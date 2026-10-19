@@ -704,3 +704,86 @@ describe('Ordine di lavoro da un ODP (0.105.5)', () => {
     assert.ok(secondo && secondo !== primo);
   });
 });
+
+describe('ODP: annullare, chiudere da sole, chi commissiona (0.105.6)', () => {
+  const statoOdp = app => app.eval(`getOdp('odp-interna').status`);
+  const decl = (app, kind, i) => app.eval(`(function(){ const o = getOdp('odp-interna');
+    const d = db.prodDecls.filter(x => x.odpId === o.id && x.phaseId === o.phases[${i}].id && x.kind === '${kind}')[0];
+    return d ? d.id : null; })()`);
+  const annulla = (app, id) => app.eval(`opAnnullaDichiarazione(${JSON.stringify(id)})`);
+  const conTondo = () => { const app = conDb(); app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`); return app; };
+
+  it('un avanzamento della 10 non si annulla se la 20 è già partita', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 10 });
+    avvia(app, 'odp-interna', 1);
+    dichiara(app, 'odp-interna', 1, { qty: 10 });
+    assert.equal(statoOdp(app), 'completato');
+    assert.equal(annulla(app, decl(app, 'avanzamento', 0)), false);
+    assert.equal(statoOdp(app), 'completato', "l'ordine resta coerente coi pezzi a magazzino");
+    assert.equal(onHand(app, 'interna'), 10);
+    // Annullate prima le dichiarazioni della 20 (avanzamento e avvio), la 10 si annulla.
+    assert.equal(annulla(app, decl(app, 'avanzamento', 1)), true);
+    assert.equal(annulla(app, decl(app, 'avvio', 1)), true);
+    assert.equal(annulla(app, decl(app, 'avanzamento', 0)), true);
+  });
+
+  it('un avvio sbagliato si annulla e rimette a scaffale il materiale', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    assert.equal(onHand(app, 'tondo'), 80);
+    const avvio = decl(app, 'avvio', 0);
+    assert.ok(app.eval(`db.movements.filter(m => m.orderId === 'odp-interna').every(m => m.declId === ${JSON.stringify(avvio)})`),
+      "i prelievi portano l'avvio che li ha fatti");
+    assert.ok(app.eval(`odpDeclBlock(getOdp('odp-interna')).includes('opAnnullaDichiarazioneAsk')`), "e l'avvio ha il suo comando");
+    assert.equal(annulla(app, avvio), true);
+    assert.equal(onHand(app, 'tondo'), 100);
+    assert.equal(stato(app, 'odp-interna', 0), 'avviabile');
+    assert.equal(statoOdp(app), 'lanciato');
+    // Riavviata, il materiale esce di nuovo, una volta.
+    assert.equal(avvia(app, 'odp-interna', 0), true);
+    assert.equal(onHand(app, 'tondo'), 80);
+  });
+
+  it('un avvio con già delle dichiarazioni non si annulla', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 4 });
+    assert.equal(annulla(app, decl(app, 'avvio', 0)), false);
+    assert.equal(onHand(app, 'tondo'), 80);
+    assert.ok(!app.eval(`odpDeclBlock(getOdp('odp-interna')).includes("opAnnullaDichiarazioneAsk('${decl(app, 'avvio', 0)}')")`));
+  });
+
+  it('le fasi che non ricevono pezzi buoni si chiudono da sole', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 3);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 0, scrap: 3 });
+    assert.equal(stato(app, 'odp-interna', 1), 'chiusa');
+    assert.equal(statoOdp(app), 'completato');
+    assert.equal(app.eval(`(invalidateCaches(), prodWipInCasa('tondo'))`), 0, 'il materiale non resta nel lavoro in corso');
+  });
+
+  it('una fase vuota resta aperta finché la precedente non è chiusa', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 3);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 0, scrap: 1 });
+    assert.equal(stato(app, 'odp-interna', 1), 'attesa');
+  });
+
+  it("l'officina non commissiona fasi a un terzista, e non vede il comando", () => {
+    const app = conDb();
+    lancia(app, 'esterna', 10);
+    app.asRole('officina');
+    assert.equal(app.eval(`(function(){ const o = getOdp('odp-esterna'); return !!opGeneraOdl(o.id, o.phases[0].id); })()`), false);
+    assert.equal(app.eval('db.workOrders.length'), 0);
+    assert.ok(!app.eval(`odpPhaseRows(getOdp('odp-esterna')).includes('opGeneraOdlAsk')`));
+    app.asRole('acquisti');
+    assert.ok(app.eval(`odpPhaseRows(getOdp('odp-esterna')).includes('opGeneraOdlAsk')`));
+  });
+});

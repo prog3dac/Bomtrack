@@ -180,10 +180,21 @@ function opForzata(odp, fase) { return opDecls(odp.id, fase.id).some(d => d.kind
 // quelli entrati. L'epsilon è lo stesso dei residui del conto lavoro: le
 // quantità sono numeri in virgola mobile, e un confronto secco lascerebbe fasi
 // «quasi chiuse» che bloccano la successiva per un miliardesimo.
+//
+// Una fase in cui non entra **nessun** pezzo buono è chiusa anche lei, se la
+// precedente è chiusa (dalla 0.105.6): quando la 10 finisce tutta in scarti, o
+// viene chiusa in difetto con zero buoni, alla 20 non arriverà mai niente.
+// Prima restava «avviabile» con zero da fare e senza un comando per chiuderla,
+// e l'ordine restava «in corso» — col suo materiale nel lavoro in corso — finché
+// qualcuno non avviava e chiudeva a mano ogni fase vuota. La prima fase non
+// cade qui: senza precedente, zero da fare è un ordine a zero, non un esito.
 function opChiusa(odp, fase) {
   if (opDecls(odp.id, fase.id).some(d => d.kind === 'chiusura')) return true;
   const daFare = opDaFare(odp, fase);
-  if (!(daFare > 0)) return false;
+  if (!(daFare > 0.000001)) {
+    const prec = opPrecedente(odp, fase);
+    return !!prec && opChiusa(odp, prec);
+  }
   return opProcessati(odp, fase) >= daFare - 0.000001;
 }
 function opTutteChiuse(odp) { return (odp.phases || []).length > 0 && odp.phases.every(f => opChiusa(odp, f)); }
@@ -416,13 +427,16 @@ function opAvvia(id, faseId, opz) {
   // Il materiale esce **all'avvio della prima fase**, e solo lì: è il primo dei
   // due estremi del ciclo. Le fasi successive non muovono il magazzino, e non
   // per pigrizia — fra le fasi i pezzi non hanno un codice che li nomini.
-  if (opEPrima(o, fase)) opPrelevaMateriale(o, opzioni.materiali, opzioni.note, `avvio|${avvio.id}`);
+  // I prelievi portano il `declId` dell'avvio (dalla 0.105.6): così annullare un
+  // avvio sbagliato rimette a scaffale proprio il materiale che ha fatto uscire.
+  if (opEPrima(o, fase)) opPrelevaMateriale(o, opzioni.materiali, opzioni.note, `avvio|${avvio.id}`, avvio.id);
   odpAutoStatus(o); touch(o); saveDB();
   return true;
 }
 // `righe` è [{ itemId, qty }]; senza, si preleva il residuo congelato.
 // `chiave`, quando c'è, fa nascere gli id dei movimenti da lei (vedi opAvvia).
-function opPrelevaMateriale(o, righe, note, chiave) {
+// `declId`, quando c'è, è la dichiarazione che ha fatto uscire il materiale.
+function opPrelevaMateriale(o, righe, note, chiave, declId) {
   const kind = opKindUscita(o);
   const fase = opPrima(o);
   const lista = righe && righe.length ? righe
@@ -431,7 +445,7 @@ function opPrelevaMateriale(o, righe, note, chiave) {
   lista.forEach((r, i) => {
     const q = Number(r.qty) || 0;
     if (!(q > 0)) return;                   // una riga a zero non è un movimento
-    const extra = { orderId: o.id, lineId: fase ? fase.id : null, declId: r.declId || null };
+    const extra = { orderId: o.id, lineId: fase ? fase.id : null, declId: declId || null };
     if (chiave) extra.id = idDaChiaveLibero(`${chiave}|${i}|${r.itemId}`, 'movements');
     if (kind === 'clOut') extra.supplierId = fase.supplierId;
     if (addMovement(r.itemId, kind, -q, note || `Materiale per ${o.number}`, extra)) n++;
@@ -513,7 +527,9 @@ function opRiapriFase(id, faseId) {
   }
   const chiusure = opDecls(o.id, faseId).filter(d => d.kind === 'chiusura');
   if (!chiusure.length && opChiusa(o, o.phases[i])) {
-    showToast('La fase è chiusa perché i pezzi la coprono: per riaprirla annulla una dichiarazione', 'error');
+    showToast(opDaFare(o, o.phases[i]) > 0.000001
+      ? 'La fase è chiusa perché i pezzi la coprono: per riaprirla annulla una dichiarazione'
+      : 'La fase è chiusa perché non le arriva nessun pezzo buono: va riaperta una fase prima', 'error');
     return false;
   }
   chiusure.forEach(d => Store.remove('prodDecls', d.id));
@@ -522,11 +538,32 @@ function opRiapriFase(id, faseId) {
 }
 // Annullare una dichiarazione toglie **i suoi** movimenti, non quelli della
 // fase: è per questo che ogni movimento porta il `declId` di chi l'ha generato.
+//
+// Le stesse regole di opRiapriFase (dalla 0.105.6): una dichiarazione si
+// annulla solo se la fase dopo non è partita. Togliere un avanzamento della 10
+// a 20 già lavorata lasciava la 20 con zero da fare e dieci fatti, mai chiusa,
+// e l'ordine di nuovo «in corso» coi pezzi ormai a magazzino.
+// Un **avvio** si annulla finché la sua fase non ha dichiarazioni: è il rimedio
+// a una fase avviata per sbaglio, e sulla prima fase rimette a scaffale il
+// materiale uscito con lui (il resto prelevato dopo resta uscito).
+function opDichiarazioneAnnullabile(o, d) {
+  if (!o || !d || (d.kind !== 'avanzamento' && d.kind !== 'avvio')) return { ok: false, motivo: 'questa dichiarazione non si annulla' };
+  const fase = (o.phases || []).find(f => f.id === d.phaseId);
+  if (!fase) return { ok: true };
+  const seguente = opPhaseAt(o, opPhaseIndex(o, fase) + 1);
+  if (seguente && opAvviata(o, seguente)) return { ok: false, motivo: `la fase ${seguente.seq} è già avviata: annulla prima le sue dichiarazioni` };
+  if (d.kind === 'avvio' && opDecls(o.id, fase.id).some(x => x.kind === 'avanzamento' || x.kind === 'chiusura')) {
+    return { ok: false, motivo: `la fase ${fase.seq} ha già delle dichiarazioni: annulla prima quelle` };
+  }
+  return { ok: true };
+}
 function opAnnullaDichiarazione(declId) {
   if (!roleGuardShop('docs')) return false;
   const d = (db.prodDecls || []).find(x => x.id === declId); if (!d) return false;
   if (!opGuard(d.odpId, 'reception')) return false;
   const o = getOdp(d.odpId);
+  const ok = opDichiarazioneAnnullabile(o, d);
+  if (o && !ok.ok) { showToast(`Non si può annullare: ${ok.motivo}`, 'error'); return false; }
   (db.movements || []).filter(m => m.declId === declId).forEach(m => Store.remove('movements', m.id));
   Store.remove('prodDecls', declId);
   if (o) { const fase = (o.phases || []).find(f => f.id === d.phaseId); if (fase) opSyncOdlReceived(o, fase); odpAutoStatus(o); touch(o); }
@@ -880,7 +917,7 @@ function odpPhaseActions(o, f, st, legame) {
   }
   if (legame) {
     cmd.push(`<span class="plandoc-link plandoc-link-sm" ${clickAttrs(`openOdlFromOdp('${legame.odl.id}')`, "Apri l'ordine di lavoro che commissiona questa fase")}>${esc(legame.odl.number)}</span>`);
-  } else if (opGenerabile(o, f) && o.status !== 'bozza') {
+  } else if (opGenerabile(o, f) && o.status !== 'bozza' && canWrite('docs')) {
     cmd.push(link(`opGeneraOdlAsk('${id}','${f.id}')`, 'genera ordine di lavoro',
       'Commissiona questa tratta al terzista: ne nasce un ordine di lavoro con la tariffa del ciclo'));
   }
@@ -931,8 +968,9 @@ function odpDeclBlock(o) {
         <td class="num">${d.qty ? fmtQty(d.qty) : '—'}</td>
         <td class="num">${d.scrap ? fmtQty(d.scrap) : '—'}</td>
         <td>${d.kind === 'forzatura' ? `<strong>${esc(d.motivo || '')}</strong>${d.note ? ` <span class="empty-text" style="padding:0">(${esc(d.note)})</span>` : ''}` : esc(d.note || '')}</td>
-        <td>${d.kind === 'avanzamento'
-    ? `<button class="mini-btn danger lock-reception" onclick="opAnnullaDichiarazioneAsk('${d.id}')" title="Annulla questa dichiarazione e i movimenti che ha generato">${ico('trash', 'tinted', 'Annulla')}</button>`
+        <td>${(d.kind === 'avanzamento' || d.kind === 'avvio') && opDichiarazioneAnnullabile(o, d).ok
+    ? `<button class="mini-btn danger lock-reception" onclick="opAnnullaDichiarazioneAsk('${d.id}')" title="${d.kind === 'avvio'
+      ? "Annulla l'avvio della fase e rimette a magazzino il materiale uscito con lui" : 'Annulla questa dichiarazione e i movimenti che ha generato'}">${ico('trash', 'tinted', 'Annulla')}</button>`
     : ''}</td></tr>`).join('')}</tbody>
     </table></div></div>`;
 }
@@ -1208,7 +1246,10 @@ function opRiapriFaseAsk(id, faseId) {
 }
 function opAnnullaDichiarazioneAsk(declId) {
   const d = (db.prodDecls || []).find(x => x.id === declId); if (!d) return;
-  askConfirm(`Annullare questa dichiarazione di ${fmtQty(d.qty)} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lei.`, () => {
+  const domanda = d.kind === 'avvio'
+    ? 'Annullare l\'avvio di questa fase?\nIl materiale uscito con lui torna a magazzino, e la fase torna da avviare.'
+    : `Annullare questa dichiarazione di ${fmtQty(d.qty)} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lei.`;
+  askConfirm(domanda, () => {
     if (!opAnnullaDichiarazione(declId)) return;
     renderOdp(); showToast('Dichiarazione annullata');
   }, { title: 'Annulla la dichiarazione', ok: 'Annulla' });
@@ -1444,8 +1485,11 @@ function opDocHead(o, supplierId) {
     odpId: o.id, supplierConfirmation: '', notes: '', notesInternal: '', active: true,
   };
 }
+// Un ordine di lavoro è un documento con un prezzo e un fornitore: lo scrive chi
+// scrive gli ordini, non l'officina (dalla 0.105.6). La guardia della ricezione
+// da sola accettava l'area `shop`.
 function opGeneraOdl(id, faseId) {
-  if (!opGuard(id, 'reception')) return null;
+  if (!roleGuard('docs') || !opGuard(id, 'reception')) return null;
   const x = opFaseDi(id, faseId); if (!x) return null;
   const { o, f } = x;
   if (!f.supplierId) { showToast('Questa fase è interna: non c\'è nessun terzista a cui commissionarla', 'error'); return null; }
