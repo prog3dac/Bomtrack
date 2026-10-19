@@ -146,7 +146,7 @@ function stockIndex() {
   const idx = new Map();
   const tocca = id => {
     let e = idx.get(id);
-    if (!e) { e = { onHand: 0, incoming: 0, arrivi: [] }; idx.set(id, e); }
+    if (!e) { e = { onHand: 0, incoming: 0, arrivi: [], nMov: 0 }; idx.set(id, e); }
     return e;
   };
   (db.orders || []).forEach(o => {
@@ -179,6 +179,11 @@ function stockIndex() {
   });
   (db.movements || []).forEach(m => {
     if (!m.itemId) return;
+    // Quanti movimenti ha l'articolo, passaggi compresi: è il numero sul
+    // pulsante «Movimenti», che prima chiamava movementsOf() per ogni riga —
+    // tutti i movimenti filtrati e ordinati, una volta per articolo, tre
+    // secondi su 2000 righe (dalla 0.105.6).
+    tocca(m.itemId).nMov++;
     // Il passaggio di lavorazione sposta un pezzo, non lo carica: vedi
     // movimentoToccaMagazzino.
     if (!movimentoToccaMagazzino(m.kind)) return;
@@ -189,7 +194,7 @@ function stockIndex() {
 }
 let _esplosi = new Map();   // mrpExplodePlan
 function invalidateStock() { _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; _ordinePiani = null; _esplosi = new Map(); }
-function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, arrivi: [] }; }
+function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, arrivi: [], nMov: 0 }; }
 function onHandOf(itemId) { return stockOf(itemId).onHand; }
 function incomingOf(itemId) { return stockOf(itemId).incoming; }
 // Quanto di ciò che è in arrivo arriva ENTRO una data, e cosa arriva dopo.
@@ -808,7 +813,7 @@ function stockPanelHtml(it) {
       ${impQty > 0 ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">Impegnato dai piani di fabbisogno <strong>aperti</strong>: ${esc(elencoImp)}. <em>Libero = esistente + in arrivo − impegnato</em>: è quanto se ne può ancora promettere. Chiudere un piano libera la sua quota.</p>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-outline" onclick="stockAdjustModal('${it.id}')">${ico('scale', 'tinted', '')} Rettifica giacenza</button>
-        <button class="btn-outline" onclick="stockMovementsModal('${it.id}')">${ico('clock', 'tinted', '')} Movimenti (${movementsOf(it.id).length})</button>
+        <button class="btn-outline" onclick="stockMovementsModal('${it.id}')">${ico('clock', 'tinted', '')} Movimenti (${s.nMov})</button>
         <button class="btn-outline" onclick="qrEtichetteModal(['${it.id}'])">${ico('qr', 'tinted', '')} Etichetta QR</button>
       </div>
     </div></div>`;
@@ -825,7 +830,7 @@ function stockAdjustModal(itemId) {
         ${MOVEMENT_MANUAL_KINDS.map(k => `<option value="${k}">${esc(MOVEMENT_KINDS[k])}</option>`).join('')}
       </select></div>
       <div class="modal-field"><label>${labelUom('Quantità contata / movimentata', itemUom(it))}</label>
-        <input type="number" id="mv-qty" step="any" value="${attuale}"></div>
+        <input type="number" id="mv-qty" step="any" min="0" value="${MOVEMENT_MANUAL_KINDS[0] === 'rettifica' ? attuale : ''}"></div>
     </div>
     <div class="modal-grid" id="mv-cl-box" style="display:none">
       <div class="modal-field"><label>Terzista</label><select id="mv-sup" class="sel-cerca">
@@ -848,7 +853,16 @@ function stockAdjustModal(itemId) {
       <button class="add-btn-sm" onclick="saveStockAdjust('${it.id}')">Registra</button>
     </div>`, false, 'form');
   stockAdjustHint(itemId);
-  const sel = document.getElementById('mv-kind'); if (sel) sel.onchange = () => stockAdjustHint(itemId);
+  const sel = document.getElementById('mv-kind'); if (sel) sel.onchange = () => stockAdjustKindChange(itemId);
+}
+// Cambiando tipo cambia la domanda, e il numero scritto per l'altra non vale
+// più (dalla 0.105.6). Il campo nasceva con l'esistente anche per un carico:
+// passare a «Carico manuale» e confermare caricava di nuovo tutta la giacenza.
+// L'esistente si propone solo dove è la risposta di partenza, la rettifica.
+function stockAdjustKindChange(itemId) {
+  const campo = document.getElementById('mv-qty');
+  if (campo) campo.value = val('mv-kind') === 'rettifica' ? String(onHandOf(itemId)) : '';
+  stockAdjustHint(itemId);
 }
 // La rettifica si inserisce come quantità *contata*, gli altri come quantità
 // *movimentata*: sono due domande diverse e confonderle produce giacenze
@@ -891,13 +905,23 @@ function saveStockAdjust(itemId) {
     showToast('Scrivi la quantità', 'error'); return;
   }
   const inserita = rawNum('mv-qty');
-  if (kind !== 'rettifica' && inserita < 0) { showToast('Inserisci una quantità positiva: è il tipo a decidere il verso', 'error'); return; }
+  // Nemmeno la rettifica è negativa (dalla 0.105.6): è quanti ce ne sono
+  // contati, e chi scriveva −5 per dire «cinque in meno» portava la giacenza
+  // a −5. L'inventario guidato lo rifiuta già (invConta).
+  if (inserita < 0) {
+    showToast(kind === 'rettifica' ? 'Una quantità contata non è negativa: scrivi quanti ce ne sono' : 'Inserisci una quantità positiva: è il tipo a decidere il verso', 'error');
+    return;
+  }
   // Senza terzista il movimento non è ricostruibile: il prospetto non saprebbe
   // da chi andare a riprendere la merce, e il saldo resterebbe appeso a nessuno.
   const supplierId = isContoLavoroKind(kind) ? val('mv-sup') : '';
   if (isContoLavoroKind(kind) && !supplierId) { showToast('Scegli il terzista: senza, non si sa da chi sta la merce', 'error'); return; }
   const uscita = kind === 'scarico' || kind === 'clOut';
-  const note = val('mv-note'), orderId = val('mv-ord');
+  // L'ordine di conto lavoro vale solo per i movimenti di conto lavoro: la
+  // tendina resta nascosta ma piena se si cambia tipo, e un consumo con
+  // l'ODL attaccato contava come materiale prelevato per il suo piano
+  // (dalla 0.105.6).
+  const note = val('mv-note'), orderId = isContoLavoroKind(kind) ? val('mv-ord') : '';
   const registra = () => {
     // La rettifica si calcola sull'esistente aggiornato ai movimenti dei colleghi (dalla 0.105.5).
     const delta = kind === 'rettifica' ? (inserita - onHandOf(it.id)) : (uscita ? -inserita : inserita);
@@ -1364,6 +1388,10 @@ function stockState(it) {
 const STOCK_STATE_FILTERS = {
   sotto: st => st.sotto,
   zero: st => st.onHand <= 0,
+  // L'esistente sotto zero è un errore di registrazione da ricontare
+  // (avvisoSottoZero lo dice): «Giacenza a zero» li mescola con gli zeri veri,
+  // «Libero negativo» parla d'altro (dalla 0.105.6).
+  sottozero: st => st.onHand < -1e-6,
   con: st => st.onHand > 0,
   arrivo: st => st.incoming > 0,
   negativo: st => st.libero < 0,
@@ -1376,7 +1404,7 @@ const STOCK_STATE_FILTERS = {
 // Le stesse voci del menu in pagina: servono all'export, che scrive nel file i
 // filtri per esteso e non il valore interno.
 const STOCK_STATE_LABELS = {
-  sotto: 'Sotto la scorta minima', zero: 'Giacenza a zero',
+  sotto: 'Sotto la scorta minima', zero: 'Giacenza a zero', sottozero: 'Esistente negativo',
   con: 'Con giacenza', arrivo: 'Con merce in arrivo', negativo: 'Libero negativo', terzi: 'Presso terzi o in lavorazione',
 };
 
@@ -1389,7 +1417,7 @@ function stockRow(it) {
   const flags = `${it.favorite ? '<span class="pick-fav" title="Preferito">★</span>' : ''}${it.obsolete ? `<span class="obs-mark" title="Obsoleto">${ico('blocked', 'tinted', '')}</span>` : ''}`
     + (st.sotto ? '<span title="Sotto la scorta minima">' + ico('warning', 'tinted', '') + '</span>' : '');
   const num = (v, colore, col) => `<td class="col-${col}" style="font-family:var(--mono);text-align:right${colore ? ';color:' + colore : ''}">${fmtQty(v)}</td>`;
-  const nMov = movementsOf(it.id).length;
+  const nMov = stockOf(it.id).nMov;
   return `<tr data-sel="${it.id}" class="${it.obsolete ? 'row-obsolete' : ''}">
     <td class="col-flags" style="width:1%;white-space:nowrap">${flags}</td>
     <td class="col-code" style="font-family:var(--mono)">${codeLink(it.id, it.code)}</td>
@@ -1460,10 +1488,11 @@ function renderStock() {
   // attivo: sono lì per dire se c'è qualcosa da guardare, e un numero che
   // cambia con il filtro non risponderebbe più a quella domanda.
   const tutti = (db.items || []).filter(hasStock);
-  let sotto = 0, inArrivo = 0, valore = 0;
+  let sotto = 0, inArrivo = 0, valore = 0, negativi = 0;
   tutti.forEach(i => {
     const st = stockState(i);
     if (st.sotto) sotto++;
+    if (STOCK_STATE_FILTERS.sottozero(st)) negativi++;
     if (st.incoming > 0) inArrivo++;
     valore += valoreGiacenza(i);
   });
@@ -1478,7 +1507,10 @@ function renderStock() {
     kpi('Sotto scorta minima', String(sotto), sotto > 0 ? 'red' : '', { azione: "stockFiltraStato('sotto')", attiva: statoOra === 'sotto', titolo: 'Filtra gli articoli sotto la scorta minima' }),
     kpi('Con merce in arrivo', String(inArrivo), 'accent', { azione: "stockFiltraStato('arrivo')", attiva: statoOra === 'arrivo', titolo: 'Filtra gli articoli con merce in arrivo' }),
     kpi(`Valore giacenza (${esc(cur())})`, fmtN(valore), 'purple', { azione: "setView('dash')", titolo: 'Apri il Cruscotto: valore per tipo e per famiglia' }),
-  ].join('');
+  ].concat(negativi || statoOra === 'sottozero' ? [
+    // Solo quando ce n'è: è un avviso da ricontare, non una misura del magazzino.
+    kpi('Esistente negativo', String(negativi), negativi ? 'red' : '', { azione: "stockFiltraStato('sottozero')", attiva: statoOra === 'sottozero', titolo: 'Filtra gli articoli con esistente sotto zero: vanno ricontati' }),
+  ] : []).join('');
 
   const head = `<thead><tr><th scope="col" class="col-flags"></th><th scope="col" class="col-code">Codice</th><th scope="col" class="col-name">Descrizione</th>
     <th scope="col" class="col-type">Tipo</th><th scope="col" class="col-family">Famiglia</th><th scope="col" class="col-uom">U.M.</th>

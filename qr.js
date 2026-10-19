@@ -332,7 +332,7 @@ function qrSchedaHtml(tipo, rec) {
         ${kpi('Libero', fmtUom(s.onHand + s.incoming - imp, u), s.onHand + s.incoming - imp < 0 ? 'red' : '')}
       </div>`;
       if (canWriteShop('catalog')) bottoni.unshift(qrBtn('Rettifica giacenza', 'scale', `stockAdjustModal('${it.id}')`, true));
-      bottoni.push(qrBtn(`Movimenti (${movementsOf(it.id).length})`, 'clock', `stockMovementsModal('${it.id}')`));
+      bottoni.push(qrBtn(`Movimenti (${s.nMov})`, 'clock', `stockMovementsModal('${it.id}')`));
     } else {
       corpo = '<p class="empty-text" style="text-align:left;padding:4px 0">Articolo senza giacenza (macchina o gruppo).</p>';
     }
@@ -389,7 +389,8 @@ function qrSchedaHtml(tipo, rec) {
   const daRicevere = (o.lines || []).some(l => (Number(l.received) || 0) < (Number(l.qty) || 0));
   const bottoni = [qrBtn("Apri l'ordine", 'file', `${odl ? 'openOdlFromPlan' : 'openOrderFromPlan'}('${o.id}')`, !(aperto && daRicevere))];
   if (aperto && daRicevere && canWriteShop('docs')) {
-    bottoni.unshift(qrBtn('Ricevi tutto', 'truck', `qrRiceviTutto('${tipo}','${o.id}')`, true));
+    bottoni.unshift(qrBtn('Ricevi tutto', 'truck', `qrRiceviTutto('${tipo}','${o.id}')`, true),
+      qrBtn('Ricevi una parte', 'truck', `qrRiceviModal('${tipo}','${o.id}')`));
   }
   return `<h3>${ico(odl ? 'truck' : 'cart', 'tinted pill', '')} ${esc(o.number)} ${statusBadge(ORDER_STATUS, o.status)}</h3>
     <p>${o.supplierId ? '<strong>' + esc(supplierName(o.supplierId) || '') + '</strong> · ' : ''}${esc(fmtDateIt(o.date) || '')}${o.title ? ' · ' + esc(o.title) : ''}</p>
@@ -412,6 +413,86 @@ function qrRiceviTutto(tipo, id) {
     docLeave(k);
     showToast('Ricevimento registrato');
   });
+}
+
+// ─── Ricevere una parte (dalla 0.105.6) ───
+// Una consegna porta spesso 40 pezzi su 100, e dal telefono c'era solo
+// «Ricevi tutto»: o si apriva l'editor completo, a dodici colonne e con il
+// «Salva» da ricordare, o si riceveva tutto e si correggeva dopo, con
+// magazzino e fabbisogno sbagliati nel frattempo. Qui le righe aperte, una
+// sotto l'altra, con il campo già pieno del residuo: si corregge solo quella
+// che arriva diversa, e una conferma registra e salva.
+//
+// Il numero è **quanto arriva adesso**, non il totale ricevuto: è quello che
+// c'è sulla bolla in mano. Le righe di un ODL che vengono da un ordine di
+// produzione restano fuori, come in «Ricevi tutto»: si dichiarano lì.
+function qrRigheDaRicevere(tipo, o) {
+  return (o.lines || []).filter(l => (Number(l.received) || 0) < (Number(l.qty) || 0)
+    && !(tipo === 'odl' && odlRigaDaOdp(l)));
+}
+function qrRiceviModal(tipo, id) {
+  const o = tipo === 'odl' ? getOdl(id) : getOrder(id);
+  if (!o) return;
+  const righe = qrRigheDaRicevere(tipo, o);
+  if (!righe.length) { showToast(`${o.number}: niente da ricevere`); return; }
+  const campi = righe.map((l, i) => {
+    const residuo = arrotondaQta((Number(l.qty) || 0) - (Number(l.received) || 0));
+    return `<div class="mgmt-item" style="flex-wrap:wrap">
+      <span style="flex:1;min-width:140px"><span style="font-family:var(--mono)">${esc(l.code || '')}</span> ${esc(l.description || l.name || '')}
+        <span class="empty-text" style="display:block;padding:0;text-align:left">Ricevuti ${fmtQty(Number(l.received) || 0)} su ${fmtQty(Number(l.qty) || 0)}</span></span>
+      <input id="qr-ric-${i}" class="num" type="number" inputmode="decimal" min="0" step="any" value="${residuo}" style="width:90px" aria-label="Quanti ne arrivano di ${esc(l.code || '')}">
+      <span>${esc(l.uom || '')}</span>
+    </div>`;
+  }).join('');
+  openModal(`<h3>${ico('truck', 'tinted pill', '')} Ricevi — ${esc(o.number)}</h3>
+    <p class="empty-text" style="text-align:left;padding:4px 0 8px">Scrivi quanti ne arrivano adesso, riga per riga: 0 per quello che non è arrivato.</p>
+    <div style="display:flex;flex-direction:column;gap:4px;margin:8px 0;max-height:55vh;overflow:auto">${campi}</div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="qrRiceviConferma('${tipo}','${o.id}')">${ico('check', '', '')} Registra il ricevimento</button>
+    </div>`, false, 'form');
+}
+// Legge i campi della finestra. Torna quante righe ha registrato, o false.
+function qrRiceviConferma(tipo, id) {
+  const o = tipo === 'odl' ? getOdl(id) : getOrder(id);
+  if (!o) return false;
+  const quantita = {};
+  let errore = false;
+  qrRigheDaRicevere(tipo, o).forEach((l, i) => {
+    const el = document.getElementById('qr-ric-' + i);
+    const t = el ? String(el.value).trim().replace(',', '.') : '';
+    if (t === '') return;                       // vuoto: per quella riga non arriva niente
+    const q = parseFloat(t);
+    if (!isFinite(q) || q < 0) { errore = true; return; }
+    if (q > 0) quantita[l.id] = q;
+  });
+  if (errore) { showToast('Le quantità ricevute non sono negative', 'error'); return false; }
+  if (!Object.keys(quantita).length) { showToast('Nessuna quantità da registrare', 'error'); return false; }
+  const n = qrRiceviRighe(tipo, id, quantita);
+  if (n) closeModal();
+  return n;
+}
+// `quantita`: { lineId: quanto arriva adesso }. Passa dalle stesse porte
+// dell'editor (guardia di ricevimento, registraRicevuto, stato automatico) e
+// salva subito, come «Ricevi tutto».
+function qrRiceviRighe(tipo, id, quantita) {
+  const k = tipo === 'odl' ? 'odl' : 'order';
+  if (!docGuard(k, id, 'reception')) return false;
+  const o = docKind(k).get(id); if (!o) return false;
+  const coll = k === 'odl' ? 'workOrders' : 'orders';
+  let n = 0;
+  qrRigheDaRicevere(tipo, o).forEach(l => {
+    const q = Number(quantita && quantita[l.id]) || 0;
+    if (q <= 0) return;
+    registraRicevuto(coll, o, l, (Number(l.received) || 0) + q);
+    n++;
+  });
+  if (!n) return false;
+  ordAutoStatus(o); touch(o); docMarkDirty(k);
+  docLeave(k);
+  docKind(k).render();
+  showToast(`Ricevimento registrato: ${n === 1 ? '1 riga' : n + ' righe'}`);
+  return n;
 }
 
 // ─── Scansiona ───

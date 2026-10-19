@@ -14,7 +14,10 @@ let dashFermiMesi = 6;
 
 // Il valore di una giacenza: la stessa formula della tessera del magazzino,
 // scritta una volta sola perché le due cifre non possano divergere.
-function valoreGiacenza(it) { return stockOf(it.id).onHand * itemUnitCost(it); }
+// Un esistente negativo vale zero, non meno (dalla 0.105.6): è un errore di
+// registrazione, non un debito, e sottraeva dal totale merce che sullo
+// scaffale c'è. Il cruscotto contava già solo le giacenze positive.
+function valoreGiacenza(it) { return Math.max(0, stockOf(it.id).onHand) * itemUnitCost(it); }
 
 // Le righe d'ordine (ODA e ODL) ancora da ricevere, con la data attesa:
 // la confermata se c'è, altrimenti la richiesta. Le stesse del calendario del

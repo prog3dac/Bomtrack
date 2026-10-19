@@ -291,6 +291,7 @@ function docSetSupplier(k, id, sid) {
   const K = docKind(k);
   if (!docGuard(k, id, 'contract')) { K.render(); return; }
   const doc = K.get(id); if (!doc) return;
+  const prima = doc.supplierId || null;
   doc.supplierId = sid || null;
   const sup = sid ? getSupplier(sid) : null;
   if (sup) {
@@ -298,6 +299,71 @@ function docSetSupplier(k, id, sid) {
     if (sup.defaultPayment) doc.payment = sup.defaultPayment;
   }
   touch(doc); docMarkDirty(k); K.render();
+  if (k !== 'rfq' && sup && sup.id !== prima) docListinoModal(k, id);
+}
+
+// ─── Il listino del fornitore appena scelto (dalla 0.105.6) ───
+// Le righe si compilano anche prima di scegliere il fornitore, e allora
+// nascono senza prezzo (docLineFromItem); cambiato il fornitore, ogni riga
+// dice «⚠ … a listino» (ordLineListinoWarn). In tutti e due i casi le
+// quotazioni ci sono, e ricopiarle a mano riga per riga era il solo modo.
+// Qui si **propongono**: nessun prezzo cambia da sé, è la regola su cui poggia
+// il resto, ma un clic le applica. Di serie solo alle righe senza prezzo; a
+// quelle che ne hanno uno diverso solo se lo si chiede, perché quel numero può
+// essere un prezzo concordato.
+//
+// La richiesta d'offerta resta fuori: lì il prezzo è la risposta del
+// fornitore, non un listino da applicare.
+function docListinoProposta(k, id) {
+  const doc = docKind(k).get(id);
+  const out = { vuote: [], diverse: [] };
+  if (!doc || !doc.supplierId) return out;
+  (doc.lines || []).forEach(l => {
+    if (!l.itemId) return;
+    const it = getItem(l.itemId);
+    const row = supplierPriceRow(it, doc.supplierId);
+    if (!row || row.price === '' || row.price == null) return;
+    if (l.price === '' || l.price == null) out.vuote.push(l.id);
+    else if (Math.abs((rowUnitCost(it, row) || 0) - Number(l.price)) >= 0.00005) out.diverse.push(l.id);
+  });
+  return out;
+}
+function docListinoModal(k, id) {
+  const doc = docKind(k).get(id); if (!doc) return;
+  const pr = docListinoProposta(k, id);
+  const nv = pr.vuote.length, nd = pr.diverse.length;
+  if (!nv && !nd) return;
+  const sup = supplierName(doc.supplierId) || 'questo fornitore';
+  const righe = n => n === 1 ? '1 riga' : n + ' righe';
+  openModal(`<h3>${ico('tag', 'tinted pill', '')} Applicare il listino di ${esc(sup)}?</h3>
+    <p>${esc(sup)} ha a listino ${nv ? `<strong>${righe(nv)} senza prezzo</strong>` : ''}${nv && nd ? ' e ' : ''}${nd ? `${righe(nd)} con un prezzo diverso da quello in riga` : ''}.</p>
+    ${nd ? `<label class="flag-check" style="margin:6px 0"><input type="checkbox" id="lst-diverse"${nv ? '' : ' checked'}> Sostituisci anche i prezzi già scritti (${righe(nd)})</label>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Un prezzo in riga può essere concordato: lascialo se non sei sicuro.</p>` : ''}
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">No, lascia i prezzi</button>
+      <button class="add-btn-sm" onclick="docApplicaListino('${k}','${id}', !!(document.getElementById('lst-diverse') || {}).checked); closeModal()">${ico('check', '', '')} Applica il listino</button>
+    </div>`, false, 'form');
+}
+// Torna quante righe ha cambiato. Il prezzo passa da rowUnitCost(), la stessa
+// porta di docLineFromItem: già convertito nell'unità di gestione della riga.
+function docApplicaListino(k, id, ancheDiverse) {
+  const K = docKind(k);
+  if (!docGuard(k, id, 'contract')) return 0;
+  const doc = K.get(id); if (!doc) return 0;
+  const pr = docListinoProposta(k, id);
+  const ids = pr.vuote.concat(ancheDiverse ? pr.diverse : []);
+  let n = 0;
+  (doc.lines || []).forEach(l => {
+    if (!ids.includes(l.id)) return;
+    const it = getItem(l.itemId);
+    l.price = rowUnitCost(it, supplierPriceRow(it, doc.supplierId)) || 0;
+    n++;
+  });
+  if (!n) return 0;
+  if (K.autoStatus) K.autoStatus(doc);
+  touch(doc); docMarkDirty(k); K.render();
+  showToast(`Listino di ${supplierName(doc.supplierId) || 'fornitore'} applicato: ${n === 1 ? '1 riga' : n + ' righe'}`);
+  return n;
 }
 function docSetLine(k, id, lineId, field, value) {
   const K = docKind(k);
@@ -1355,6 +1421,11 @@ function renderRfqCompare() {
       if (!(k in meta)) { keys.push(k); meta[k] = { itemId: l.itemId, code: l.code, description: l.description }; }
     }));
     const totals = sel.map(() => 0);
+    // Quante righe ha quotato ciascuna offerta. Il totale somma solo le righe
+    // con un prezzo: chi quota una riga su tre ha il totale più basso, e
+    // finiva in verde come l'offerta migliore (dalla 0.105.6). Il minimo si
+    // cerca solo fra le offerte complete; le altre dicono quante ne mancano.
+    const quotate = sel.map(() => 0);
     const bodyRows = keys.map(k => {
       const cellsData = sel.map(r => {
         const l = (r.lines || []).find(x => rfqLineKey(x) === k);
@@ -1365,6 +1436,7 @@ function renderRfqCompare() {
       const cells = cellsData.map((p, ci) => {
         if (!p) return `<td class="rfq-cmp-cell">—</td>`;
         totals[ci] += p.price * p.qty;
+        if (p.price > 0) quotate[ci]++;
         const isMin = min != null && p.price === min;
         // L'unità è quella della riga d'offerta, non "pz": ogni fornitore quota
         // nella sua, e confrontare €/kg con €/m senza dirlo è peggio che non
@@ -1374,13 +1446,16 @@ function renderRfqCompare() {
       const m = meta[k];
       return `<tr><td>${esc(m.description || '')}<div class="rfq-cmp-sub">${codeLink(m.itemId, m.code || '')}</div></td>${cells}</tr>`;
     }).join('');
-    const posTotals = totals.filter(t => t > 0);
+    const completa = ci => quotate[ci] === keys.length;
+    const posTotals = totals.filter((t, ci) => t > 0 && completa(ci));
     const minTot = posTotals.length ? Math.min(...posTotals) : null;
-    const totalRow = `<tr class="rfq-cmp-total"><td>Totale offerta</td>${totals.map(t => `<td class="${minTot != null && t === minTot ? 'rfq-min' : ''}">${fmtN(t)}</td>`).join('')}</tr>`;
+    const totalRow = `<tr class="rfq-cmp-total"><td>Totale offerta</td>${totals.map((t, ci) => completa(ci)
+      ? `<td class="${minTot != null && t === minTot ? 'rfq-min' : ''}">${fmtN(t)}</td>`
+      : `<td title="Il totale somma solo le righe quotate: non si confronta con le offerte complete">${fmtN(t)}<span class="rfq-line-tot">incompleta (${quotate[ci]}/${keys.length})</span></td>`).join('')}</tr>`;
     const header = `<tr><th scope="col">Articolo</th>${sel.map(r => `<th scope="col">${esc(r.supplierId ? supplierName(r.supplierId) : r.number)}<div class="rfq-cmp-sub">${esc(r.number)}</div></th>`).join('')}</tr>`;
     matrix = `<div class="table-wrap"><table class="rfq-table rfq-cmp-table">
       <thead>${header}</thead><tbody>${bodyRows}${totalRow}</tbody></table></div>
-      <p class="empty-text" style="text-align:left">Prezzo minimo per riga e totale offerta più basso evidenziati in verde. I totali usano la quantità indicata in ciascuna richiesta.</p>`;
+      <p class="empty-text" style="text-align:left">Prezzo minimo per riga e totale offerta più basso evidenziati in verde. I totali usano la quantità indicata in ciascuna richiesta; un'offerta che non quota tutte le righe si dice incompleta e non entra nel confronto dei totali.</p>`;
   }
   return `<div class="manage-wrap">${head}
     <h3 class="rfq-subhead">Richieste da confrontare</h3>
