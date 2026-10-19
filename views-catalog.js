@@ -2091,10 +2091,15 @@ function delItem(id) {
     return;
   }
   if (!articoloUltimo(it)) { showToast(ARTICOLO_NON_ULTIMO(it.code), 'error'); return; }
-  askConfirm(`Eliminare "${it.name}"?`, () => {
+  askConfirm(`Eliminare "${it.name}"?`, () => eliminaSeAncoraUltimo(() => {
+    const x = getItem(id);
+    if (x && articoloUltimo(x)) return true;
+    if (x) showToast(ARTICOLO_NON_ULTIMO(x.code), 'error');
+    return false;
+  }, () => {
     if (currentBomId === id) currentBomId = null;
     removeConUndo('items', id, `"${it.name}" eliminato`, renderCatalogs);
-  });
+  }));
 }
 
 // ─── Azioni su più articoli insieme ───

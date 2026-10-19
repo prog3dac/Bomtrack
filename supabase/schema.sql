@@ -741,6 +741,21 @@ end $$;
 -- `now` va conservato e ripassato come `since` al giro dopo, meno un margine:
 -- una transazione lunga può scrivere un synced_at più vecchio di un pull già
 -- fatto. Applicare due volte la stessa riga non costa niente.
+-- L'istante da cui il pull successivo riparte (dalla 0.105.4). Non l'ora
+-- esatta: una transazione cominciata prima e non ancora conclusa scrive righe
+-- con un synced_at più vecchio, che il pull dopo non vedrebbe più. Allora
+-- l'inizio della transazione aperta più vecchia, se c'è — ma non più indietro
+-- di due minuti, perché una connessione rimasta appesa non faccia riscaricare
+-- tutto a ogni giro. `security definer`: chi chiama non vede le transazioni
+-- degli altri utenti. Il client toglie comunque un margine suo.
+create or replace function public.pull_istante() returns timestamptz
+language sql stable security definer set search_path = public as $$
+  select least(clock_timestamp(), greatest(clock_timestamp() - interval '2 minutes',
+    coalesce((select min(a.xact_start) from pg_stat_activity a
+               where a.xact_start is not null and a.pid <> pg_backend_pid()
+                 and a.datname = current_database() and a.backend_type = 'client backend'), 'infinity')))
+$$;
+
 create or replace function public.pull_changes(since timestamptz default null)
 returns jsonb language plpgsql security invoker set search_path = public as $$
 declare
@@ -748,7 +763,7 @@ declare
   tabelle jsonb := '{}'::jsonb;
   righe jsonb;
   lapidi jsonb;
-  inizio timestamptz := clock_timestamp();
+  inizio timestamptz := public.pull_istante();
   dal timestamptz := coalesce(since, '-infinity'::timestamptz);
 begin
   for reg in select * from sync_tables loop
@@ -1065,6 +1080,7 @@ end $$;
 grant execute on function public.push_changes(jsonb) to authenticated;
 grant execute on function public.pull_changes(timestamptz) to authenticated;
 grant execute on function public.pull_pagina(text, text, int) to authenticated;
+grant execute on function public.pull_istante() to authenticated;
 
 -- ─── Profili: nascono da Supabase Auth (dalla 0.103.0) ──────
 -- Un collega entra in Bomtrack perché l'amministratore lo **invita** dal
@@ -1123,7 +1139,7 @@ language sql stable security definer set search_path = public as $$
     'vuoto', not (exists (select 1 from public.items) or exists (select 1 from public.suppliers)
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
-    'ora', clock_timestamp())
+    'ora', public.pull_istante())
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

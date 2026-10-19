@@ -50,8 +50,12 @@ const CLOUD_ATTESA_MS = 1500;
 const CLOUD_RIPROVA_MS = 5000;   // senza collegamento: ogni quanto si riprova
 const CLOUD_LIMITE_MS = 90000;   // una richiesta senza risposta dopo questo vale come rete assente
 // Il pull riparte da un po' prima dell'ultimo: una transazione lunga può
-// scrivere un synced_at più vecchio di un pull già fatto (schema.sql).
-const CLOUD_MARGINE_MS = 5000;
+// scrivere un synced_at più vecchio di un pull già fatto. Il server già
+// risponde con l'inizio della transazione aperta più vecchia (pull_istante in
+// schema.sql); il margine copre uno schema di prima e un invio che dura più
+// del limite di Supabase per una richiesta (8 secondi). Fino alla 0.105.4 era
+// 5 secondi: le righe scritte all'inizio di un invio più lungo sfuggivano.
+const CLOUD_MARGINE_MS = 15000;
 // Le righe figlie già note si mandano solo se cambiate dall'ultimo invio. Il
 // margine copre gli orologi dei PC che non vanno d'accordo al secondo.
 const CLOUD_MARGINE_FIGLI_MS = 120000;
@@ -253,7 +257,11 @@ function cloudPayload(changes, soglia, puoImpostazioni) {
     const def = SCHEMA[c]; if (!def) return;
     const ch = changes[c];
     const figli = def.children || {};
-    const recs = (ch.upsert || []).map(id => Store.getById(c, id)).filter(Boolean);
+    // Per id con una mappa, non con una ricerca per ciascuno: su un invio
+    // completo erano decine di secondi a browser fermo (dalla 0.105.4).
+    const ids = ch.upsert || [];
+    const perId = ids.length > 20 ? new Map((Store.getAll(c) || []).map(r => [r.id, r])) : null;
+    const recs = ids.map(id => perId ? perId.get(id) : Store.getById(c, id)).filter(Boolean);
     if (recs.length) {
       const posizioni = new Map((Store.getAll(c) || []).map((r, i) => [r.id, i]));
       const righe = dbVersoCloud({ [c]: recs });
@@ -341,8 +349,16 @@ function cloudTogliRipristini(inviati) {
 function cloudPayloadVuoto(p) { return !p.upsert && !p.remove && !p.settings; }  // `base` da sola non è un invio
 
 // ── La fotografia salvata ──
+// In IndexedDB, accanto all'archivio, dove c'è (dalla 0.105.4): in
+// localStorage oltre qualche decina di migliaia di record non ci stava, e a
+// ogni riavvio si rimandava tutto.
 function cloudSalvaBase() {
   const b = Store.baseSalvabile();
+  if (Store.salvaExtra('cloudBase', b)) {
+    cloudScrivi(CLOUD_BASE_KEY, null);
+    _cloud.baseNonSalvata = false;
+    return;
+  }
   if (!cloudScrivi(CLOUD_BASE_KEY, b)) {
     // Senza spazio la fotografia non si salva: al prossimo avvio si manda
     // tutto (il server tiene la versione più recente di ogni riga), ma le
@@ -372,22 +388,38 @@ function cloudApplica(d, risposta) {
     if (!Array.isArray(d[c])) d[c] = [];
     const arr = d[c];
     const indice = new Map(arr.map((x, i) => [x && x.id, i]));
+    const vecchi = new Map();   // i record come erano prima, per dire se qualcosa è cambiato davvero
+    // I campi che il server non ha (segreti, solo locali) non dicono niente.
+    const soloQui = [].concat(def.secret || [], (CLOUD_TABLES[def.table] || {}).drop || []);
+    const senzaFigli = r => { const o = Object.assign({}, r); Object.keys(figli).concat(soloQui).forEach(k => delete o[k]); return o; };
     ordinaPerPos(loc[def.table] || []).forEach(riga => {
       const rec = Object.assign({}, riga);
       delete rec.pos; delete rec.childSets;
       const dichiarati = riga.childSets != null ? String(riga.childSets).split(',').filter(Boolean) : null;
       const i = indice.get(rec.id);
       const vecchio = i != null ? arr[i] : null;
+      if (vecchio) vecchi.set(rec.id, Object.assign({}, vecchio));
       Object.keys(figli).forEach(k => {
         const presente = dichiarati ? dichiarati.includes(k) : !!(vecchio && Array.isArray(vecchio[k]));
         if (!presente) return;
         rec[k] = figli[k].merge === 'replace' ? [] : ((vecchio && Array.isArray(vecchio[k])) ? vecchio[k] : []);
       });
+      // Uguale a quello che c'è: resta lui, con i suoi campi solo locali. Gli
+      // insiemi «sostituiti» si rifanno comunque, e si contano sotto.
+      if (vecchio && cloudUguali(senzaFigli(vecchio), senzaFigli(rec))) {
+        Object.keys(figli).forEach(k => { if (figli[k].merge === 'replace' && Array.isArray(rec[k])) vecchio[k] = rec[k]; });
+        return;
+      }
       if (i != null) arr[i] = rec; else { indice.set(rec.id, arr.length); arr.push(rec); }
       n++;
     });
     Object.keys(figli).forEach(k => {
       const cdef = figli[k];
+      // Un insieme «sostituito» si rifà da capo: è cambiato se non è lo stesso di prima.
+      const prima = new Map();
+      if (cdef.merge === 'replace') (loc[cdef.table] || []).forEach(rr => {
+        if (indice.has(rr.parentId) && !prima.has(rr.parentId)) prima.set(rr.parentId, vecchi.get(rr.parentId));
+      });
       ordinaPerPos(loc[cdef.table] || []).forEach(rr => {
         const i = indice.get(rr.parentId);
         const padre = i != null ? arr[i] : null;
@@ -399,10 +431,14 @@ function cloudApplica(d, risposta) {
         if (cdef.merge === 'replace') padre[k].push(x);
         else {
           const j = padre[k].findIndex(y => y && y[cdef.rowId] === x[cdef.rowId]);
-          if (j >= 0) padre[k][j] = x;
-          else padre[k].splice(Math.min(Number.isFinite(rr.pos) ? rr.pos : Infinity, padre[k].length), 0, x);
+          // Uguale com'è (a parte i campi ricavati, che dal server tornano senza): resta quella che c'è.
+          if (j >= 0) { if (!cloudUguali(padre[k][j], x, cdef.derived)) { padre[k][j] = x; n++; } }
+          else { padre[k].splice(Math.min(Number.isFinite(rr.pos) ? rr.pos : Infinity, padre[k].length), 0, x); n++; }
         }
-        n++;
+      });
+      prima.forEach((v, id) => {
+        const padre = arr[indice.get(id)];
+        if (!v || !Array.isArray(v[k]) || !cloudUguali(v[k], padre && padre[k])) n++;
       });
     });
   });
@@ -437,10 +473,24 @@ function cloudApplica(d, risposta) {
     });
   });
   if (risposta && risposta.settings && risposta.settings.data && typeof risposta.settings.data === 'object') {
+    if (!cloudUguali(d.settings, risposta.settings.data)) n++;
     d.settings = risposta.settings.data;
-    n++;
   }
   return n;
+}
+// Lo stesso contenuto, a parte l'ordine delle chiavi (e un null o un '' valgono
+// un campo che manca: il server li tratta allo stesso modo). `ignora`: campi
+// del primo livello che non contano. Le righe ripescate dal
+// margine di ricezione sono quasi sempre identiche a quelle che ci sono: un
+// giro che non porta niente di nuovo non risalva l'archivio.
+function cloudUguali(a, b, ignora) {
+  if (a === b) return true;
+  if (a == null || b == null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) return a.length === b.length && a.every((x, i) => cloudUguali(x, b[i]));
+  const vale = (o, k) => o[k] != null && o[k] !== '' && !(ignora && ignora.includes(k));
+  const ka = Object.keys(a).filter(k => vale(a, k)), kb = Object.keys(b).filter(k => vale(b, k));
+  return ka.length === kb.length && ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && cloudUguali(a[k], b[k]));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -678,11 +728,11 @@ async function cloudRicevi() {
   let n = 0;
   _cloud.applicando = true;
   let salvato;
-  try { salvato = Store.applicaRemoto(d => { n = cloudApplica(d, r); }); }
+  try { salvato = Store.applicaRemoto(d => (n = cloudApplica(d, r))); }
   finally { _cloud.applicando = false; }
   if (!cloudSalvatoDavvero(salvato)) return 0;
   cloudAggiornaConfig({ since: r.now });
-  cloudSalvaBase();
+  if (n || _cloud.baseNonSalvata) cloudSalvaBase();
   if (n) { cloudNumeriDoppi(db); cloudDopoArrivo(); }
   return n;
 }
@@ -969,7 +1019,7 @@ function cloudDisegnaStato() {
 function cloudAvvio() {
   const c = cloudConfig();
   if (!c) return;
-  if (c.allineato) Store.ripristinaBase(cloudLeggi(CLOUD_BASE_KEY) || {});
+  if (c.allineato) Store.ripristinaBase(Store.leggiExtra('cloudBase') || cloudLeggi(CLOUD_BASE_KEY) || {});
   Store.dopoCommit = () => cloudProgramma();
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function' && !_cloud.ascolta) {
     _cloud.ascolta = true;
@@ -1066,6 +1116,45 @@ async function cloudPullTutto() {
 }
 // Il pull: da un istante, o tutto a pagine.
 function cloudPullDa(since) { return since ? cloudRpc('pull_changes', { since }) : cloudPullTutto(); }
+
+// ── Prima di un conto fatto sull'archivio locale (dalla 0.105.4) ──
+// Una rettifica scrive «contato − esistente», e l'esistente è quello di questo
+// PC: senza i movimenti dei colleghi non ancora ricevuti, che poi arrivano e
+// si sommano alla rettifica, contati due volte. Qui si manda e si riceve
+// subito, anche con la finestra dell'inventario aperta, e il conto si fa dopo.
+// Senza archivio condiviso `fn` parte subito.
+async function cloudAllineaOra() {
+  if (!cloudPronto()) return true;
+  for (let i = 0; i < 40 && _cloud.inCorso; i++) await new Promise(r => setTimeout(r, 250));
+  if (_cloud.inCorso) return false;
+  _cloud.inCorso = true;
+  try {
+    await cloudInvia();
+    const c = cloudConfig();
+    const since = c.since ? new Date(Date.parse(c.since) - CLOUD_MARGINE_MS).toISOString() : null;
+    const r = await cloudPullDa(since);
+    let n = 0, salvato;
+    _cloud.applicando = true;
+    try { salvato = Store.applicaRemoto(d => (n = cloudApplica(d, r))); }
+    finally { _cloud.applicando = false; }
+    if (!cloudSalvatoDavvero(salvato)) return false;
+    cloudAggiornaConfig({ since: r.now });
+    cloudSalvaBase();
+    if (n) cloudDopoArrivo();
+    return true;
+  } catch (e) {
+    cloudGestisciErrore(e);
+    return false;
+  } finally { _cloud.inCorso = false; }
+}
+function conArchivioAggiornato(fn) {
+  if (!cloudPronto()) return fn();
+  return cloudAllineaOra().then(ok => {
+    if (ok) return fn();
+    showToast('Non riesco a ricevere le ultime modifiche dei colleghi: la giacenza di questo PC potrebbe essere vecchia. Riprova fra poco', 'error');
+    return undefined;
+  });
+}
 
 // Un pull applicato comunque (all'accesso nessuno sta scrivendo).
 async function cloudRiceviForzato() {
@@ -1224,6 +1313,7 @@ function cloudCollega(url, chiave) {
   cloudScrivi(CLOUD_SCOLLEGATO_KEY, null);
   cloudScrivi(CLOUD_SESS_KEY, null);
   cloudScrivi(CLOUD_BASE_KEY, null);
+  Store.salvaExtra('cloudBase', null);
 }
 async function cloudProva(url, chiave) {
   const u = cloudNormalizzaUrl(url);
@@ -1240,6 +1330,7 @@ function cloudScollega() {
   cloudEsci();
   cloudScrivi(CLOUD_KEY, null);
   cloudScrivi(CLOUD_BASE_KEY, null);
+  Store.salvaExtra('cloudBase', null);
 }
 
 // ═══════════════════════════════════════════════════════════

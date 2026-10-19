@@ -221,3 +221,18 @@ describe('Una richiesta al server che non torna più', () => {
     await assert.rejects(a.eval(`cloudHttp('/rest/v1/rpc/prova', {})`), /non raggiungibile/);
   });
 });
+
+// 0.105.4: l'invio completo cercava ogni record per id scorrendo la sua
+// collezione. Con 35.000 righe erano secondi a browser fermo (quadratico).
+describe('Un invio completo all\'archivio condiviso', () => {
+  it('si prepara in tempo lineare', () => {
+    const a = app(makeDb({}));
+    a.eval(`db.movements = db.movements || []; for (let i = 0; i < 30000; i++) db.movements.push({ id: '10000000-0000-4000-8000-' + String(i).padStart(12, '0'),
+      itemId: null, kind: 'carico', qty: 1, date: '2026-01-01T00:00:00.000Z', note: '', updatedAt: '2026-01-01T00:00:00.000Z' });`);
+    a.eval('Store.ripristinaBase({})');
+    const t = Date.now();
+    const n = a.eval('cloudPayload(Store.takeChanges().changes, null, true).payload.upsert.stock_movements.length');
+    assert.equal(n, 30000);
+    assert.ok(Date.now() - t < 3000, `${Date.now() - t} ms`);
+  });
+});

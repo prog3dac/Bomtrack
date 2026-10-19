@@ -824,10 +824,15 @@ function deleteCurrentMachine() {
     return;
   }
   if (!articoloUltimo(it)) { showToast(ARTICOLO_NON_ULTIMO(it.code), 'error'); return; }
-  askConfirm(`Eliminare "${it.name}" e la sua distinta?`, () => {
+  askConfirm(`Eliminare "${it.name}" e la sua distinta?`, () => eliminaSeAncoraUltimo(() => {
+    const x = getItem(it.id);
+    if (x && articoloUltimo(x)) return true;
+    if (x) showToast(ARTICOLO_NON_ULTIMO(x.code), 'error');
+    return false;
+  }, () => {
     currentBomId = null;
     removeConUndo('items', it.id, `"${it.name}" eliminato`, renderBom);
-  });
+  }));
 }
 // Chi contiene questo articolo, dall'indice inverso: una lettura invece di una
 // scansione del catalogo. La copia protegge l'indice da chi ordina il risultato.

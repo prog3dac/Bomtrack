@@ -491,8 +491,11 @@ function delJob(id) {
     showToast('Commessa collegata a ' + usi.join(', ') + ': scollegali prima, oppure chiudila.', 'error');
     return;
   }
-  askConfirm(`Eliminare la commessa ${j.number}?`, () => {
+  askConfirm(`Eliminare la commessa ${j.number}?`, () => eliminaSeAncoraUltimo(() => {
+    const x = getJob(id);
+    return !!x && guardiaDocumentoUltimo(x, jobList(), 'Annullala invece di eliminarla.');
+  }, () => {
     if (currentJobId === id) { currentJobId = null; jobView = 'list'; }
     removeConUndo('jobs', id, `Commessa ${j.number} eliminata`, renderJobs);
-  });
+  }));
 }

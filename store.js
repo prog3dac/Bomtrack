@@ -1577,8 +1577,13 @@ const IDB_NOME = 'bomtrack_archivio';
 // localStorage vuoto non vuol dire «archivio nuovo».
 const DB_KEY_IN_IDB = 'bomtrack_v1_in_indexeddb';
 const IDB_STORE = 'archivio';
+// Le chiavi che stanno in IndexedDB accanto all'archivio. `cloudBase`: la
+// fotografia dell'ultimo invio all'archivio condiviso, che in localStorage
+// oltre qualche decina di migliaia di record non ci stava più (dalla 0.105.4).
+const IDB_EXTRA = ['cloudBase'];
 function creaIdbAdapter(fabbrica) {
   let conn = null, copia = null, copiaRescue = null, inVolo = 0, segnato = false;
+  const extra = {};   // altre chiavi accanto all'archivio (la fotografia del cloud), lette all'avvio
   const attesa = req => new Promise((ok, ko) => { req.onsuccess = () => ok(req.result); req.onerror = () => ko(req.error); });
   const completa = tx => new Promise((ok, ko) => {
     tx.oncomplete = () => ok();
@@ -1606,6 +1611,7 @@ function creaIdbAdapter(fabbrica) {
       conn = await apri();
       copia = (await leggi('db')) || null;
       copiaRescue = (await leggi('illeggibile')) || null;
+      for (const k of IDB_EXTRA) extra[k] = (await leggi('x:' + k)) || null;
       const revIdb = Number(await leggi('rev')) || 0;
       // Il trasloco da localStorage: la prima volta, o quando una scheda con
       // l'app vecchia ha scritto lì dopo l'ultimo salvataggio qui.
@@ -1644,6 +1650,14 @@ function creaIdbAdapter(fabbrica) {
       return true;
     },
     rescued() { return copiaRescue; },
+    // Dalla 0.105.4. Restituisce false se la chiave non è fra quelle previste.
+    scriviExtra(k, v) {
+      if (!IDB_EXTRA.includes(k)) return false;
+      extra[k] = v;
+      scriviTutto([['x:' + k, v]]).catch(e => console.error('Salvataggio di ' + k + ' fallito:', e));
+      return true;
+    },
+    leggiExtra: k => extra[k],
     leggiRev: () => LocalAdapter.leggiRev(),
     scriviRev: n => LocalAdapter.scriviRev(n),
     // La scrittura parte subito ma finisce dopo: commit() non deve dichiarare
@@ -2103,6 +2117,10 @@ const Store = {
   // chiudere la finestra con una modifica non ancora partita la perderebbe —
   // al riavvio il caricamento rifotografa l'adesso e la modifica non risulta
   // più da mandare. `null` = nessuna fotografia.
+  // Altre chiavi accanto all'archivio, dove c'è IndexedDB (dalla 0.105.4):
+  // `salvaExtra` torna false se qui non c'è, e chi chiama resta dov'era.
+  salvaExtra(k, v) { return !!(adapter && adapter.scriviExtra && adapter.scriviExtra(k, v)); },
+  leggiExtra(k) { return adapter && adapter.leggiExtra ? adapter.leggiExtra(k) : undefined; },
   baseSalvabile() {
     if (!_baseIds) return null;
     const ids = {}, children = {};
@@ -2127,7 +2145,10 @@ const Store = {
   // conto delle modifiche le veda. Si chiama solo senza modifiche in sospeso:
   // la fotografia finale le dà tutte per inviate.
   applicaRemoto(fn) {
-    fn(db);
+    // `fn` dice quante cose sono cambiate: con zero non c'è niente da salvare,
+    // e un salvataggio a vuoto farebbe credere alle altre schede di essere
+    // rimaste indietro.
+    if (fn(db) === 0) return true;
     // I ricevuti delle righe arrivate si ricalcolano dagli eventi: il campo è
     // derivato, e dal server torna senza.
     if (modoCondiviso) riallineaRicevuti(false);

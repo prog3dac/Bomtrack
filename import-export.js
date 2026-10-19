@@ -909,6 +909,13 @@ function applyUsersSheet(rows, rep) {
     const u = findUserByEmail(email);
     if (!u) {
       if (!name) { rep.errors.push(`Utenti, riga ${i + 2}: nome richiesto per creare "${esc(email)}"`); return; }
+      // Con l'archivio condiviso un utente esiste solo se Supabase lo conosce:
+      // uno creato qui il server lo rifiuterebbe, e fermerebbe in coda tutto
+      // quello che questo PC manda dopo (dalla 0.105.5).
+      if (typeof cloudInUso === 'function' && cloudInUso()) {
+        rep.errors.push(`Utenti, riga ${i + 2}: "${esc(email)}" non c'è. Con l'archivio condiviso un collega nuovo si aggiunge da Gestione → Utenti, che gli manda l'invito`);
+        return;
+      }
       Store.insert('users', { id: gid(), name, email, username: cell(row, 'Username') || '',
         role: role || 'lettore', color: safeColor(cell(row, 'Colore', 'Color')), active: attivo !== false });
       out.created++;

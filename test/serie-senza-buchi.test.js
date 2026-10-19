@@ -53,6 +53,25 @@ describe('Documenti: si elimina solo l\'ultimo della serie', () => {
   });
 });
 
+// 0.105.5: con l'archivio condiviso il successivo può essere di un collega e
+// non ancora arrivato. Si riceve prima di eliminare, e si ricontrolla.
+describe('Con l\'archivio condiviso «l\'ultimo» si controlla dopo aver ricevuto', () => {
+  it('un ordine che un collega ha appena superato non si elimina', () => {
+    const a = app(makeDb({ items: [], orders: [ordine('o1', 'ODA-2026-001')] }));
+    a.eval(`conArchivioAggiornato = fn => { db.orders.push(${JSON.stringify(ordine('o2', 'ODA-2026-002'))}); return fn(); };`);
+    a.eval(`delOrder('o1'); confirmYes();`);
+    assert.match(avvisi(a), /ODA-2026-001 non è l'ultimo/);
+    assert.equal(a.eval('db.orders.length'), 2);
+  });
+  it('lo stesso per un codice articolo', () => {
+    const a = app(makeDb({ items: [Object.assign(mat('m1', 1), { code: 'MAT-ACC-001' })] }));
+    a.eval(`conArchivioAggiornato = fn => { db.items.push(${JSON.stringify(Object.assign(mat('m2', 1), { code: 'MAT-ACC-002' }))}); return fn(); };`);
+    a.eval(`delItem('m1'); confirmYes();`);
+    assert.match(avvisi(a), /MAT-ACC-001 non è l'ultimo/);
+    assert.equal(a.eval('db.items.length'), 2);
+  });
+});
+
 describe('Articoli: si elimina solo l\'ultimo codice della serie', () => {
   const codice = (id, code, type) => Object.assign(mat(id, 1), { code }, type ? { type } : {});
 

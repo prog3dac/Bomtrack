@@ -704,7 +704,10 @@ function delOdp(id) {
   if (odl) { showToast(`L'ordine di lavoro ${odl.number || ''} ha righe di questo ordine di produzione: annullalo o eliminalo prima.`, 'error'); return; }
   const mov = (db.movements || []).filter(m => m.orderId === id).length;
   const avviso = mov ? `\n\n⚠ Ha ${mov} ${mov === 1 ? 'movimento' : 'movimenti'} di magazzino: eliminandolo la merce torna com'era prima.` : '';
-  askConfirm(`Eliminare l'ordine di produzione ${o.number}?${avviso}`, () => {
+  askConfirm(`Eliminare l'ordine di produzione ${o.number}?${avviso}`, () => eliminaSeAncoraUltimo(() => {
+    const x = getOdp(id);
+    return !!x && guardiaDocumentoUltimo(x, db.prodOrders, 'Annullalo invece di eliminarlo.');
+  }, () => {
     // Dichiarazioni e movimenti se ne vanno con lui, e con lui tornano: un
     // «Annulla» che rimettesse solo la testata darebbe un ODP completato con le
     // fasi a zero e il magazzino senza i suoi movimenti.
@@ -721,7 +724,7 @@ function delOdp(id) {
       renderOdp();
       showToast('Ripristinato');
     });
-  }, { title: 'Elimina ordine di produzione', ok: 'Elimina' });
+  }), { title: 'Elimina ordine di produzione', ok: 'Elimina' });
 }
 
 // ─── La scheda ───

@@ -1371,10 +1371,13 @@ function delPlan(id) {
   if (!roleGuard('docs')) return;
   const p = getPlan(id); if (!p) return;
   if (!guardiaDocumentoUltimo(p, db.plans, 'Chiudilo invece di eliminarlo.')) return;
-  askConfirm(`Eliminare il piano ${p.number}?`, () => {
+  askConfirm(`Eliminare il piano ${p.number}?`, () => eliminaSeAncoraUltimo(() => {
+    const x = getPlan(id);
+    return !!x && guardiaDocumentoUltimo(x, db.plans, 'Chiudilo invece di eliminarlo.');
+  }, () => {
     if (currentPlanId === id) { currentPlanId = null; mrpView = 'list'; }
     removeConUndo('plans', id, `Piano ${p.number} eliminato`, renderMrp);
-  });
+  }));
 }
 function openPlanEdit(id) { currentPlanId = id; mrpView = 'edit'; renderMrp(); }
 // Aperto / chiuso. È l'unico stato che un piano ha, ed esiste per una ragione

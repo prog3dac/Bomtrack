@@ -327,6 +327,15 @@ describe('Import utenti — un foglio non è un buon posto da cui chiudersi fuor
     assert.equal(a.snapshot().users[0].name, 'Andrea C.');
     assert.equal(a.snapshot().users[0].color, '#FF0000');
   });
+  // 0.105.5: un utente creato in locale il server lo rifiuta, e la coda si ferma.
+  it('con l\'archivio condiviso un utente nuovo non nasce da un foglio', () => {
+    const a = conMe();
+    a.eval('cloudAttivo = () => true;');
+    const rep = importa(a, { Utenti: [{ Nome: 'Nuovo', Email: 'n@n.it', Ruolo: 'Lettore' }, { Nome: 'Andrea C.', Email: 't@t.it' }] });
+    assert.equal(a.snapshot().users.length, 1);
+    assert.equal(a.snapshot().users[0].name, 'Andrea C.', 'chi c\'è si aggiorna');
+    assert.match(rep.errors[0], /Gestione → Utenti/);
+  });
   it('l\'ultimo amministratore attivo non si declassa da un foglio', () => {
     const a = app(makeDb({ users: [{ id: 'u1', name: 'Capo', email: 'c@c.it', role: 'admin', active: true }] }));
     const rep = importa(a, { Utenti: [{ Nome: 'Capo', Email: 'c@c.it', Ruolo: 'Lettore' }] });

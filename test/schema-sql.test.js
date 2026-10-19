@@ -255,6 +255,24 @@ describe('Postgres: invio e lettura', () => {
     assert.equal(d.sql(`select count(*) from sync_tombstones where id = '${altro.id}'`), '1', 'una riga che non viaggia resta cancellata');
   }));
 
+  // 0.105.4: una riga scritta all'inizio di una transazione lunga ha un
+  // synced_at più vecchio del pull fatto mentre era aperta. Il `now` di quel
+  // pull ora non va oltre l'inizio della transazione, e il pull dopo la vede.
+  it('una riga scritta da un invio ancora aperto arriva al pull successivo', conDb(d => {
+    pieno(d);
+    const { spawn } = require('node:child_process');
+    const dorme = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    const rem = righe.reminders[0];
+    spawn('psql', [process.env.BOMTRACK_PG + ' dbname=' + d.nome, '-q', '-c',
+      `begin; update reminders set title = 'lento' where id = '${rem.id}'; select pg_sleep(2); commit;`], { stdio: 'ignore' });
+    dorme(700);
+    const durante = d.pull(null);
+    assert.equal(durante.tables.reminders.find(r => r.id === rem.id).title === 'lento', false, 'mentre è aperta non si vede');
+    for (let i = 0; i < 50 && d.sql(`select title from reminders where id = '${rem.id}'`) !== 'lento'; i++) dorme(200);
+    const dopo = d.pull(durante.now);
+    assert.ok((dopo.tables.reminders || []).some(r => r.id === rem.id && r.title === 'lento'), 'il pull dopo, dal suo istante, la porta');
+  }));
+
   it('il pull da un istante porta solo ciò che è cambiato dopo', conDb(d => {
     pieno(d);
     const da = d.pull(null).now;

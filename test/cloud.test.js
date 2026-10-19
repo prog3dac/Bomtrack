@@ -113,6 +113,26 @@ describe('Archivio condiviso — quello che arriva', () => {
     assert.deepEqual(pl.map(p => p.price), [9.9, 4.8], 'cambia solo la riga arrivata, al suo posto');
   });
 
+  // 0.105.5: il margine di ricezione ripesca sempre le ultime righe, e ogni
+  // giro risalvava l'archivio anche senza niente di nuovo.
+  it('righe uguali a quelle che ci sono non contano come cambiate', () => {
+    const a = appCondivisa(dbCloudCompleto());
+    const g1 = U(10);
+    const t = ev(a, `dbVersoCloud({ items: [Store.getById('items', '${g1}'), Store.getById('items', '${ID.item}')] })`);
+    a.eval(`Store.applicaRemoto(d => cloudApplica(d, ${JSON.stringify(risposta({ tables: t }))}))`);   // i campi solo locali se ne vanno qui
+    const impostazioni = ev(a, 'db.settings');
+    assert.equal(a.eval(`cloudApplica(db, ${JSON.stringify(risposta({ tables: t, settings: { data: impostazioni } }))})`), 0);
+    let salvati = 0;
+    a.ctx.__conta = () => salvati++;
+    a.eval('{ const c = Store.commit; Store.commit = function () { __conta(); return c.apply(this, arguments); }; }');
+    assert.equal(a.eval(`Store.applicaRemoto(d => cloudApplica(d, ${JSON.stringify(risposta({ tables: t }))}))`), true);
+    assert.equal(salvati, 0, 'niente di nuovo, niente da salvare');
+    t.item_components = [t.item_components[0]];
+    assert.ok(a.eval(`cloudApplica(db, ${JSON.stringify(risposta({ tables: t }))})`) > 0, 'una distinta con un componente in meno è cambiata');
+    t.item_prices[0].price = 9.9;
+    assert.equal(a.eval(`cloudApplica(db, ${JSON.stringify(risposta({ tables: { item_prices: [t.item_prices[0]] } }))})`), 1);
+  });
+
   it('le lapidi tolgono record e righe', () => {
     const a = appCondivisa(dbCloudCompleto());
     a.eval(`cloudApplica(db, ${JSON.stringify(risposta({ removed: { reminders: [ID.rem], item_prices: [ID.pr2] } }))})`);
@@ -200,6 +220,15 @@ describe('Archivio condiviso — più PC contro Supabase (finto, con Postgres ve
     assert.equal(B.eval(`Store.getById('orders', '${ID.ord}').lines[0].received`), 40, 'il ricevuto torna dagli eventi');
     assert.equal(B.eval('Store.hasPendingChanges()'), false, 'scaricare non crea niente da rimandare');
     assert.equal(B.eval(`currentUser.role`), 'acquisti');
+  });
+
+  passo('un giro senza novità non risalva l\'archivio', async () => {
+    await giro(B);
+    let salvati = 0;
+    B.ctx.__conta = () => salvati++;
+    B.eval('{ const c = Store.commit; Store.commit = function () { __conta(); return c.apply(this, arguments); }; }');
+    await giro(B); await giro(B);
+    assert.equal(salvati, 0, 'le righe ripescate dal margine sono uguali a quelle che ci sono');
   });
 
   // 0.105.4: uno schema di prima non ha pull_pagina, e lo scaricamento torna al pull intero.
@@ -547,6 +576,23 @@ describe('Archivio condiviso — due colleghi sulla stessa cosa', () => {
     assert.equal(srv.db.sql(`select count(*) from production_plan_lines where plan_id = '${PL}'`), '1', 'e con la sua riga');
     await giro(A);
     assert.equal(A.eval(`(Store.getById('plans', '${PL}') || { lines: [] }).lines.length`), 1, 'anche per Anna');
+  });
+
+  // 0.105.4: la rettifica scrive «contato − esistente», e l'esistente era
+  // quello di questo PC: il carico di un collega non ancora ricevuto si
+  // sommava poi alla rettifica, contato due volte.
+  passo('una rettifica si calcola sulla giacenza aggiornata ai colleghi', async () => {
+    await giro(A); await giro(B);
+    const prima = A.eval(`onHandOf('${ID.item}')`);
+    B.eval(`addMovement('${ID.item}', 'carico', 10, 'arrivato da Bruno')`);
+    await giro(B);
+    // Anna conta lo scaffale, dove ci sono anche i 10 di Bruno.
+    const contato = prima + 10 + 3;
+    A.el('mv-kind').value = 'rettifica'; A.el('mv-qty').value = String(contato); A.el('mv-note').value = ''; A.el('mv-ord').value = '';
+    await A.eval(`saveStockAdjust('${ID.item}')`);
+    await giro(A); await giro(B);
+    assert.equal(A.eval(`(invalidateCaches(), onHandOf('${ID.item}'))`), contato, 'la differenza è 3, non 13');
+    assert.equal(B.eval(`(invalidateCaches(), onHandOf('${ID.item}'))`), contato);
   });
 
   // 0.105.4: con l'orologio del PC indietro il record ripristinato era più

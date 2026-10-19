@@ -331,7 +331,15 @@ function invRegistraDaModal() {
     const el = document.getElementById('inv-ok-' + i);
     return r.diff !== 0 && el && el.checked ? r.it.id : null;
   }).filter(Boolean);
-  const n = invRegistra(scelti, val('inv-nota'));
+  const nota = val('inv-nota');
+  // Le differenze si calcolano sull'esistente aggiornato ai movimenti dei
+  // colleghi (dalla 0.105.4): con l'archivio condiviso, prima si riceve.
+  const registra = () => invRegistraEChiudi(scelti, nota);
+  return typeof conArchivioAggiornato === 'function' ? conArchivioAggiornato(registra) : registra();
+}
+function invRegistraEChiudi(scelti, nota) {
+  if (!_inv) return;
+  const n = invRegistra(scelti, nota);
   closeModal();
   if (typeof activeView !== 'undefined' && activeView === 'stock' && typeof renderStock === 'function') renderStock();
   showToast(n ? (n === 1 ? '1 rettifica registrata' : n + ' rettifiche registrate') : 'Inventario chiuso: nessuna differenza da registrare');

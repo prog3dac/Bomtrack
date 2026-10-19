@@ -806,6 +806,14 @@ function articoloUltimo(it, via) {
     return s && s.prefisso === x.prefisso && (giu ? s.n < x.n : s.n > x.n);
   });
 }
+// Con l'archivio condiviso «l'ultimo» di questo PC può non esserlo più: un
+// collega può aver appena creato il successivo, non ancora arrivato. Prima di
+// eliminare si manda e si riceve, e la guardia si ripete sull'archivio
+// aggiornato (dalla 0.105.5). Senza archivio condiviso `fn` parte subito.
+function eliminaSeAncoraUltimo(guardia, fn) {
+  const vai = () => { if (guardia()) fn(); };
+  return typeof conArchivioAggiornato === 'function' ? conArchivioAggiornato(vai) : vai();
+}
 const ARTICOLO_NON_ULTIMO = c => `Il codice ${c} non è l'ultimo della sua serie: eliminandolo resterebbe un buco nella codifica. Segnalo come obsoleto invece di eliminarlo.`;
 // Codice per famiglia: materie prime, commerciali e parti non legate a una macchina
 function genFamilyCode(type, familyId, subFamilyId) {

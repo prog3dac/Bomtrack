@@ -841,10 +841,18 @@ function saveStockAdjust(itemId) {
   const supplierId = isContoLavoroKind(kind) ? val('mv-sup') : '';
   if (isContoLavoroKind(kind) && !supplierId) { showToast('Scegli il terzista: senza, non si sa da chi sta la merce', 'error'); return; }
   const uscita = kind === 'scarico' || kind === 'clOut';
-  const delta = kind === 'rettifica' ? (inserita - onHandOf(it.id)) : (uscita ? -inserita : inserita);
-  if (!delta) { showToast('Nessuna differenza da registrare'); closeModal(); return; }
+  const note = val('mv-note'), orderId = val('mv-ord');
+  const registra = () => {
+    // La rettifica si calcola sull'esistente aggiornato ai movimenti dei colleghi (dalla 0.105.4).
+    const delta = kind === 'rettifica' ? (inserita - onHandOf(it.id)) : (uscita ? -inserita : inserita);
+    if (!delta) { showToast('Nessuna differenza da registrare'); closeModal(); return; }
+    registraMovimentoManuale(it, kind, delta, inserita, uscita, note, supplierId, orderId);
+  };
+  return kind === 'rettifica' && typeof conArchivioAggiornato === 'function' ? conArchivioAggiornato(registra) : registra();
+}
+function registraMovimentoManuale(it, kind, delta, inserita, uscita, note, supplierId, orderId) {
   const sotto = uscita ? avvisoSottoZero([{ itemId: it.id, qty: inserita }]) : [];
-  addMovement(it.id, kind, delta, val('mv-note'), { supplierId, orderId: val('mv-ord') });
+  addMovement(it.id, kind, delta, note, { supplierId, orderId });
   closeModal();
   if (typeof renderCatalogs === 'function') renderCatalogs();
   // Il toast passa già da esc(): qui l'unità va concatenata cruda, non da fmtUom.

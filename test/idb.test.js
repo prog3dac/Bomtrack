@@ -82,6 +82,23 @@ async function avvia(storage, idb, opts) {
   return a;
 }
 
+// 0.105.4: la fotografia dell'archivio condiviso in localStorage, oltre
+// qualche decina di migliaia di record, non ci stava più.
+describe('La fotografia del cloud accanto all\'archivio', () => {
+  it('si salva in IndexedDB, fuori da localStorage, e torna al riavvio', async () => {
+    const storage = makeStorage();
+    const idb = fakeIdb();
+    const a = await avvia(storage, idb);
+    const grande = { ids: { items: Object.fromEntries(Array.from({ length: 70000 }, (_, i) => ['id-' + i, '2026-10-19T00:00:00.000Z'])) } };
+    a.ctx.__grande = grande;
+    assert.equal(a.eval(`Store.salvaExtra('cloudBase', __grande)`), true);
+    assert.equal(a.eval(`Store.salvaExtra('altro', 1)`), false, 'solo le chiavi previste');
+    await asciuga();
+    const b = await avvia(storage, idb);
+    assert.equal(Object.keys(b.eval(`Store.leggiExtra('cloudBase')`).ids.items).length, 70000);
+  });
+});
+
 describe('Il trasloco da localStorage', () => {
   it('la prima volta copia l\'archivio, lo rilegge, e solo allora libera localStorage', async () => {
     const storage = makeStorage();

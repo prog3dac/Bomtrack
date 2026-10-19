@@ -485,12 +485,16 @@ function docDel(k, id, before, extraWarn) {
   if (!guardiaDocumentoUltimo(doc, db[K.coll], k === 'rfq' ? 'Chiudila invece di eliminarla.' : 'Annullalo invece di eliminarlo.')) return;
   const warn = doc.status === 'bozza' ? ''
     : `\nAttenzione: risulta ${docStatusLabel(K, doc)}${extraWarn ? extraWarn(doc) : ''}.`;
-  askConfirm(`Eliminare ${K.pronome} ${K.nome.toLowerCase()} ${doc.number}?${warn}`, () => {
+  const invece = k === 'rfq' ? 'Chiudila invece di eliminarla.' : 'Annullalo invece di eliminarlo.';
+  askConfirm(`Eliminare ${K.pronome} ${K.nome.toLowerCase()} ${doc.number}?${warn}`, () => eliminaSeAncoraUltimo(() => {
+    const d = K.get(id);
+    return !!d && guardiaDocumentoUltimo(d, db[K.coll], invece);
+  }, () => {
     if (before) before();
     // Il documento aperto che si elimina non ha più niente da salvare.
     if (K.dirty() && K.currentId && K.currentId() === id) K.dirty(false);
     removeConUndo(K.coll, id, `${K.nome} ${doc.number} eliminat${K.suffisso}`, () => K.render());
-  });
+  }));
 }
 // Lasciare il documento aperto: quel che era in sospeso si salva, e lo sblocco
 // decade. Vale sia chiudendolo sia passando direttamente a un altro documento
