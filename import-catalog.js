@@ -928,7 +928,7 @@ function catLegacySheets(byName, ctx) {
     if ((type === 'materiale' || type === 'parte') && pick(row, 'CostoUnitario', 'Costo') !== '') {
       riga['Prezzo'] = pick(row, 'CostoUnitario', 'Costo');
     }
-    catApplyItemRow(riga, { name: primo, type }, ctx, ln, st);
+    catApplyItemRow(riga, { name: esc(primo), type }, ctx, ln, st);   // i messaggi del report sono HTML già escapato
   });
   if (altri) {
     const altro = ctx.scope === 'buy' ? 'Progetto' : 'Acquisti';

@@ -195,7 +195,9 @@ describe('Coerenza con la costificazione', () => {
     const app = conDb(makeDb({ items: [
       mat('m', 3.5), acq('a', 7.25), acq('v', 0.4),
       parte('p', { cycle: [{ kind: 'item', itemId: 'm', qty: 2.5 }] }),
-      asm('sg', 'sottogruppo', { components: [comp('p', 2), comp('v', 10, 5)] }),
+      // Scarto del 10%: 33 viti tonde. Con un 5% sarebbero 31,5, e l'ordine
+      // (dalla 0.105.5) ne chiede 32 interi, che il costo non conta.
+      asm('sg', 'sottogruppo', { components: [comp('p', 2), comp('v', 10, 10)] }),
       asm('mac', 'macchina', { components: [comp('sg', 3), comp('a', 1)] }),
     ] }));
     const totale = app.eval(`(() => {
@@ -357,5 +359,21 @@ describe('Piani di produzione', () => {
     app.seedStorage({ schemaVersion: 2, items: [], settings: {} });
     app.eval('Store.load()');
     assert.deepEqual(app.snapshot().plans, []);
+  });
+});
+
+// 0.105.5: scarti e coefficienti davano mezze viti sugli ordini.
+describe('Le quantità da ordinare', () => {
+  it('i pezzi si arrotondano all\'intero in su, il resto a sei decimali', () => {
+    const app = conDb(makeDb({ items: [
+      Object.assign(acq('vite', 1), { uom: 'pz' }),
+      Object.assign(mat('olio', 1), { uom: 'l' }),
+      Object.assign(parte('p', { cycle: [] }), { uom: 'pz' }),
+      asm('g', 'gruppo', { components: [Object.assign(comp('vite', 1), { scrapPct: 5 }), comp('olio', 0.1), Object.assign(comp('p', 1), { scrapPct: 5 })] }),
+    ], plans: [{ id: 'pl1', number: 'FAB-1', active: true, lines: [{ id: 'l1', itemId: 'g', qty: 3, dueDate: '2026-12-01' }] }] }));
+    const r = JSON.parse(app.eval(`(invalidateCaches(), JSON.stringify({
+      buy: Object.fromEntries(mrpBuyRows(getPlan('pl1'), false).map(x => [x.item.id, x.qtyOrder])),
+      make: Object.fromEntries(mrpMakeRows(getPlan('pl1')).map(x => [x.item.id, x.qtyOrder])) }))`));
+    assert.deepEqual(r, { buy: { vite: 4, olio: 0.3 }, make: { p: 4 } });
   });
 });

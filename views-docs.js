@@ -319,7 +319,11 @@ function docSetLine(k, id, lineId, field, value) {
     l.received = ricevutoPrima;
     registraRicevuto(K.coll, doc, l, totale);
   }
-  K.autoStatus(doc);   // anche cambiare una quantità sposta la soglia di evasione
+  // Lo stato si ricalcola solo se cambia ciò da cui dipende: ricevuto,
+  // quantità, prezzo (per la richiesta). Una nota o una data confermata non
+  // devono riscrivere uno stato scelto a mano (dalla 0.105.5: un ordine
+  // chiuso corto come «Evaso» tornava «Parziale» alla prima nota).
+  if (['received', 'qty', 'price'].includes(field)) K.autoStatus(doc);
   touch(doc); docMarkDirty(k);
   if (doc.status !== before) { K.render(); showToast('Stato: ' + (K.STATUS[doc.status] || doc.status)); }
   else if (K.numLineFields.includes(field)) K.render();
@@ -400,6 +404,7 @@ function docSaveLineEdit(k, id, lineId) {
   if (!roleGuard('docs')) { closeModal(); return; }
   const doc = K.get(id); if (!doc) return;
   const l = (doc.lines || []).find(x => x.id === lineId); if (!l) return;
+  const prima = { qty: l.qty, price: l.price };
   if (modeAllows(docMode(k, doc), 'contract')) {
     if (!readLineIdentity(p, l)) return;
     if (isNeg(p + '-qty')) { showToast('La quantità non può essere negativa', 'error'); return; }
@@ -408,7 +413,8 @@ function docSaveLineEdit(k, id, lineId) {
     if (K.hasLinePrice) l.price = val(p + '-price') === '' ? '' : numVal(p + '-price', 0);
   }
   l.note = val(p + '-note');   // la nota passa sempre, anche a documento bloccato
-  K.autoStatus(doc); touch(doc); docMarkDirty(k); closeModal(); K.render();
+  if (l.qty !== prima.qty || l.price !== prima.price) K.autoStatus(doc);   // come in docSetLine
+  touch(doc); docMarkDirty(k); closeModal(); K.render();
 }
 function docAddCatalogLines(k, id, ids) {
   const K = docKind(k);
@@ -1445,7 +1451,8 @@ function orderReception(o) {
 function ordAutoStatus(o) {
   if (o.status === 'bozza' || o.status === 'annullato') return;
   const { ordered, received } = orderReception(o);
-  if (received <= 0) o.status = o.supplierConfirmation ? 'confermato' : 'inviato';
+  // «Confermato» scelto a mano resta, anche senza il numero di conferma.
+  if (received <= 0) o.status = (o.supplierConfirmation || o.status === 'confermato') ? 'confermato' : 'inviato';
   else if (ordered > 0 && received >= ordered) o.status = 'evaso';
   else o.status = 'parziale';
 }
@@ -1506,7 +1513,26 @@ function orderFromRfq(rfqId) {
   // richiesta senza lavorazioni), un ODL per ogni passata.
   const conFase = (r.lines || []).filter(l => !!l.phaseKey);
   const nOda = conFase.length < (r.lines || []).length || !conFase.length ? 1 : 0;
-  return conNumeri({ ODA: nOda, ODL: new Set(conFase.map(clPassataDiRiga)).size }, () => orderFromRfqFatto(r));
+  // Fra il clic e la creazione c'è il giro dei numeri: un secondo clic, o un
+  // collega, può aver creato l'ordine nel frattempo. Allora ci si ferma.
+  const crea = () => {
+    const prima = ordiniDaRfq(r.id).length;
+    return conNumeri({ ODA: nOda, ODL: new Set(conFase.map(clPassataDiRiga)).size }, () => {
+      if (ordiniDaRfq(r.id).length > prima) { showToast(`L'ordine da ${r.number} è appena stato creato`, 'error'); return; }
+      return orderFromRfqFatto(r);
+    });
+  };
+  // Un ordine da questa richiesta c'è già (dalla 0.105.5): un secondo nasce
+  // solo se lo si vuole davvero. Prima ne nasceva uno a ogni clic.
+  const gia = ordiniDaRfq(r.id);
+  if (gia.length) {
+    return askConfirm(`Da ${r.number} esiste già ${gia.map(d => d.number).join(', ')}. Crearne un altro?`, crea,
+      { title: 'Ordine già creato', ok: 'Crea un altro ordine' });
+  }
+  return crea();
+}
+function ordiniDaRfq(rfqId) {
+  return [].concat(db.orders || [], db.workOrders || []).filter(d => d.rfqId === rfqId && d.status !== 'annullato');
 }
 function orderFromRfqFatto(r) {
   const sup = r.supplierId ? getSupplier(r.supplierId) : null;

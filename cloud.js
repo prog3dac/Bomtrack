@@ -436,9 +436,13 @@ function cloudApplica(d, risposta) {
           else { padre[k].splice(Math.min(Number.isFinite(rr.pos) ? rr.pos : Infinity, padre[k].length), 0, x); n++; }
         }
       });
+      // Uguale a quello di prima: resta quello di prima. Non solo per contare:
+      // la copia del server può differire in un '' o un null, e senza un
+      // salvataggio che la fotografi risulterebbe una modifica da rimandare.
       prima.forEach((v, id) => {
         const padre = arr[indice.get(id)];
-        if (!v || !Array.isArray(v[k]) || !cloudUguali(v[k], padre && padre[k])) n++;
+        if (v && Array.isArray(v[k]) && padre && cloudUguali(v[k], padre[k])) padre[k] = v[k];
+        else n++;
       });
     });
   });
@@ -473,8 +477,7 @@ function cloudApplica(d, risposta) {
     });
   });
   if (risposta && risposta.settings && risposta.settings.data && typeof risposta.settings.data === 'object') {
-    if (!cloudUguali(d.settings, risposta.settings.data)) n++;
-    d.settings = risposta.settings.data;
+    if (!cloudUguali(d.settings, risposta.settings.data)) { d.settings = risposta.settings.data; n++; }
   }
   return n;
 }

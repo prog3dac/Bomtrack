@@ -122,6 +122,10 @@ describe('Archivio condiviso — quello che arriva', () => {
     a.eval(`Store.applicaRemoto(d => cloudApplica(d, ${JSON.stringify(risposta({ tables: t }))}))`);   // i campi solo locali se ne vanno qui
     const impostazioni = ev(a, 'db.settings');
     assert.equal(a.eval(`cloudApplica(db, ${JSON.stringify(risposta({ tables: t, settings: { data: impostazioni } }))})`), 0);
+    // Le impostazioni del server, uguali a meno di un '' che lì è null: restano quelle di qui,
+    // o al giro dopo risulterebbero una modifica da rimandare (e il giro non finirebbe mai).
+    a.eval('db.settings.__vuoto = ""; globalThis.__prima = db.settings;');
+    assert.equal(a.eval(`cloudApplica(db, ${JSON.stringify(risposta({ settings: { data: impostazioni } }))}) + (db.settings === __prima ? 'stesse' : 'sostituite')`), '0stesse');
     let salvati = 0;
     a.ctx.__conta = () => salvati++;
     a.eval('{ const c = Store.commit; Store.commit = function () { __conta(); return c.apply(this, arguments); }; }');

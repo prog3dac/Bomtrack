@@ -187,7 +187,8 @@ function stockIndex() {
   _stockIdx = idx;
   return idx;
 }
-function invalidateStock() { _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; _ordinePiani = null; }
+let _esplosi = new Map();   // mrpExplodePlan
+function invalidateStock() { _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; _ordinePiani = null; _esplosi = new Map(); }
 function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, arrivi: [] }; }
 function onHandOf(itemId) { return stockOf(itemId).onHand; }
 function incomingOf(itemId) { return stockOf(itemId).incoming; }
@@ -424,7 +425,20 @@ function mrpOpzPiano(planId) { return { scaffale: mrpScaffale(planId) }; }
 // L'esplosione di un piano **com'è davvero**: al netto delle parti pronte che
 // gli toccano. È quella che usano tutte le viste di un piano; la lorda resta per
 // costi e anteprime.
-function mrpExplodePlan(p) { return mrpExplode((p && p.lines) || [], mrpOpzPiano(p && p.id)); }
+//
+// Una volta per piano fra un salvataggio e l'altro (dalla 0.105.5): una
+// schermata del piano la chiedeva una quarantina di volte. La chiave porta le
+// righe, così una modifica non ancora salvata non legge un'esplosione vecchia.
+// Il risultato si legge e basta: chi deve cambiarlo se ne fa una copia.
+function mrpExplodePlan(p) {
+  if (!p || !p.id) return mrpExplode((p && p.lines) || [], mrpOpzPiano(p && p.id));
+  const chiave = JSON.stringify(p.lines || []);
+  const gia = _esplosi.get(p.id);
+  if (gia && gia.chiave === chiave) return gia.exp;
+  const exp = mrpExplode(p.lines || [], mrpOpzPiano(p.id));
+  _esplosi.set(p.id, { chiave, exp });
+  return exp;
+}
 // Il materiale già uscito dal magazzino **per un piano**: piano → articolo →
 // quantità. Conta i movimenti che portano l'id di un documento del piano (ODP,
 // ODL, ordine di conto lavoro): lo `scarico` e l'uscita a conto lavoro tolgono,

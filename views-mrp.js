@@ -68,7 +68,7 @@ function mrpExplode(lines, opz) {
   // sbaglia a passare.
   const acc = { buy: new Map(), make: new Map(), phases: new Map(), load: new Map(),
     asm: new Map(), intOps: new Map(), stock: new Map(), cycle: false,
-    scaffale: (opz && opz.scaffale) || null };
+    scaffale: (opz && opz.scaffale) || null, lotti: mrpLotti(lines) };
   (lines || []).forEach(l => mrpDescend(l.itemId, Number(l.qty) || 0, new Set(), acc, l.dueDate || ''));
   const perCodice = m => Array.from(m.values()).sort((a, b) => String(a.item.code).localeCompare(String(b.item.code)));
   // Le fasi si ordinano per parte e poi per posizione nel ciclo: l'ordine delle
@@ -117,6 +117,30 @@ function mrpAddPhase(map, it, row, opIndex, qty, due, start) {
   map.set(k, { item: it, row, opIndex, phaseKey: k, phaseNo: cyclePhaseNumber(opIndex),
     workCenterId: row.workCenterId || '', supplierId: row.supplierId || '', qty, due: due || '', start: start || '' });
 }
+// Il lotto di una parte o di un assieme che compare in più rami della
+// distinta: si fabbrica (e si monta) tutto insieme, in un ODP solo, e i tempi
+// vanno calcolati sul lotto intero. Calcolati sul ramo, una parte comune a due
+// gruppi risultava da lanciare più tardi di quanto serve (dalla 0.105.5).
+// Lordo, senza lo scaffale: chi compare in un ramo solo usa la sua quantità.
+function mrpLotti(lines) {
+  const tot = new Map(), rami = new Map();
+  const giu = (itemId, qty, ancestors) => {
+    const it = getItem(itemId);
+    if (!it || !(qty > 0) || ancestors.has(itemId)) return;
+    if (it.type === 'materiale' || it.type === 'acquistato') return;
+    if (it.type === 'parte' && partSourcing(it) === 'buy') return;
+    tot.set(itemId, (tot.get(itemId) || 0) + qty);
+    rami.set(itemId, (rami.get(itemId) || 0) + 1);
+    const next = new Set(ancestors); next.add(itemId);
+    if (it.type === 'parte') (it.cycle || []).forEach(r => { if (r.kind !== 'op') giu(r.itemId, qty * (Number(r.qty) || 0), next); });
+    else (it.components || []).forEach(c => giu(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next));
+  };
+  (lines || []).forEach(l => giu(l.itemId, Number(l.qty) || 0, new Set()));
+  const lotti = new Map();
+  rami.forEach((n, id) => { if (n > 1) lotti.set(id, tot.get(id)); });
+  return lotti;
+}
+function mrpLotto(acc, it, qty) { return Math.max(qty, (acc.lotti && acc.lotti.get(it.id)) || 0); }
 function mrpDescend(itemId, qty, ancestors, acc, due) {
   const it = getItem(itemId);
   if (!it || !(qty > 0)) return;
@@ -141,7 +165,7 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
     // fase ha il suo inizio e la sua fine, e il materiale serve all'inizio
     // della prima. Le ore di una fase interna stanno nella settimana in cui la
     // fase **comincia**, non in quella in cui il pezzo serve.
-    const prog = schedPart(it, qty, due);
+    const prog = schedPart(it, mrpLotto(acc, it, qty), due);
     mrpAdd(acc.make, it, qty, due, prog.start);
     // Le righe di ciclo non hanno scarto e il fattore resta la quantità secca —
     // asimmetria rispetto agli assiemi qui sotto, e **voluta**: introdurlo
@@ -167,7 +191,7 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
   }
   // assieme: il montaggio finisce quando l'assieme serve e comincia prima dei
   // suoi giorni; i componenti servono all'inizio del montaggio.
-  const prog = schedAssembly(it, qty, due);
+  const prog = schedAssembly(it, mrpLotto(acc, it, qty), due);
   mrpAdd(acc.asm, it, qty, due, prog.start);
   // le sue lavorazioni caricano i centri come le fasi interne di una parte.
   // Vanno raccolte qui e non a posteriori: `make` contiene solo parti, e le
@@ -319,7 +343,8 @@ function schedAssembly(it, qty, due) {
 //   nodo = { item, kind: 'asm'|'make'|'buy', qty, start, end, days, lead, steps, children }
 // `start`/`end` sono le date **a ritroso**: per un acquisto ordine e arrivo,
 // per una parte lancio e pronto, per un assieme inizio e fine montaggio.
-function schedTree(itemId, qty, due, ancestors) {
+// `lotti`: quelli di mrpLotti() sul piano intero, come nell'esplosione.
+function schedTree(itemId, qty, due, ancestors, lotti) {
   const it = getItem(itemId);
   if (!it || !(qty > 0)) return null;
   const visti = ancestors || new Set();
@@ -333,23 +358,23 @@ function schedTree(itemId, qty, due, ancestors) {
   }
   const next = new Set(visti); next.add(itemId);
   if (it.type === 'parte') {
-    const prog = schedPart(it, qty, due);
+    const prog = schedPart(it, mrpLotto({ lotti }, it, qty), due);
     const figli = [];
     const perFigli = schedChildDue(prog.start);
     (it.cycle || []).forEach(r => {
       if (r.kind === 'op') return;
-      const n = schedTree(r.itemId, qty * (Number(r.qty) || 0), perFigli, next);
+      const n = schedTree(r.itemId, qty * (Number(r.qty) || 0), perFigli, next, lotti);
       if (n) figli.push(n);
     });
     return { item: it, kind: 'make', qty, start: prog.start, end: due || '', days: 0,
       steps: prog.steps, children: figli };
   }
-  const prog = schedAssembly(it, qty, due);
+  const prog = schedAssembly(it, mrpLotto({ lotti }, it, qty), due);
   const perFigli = schedChildDue(prog.start);
   const figli = [];
   (it.components || []).forEach(c => {
     const f = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
-    const n = schedTree(c.itemId, qty * f, perFigli, next);
+    const n = schedTree(c.itemId, qty * f, perFigli, next, lotti);
     if (n) figli.push(n);
   });
   return { item: it, kind: 'asm', qty, start: prog.start, end: due || '', days: prog.days,
@@ -469,8 +494,9 @@ function schedCritico(node) {
 // (negativo = la consegna richiesta non si regge), l'albero e il percorso.
 function planFeasibility(plan) {
   const disp = schedDisponibilita(plan.id, plan.lines);
+  const lotti = mrpLotti(plan.lines);
   return (plan.lines || []).map(l => {
-    const tree = schedTree(l.itemId, Number(l.qty) || 0, l.dueDate || '');
+    const tree = schedTree(l.itemId, Number(l.qty) || 0, l.dueDate || '', null, lotti);
     if (!tree) return { lineId: l.id, richiesta: l.dueDate || '', fattibile: '', margine: null, tree: null, critico: [] };
     const fattibile = schedForward(tree, disp);
     const margine = l.dueDate && fattibile ? workDaysBetween(fattibile, l.dueDate) : null;
@@ -620,6 +646,18 @@ function buyLeadDays(it) { return leadDaysOfRow(buyDocRow(it)); }
 // concorrenza il fabbisogno del piano stesso. Passarlo è obbligatorio nei fatti
 // — ometterlo fa risultare ogni riga impegnata contro sé stessa e raddoppia gli
 // acquisti — e infatti nessuna vista chiama questa funzione direttamente.
+// La quantità che va su un documento. Scarti e coefficienti frazionari danno
+// 10,5 pezzi o 0,30000000000000004 kg: un ordine per mezza vite non si
+// riceve mai per intero, e il residuo restava «in arrivo» per sempre. Le
+// unità che si contano (pezzi, numero, set, confezioni) si arrotondano
+// all'intero in su; le altre a sei decimali (dalla 0.105.5).
+const UOM_INTERE = ['pz', 'n', 'nr', 'set', 'conf', 'kit'];
+function uomIntera(code) { return UOM_INTERE.includes(String(code || '').trim().toLowerCase()); }
+function quantitaDaOrdinare(q, uom) {
+  const n = Number(q) || 0;
+  if (!(n > 0)) return n;
+  return uomIntera(uom) ? Math.ceil(n - 1e-9) : Math.round(n * 1e6) / 1e6;
+}
 function mrpBuyRow(entry, netMode, planId) {
   const it = entry.item;
   const attiva = activePriceRow(it);
@@ -634,7 +672,7 @@ function mrpBuyRow(entry, netMode, planId) {
   // ricomprerebbe ciò che ha appena usato (vedi commitIndex).
   const prelevato = prelevatoPer(it.id, planId || null);
   const st = stockFor(it, Math.max(0, entry.qty - prelevato), impegni.reduce((s, c) => s + c.qty, 0));
-  const qtyOrder = netMode ? st.net : entry.qty;
+  const qtyOrder = quantitaDaOrdinare(netMode ? st.net : entry.qty, itemUom(it));
 
   // ─── Da chi si compra, e a quale listino ───
   // Il fornitore lo decide la quotazione **in uso**: è la scelta che qualcuno ha
@@ -706,12 +744,28 @@ function mrpBuyRow(entry, netMode, planId) {
 function mrpLoadEntries(plans) {
   const map = new Map();
   (plans || []).forEach(p => {
-    mrpExplodePlan(p).load.forEach(e => {
+    const exp = mrpExplodePlan(p);
+    // Le parti già fatte non caricano più i centri (0.105.5): le loro ore si
+    // tolgono in proporzione ai pezzi che restano. Gli assiemi non hanno fatti.
+    const lordo = new Map(exp.make.map(m => [m.item.id, m.qty]));
+    const quota = new Map();
+    const resto = itemId => {
+      if (!quota.has(itemId)) {
+        const q = lordo.get(itemId);
+        quota.set(itemId, q > 0 && typeof daFare === 'function' ? daFare(p.id, itemId, q) / q : 1);
+      }
+      return quota.get(itemId);
+    };
+    exp.load.forEach(e => {
+      const voci = e.voci.map(v => {
+        const f = resto(v.itemId);
+        return f === 1 ? v : Object.assign({}, v, { qty: v.qty * f, hours: v.hours * f });
+      }).filter(v => v.hours > 0);
+      if (!voci.length) return;
       const k = e.workCenterId + '|' + e.week;
       let t = map.get(k);
       if (!t) { t = { workCenterId: e.workCenterId, week: e.week, hours: 0, voci: [] }; map.set(k, t); }
-      t.hours += e.hours;
-      e.voci.forEach(v => t.voci.push(Object.assign({ planId: p.id, planNumber: p.number || '' }, v)));
+      voci.forEach(v => { t.hours += v.hours; t.voci.push(Object.assign({ planId: p.id, planNumber: p.number || '' }, v)); });
     });
   });
   return Array.from(map.values());
@@ -1116,7 +1170,7 @@ function mrpPhaseRow(entry) {
     // nella stessa tabella e devono poterle distinguere senza indovinare da
     // quali campi mancano.
     isPhase: true,
-    qty: entry.qty, qtyOrder: entry.qty, uom: itemUom(entry.item),
+    qty: entry.qty, qtyOrder: quantitaDaOrdinare(entry.qty, itemUom(entry.item)), uom: itemUom(entry.item),
     // I **giorni di attraversamento** della fase sono il suo tempo di consegna:
     // se il pezzo serve pronto il 30 e il terzista ci mette cinque giorni,
     // l'ordine di lavoro deve uscire entro il 25. È la stessa aritmetica dei
@@ -1266,7 +1320,7 @@ function mrpMakeRow(entry, planId) {
   const resta = (planId && typeof daLanciare === 'function') ? daLanciare(planId, it.id, entry.qty) : entry.qty;
   return {
     item: it, isMake: true, makeKey: 'make#' + it.id,
-    qty: entry.qty, qtyOrder: resta, uom: itemUom(it),
+    qty: entry.qty, qtyOrder: quantitaDaOrdinare(resta, itemUom(it)), uom: itemUom(it),
     // Entro quando lanciarla: l'inizio della prima fase del ciclo, che la
     // programmazione a ritroso ha calcolato. Senza ciclo coincide con la data
     // in cui serve, come prima.
@@ -1812,6 +1866,15 @@ function planCreateDocs() {
 }
 const PLAN_DOC_SERIE = { rfq: 'RFQ', order: 'ODA', odl: 'ODL', odp: 'ODP' };
 function planCreateDocsFatto(p, kind, gruppi) {
+  // Con l'archivio condiviso fra la scelta e la creazione c'è un giro al
+  // server (i numeri): un secondo clic, o un collega appena arrivato, può aver
+  // già messo quelle righe in un documento. Si ricontrolla qui (0.105.5).
+  const gia = planDocumentedKeys(p.id), indice = planRowIndex(p);
+  gruppi = gruppi.map(g => ({ supplierId: g.supplierId, righe: g.righe
+    .map(r => indice.get(planRowKey(r)))
+    .filter(r => r && r.qtyOrder > 0 && !planBloccata(gia.get(planRowKey(r)), kind, r)) }))
+    .filter(g => g.righe.length);
+  if (!gruppi.length) { closeModal(); showToast('Quelle righe sono già in un documento di questo tipo', 'error'); renderMrp(); return; }
   const creati = [];
   gruppi.forEach(({ supplierId, righe }) => {
     if (kind === 'odp') { righe.forEach(r => creati.push(planNewOdp(p, r))); return; }
@@ -2093,7 +2156,8 @@ function renderPlanEdit(id) {
   const p = getPlan(id);
   const exp = mrpExplodePlan(p);
   const buy = mrpRowsOf(exp.buy, id);
-  const fasi = exp.phases.map(mrpPhaseRow);
+  // Al netto dei pezzi già fatti, come i documenti che ne nascono (0.105.5).
+  const fasi = mrpPhaseRowsNette(id, exp.phases);
   // Dove ogni riga è già finita: si legge dai documenti del piano, una volta
   // per disegno invece che una volta per riga.
   const gia = planDocumentedKeys(id);
@@ -2836,7 +2900,7 @@ function exportMrpPDF(id) {
     head: [['Codice', mrpNet ? 'Da acquistare (netto)' : 'Da acquistare', 'Fornitore', 'Q.tà', 'Prezzo', 'Importo']], body: righe,
     styles: { fontSize: 8 }, headStyles: { fillColor: [58, 123, 232] },
   });
-  const fasi = exp.phases.map(mrpPhaseRow);
+  const fasi = mrpPhaseRowsNette(p.id, exp.phases);
   if (fasi.length) {
     const righeCl = fasi.map(r => [String(r.phaseNo), r.wcName, r.item.code,
       supplierName(r.supplierId) || '—', (fmtQty(r.qty) + ' ' + r.uom).trim(),
