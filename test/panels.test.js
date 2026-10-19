@@ -84,11 +84,17 @@ describe('chiusura', () => {
 });
 
 describe('un form aperto non si perde per sbaglio', () => {
-  it('aprirne un altro chiede conferma', () => {
+  it('aprirne un altro, con il primo modificato, chiede conferma', () => {
     const app = conPannelli();
     let chiesto = 0;
     app.ctx.confirm = () => { chiesto++; return false; };
     app.eval('openModal("<h3>Primo</h3>")');
+    // Dalla 0.105.6 si chiede solo se il form è cambiato: un campo finto,
+    // fissato com'era all'apertura e poi modificato.
+    const campo = { type: 'text', value: 'a' };
+    aperti(app)[0].querySelectorAll = sel => (sel === 'input, select, textarea' ? [campo] : []);
+    app.ctx.panelFissaStato(aperti(app)[0]);
+    campo.value = 'b';
     app.eval('openModal("<h3>Secondo</h3>")');
     assert.equal(chiesto, 1);
     assert.ok(aperti(app)[0].innerHTML.includes('Primo'), 'rifiutando, il form aperto resta intatto');
@@ -99,6 +105,61 @@ describe('un form aperto non si perde per sbaglio', () => {
     let chiesto = 0;
     app.ctx.confirm = () => { chiesto++; return true; };
     app.eval('openModal("<h3>A</h3>", true, "listino"); openModal("<h3>B</h3>", true, "listino");');
+    assert.equal(chiesto, 0);
+  });
+});
+
+describe('la domanda arriva solo se il form è stato davvero cambiato (dalla 0.105.6)', () => {
+  // Il DOM finto non ha campi: se ne mettono di finti nel pannello, come li
+  // troverebbe querySelectorAll nel browser.
+  function conCampi(app, valori) {
+    const p = aperti(app)[0];
+    const campi = valori.map(v => (typeof v === 'boolean' ? { type: 'checkbox', checked: v, value: 'on' } : { type: 'text', value: v }));
+    p.querySelectorAll = sel => (sel === 'input, select, textarea' ? campi : []);
+    // Quello che nel browser fa il giro di coda dopo l'apertura: i valori che
+    // il chiamante ha scritto nei campi diventano lo stato di partenza.
+    app.ctx.panelFissaStato(p);
+    return campi;
+  }
+  it('un form aperto e non toccato si sostituisce senza chiedere', () => {
+    const app = conPannelli();
+    let chiesto = 0;
+    app.ctx.confirm = () => { chiesto++; return false; };
+    app.eval('openModal("<h3>Primo</h3>")');
+    conCampi(app, ['Cuscinetto', 'pz', true]);
+    app.eval('openModal("<h3>Secondo</h3>")');
+    assert.equal(chiesto, 0, 'non c\'è niente da perdere: la domanda è solo rumore');
+    assert.ok(aperti(app)[0].innerHTML.includes('Secondo'));
+  });
+  it('un campo cambiato fa chiedere, e rifiutando il form resta', () => {
+    const app = conPannelli();
+    let chiesto = 0;
+    app.ctx.confirm = () => { chiesto++; return false; };
+    app.eval('openModal("<h3>Primo</h3>")');
+    const campi = conCampi(app, ['Cuscinetto', 'pz']);
+    campi[0].value = 'Cuscinetto 6204';
+    app.eval('openModal("<h3>Secondo</h3>")');
+    assert.equal(chiesto, 1);
+    assert.ok(aperti(app)[0].innerHTML.includes('Primo'));
+  });
+  it('anche una casella spuntata conta come modifica', () => {
+    const app = conPannelli();
+    let chiesto = 0;
+    app.ctx.confirm = () => { chiesto++; return true; };
+    app.eval('openModal("<h3>Primo</h3>")');
+    const campi = conCampi(app, [false]);
+    campi[0].checked = true;
+    app.eval('openModal("<h3>Secondo</h3>")');
+    assert.equal(chiesto, 1);
+  });
+  it('un valore riportato com\'era non è una modifica', () => {
+    const app = conPannelli();
+    let chiesto = 0;
+    app.ctx.confirm = () => { chiesto++; return true; };
+    app.eval('openModal("<h3>Primo</h3>")');
+    const campi = conCampi(app, ['A']);
+    campi[0].value = 'B'; campi[0].value = 'A';
+    app.eval('openModal("<h3>Secondo</h3>")');
     assert.equal(chiesto, 0);
   });
 });

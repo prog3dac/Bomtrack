@@ -1291,7 +1291,12 @@ function openModal(h, wide, key) {
   // una richiamata. Sostituirlo qui vorrebbe dire rendere asincrona l'apertura
   // di ogni scheda dell'app. Il prezzo è un riquadro di sistema fuori tema in un
   // caso che capita di rado; il resto dell'app askConfirm ce l'ha.
-  if (p && k === 'form' && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
+  //
+  // Dalla 0.105.6 si chiede solo se quel form è stato **davvero** cambiato:
+  // la domanda arrivava anche su una scheda appena aperta e mai toccata, e una
+  // domanda che non ha mai niente da proteggere si impara a confermare senza
+  // leggerla — proprio la volta che conta.
+  if (p && k === 'form' && panelModificato(p) && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
   const nuovo = !p;
   if (nuovo) {
     p = document.createElement('div');
@@ -1320,8 +1325,24 @@ function openModal(h, wide, key) {
   panelRaise(p);
   a11yFields(p);
   panelFocus(p);
+  // Lo stato di partenza dei campi, per sapere poi se il form è cambiato. Si
+  // fissa subito e di nuovo al giro di coda: molti chiamanti riempiono i campi
+  // dopo che openModal ha restituito il pannello (le tendine, i valori
+  // calcolati), e quei valori sono la partenza, non una modifica. Chi scrive
+  // non può farlo prima di quel giro: è lo stesso tratto sincrono.
+  panelFissaStato(p);
+  Promise.resolve().then(() => panelFissaStato(p));
   return p;
 }
+// I valori dei campi di una scheda, in una stringa sola da confrontare.
+function panelStato(p) {
+  if (!p || typeof p.querySelectorAll !== 'function') return '';
+  return Array.prototype.map.call(p.querySelectorAll('input, select, textarea'), c =>
+    (c.type === 'checkbox' || c.type === 'radio' ? (c.checked ? '1' : '0') : String(c.value == null ? '' : c.value))).join('\u0000');
+}
+function panelFissaStato(p) { if (p) p._statoIniziale = panelStato(p); }
+// Senza uno stato di partenza si risponde «cambiato»: nel dubbio si chiede.
+function panelModificato(p) { return !p || p._statoIniziale == null || panelStato(p) !== p._statoIniziale; }
 // ─── Etichette, pulsanti-icona e titolo della scheda ───
 // I template scrivono `<div class="modal-field"><label>Nome</label><input id="…">`:
 // l'associazione fra i due c'è per posizione ma non per il browser, quindi
