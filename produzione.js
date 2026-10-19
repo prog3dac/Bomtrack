@@ -39,16 +39,40 @@ function produzioniDi(planId) {
 // somma può essere corretta aggiungendo una dichiarazione negativa — come una
 // rettifica di magazzino, e per la stessa ragione: cancellare una riga sbagliata
 // è un'altra cosa dal dire che se ne erano contati troppi.
+//
+// Dalla 0.105.5 contano anche i pezzi buoni che gli ordini di produzione del
+// piano hanno versato: prima il piano non li vedeva, e una parte con un ODP
+// chiuso corto (scarti, una chiusura anticipata) sembrava fatta lo stesso.
 function prodottiDi(planId, itemId) {
   return (db.productions || [])
     .filter(p => p.planId === planId && p.itemId === itemId)
-    .reduce((s, p) => s + (Number(p.qty) || 0), 0);
+    .reduce((s, p) => s + (Number(p.qty) || 0), 0)
+    + odpDelPiano(planId, itemId).reduce((s, o) => s + opVersato(o), 0);
 }
+// Gli ordini di produzione vivi di un piano per una parte.
+function odpDelPiano(planId, itemId) {
+  if (!planId || typeof opVersato !== 'function') return [];
+  return (db.prodOrders || []).filter(o => o.planId === planId && o.itemId === itemId && o.status !== 'annullato');
+}
+// Un ODP ancora aperto promette i pezzi lanciati, meno gli scarti già
+// dichiarati e meno quelli già versati (che sono fra i fatti). Uno completato
+// o chiuso non promette più niente: quello che ha dato è quello che ha versato.
+function odpAttesi(o) {
+  if (['completato', 'chiuso'].includes(o.status)) return 0;
+  const scarti = (o.phases || []).reduce((s, f) => s + opScarti(o, f), 0);
+  return Math.max(0, (Number(o.qty) || 0) - scarti - opVersato(o));
+}
+function attesiDi(planId, itemId) { return odpDelPiano(planId, itemId).reduce((s, o) => s + odpAttesi(o), 0); }
 // Quanto resta da fare. Mai negativo: se se ne sono dichiarati più del previsto
 // il residuo è zero, non un numero che invita a produrre all'indietro. Il
 // sovrappiù resta visibile nella colonna «fatti», dove è un'informazione.
 function daFare(planId, itemId, richiesti) {
   return Math.max(0, (Number(richiesti) || 0) - prodottiDi(planId, itemId));
+}
+// Quanto resta da lanciare: il da fare, meno quello che gli ODP aperti stanno
+// ancora producendo.
+function daLanciare(planId, itemId, richiesti) {
+  return Math.max(0, daFare(planId, itemId, richiesti) - attesiDi(planId, itemId));
 }
 
 // ─── Dichiarare ───
@@ -58,25 +82,34 @@ function produzioneDichiara(planId, itemId, qty, note) {
   if (!p || !it) return null;
   const q = Number(qty) || 0;
   if (!q) { showToast('Scrivi quanti pezzi sono stati fatti', 'error'); return null; }
-  return Store.insert('productions', {
+  const rec = Store.insert('productions', {
     planId, itemId, qty: q,
     date: nowISO(),
     note: String(note || '').trim(),
   });
+  // Dalla 0.105.5 una parte fatta entra a magazzino, come quella versata da un
+  // ODP: il montaggio la scarica (0.100.0), e senza il carico la giacenza
+  // andava sotto zero a ogni assieme. Una correzione negativa la toglie.
+  if (rec && hasStock(it) && !isAssembly(it.type)) {
+    addMovement(itemId, 'versamento', q, `Produzione ${it.code || ''} — ${p.number || ''}`.trim(), { orderId: rec.id });
+  }
+  return rec;
 }
 function produzioneElimina(id) {
   if (!roleGuardShop('docs')) return;
   const rec = (db.productions || []).find(p => p.id === id);
   if (!rec) return;
-  const mov = montaggioMovimenti(id);
-  askConfirm(mov.length
+  const mov = (db.movements || []).filter(m => m.orderId === id);
+  const montaggio = mov.some(m => m.kind === 'scarico');
+  askConfirm(montaggio
     ? `Eliminare questo montaggio? I ${mov.length === 1 ? 'componente scaricato torna' : mov.length + ' componenti scaricati tornano'} a magazzino.`
-    : 'Eliminare questa dichiarazione di produzione?', () => {
+    : mov.length ? 'Eliminare questa dichiarazione di produzione? I pezzi che aveva caricato escono dal magazzino.'
+      : 'Eliminare questa dichiarazione di produzione?', () => {
     // I movimenti del montaggio se ne vanno con lui: sono la sua conseguenza,
     // e lasciarli scaricherebbe componenti per un montaggio che non c'è più.
     mov.forEach(m => Store.remove('movements', m.id));
     Store.remove('productions', id);
-    savedToast(mov.length ? 'Montaggio eliminato, componenti restituiti' : 'Dichiarazione eliminata');
+    savedToast(montaggio ? 'Montaggio eliminato, componenti restituiti' : 'Dichiarazione eliminata');
     if (window.__montPlanId) montaggioRefresh();
     else if (window.__prodPlanId) produzioneRefresh();
     else renderMrp();
@@ -260,6 +293,11 @@ function produzioneBody() {
       <span class="mgmt-item-name" style="font-family:var(--mono)">${p.qty > 0 ? '+' : ''}${fmtQty(p.qty)} ${esc(u)}</span>
       <span class="mgmt-item-meta">${esc(fmtDateIt(p.date))}${p.createdBy ? ' · ' + esc(actorName(p.createdBy)) : ''}${p.note ? ' · ' + esc(p.note) : ''}
         ${puoScrivere ? `<button class="mini-btn danger" title="Elimina la dichiarazione" onclick="produzioneElimina('${p.id}')">${ico('trash', 'tinted', 'Elimina')}</button>` : ''}</span>
+    </div>`).join('')
+    // I pezzi versati dagli ODP del piano sono fra i fatti (0.105.5): si dice da dove vengono.
+    + odpDelPiano(planId, itemId).filter(o => opVersato(o) > 0).map(o => `<div class="mgmt-item">
+      <span class="mgmt-item-name" style="font-family:var(--mono)">+${fmtQty(opVersato(o))} ${esc(u)}</span>
+      <span class="mgmt-item-meta">versati dall'ordine di produzione ${esc(o.number || '')}</span>
     </div>`).join('');
   // Il modulo propone il residuo: il gesto più frequente è «finito», e
   // riscrivere un numero che l'app conosce già è lavoro inutile.

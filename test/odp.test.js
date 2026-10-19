@@ -642,3 +642,65 @@ describe('ODP: lo stato dai comandi, e il resto del materiale', () => {
     assert.equal(app.eval(`opPrelevaResto('odp-esterna')`), false);
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+//  Il piano vede quello che l'ODP ha fatto (0.105.5)
+// ═══════════════════════════════════════════════════════════
+describe('Il piano e i suoi ordini di produzione', () => {
+  const riga = (app, id) => JSON.parse(app.eval(`(invalidateCaches(), JSON.stringify((() => {
+    const r = mrpMakeRows(getPlan('pl1')).find(x => x.item.id === ${JSON.stringify(id)});
+    return { qty: r.qty, ordina: r.qtyOrder, bloccata: planBloccata(planDocumentedKeys('pl1').get(r.makeKey), 'odp', r),
+      fatti: prodottiDi('pl1', r.item.id) };
+  })()))`));
+
+  it('un ODP aperto copre la parte: niente da rilanciare', () => {
+    const app = conDb();
+    lancia(app, 'interna', 6);
+    assert.deepEqual(riga(app, 'interna'), { qty: 6, ordina: 0, bloccata: true, fatti: 0 });
+  });
+
+  it('chiuso con meno pezzi buoni, il piano lo vede e propone quelli che mancano', () => {
+    const app = conDb();
+    lancia(app, 'interna', 6);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 4, scrap: 2 });
+    avvia(app, 'odp-interna', 1);
+    dichiara(app, 'odp-interna', 1, { qty: 4, scrap: 0 });
+    assert.equal(app.eval(`getOdp('odp-interna').status`), 'completato');
+    assert.deepEqual(riga(app, 'interna'), { qty: 6, ordina: 2, bloccata: false, fatti: 4 });
+    assert.equal(app.eval(`(invalidateCaches(), planDocsAvailable(getPlan('pl1'), 'odp'))`), 1);
+  });
+
+  it('i pezzi di un altro, liberi a scaffale, non vanno a un piano che ha già il suo ODP', () => {
+    const app = conDb();
+    lancia(app, 'interna', 6);
+    app.eval(`addMovement('interna', 'carico', 6, 'liberi')`);
+    // Il piano 2 ha bisogno anche lui di 6 pezzi, e consegna dopo: senza la
+    // correzione il piano 1, più urgente, si prendeva anche quelli liberi.
+    app.eval(`db.plans.push({ id: 'pl2', number: 'FAB-2026-002', date: '2026-07-02', active: true,
+      lines: [{ id: 'l2', itemId: 'grp', qty: 2, dueDate: '2026-10-30' }] }); invalidateCaches();`);
+    const sc = JSON.parse(app.eval(`(invalidateCaches(), JSON.stringify(['pl1', 'pl2'].map(id => (scaffaleIndex().get(id).quota.get('interna') || 0))))`));
+    assert.deepEqual(sc, [0, 6]);
+  });
+});
+
+describe('Ordine di lavoro da un ODP (0.105.5)', () => {
+  it('commissionato prima che i pezzi arrivino, chiede quelli che arriveranno', () => {
+    const app = conDb();
+    lancia(app, 'mista', 10);
+    avvia(app, 'odp-mista', 0);
+    dichiara(app, 'odp-mista', 0, { qty: 3, scrap: 1 });
+    const l = JSON.parse(app.eval(`(function(){ const o = getOdp('odp-mista');
+      return JSON.stringify(opGeneraOdl(o.id, o.phases[1].id).lines[0]); })()`));
+    assert.equal(l.qty, 9, 'dieci lanciati, uno scartato alla fase prima');
+  });
+
+  it('uno annullato si può sostituire, e i rientri non vanno più su di lui', () => {
+    const app = conDb();
+    lancia(app, 'esterna', 6);
+    const primo = app.eval(`(function(){ const o = getOdp('odp-esterna'); return opGeneraOdl(o.id, o.phases[0].id).id; })()`);
+    app.eval(`db.workOrders.find(w => w.id === '${primo}').status = 'annullato'; invalidateCaches();`);
+    const secondo = app.eval(`(function(){ const o = getOdp('odp-esterna'); const w = opGeneraOdl(o.id, o.phases[0].id); return w ? w.id : null; })()`);
+    assert.ok(secondo && secondo !== primo);
+  });
+});

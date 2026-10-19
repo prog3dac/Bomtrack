@@ -159,6 +159,19 @@ function opDaFare(odp, fase) {
   const prec = opPrecedente(odp, fase);
   return prec ? opFatti(odp, prec) : (Number(odp.qty) || 0);
 }
+// I pezzi che una fase **riceverà**: i lanciati, meno gli scarti delle fasi
+// prima; una fase prima già chiusa dà quelli che ha dato. È la quantità da
+// commissionare a un terzista prima che le fasi precedenti abbiano finito
+// (dalla 0.105.5: l'ordine di lavoro nasceva coi pezzi arrivati fin lì, anche zero).
+function opAttesiFase(odp, fase) {
+  let n = Number(odp.qty) || 0;
+  const i = opPhaseIndex(odp, fase);
+  for (let k = 0; k < i; k++) {
+    const p = opPhaseAt(odp, k);
+    n = opChiusa(odp, p) ? opFatti(odp, p) : Math.max(opFatti(odp, p), n - opScarti(odp, p));
+  }
+  return Math.max(n, opDaFare(odp, fase));
+}
 function opResidua(odp, fase) { return Math.max(0, opDaFare(odp, fase) - opProcessati(odp, fase)); }
 
 function opAvviata(odp, fase) { return opDecls(odp.id, fase.id).some(d => d.kind === 'avvio'); }
@@ -532,7 +545,9 @@ function opAnnullaDichiarazione(declId) {
 function opOdlIndex() {
   if (_opOdlIdx) return _opOdlIdx;
   const map = new Map();
-  (db.workOrders || []).forEach(o => (o.lines || []).forEach(l => {
+  // Un ordine di lavoro annullato non commissiona più niente: la tratta si
+  // può commissionare di nuovo, e i rientri non si scrivono su di lui.
+  (db.workOrders || []).forEach(o => o.status !== 'annullato' && (o.lines || []).forEach(l => {
     if (l.odpPhaseId) map.set(l.odpPhaseId, { odl: o, line: l });
   }));
   _opOdlIdx = map;
@@ -1387,7 +1402,7 @@ function exportOdpExcel(id) { const o = getOdp(id); if (o) exportListXlsx(odpDoc
 // quello che l'ordine di produzione gli ha promesso.
 function opRunDocRow(o, fase) {
   const part = getItem(o.itemId); if (!part) return null;
-  const qty = opDaFare(o, fase);
+  const qty = opAttesiFase(o, fase);
   const fasi = opRunFasi(o, fase).map(f => mrpPhaseRow({
     item: part, row: f, opIndex: f.opIndex, phaseKey: f.phaseKey, phaseNo: f.seq,
     workCenterId: f.workCenterId || '', supplierId: f.supplierId || '',
@@ -1447,7 +1462,7 @@ function opGeneraOdlAsk(id, faseId) {
   const { o, f } = x;
   const fasi = opRunFasi(o, f);
   const quali = fasi.length === 1 ? `la fase ${f.seq}` : `le fasi ${fasi[0].seq}-${fasi[fasi.length - 1].seq}`;
-  askConfirm(`Commissionare ${quali} a ${f.supplierName || supplierName(f.supplierId) || 'questo terzista'}?\n${fmtQty(opDaFare(o, f))} pezzi di ${o.code || ''}.`, () => conNumeri({ ODL: 1 }, () => {
+  askConfirm(`Commissionare ${quali} a ${f.supplierName || supplierName(f.supplierId) || 'questo terzista'}?\n${fmtQty(opAttesiFase(o, f))} pezzi di ${o.code || ''}.`, () => conNumeri({ ODL: 1 }, () => {
     const odl = opGeneraOdl(id, faseId); if (!odl) { renderOdp(); return; }
     renderOdp();
     showToast(`Ordine di lavoro ${odl.number} creato`, 'success');

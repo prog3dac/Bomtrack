@@ -175,19 +175,34 @@ describe('Il netto sulle lavorazioni', () => {
 // ═══════════════════════════════════════════════════════════
 //  Quello che l'avanzamento NON deve toccare
 // ═══════════════════════════════════════════════════════════
-describe('L\'avanzamento non muove il magazzino', () => {
-  it('dichiarare pezzi fatti non crea nessun movimento', () => {
+// Fino alla 0.105.4 la dichiarazione non muoveva il magazzino, ma il montaggio
+// (0.100.0) scarica le parti: la giacenza andava sotto zero a ogni assieme.
+describe('L\'avanzamento carica la parte a magazzino (0.105.5)', () => {
+  it('i pezzi dichiarati fatti entrano come versamento della dichiarazione', () => {
     const a = app();
     dichiara(a, 10);
-    assert.equal((a.snapshot().movements || []).length, 0,
-      'due strade per la stessa giacenza darebbero due verità');
+    const mov = a.snapshot().movements || [];
+    assert.equal(mov.length, 1);
+    assert.equal(mov[0].kind, 'versamento');
+    assert.equal(mov[0].qty, 10);
+    assert.equal(mov[0].orderId, a.snapshot().productions[0].id);
+    assert.equal(a.eval('onHandOf("P1")'), 10);
   });
 
-  it('e non cambia la giacenza della parte', () => {
+  it('una correzione negativa li toglie, ed eliminare la dichiarazione toglie il suo carico', () => {
     const a = app();
-    const prima = a.eval('onHandOf("P1")');
-    dichiara(a, 10);
-    assert.equal(a.eval('onHandOf("P1")'), prima);
+    dichiara(a, 10); dichiara(a, -2);
+    assert.equal(a.eval('onHandOf("P1")'), 8);
+    const id = a.snapshot().productions[0].id;
+    a.eval(`produzioneElimina('${id}'); confirmYes();`);
+    assert.equal(a.eval('(invalidateCaches(), onHandOf("P1"))'), -2);
+  });
+
+  it('i pezzi caricati restano del piano: non riducono il suo da fabbricare una seconda volta', () => {
+    const a = app();
+    dichiara(a, 4);
+    const r = JSON.parse(a.eval('(invalidateCaches(), JSON.stringify(mrpMakeRows(getPlan("pl1")).map(r => [r.qty, r.qtyOrder])))'));
+    assert.deepEqual(r, [[10, 6]]);
   });
 
   it('non tocca le righe d\'acquisto del piano', () => {

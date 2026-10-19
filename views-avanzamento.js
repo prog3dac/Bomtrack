@@ -25,6 +25,8 @@ const AVZ_STATI = {
   corso: { label: 'in corso', colore: 'var(--purple)' },
   'da fare': { label: 'da fare', colore: 'var(--orange)' },
   fatto: { label: 'fatto', colore: 'var(--green)' },
+  // Finito, ma con meno pezzi buoni di quelli lanciati (scarti, chiusura corta).
+  corto: { label: 'finito con meno pezzi', colore: 'var(--red)' },
   coperto: { label: 'da magazzino', colore: 'var(--green)' },
   previsto: { label: 'previsto', colore: 'var(--text-dim)' },
 };
@@ -181,7 +183,7 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   }
   const base = { tipo, label, start: st.start, end: st.end, attesa, docs };
   if (conFasi) {
-    const stato = tutteChiuse ? 'fatto' : avzStato(fatto, totale, iniziato, emesso, st.start, st.end, attesa, oggi);
+    const stato = tutteChiuse ? (fatto < Math.min(totale, Number(n.qty) || totale) - 0.000001 ? 'corto' : 'fatto') : avzStato(fatto, totale, iniziato, emesso, st.start, st.end, attesa, oggi);
     return Object.assign(base, { fatto, totale, pct: stato === 'fatto' ? 1 : (totale ? Math.min(1, fatto / totale) : 0), stato, nota: '' });
   }
   if (odlQty) {
@@ -232,7 +234,7 @@ function avzDaOdp(n, suoi, tipo, label, serve, oggi) {
     return { tipo, label, start: n.start, end: n.end, attesa: '', fatto: 0, totale: 0, pct: 0, stato, docs,
       nota: stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione' };
   }
-  const stato = finito ? 'fatto' : avzStato(fatto, totale, iniziato, false, n.start, n.end, '', oggi);
+  const stato = finito ? (fatto < Math.min(totale, Number(n.qty) || totale) - 0.000001 ? 'corto' : 'fatto') : avzStato(fatto, totale, iniziato, false, n.start, n.end, '', oggi);
   return { tipo, label, start: n.start, end: n.end, attesa: '', fatto, totale,
     pct: stato === 'fatto' ? 1 : (totale ? Math.min(1, fatto / totale) : 0), stato, docs, nota: '' };
 }

@@ -1262,7 +1262,8 @@ function mrpMakeRow(entry, planId) {
   // agli ordini di lavoro, e lanciarne un ordine di produzione per l'intero
   // significherebbe rifare un lavoro che qualcuno ha appena dichiarato di aver
   // fatto. Il lordo resta in `qty`, accanto, come sulle righe d'acquisto.
-  const resta = (planId && typeof daFare === 'function') ? daFare(planId, it.id, entry.qty) : entry.qty;
+  // Dalla 0.105.5 anche al netto di quello che gli ODP aperti stanno facendo.
+  const resta = (planId && typeof daLanciare === 'function') ? daLanciare(planId, it.id, entry.qty) : entry.qty;
   return {
     item: it, isMake: true, makeKey: 'make#' + it.id,
     qty: entry.qty, qtyOrder: resta, uom: itemUom(it),
@@ -1548,7 +1549,12 @@ function planDocumentedKeys(planId) {
 // Se una riga è già coperta per il tipo di documento che si sta generando.
 // L'eccezione: un ordine di produzione copre anche gli **ordini di lavoro**
 // delle sue fasi, perché è da lui che si generano.
-function planBloccata(refs, kind) {
+// Una parte da fabbricare fa eccezione (dalla 0.105.5): un suo ODP copre i
+// pezzi che lancia, non la parte per sempre. Se ne mancano ancora — scarti,
+// una chiusura corta, un fabbisogno cresciuto — la riga resta lanciabile per
+// quelli, e `qtyOrder` li conta già al netto degli ODP (daLanciare).
+function planBloccata(refs, kind, riga) {
+  if (kind === 'odp' && riga && riga.isMake) return !(riga.qtyOrder > 0);
   return (refs || []).some(x => x.kind === kind)
     || (kind === 'odl' && (refs || []).some(x => x.kind === 'odp'));
 }
@@ -1640,7 +1646,7 @@ function planDocsHint(kind) {
 function planDocsAvailable(plan, kind) {
   const gia = planDocumentedKeys(plan.id);
   return planDocRows(plan, kind)
-    .filter(r => r.qtyOrder > 0 && !planBloccata(gia.get(planRowKey(r)), kind)).length;
+    .filter(r => r.qtyOrder > 0 && !planBloccata(gia.get(planRowKey(r)), kind, r)).length;
 }
 // Tutto ciò che da questo piano può diventare una riga di documento: gli
 // acquisti prima, le fasi di conto lavoro dopo, filtrate per il tipo di
@@ -1657,8 +1663,9 @@ function planDocsBody(gruppi, planId, kind) {
   // Già usato *per questo tipo* = non riselezionabile. Gli altri riferimenti si
   // mostrano lo stesso: sapere che di quell'articolo esiste già una richiesta è
   // utile anche mentre si prepara un ordine.
-  const usati = r => (gia.get(planRowKey(r)) || []).filter(x => x.kind === kind || (kind === 'odl' && x.kind === 'odp'));
-  const altri = r => (gia.get(planRowKey(r)) || []).filter(x => x.kind !== kind && !(kind === 'odl' && x.kind === 'odp'));
+  const usati = r => planBloccata(gia.get(planRowKey(r)), kind, r)
+    ? (gia.get(planRowKey(r)) || []).filter(x => x.kind === kind || (kind === 'odl' && x.kind === 'odp')) : [];
+  const altri = r => (gia.get(planRowKey(r)) || []).filter(x => !usati(r).includes(x));
   // Quanto varrà davvero la riga sul documento. Senza listino applicabile la
   // riga nascerà vuota: qui resta la stima da costificazione, che è l'unica
   // cifra disponibile per decidere se conviene generare.
@@ -1680,7 +1687,8 @@ function planDocsBody(gruppi, planId, kind) {
           ${ico('lock', 'tinted', '')} già in ${esc(bloccata.map(x => x.number).join(', '))}</span>`);
       } else if (r.isMake) {
         const a = altri(r);
-        if (a.length) seg.push(`<span class="price-best" title="Esiste già ${esc(a.map(docRefLabel).join(', '))}, di tipo diverso: questa riga resta selezionabile">${ico('file', 'tinted', '')} ${esc(a.map(x => x.number).join(', '))}</span>`);
+        if (kind === 'odp' && a.some(x => x.kind === 'odp')) seg.push(`<span class="price-best" title="Già lanciata in parte (${esc(a.filter(x => x.kind === 'odp').map(docRefLabel).join(', '))}): la quantità proposta è solo quella che manca">${ico('factory', 'tinted', '')} ${esc(a.filter(x => x.kind === 'odp').map(x => x.number).join(', '))}</span>`);
+        else if (a.length) seg.push(`<span class="price-best" title="Esiste già ${esc(a.map(docRefLabel).join(', '))}, di tipo diverso: questa riga resta selezionabile">${ico('file', 'tinted', '')} ${esc(a.map(x => x.number).join(', '))}</span>`);
         // Una parte senza fasi non ha una successione da seguire: l'ordine che
         // ne uscirebbe è una scheda vuota, e va detto prima di generarlo.
         if (r.senzaCiclo) seg.push(`<span class="mrp-warn" title="Il ciclo di questa parte non ha lavorazioni: l'ordine di produzione nascerebbe senza fasi">${ico('warning', 'tinted', '')} senza ciclo</span>`);
@@ -1780,7 +1788,7 @@ function planCreateDocs() {
   // DOM, e ciò che decide se una riga può finire in un documento deve
   // stare accanto alla scrittura, non solo nell'interfaccia.
   const gia = planDocumentedKeys(p.id);
-  const bloccato = chiave => planBloccata(gia.get(chiave), kind);
+  const bloccato = chiave => planBloccata(gia.get(chiave), kind, index.get(chiave));
   const gruppi = [];
   let scartate = 0;
   sel.forEach((chiavi, chiaveGruppo) => {

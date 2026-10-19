@@ -321,17 +321,34 @@ function scaffaleIndex() {
   _scaffaleIdx = idx;                   // prima del calcolo: niente rientri
   if (typeof mrpExplode !== 'function') return idx;
   const piani = pianiInOrdine().piani;
-  // Versato dagli ODP di ciascun piano, per parte.
+  // Versato dagli ODP di ciascun piano, per parte, e dalle parti dichiarate
+  // fatte sul piano (che dalla 0.105.5 entrano a magazzino).
   const versato = new Map();
+  const aggiungi = (planId, itemId, v) => {
+    let m = versato.get(planId);
+    if (!m) { m = new Map(); versato.set(planId, m); }
+    m.set(itemId, (m.get(itemId) || 0) + v);
+  };
+  // Quello che gli ODP aperti di un piano stanno ancora facendo: è coperto,
+  // come il versato, e lo scaffale comune non deve darglielo una seconda volta.
+  const attesi = new Map();
   if (typeof opVersato === 'function') {
     (db.prodOrders || []).forEach(o => {
       if (!o.planId || o.status === 'annullato') return;
-      const v = opVersato(o); if (!(v > 0)) return;
-      let m = versato.get(o.planId);
-      if (!m) { m = new Map(); versato.set(o.planId, m); }
-      m.set(o.itemId, (m.get(o.itemId) || 0) + v);
+      const v = opVersato(o);
+      if (v > 0) aggiungi(o.planId, o.itemId, v);
+      const a = typeof odpAttesi === 'function' ? odpAttesi(o) : 0;
+      if (a > 0) {
+        let m = attesi.get(o.planId);
+        if (!m) { m = new Map(); attesi.set(o.planId, m); }
+        m.set(o.itemId, (m.get(o.itemId) || 0) + a);
+      }
     });
   }
+  const dichiarazioni = new Map((db.productions || []).filter(d => d.planId).map(d => [d.id, d.planId]));
+  if (dichiarazioni.size) (db.movements || []).forEach(m => {
+    if (m.kind === 'versamento' && m.orderId && dichiarazioni.has(m.orderId)) aggiungi(dichiarazioni.get(m.orderId), m.itemId, Number(m.qty) || 0);
+  });
   const aperti = new Set(piani.map(p => p.id));
   // Quanto di una parte resta in mano al piano che l'ha fatta, e quanto il
   // piano ha consumato dallo scaffale comune (oltre i suoi).
@@ -347,15 +364,25 @@ function scaffaleIndex() {
     }
     return comune.get(itemId);
   };
+  // I pezzi che il piano fa da sé (versati dai suoi ODP o dichiarati, più
+  // quelli che i suoi ODP aperti stanno facendo) coprono per primi il suo
+  // bisogno: restano «da fabbricare», documentati dal loro ODP, e lo scaffale
+  // comune copre solo il resto. Prima la quota libera si sommava ai pezzi
+  // propri, e un piano col suo ODP prendeva anche quelli di un altro.
+  const copertiDi = (planId, itemId) => ((versato.get(planId) || new Map()).get(itemId) || 0)
+    + ((attesi.get(planId) || new Map()).get(itemId) || 0);
   piani.forEach(p => {
-    const preso = new Map(), consumato = new Map(), budget = new Map();
+    const preso = new Map(), consumato = new Map(), budget = new Map(), coperto = new Map();
     const scaffale = { prendi(itemId, q) {
       if (!budget.has(itemId)) {
         const c = dalComune(p.id, itemId);
         consumato.set(itemId, c);
         budget.set(itemId, c + comuneDi(itemId));
+        coperto.set(itemId, copertiDi(p.id, itemId));
       }
-      const t = Math.min(q, budget.get(itemId));
+      const proprio = Math.min(q, coperto.get(itemId));
+      coperto.set(itemId, coperto.get(itemId) - proprio);
+      const t = Math.min(q - proprio, budget.get(itemId));
       if (!(t > 0)) return 0;
       budget.set(itemId, budget.get(itemId) - t);
       preso.set(itemId, (preso.get(itemId) || 0) + t);
@@ -368,7 +395,9 @@ function scaffaleIndex() {
       comune.set(itemId, Math.max(0, comuneDi(itemId) - dalloScaffale));
       impegno.set(itemId, dalloScaffale);
     });
-    idx.set(p.id, { quota: preso, impegno });
+    const copertura = new Map();
+    budget.forEach((b, itemId) => copertura.set(itemId, copertiDi(p.id, itemId)));
+    idx.set(p.id, { quota: preso, impegno, coperto: copertura });
   });
   return idx;
 }
@@ -379,9 +408,13 @@ function scaffaleIndex() {
 function mrpScaffale(planId) {
   const sc = planId ? scaffaleIndex().get(planId) : null;
   if (!sc || !sc.quota.size) return null;
-  const resto = new Map(sc.quota);
+  const resto = new Map(sc.quota), coperto = new Map(sc.coperto || []);
   return { prendi(itemId, q) {
-    const t = Math.min(q, resto.get(itemId) || 0);
+    // Prima i pezzi propri, come nella spartizione: le parti dello scaffale
+    // finiscono negli stessi rami.
+    const proprio = Math.min(q, coperto.get(itemId) || 0);
+    if (proprio) coperto.set(itemId, coperto.get(itemId) - proprio);
+    const t = Math.min(q - proprio, resto.get(itemId) || 0);
     if (!(t > 0)) return 0;
     resto.set(itemId, resto.get(itemId) - t);
     return t;
