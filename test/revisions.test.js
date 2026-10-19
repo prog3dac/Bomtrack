@@ -250,6 +250,26 @@ describe('Confronto fra revisioni', () => {
     assert.equal(d.aggiunte[0].tipo, 'Distinta parte');
   });
 
+  // 0.105.5: costo, tempi e terzista di una fase, il costo forzato e
+  // l'approvvigionamento cambiavano senza che il confronto lo dicesse.
+  it('anche costo e tempi di una fase, il costo forzato e l\'approvvigionamento sono modifiche', () => {
+    const a = app(makeDb({ workCenters: [wc('w1', 40)], suppliers: [{ id: 's1', name: 'Beta', active: true }], items: [
+      parte('p1', { sourcing: 'make', cycle: [{ kind: 'item', itemId: 'm1', qty: 1 },
+        { kind: 'op', workCenterId: 'w1', supplierId: null, costMode: 'fisso', cost: 3, hours: 1, days: 0, note: '' },
+        { kind: 'op', workCenterId: 'w1', supplierId: null, costMode: 'fisso', cost: 2, hours: 1, days: 0, note: '' }] }), mat('m1', 10),
+    ] }));
+    rilascia(a, 'p1');
+    a.eval(`const it = getItem("p1"); it.cycle[1].cost = 4; it.cycle[2].supplierId = 's1'; it.cycle[0].costOverride = 12;
+      it.sourcing = 'buy'; touch(it); saveDB();`);
+    const d = JSON.parse(a.eval('JSON.stringify(revDiff(revisionsOf("p1")[0].snapshot, revSnapshot(getItem("p1"))))'));
+    const testo = d.cambiate.map(x => x.etichetta + ': ' + (x.altro || []).join(', ')).join(' | ');
+    assert.equal(d.cambiate.length, 4, testo);
+    assert.match(testo, /costo 3 → 4/);
+    assert.match(testo, /terzista interna → Beta/);
+    assert.match(testo, /costo forzato — → 12/);
+    assert.match(testo, /Approvvigionamento: Produzione interna → Acquisto da fornitore/);
+  });
+
   it('un componente tolto dalla distinta E dal catalogo resta leggibile', () => {
     const a = conRevisione(app());
     a.eval('const it = getItem("g1"); it.components.splice(1, 1); touch(it); saveDB(); Store.remove("items", "c1");');
@@ -332,7 +352,7 @@ describe('Due revisioni a confronto, non solo con l\'attuale', () => {
     assert.match(h, /Rev\. A → Rev\. B/);
     assert.match(h, /Aggiunte \(1\)/);
     assert.match(h, /M2/);
-    assert.doesNotMatch(h, /Quantità cambiate/, 'la quantità di M1 è cambiata dopo la B');
+    assert.doesNotMatch(h, /Cambiate/, 'la quantità di M1 è cambiata dopo la B');
   });
 
   it('l\'ordine della scelta non conta: si legge sempre dalla più vecchia', () => {
@@ -349,7 +369,7 @@ describe('Due revisioni a confronto, non solo con l\'attuale', () => {
     a.eval(`revCompareModal(${JSON.stringify(rA.id)})`);
     const h = pannello(a, 'confronto');
     assert.match(h, /Rev\. A → attuale \(C\)/);
-    assert.match(h, /Quantità cambiate \(1\)/);
+    assert.match(h, /Cambiate \(1\)/);
     assert.match(h, /<select id="rev-contro"/);
     assert.match(h, /la Rev\. B del/);
   });

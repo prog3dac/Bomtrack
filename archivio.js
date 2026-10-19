@@ -213,27 +213,34 @@ function archivioFile(path, chiedi) {
 function archivioSalva(nome, blob) {
   return archivioPronto(true).then(h => {
     if (!h) return null;
-    return h.getFileHandle(nome, { create: true })
-      .then(fh => fh.createWritable())
-      .then(w => Promise.resolve(w.write(blob)).then(() => w.close()))
-      .then(() => { _archivioElenco = null; return nome; })
-      .catch(e => { console.error('Copia in archivio fallita:', e); return null; });
+    // Ultima prova sulla cartella vera, subito prima di scrivere: un nome
+    // comparso nel frattempo non si tocca (createWritable lo azzererebbe).
+    return _archivioEsiste(h, nome).then(c_e => {
+      if (c_e) { console.error('Copia in archivio rifiutata: ' + nome + ' esiste già'); return null; }
+      return h.getFileHandle(nome, { create: true })
+        .then(fh => fh.createWritable())
+        .then(w => Promise.resolve(w.write(blob)).then(() => w.close()))
+        .then(() => { _archivioElenco = null; return nome; });
+    }).catch(e => { console.error('Copia in archivio fallita:', e); return null; });
   });
 }
+const _archivioEsiste = (h, nome) => h.getFileHandle(nome).then(() => true, () => false);
 // Un nome già preso non si sovrascrive: il file che c'è appartiene a qualcun
 // altro, e il codice che lo cita non saprebbe mai di aver perso il suo.
+// Si chiede alla cartella vera, non all'elenco: quello è letto una volta per
+// sessione e si ferma a 5000 PDF, e un file messo da un collega dopo non c'è.
 function archivioNomeLibero(nome) {
-  return archivioElenco().then(lista => {
-    const presi = new Set((lista || []).map(f => f.path.toLowerCase()));
-    if (!presi.has(nome.toLowerCase())) return nome;
+  return archivioPronto(true).then(h => {
+    if (!h) return nome;
     const punto = nome.lastIndexOf('.');
     const base = punto > 0 ? nome.slice(0, punto) : nome;
     const est = punto > 0 ? nome.slice(punto) : '';
-    for (let i = 2; i < 999; i++) {
-      const c = base + ' (' + i + ')' + est;
-      if (!presi.has(c.toLowerCase())) return c;
-    }
-    return base + ' ' + Date.now() + est;
+    const prova = i => {
+      if (i >= 999) return base + ' ' + Date.now() + est;
+      const c = i === 1 ? nome : base + ' (' + i + ')' + est;
+      return _archivioEsiste(h, c).then(c_e => (c_e ? prova(i + 1) : c));
+    };
+    return prova(1);
   });
 }
 
@@ -246,7 +253,11 @@ function archivioNomeLibero(nome) {
 //
 // Torna il motivo, non un booleano: chi chiama deve poter dire *quale* delle
 // tre cose è andata storta, che è metà di ciò che l'utente chiede.
+// Solo PDF (dalla 0.105.3): il file si apre come pagina dell'app, e un HTML o un
+// SVG aperto così eseguirebbe i suoi script con i dati e la sessione di
+// Bomtrack. Il percorso viaggia con l'archivio condiviso: lo scrive chiunque.
 function archivioApri(path, pagina) {
+  if (!/\.pdf$/i.test(String(path || ''))) return Promise.resolve('non-pdf');
   if (!archivioSupportato()) return Promise.resolve('non-supportato');
   if (!archivioNome()) return Promise.resolve('non-configurato');
   return archivioFile(path, true).then(f => {

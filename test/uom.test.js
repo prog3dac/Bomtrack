@@ -375,3 +375,36 @@ describe('Compatibilità con i dati esistenti', () => {
     assert.deepEqual(dopo, prima);
   });
 });
+
+// 0.105.5
+describe('La scheda di un articolo', () => {
+  it('l\'unità di un articolo già usato non cambia', () => {
+    const a = app();
+    a.eval('window.__editingItemId = "bar"');
+    a.el('it-code').value = 'BAR'; a.el('it-name').value = 'Barra'; a.el('it-uom').value = 'kg';
+    a.el('it-altuom').value = 'kg'; a.el('it-altfactor').value = '8';
+    a.eval('readItemForm(getItem("bar")); saveDB();');
+    assert.equal(a.snapshot().items.find(i => i.id === 'bar').uom, 'm', 'è in una distinta: giacenza e quantità sono in metri');
+  });
+
+  it('una parte che passa da «fabbrica» a «compra» prende il prezzo della quotazione in uso', () => {
+    const { parte } = require('./fixtures.js');
+    const a = app(makeDb({ suppliers: [{ id: 's1', name: 'Rossi', active: true }], items: [
+      Object.assign(parte('p', { sourcing: 'make', cycle: [{ kind: 'op', workCenterId: '', supplierId: null, costMode: 'fisso', cost: 1, hours: 0, days: 0, note: '' }] }), { code: 'P', unitCost: 3,
+        priceList: [{ id: 'q', supplierId: 's1', price: 7, minQty: '', date: '2026-01-01' }], activePriceId: 'q' })] }));
+    a.eval('window.__editingItemId = "p"');
+    ['it-code', 'it-concept', 'it-namefree', 'it-uom', 'it-sourcing'].forEach(id => a.el(id));
+    a.el('it-code').value = 'P'; a.el('it-uom').value = 'pz'; a.el('it-sourcing').value = 'buy';
+    a.eval('readItemForm(getItem("p")); saveDB(); invalidateCaches();');
+    assert.equal(a.eval('costOf("p").total'), 7);
+  });
+});
+
+describe('Un centro sospeso', () => {
+  it('resta scelto sulla lavorazione che lo usa', () => {
+    const a = app(makeDb({ workCenters: [{ id: 'w1', name: 'Tornio', hourlyRate: 40, active: true }, { id: 'w2', name: 'Fresa', hourlyRate: 50, active: false }] }));
+    const html = a.eval("wcOptions('w2')");
+    assert.match(html, /value="w2" selected>Fresa \(.*\) \(sospeso\)/);
+    assert.doesNotMatch(a.eval("wcOptions('w1')"), /w2/, 'per una lavorazione nuova non si propone');
+  });
+});

@@ -95,13 +95,15 @@ describe('Ubicazioni — il QR dello scaffale', () => {
     const h = a.eval("qrSchedaHtml('ubi', ubicazioneRec('A-2'))");
     assert.match(h, /2 articoli/);
     assert.match(h, /Conta questa ubicazione/);
-    assert.match(h, /inventarioAvvia\(\{ ambito: 'ubi', ubi: 'A-2' \}\)/);
+    // Il codice passa da jsAttr() (dalla 0.105.6): nell'attributo le virgolette
+    // sono &quot;, e il browser le decodifica in un letterale "A-2".
+    assert.match(h, /inventarioAvviaDaQr\(\{ ambito: 'ubi', ubi: &quot;A-2&quot; \}\)/);
   });
   it('un\'ubicazione con un apice non rompe il pulsante', () => {
     const a = app();
     a.eval("getItem('a2').location = \"L'ANGOLO\"");
     const h = a.eval("qrSchedaHtml('ubi', ubicazioneRec(\"L'ANGOLO\"))");
-    assert.match(h, /ubi: 'L\\'ANGOLO'/);
+    assert.match(h, /ubi: &quot;L&#39;ANGOLO&quot;/);
   });
   it('le etichette delle ubicazioni: una per posto, dagli articoli elencati', () => {
     const a = app();
@@ -199,6 +201,18 @@ describe('Inventario guidato: il riepilogo e le rettifiche', () => {
     a.eval("addMovement('a1', 'scarico', -3, '')");   // esce qualcosa prima di registrare
     a.eval('invRegistra()');
     assert.equal(a.eval("onHandOf('a1')"), 10);
+  });
+  // 0.105.5: un salvataggio dell'archivio per rettifica, 12 s su 300 righe.
+  it('trecento rettifiche si salvano una volta sola', () => {
+    const a = app();
+    a.eval(`for (let i = 0; i < 300; i++) db.items.push(Object.assign({}, getItem('a1'), { id: 'x' + i, code: 'X' + i, location: 'A-2' }));
+      invalidateCaches(); inventarioAvvia({ ambito: 'tutto' });
+      _inv.conteggi = Object.fromEntries(db.items.map(it => [it.id, 3])); invSalva && invSalva();
+      globalThis.__salvati = 0; const c = Store.commit; Store.commit = function () { __salvati++; return c.apply(this, arguments); };`);
+    const n = a.eval('invRegistra()');
+    assert.ok(n >= 300, String(n));
+    assert.equal(a.eval('__salvati'), 1);
+    assert.equal(a.eval("(invalidateCaches(), onHandOf('x7'))"), 3);
   });
   it('si registrano solo le righe scelte; i non contati restano come sono', () => {
     const a = app();

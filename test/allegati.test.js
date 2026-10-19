@@ -105,6 +105,16 @@ describe('Allegati — eliminare', () => {
   // Il record eliminato finisce nel cestino per TRASH_DAYS giorni, quindi si può
   // rimettere a posto: per questo i byte non vanno buttati come orfani finché
   // la voce di cestino è lì.
+  it('ripristinato dal cestino, l\'allegato ha ancora il suo file', async () => {
+    const a = app();
+    const id = await aggiungi(a, 'M1', file('disegno.pdf'));
+    a.eval('allegatoElimina(' + JSON.stringify(id) + '); confirmYes();');
+    await new Promise(r => setImmediate(r));
+    a.eval('Store.restore(db.trash[db.trash.length - 1].id)');
+    const blob = await a.eval('allegatoLeggi(' + JSON.stringify(id) + ')');
+    assert.ok(blob, 'prima i byte se ne andavano subito, e il ripristino dava un allegato vuoto');
+  });
+
   it('un allegato eliminato di recente non è un file orfano', async () => {
     const a = app();
     const id = await aggiungi(a, 'M1', file('disegno.pdf'));

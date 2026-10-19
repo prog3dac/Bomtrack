@@ -135,3 +135,26 @@ describe('Nell\'app vera, a sette larghezze', () => {
     assert.deepEqual(menu.flatMap(m => m.errori), []);
   });
 });
+
+describe('Telefono: menu «Esporta» e schede lunghe dentro lo schermo (dalla 0.105.6)', () => {
+  it('le schede su schermo stretto usano l\'altezza dinamica, con vh come riserva', () => {
+    const regola = CSS.match(/@media\(max-width:640px\)\{\s*\.panel,\.panel-wide\{[^}]*\}/)[0];
+    assert.match(regola, /max-height:calc\(100vh - 16px\);max-height:calc\(100dvh - 16px\)/);
+  });
+  it('il menu a tendina non è più largo dello schermo e sa ancorarsi a sinistra', () => {
+    assert.match(CSS, /\.dd-menu\{max-width:calc\(100vw - 16px\)\}/);
+    assert.match(CSS, /\.dd-menu\.dd-sx\{right:auto;left:0\}/);
+  });
+  it('un menu che uscirebbe a sinistra si gira; uno che ci sta resta a destra', () => {
+    const a = loadApp({ silent: true });
+    const prova = sinistra => a.eval(`(() => {
+      const classi = new Set();
+      const m = { classList: { add: c => classi.add(c), remove: c => classi.delete(c) },
+        getBoundingClientRect: () => ({ left: classi.has('dd-sx') ? 10 : ${sinistra} }) };
+      tendinaPosiziona({ querySelector: () => m });
+      return classi.has('dd-sx');
+    })()`);
+    assert.equal(prova(-50), true);
+    assert.equal(prova(120), false);
+  });
+});

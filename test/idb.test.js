@@ -82,6 +82,23 @@ async function avvia(storage, idb, opts) {
   return a;
 }
 
+// 0.105.5: la fotografia dell'archivio condiviso in localStorage, oltre
+// qualche decina di migliaia di record, non ci stava più.
+describe('La fotografia del cloud accanto all\'archivio', () => {
+  it('si salva in IndexedDB, fuori da localStorage, e torna al riavvio', async () => {
+    const storage = makeStorage();
+    const idb = fakeIdb();
+    const a = await avvia(storage, idb);
+    const grande = { ids: { items: Object.fromEntries(Array.from({ length: 70000 }, (_, i) => ['id-' + i, '2026-10-19T00:00:00.000Z'])) } };
+    a.ctx.__grande = grande;
+    assert.equal(a.eval(`Store.salvaExtra('cloudBase', __grande)`), true);
+    assert.equal(a.eval(`Store.salvaExtra('altro', 1)`), false, 'solo le chiavi previste');
+    await asciuga();
+    const b = await avvia(storage, idb);
+    assert.equal(Object.keys(b.eval(`Store.leggiExtra('cloudBase')`).ids.items).length, 70000);
+  });
+});
+
 describe('Il trasloco da localStorage', () => {
   it('la prima volta copia l\'archivio, lo rilegge, e solo allora libera localStorage', async () => {
     const storage = makeStorage();
@@ -231,6 +248,35 @@ describe('Spazio ed errori', () => {
     const a = await avvia(makeStorage(), fakeIdb());
     assert.match(a.eval('renderBackup()'), /IndexedDB/);
     assert.doesNotMatch(a.eval('dbSizeLine()'), /circa 5 MB/);
+  });
+});
+
+// 0.105.6: la copia di soccorso di un archivio illeggibile si scriveva dopo, e
+// se falliva lo diceva solo la console; il primo salvataggio scriveva i dati
+// d'esempio sopra l'originale.
+describe('Archivio illeggibile in IndexedDB, copia di soccorso fallita', () => {
+  it('il salvataggio successivo si ferma e l\'originale resta', async () => {
+    const storage = makeStorage();
+    const idb = fakeIdb();
+    const a = loadApp({ silent: true, storage });
+    a.ctx.__idb = idb;
+    await a.eval('Store.preparaArchivio(__idb)');
+    await asciuga();
+    idb.dbs.get('bomtrack_archivio').stores.get('archivio').set('db', '{"items":[');
+    await a.eval('Store.preparaArchivio(__idb)');
+    idb.quota = true;
+    a.eval('Store.load()');
+    a.asRole('admin');
+    a.eval('Store.commit()');
+    await asciuga();
+    idb.quota = false;
+    await asciuga();
+    assert.equal(idb.leggi('db'), '{"items":[', 'l\'originale è ancora al suo posto');
+    assert.equal(a.eval('Store.isUnsaved()'), true);
+    // Scaricato il file, si torna a salvare.
+    a.eval('Store.scaricatoIlleggibile(); Store.commit()');
+    await asciuga();
+    assert.notEqual(idb.leggi('db'), '{"items":[');
   });
 });
 

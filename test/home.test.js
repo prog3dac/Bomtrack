@@ -167,3 +167,49 @@ describe('Il disegno', () => {
     assert.doesNotMatch(a.html('view-home'), /home-chip/);
   });
 });
+
+describe('Riepilogo: ritardi, articoli obsoleti e ordine per gravità (dalla 0.105.6)', () => {
+  it('un ordine parziale non resta in ritardo per una riga già arrivata', () => {
+    const a = app({
+      suppliers: [{ id: 's1', name: 'SKF', active: true }],
+      orders: [{ id: 'o1', number: 'ODA-2026-001', status: 'parziale', supplierId: 's1', active: true, lines: [
+        // Confermata 19 giorni dopo la richiesta, ma ricevuta per intero.
+        { id: 'l1', itemId: null, code: 'A', qty: 10, received: 10, deliveryDate: '2026-03-01', confirmedDate: '2026-03-20' },
+        // Ancora da ricevere, confermata in tempo.
+        { id: 'l2', itemId: null, code: 'B', qty: 5, received: 0, deliveryDate: '2026-04-01', confirmedDate: '2026-04-01' }] }],
+    });
+    assert.equal(perVista(a, 'orders'), undefined);
+  });
+  it('la riga ancora aperta in ritardo continua a segnalare, con il suo ritardo', () => {
+    const a = app({
+      suppliers: [{ id: 's1', name: 'SKF', active: true }],
+      orders: [{ id: 'o1', number: 'ODA-2026-001', status: 'parziale', supplierId: 's1', active: true, lines: [
+        { id: 'l1', itemId: null, code: 'A', qty: 10, received: 10, deliveryDate: '2026-03-01', confirmedDate: '2026-03-20' },
+        { id: 'l2', itemId: null, code: 'B', qty: 5, received: 2, deliveryDate: '2026-04-01', confirmedDate: '2026-04-04' }] }],
+    });
+    const s = perVista(a, 'orders');
+    assert.equal(s.n, 1);
+    assert.match(s.voci[0].titolo, /3 giorni di ritardo/);
+  });
+  it('un articolo obsoleto non chiede attenzione per la scorta minima né per il prezzo', () => {
+    const a = app({ items: [
+      Object.assign(acq('vivo', 0), { safetyStock: 5 }),
+      Object.assign(acq('vecchio', 0), { safetyStock: 5, obsolete: true }),
+    ] });
+    assert.deepEqual(perVista(a, 'stock').voci.map(v => v.testo), ['VIVO']);
+    assert.deepEqual(perVista(a, 'buy').voci.map(v => v.testo), ['VIVO']);
+  });
+  it('gli avvisi sono ordinati per gravità: prima gli alti, poi i medi, poi le informazioni', () => {
+    const a = app({
+      suppliers: [{ id: 's1', name: 'SKF', active: true }],
+      rfqs: [{ id: 'r1', number: 'RDO-2026-001', status: 'inviata', supplierId: 's1', date: '2026-01-01', lines: [] }],
+      items: [Object.assign(acq('c', 0), { safetyStock: 5 })],
+      jobs: [{ id: 'j1', number: 'COM-2025-001', customer: 'Alfa', status: 'aperta', dueDate: '2020-01-01', active: true }],
+    });
+    const g = segnali(a).map(s => s.gravita);
+    const ORD = { alta: 0, media: 1, info: 2 };
+    assert.deepEqual(g, g.slice().sort((x, y) => ORD[x] - ORD[y]));
+    assert.equal(g[0], 'alta');
+    assert.equal(g[g.length - 1], 'info');
+  });
+});

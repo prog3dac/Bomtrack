@@ -456,9 +456,12 @@ describe('Progressivi per prefisso', () => {
     assert.equal(next(a, 'CMM-MEC-'), 'CMM-MEC-010');
   });
 
-  it('le maiuscole contano, come nel confronto di prima', () => {
+  // Fino alla 0.105.5 le maiuscole contavano, e la prova lo fissava: ma il
+  // controllo dei doppioni le ignora, e il codice proposto veniva poi rifiutato
+  // come già usato. Ora il conto le ignora come i doppioni.
+  it('le maiuscole non contano, come nel controllo dei doppioni', () => {
     const a = conCodici(['PRT-X-0001', 'prt-x-0002']);
-    assert.equal(next(a, 'PRT-X-'), 'PRT-X-002');
+    assert.equal(next(a, 'PRT-X-'), 'PRT-X-003');
   });
 
   it('senza nessun codice si parte da uno', () => {
@@ -517,5 +520,21 @@ describe('Le colonne di Acquisti e Progetto sono separate davvero', () => {
       'le colonne di base restano identiche: solo Progetto ospita anche le parti');
     assert.deepEqual(design.slice(buy.length).map(c => c.key), ['concept', 'sourcing'],
       'concetto e approvvigionamento esistono solo per le parti, e le parti stanno solo in Progetto');
+  });
+});
+
+// 0.105.5: due gruppi con la stessa sigla numerano le parti nello stesso
+// TRN-BAS-###, e il secondo ripartiva da 001.
+describe('Due gruppi con la stessa sigla', () => {
+  it('le parti e i sottogruppi del secondo continuano la numerazione comune', () => {
+    const a = app(makeDb({ items: [
+      { id: 'mac', code: 'TRN-S00', name: 'Tornio', type: 'macchina', uom: 'pz', sigla: 'TRN', components: [], operations: [] },
+      { id: 'g1', code: 'TRN-BAS-S00', name: 'Base', type: 'gruppo', uom: 'pz', sigla: 'BAS', machineItemId: 'mac', components: [], operations: [] },
+      { id: 'g2', code: 'TRN-BAS-S01', name: 'Base bis', type: 'gruppo', uom: 'pz', sigla: 'BAS', machineItemId: 'mac', components: [], operations: [] },
+      { id: 'p1', code: 'TRN-BAS-001', name: 'P1', type: 'parte', uom: 'pz', machineItemId: 'mac', groupItemId: 'g1', cycle: [] },
+      { id: 's1', code: 'TRN-BAS-999', name: 'S1', type: 'sottogruppo', uom: 'pz', machineItemId: 'mac', groupItemId: 'g1', components: [], operations: [] },
+    ] }));
+    assert.equal(a.eval('genItemCode({ id: "x", type: "parte", uom: "pz", machineItemId: "mac", groupItemId: "g2" })'), 'TRN-BAS-002');
+    assert.equal(a.eval('genItemCode({ id: "y", type: "sottogruppo", uom: "pz", machineItemId: "mac", groupItemId: "g2" })'), 'TRN-BAS-998');
   });
 });

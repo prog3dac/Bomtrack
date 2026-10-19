@@ -10,16 +10,21 @@
 // ═══════════════════════════════════════════════════════════
 // `pos` è la posizione gerarchica della riga (1, 1.1, 1.1.1…, vedi bomPos in views-bom.js):
 // vuota sulla radice, così i componenti di primo livello partono da 1.
-function flattenBom(itemId, qty, scrap, level, rows, ancestors, pos) {
+// `mult` è quante volte il padre entra nella radice: `line` resta il costo riga
+// nel suo padre (è la colonna a video), `tot` e `qtyTot` sono gli stessi numeri
+// riportati alla radice — un M1 da 3 pezzi in un gruppo usato due volte sono 6.
+function flattenBom(itemId, qty, scrap, level, rows, ancestors, pos, mult) {
+  if (mult == null) mult = 1;
   const it = getItem(itemId); if (!it) return;
   const cyc = ancestors.includes(itemId);
   const unit = cyc ? 0 : costOf(itemId).total;
   const factor = (Number(qty) || 0) * (1 + (Number(scrap) || 0) / 100);
   pos = pos || '';
   rows.push({ level, pos, itemId, code: it.code, name: it.name + (cyc ? ' (ciclo!)' : ''), type: typeLabel(it.type),
-    qty: Number(qty) || 0, uom: it.uom || '', unit, line: unit * factor });
+    qty: Number(qty) || 0, uom: it.uom || '', unit, line: unit * factor,
+    qtyTot: (Number(qty) || 0) * mult, tot: unit * factor * mult });
   if (isAssembly(it.type) && !cyc) {
-    (it.components || []).forEach((c, i) => flattenBom(c.itemId, c.qty, c.scrapPct, level + 1, rows, ancestors.concat(itemId), bomPos(pos, i)));
+    (it.components || []).forEach((c, i) => flattenBom(c.itemId, c.qty, c.scrapPct, level + 1, rows, ancestors.concat(itemId), bomPos(pos, i), mult * factor));
   }
   // Una Parte esplode il proprio ciclo di lavorazione: i costi riga sono scalati per la quantità del padre,
   // così la somma dei figli coincide col costo riga della Parte.
@@ -34,12 +39,14 @@ function flattenBom(itemId, qty, scrap, level, rows, ancestors, pos) {
         const wc = getWorkCenter(row.workCenterId);
         const sup = supplierName(row.supplierId);
         rows.push({ level: level + 1, pos: '', code: '', name: '🔧 ' + (wc ? wc.name : '?') + (sup ? ' · ' + sup : ''),
-          type: 'Lavorazione', qty: 1, uom: '', unit: rowCost, line: rowCost * factor });
+          type: 'Lavorazione', qty: 1, uom: '', unit: rowCost, line: rowCost * factor,
+          qtyTot: factor * mult, tot: rowCost * factor * mult });
       } else {
         const rowPos = bomPos(pos, n++);
         const ci = getItem(row.itemId); if (!ci) return;
         rows.push({ level: level + 1, pos: rowPos, itemId: ci.id, code: ci.code, name: ci.name, type: typeLabel(ci.type),
-          qty: Number(row.qty) || 0, uom: ci.uom || '', unit: costOf(row.itemId).total, line: rowCost * factor });
+          qty: Number(row.qty) || 0, uom: ci.uom || '', unit: costOf(row.itemId).total, line: rowCost * factor,
+          qtyTot: (Number(row.qty) || 0) * factor * mult, tot: rowCost * factor * mult });
       }
     });
   }
@@ -137,7 +144,9 @@ function costContributors(itemId) {
       || (it.type === 'parte' && partSourcing(it) !== 'buy' && (it.cycle || []).length));
     if (esplode) return;
     const e = per.get(r.itemId) || { id: r.itemId, code: r.code, name: r.name, type: r.type, qty: 0, line: 0 };
-    e.qty += r.qty; e.line += r.line;
+    // Riportati alla radice: il costo riga nel suo padre non basta quando il
+    // padre entra più volte (vedi `mult` in flattenBom).
+    e.qty += r.qtyTot; e.line += r.tot;
     per.set(r.itemId, e);
   });
   return Array.from(per.values()).filter(x => x.line > 0).sort((a, b) => b.line - a.line);

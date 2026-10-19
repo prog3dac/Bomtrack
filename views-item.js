@@ -94,7 +94,7 @@ function itemInfoHtml(it) {
     : '';
   return `<h3>${ico('eye', 'tinted pill', 'Scheda di sola lettura')} ${esc(it.code)} — ${esc(it.name)}${itemBadges(it)}</h3>
     <p style="color:var(--text-dim);margin-bottom:4px">
-      <span class="bom-type-tag tt-${it.type}">${typeShort(it.type)}</span> ${esc(typeLabel(it.type))}
+      <span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span> ${esc(typeLabel(it.type))}
       · U.M. <strong>${esc(it.uom || '—')}</strong>${hasRevisions(it) ? ` · revisione in lavorazione <strong>${esc(itemRev(it))}</strong>` : ''}</p>
     <p class="empty-text" style="text-align:left;padding:0 0 12px">Scheda di <strong>sola lettura</strong>: qui non si modifica niente, e per questo si può aprire in mezzo a qualunque lavoro. Le modifiche si fanno dall'anagrafica, dal listino e dalla distinta.</p>
     ${itemInfoBody(it)}
@@ -256,7 +256,7 @@ function itemInfoComposizione(it) {
       if (!ci) return `<tr><td colspan="5" class="empty-text">${ico('warning', 'tinted', '')} componente mancante</td></tr>`;
       return `<tr>
         <td>${codeLink(ci.id, ci.code)}</td>
-        <td><span class="bom-type-tag tt-${ci.type}">${typeShort(ci.type)}</span> ${esc(ci.name)}${itemBadges(ci)}</td>
+        <td><span class="bom-type-tag tt-${typeKey(ci.type)}">${typeShort(ci.type)}</span> ${esc(ci.name)}${itemBadges(ci)}</td>
         <td style="font-family:var(--mono);text-align:right">${fmtUom(c.qty, itemUom(ci))}</td>
         <td style="font-family:var(--mono);text-align:right">${c.scrapPct ? fmtQty(c.scrapPct) + '%' : '—'}</td>
         <td style="font-family:var(--mono);text-align:right">${fmtN(costOf(ci.id).total * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100))}</td></tr>`;
@@ -291,7 +291,7 @@ function itemInfoComposizione(it) {
     const ci = getItem(r.itemId);
     if (!ci) return `<tr><td colspan="4" class="empty-text">${ico('warning', 'tinted', '')} articolo mancante</td></tr>`;
     return `<tr><td>${codeLink(ci.id, ci.code)}</td>
-      <td><span class="bom-type-tag tt-${ci.type}">${typeShort(ci.type)}</span> ${esc(ci.name)}${itemBadges(ci)}</td>
+      <td><span class="bom-type-tag tt-${typeKey(ci.type)}">${typeShort(ci.type)}</span> ${esc(ci.name)}${itemBadges(ci)}</td>
       <td style="font-family:var(--mono);text-align:right">${fmtUom(r.qty, itemUom(ci))}</td>
       <td style="font-family:var(--mono);text-align:right">${fmtN(cycleRowCost(r))}${r.costOverride != null && r.costOverride !== '' ? '<div class="empty-text" style="padding:0">forzato</div>' : ''}</td></tr>`;
   }).join('');
@@ -322,7 +322,7 @@ function itemInfoImpieghi(it) {
       <thead><tr><th scope="col">Codice</th><th scope="col">Articolo</th><th scope="col" style="text-align:right">${labelUom('Q.tà', u)}</th></tr></thead>
       <tbody>${righe.map(r => `<tr>
         <td>${codeLink(r.item.id, r.item.code)}</td>
-        <td><span class="bom-type-tag tt-${r.item.type}">${typeShort(r.item.type)}</span> ${esc(r.item.name)}</td>
+        <td><span class="bom-type-tag tt-${typeKey(r.item.type)}">${typeShort(r.item.type)}</span> ${esc(r.item.name)}</td>
         <td style="font-family:var(--mono);text-align:right">${fmtQty(r.qty)}</td></tr>`).join('')}</tbody></table></div>`;
   const etichetta = cime.some(c => c.item.type === 'macchina') ? 'Macchine impattate' : 'Assiemi di testa impattati';
   return itemInfoSection(ico('link', 'tinted', '') + ' Dove è usato',

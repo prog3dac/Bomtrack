@@ -396,15 +396,25 @@ function priceDelRow(rowId) {
 // ─── Dalla richiesta di offerta al listino ───
 // Le righe da catalogo con un prezzo compilato diventano quotazioni. Una riga
 // già registrata non si duplica: la coppia richiesta + riga è la chiave.
+// Se dopo la registrazione il prezzo sulla richiesta cambia (un errore di
+// battitura, un'offerta rivista), la quotazione si aggiorna invece di restare
+// al prezzo vecchio senza che niente lo dica.
+function rfqQuoteRow(it, r, l) { return priceRows(it).find(p => p.rfqId === r.id && p.lineId === l.id) || null; }
 function rfqPriceCandidates(r) {
   if (!r || !r.supplierId) return [];
   return (r.lines || []).filter(l => {
     if (!l.itemId || l.price === '' || l.price == null) return false;
     const it = getItem(l.itemId);
     if (!hasPriceList(it)) return false;
-    return !priceRows(it).some(p => p.rfqId === r.id && p.lineId === l.id);
+    const fatta = rfqQuoteRow(it, r, l);
+    return !fatta || Number(fatta.price) !== (Number(l.price) || 0);
   });
 }
+// L'id della quotazione nasce dalla richiesta e dalla riga, uguale su ogni PC:
+// due colleghi che registrano la stessa offerta prima di essersi visti
+// scrivono la stessa quotazione, non due che il server rifiuta (c'è un indice
+// unico su articolo + richiesta + riga) bloccando l'invio di chi arriva dopo.
+function rfqQuoteId(rfqId, lineId) { return idDaChiave(String(rfqId) + '|' + String(lineId)); }
 function rfqRecordPrices(id) {
   if (!roleGuard('catalog')) return;
   const r = getRfq(id); if (!r) return;
@@ -412,18 +422,33 @@ function rfqRecordPrices(id) {
   const righe = rfqPriceCandidates(r);
   if (!righe.length) { showToast('Nessun prezzo nuovo da registrare', 'error'); return; }
   const data = (r.date || oggiISO()).slice(0, 10);
+  let nuove = 0, aggiornate = 0;
   righe.forEach(l => {
     const it = getItem(l.itemId);
-    const si = rfqLineSupInfo(r, l);
-    it.priceList.push(stampNew({
-      id: gid(), supplierId: r.supplierId, price: Number(l.price) || 0,
-      minQty: '', leadDays: '', code: (si && si.code) || '', desc: (si && si.desc) || '',
-      date: data, rfqId: r.id, lineId: l.id, note: '',
-    }));
+    const prezzo = Number(l.price) || 0;
+    const fatta = rfqQuoteRow(it, r, l);
+    if (fatta) {
+      fatta.price = prezzo;
+      // Quella in uso porta il prezzo nel costo: si riapplica, come quando lo
+      // si corregge dal listino (priceSetField).
+      if (it.activePriceId === fatta.id) applyPriceRow(it, fatta);
+      aggiornate++;
+    } else {
+      const si = rfqLineSupInfo(r, l);
+      it.priceList.push(stampNew({
+        id: rfqQuoteId(r.id, l.id), supplierId: r.supplierId, price: prezzo,
+        minQty: '', leadDays: '', code: (si && si.code) || '', desc: (si && si.desc) || '',
+        date: data, rfqId: r.id, lineId: l.id, note: '',
+      }));
+      nuove++;
+    }
     touch(it);
   });
   saveDB(); renderRfq(); renderCatalogs();
-  showToast(righe.length + (righe.length === 1 ? ' prezzo registrato a listino' : ' prezzi registrati a listino'));
+  const parti = [];
+  if (nuove) parti.push(nuove + (nuove === 1 ? ' prezzo registrato' : ' prezzi registrati'));
+  if (aggiornate) parti.push(aggiornate + (aggiornate === 1 ? ' prezzo aggiornato' : ' prezzi aggiornati'));
+  showToast(parti.join(', ') + ' a listino');
 }
 
 function usageModal(id) {
@@ -470,7 +495,7 @@ function usageBody(id) {
     <tbody>${diretti.map(r => `<tr>
       <td style="font-family:var(--mono)">${codeLink(r.item.id, r.item.code)}</td>
       <td>${esc(r.item.name)}</td>
-      <td><span class="bom-type-tag tt-${r.item.type}">${typeShort(r.item.type)}</span> ${typeLabel(r.item.type)}</td>
+      <td><span class="bom-type-tag tt-${typeKey(r.item.type)}">${typeShort(r.item.type)}</span> ${typeLabel(r.item.type)}</td>
       <td style="text-align:right;font-family:var(--mono)">${fmtQty(r.qty)}</td>
       <td style="text-align:right"><button class="mini-btn" title="Apri qui" onclick="usageModal('${r.item.id}')">${ico('link', 'tinted', 'Apri qui')}</button></td>
     </tr>`).join('')}</tbody></table>`;
@@ -672,7 +697,7 @@ function catalogRow(i, scope) {
     <td class="col-flags" style="width:1%;white-space:nowrap">${flags}</td>
     <td class="col-code" style="font-family:var(--mono)">${codeLink(i.id, i.code)}</td>
     <td class="col-name">${esc(i.name)}</td>
-    <td class="col-type"><span class="bom-type-tag tt-${i.type}">${typeShort(i.type)}</span> ${typeLabel(i.type)}</td>
+    <td class="col-type"><span class="bom-type-tag tt-${typeKey(i.type)}">${typeShort(i.type)}</span> ${typeLabel(i.type)}</td>
     <td class="col-family" style="color:var(--text-dim)">${esc(codingLabel(i) || familyLabel(i))}</td>
     <td class="col-uom">${esc(i.uom || '')}</td>
     <td class="col-cost" style="font-family:var(--mono)">${fmtN(unit)}</td>
@@ -833,7 +858,7 @@ function renderCatalog(scope) {
   // hanno appena preso le loro <option> fresche da syncMachineFilters/
   // updateCatFamilyFilters, e un valore assegnato a un <select> senza
   // un'opzione corrispondente non prende — è per questo che l'ordine conta.
-  filtScopeApply(scope);
+  filtScopeApply(scope, () => { updateCatFamilyFilters(scope); syncMachineFilters(sc.pfx); });
   const pfx = sc.pfx;
   const rows = catalogFilteredRows(scope);
 
@@ -870,10 +895,9 @@ function catalogExportSpec(scope, soloIds) {
   const fam = getFamily(leggi('family'));
   const sub = (fam && (fam.subs || []).find(s => s.id === leggi('subfamily'))) || null;
   const mac = getItem(leggi('machine')), grp = getItem(leggi('group'));
-  const righe = catalogFilteredRows(scope, soloIds).map(i => [
-    i.code || '', i.name || '', typeLabel(i.type), codingLabel(i) || familyLabel(i),
-    i.uom || '', +(itemUnitCost(i) || 0).toFixed(4), catalogMeta(i),
-  ]);
+  // Le colonne sono quelle accese a schermo (dalla 0.105.6, vedi export-lists.js).
+  const vis = listColonneVisibili(scope, CATALOG_EXPORT_COLS);
+  const righe = catalogFilteredRows(scope, soloIds).map(vis.riga);
   return {
     titolo: scope === 'buy' ? 'Anagrafica — Commerciali e materie prime' : 'Anagrafica — Macchine, gruppi e parti',
     slug: scope === 'buy' ? 'anagrafica_acquisti' : 'anagrafica_progetto',
@@ -889,17 +913,35 @@ function catalogExportSpec(scope, soloIds) {
     ],
     sezioni: [{
       nome: scope === 'buy' ? 'Acquisti' : 'Progetto',
-      colonne: [
-        { h: 'Codice', w: 18 }, { h: 'Descrizione', w: 34 }, { h: 'Tipo', w: 16 }, { h: 'Famiglia', w: 24 },
-        { h: 'U.M.', w: 8 },
-        // La valuta sta in intestazione: nella cella romperebbe ogni formula.
-        { h: `Costo unitario (${cur()}/U.M.)`, w: 18, num: true },
-        { h: 'Dettaglio', w: 28 },
-      ],
+      colonne: vis.colonne,
       righe,
     }],
   };
 }
+// Le colonne dell'anagrafica nel file, per chiave del registro (COLUMNS in
+// columns.js). Un trattino a schermo è una cella vuota nel file: «—» in un
+// foglio non si filtra e non si somma.
+const vuotoSeTrattino = t => (t === '—' ? '' : t || '');
+const CATALOG_EXPORT_COLS = {
+  code: { h: 'Codice', w: 18, v: i => i.code || '' },
+  name: { h: 'Descrizione', w: 34, v: i => i.name || '' },
+  type: { h: 'Tipo', w: 16, v: i => typeLabel(i.type) },
+  family: { h: 'Famiglia', w: 24, v: i => codingLabel(i) || familyLabel(i) },
+  uom: { h: 'U.M.', w: 8, v: i => i.uom || '' },
+  // La valuta sta in intestazione: nella cella romperebbe ogni formula.
+  cost: { h: () => `Costo unitario (${cur()}/U.M.)`, w: 18, num: true, v: i => +(itemUnitCost(i) || 0).toFixed(4) },
+  meta: { h: 'Dettaglio', w: 28, v: i => catalogMeta(i) },
+  subfamily: { h: 'Sottofamiglia', w: 20, v: i => (usesFamily(i.type) && i.familyId ? subFamilyName(i.familyId, i.subFamilyId) || '' : '') },
+  supplier: { h: 'Fornitore', w: 22, v: i => vuotoSeTrattino(catalogSupplierName(i)) },
+  altuom: { h: 'UM acquisto', w: 10, v: i => i.altUom || '' },
+  altfactor: { h: 'Fattore conversione', w: 12, num: true, v: i => Number(i.altFactor) || 0 },
+  safety: { h: 'Scorta minima', w: 12, num: true, v: i => Number(i.safetyStock) || 0 },
+  lot: { h: 'Lotto', w: 10, num: true, v: i => Number(i.lotSize) || 0 },
+  notes: { h: 'Note', w: 30, v: i => i.notes || '' },
+  autore: { h: 'Creato/aggiornato da', w: 24, v: i => recordAuthorShort(i) },
+  concept: { h: 'Concetto', w: 20, v: i => (i.type === 'parte' ? conceptName(i.conceptId) || '' : '') },
+  sourcing: { h: 'Approvvigionamento', w: 16, v: i => (i.type === 'parte' ? PART_SOURCING[partSourcing(i)] || '' : '') },
+};
 // Etichette del menu "Tipo" (l'elenco è ristretto ai tipi della vista di provenienza)
 const TYPE_OPTION_LABELS = {
   acquistato: 'Componente commerciale', materiale: 'Materia prima', parte: 'Parte (lavorato)',
@@ -974,7 +1016,7 @@ function itemModalBody(it, scope) {
         <span class="empty-text" style="padding:0">Descrizione: <strong id="part-name-preview"></strong></span></div>
     </div>
     <div class="modal-grid">
-      <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()">${uomOptions(it ? (it.uom || defaultUom()) : defaultUom())}</select></div>
+      <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()" ${dis(lock.structLocked)} title="${lock.structLocked ? 'Articolo già usato: cambiare l\'unità reinterpreterebbe giacenza, distinte e costi' : ''}">${uomOptions(it ? (it.uom || defaultUom()) : defaultUom())}</select></div>
       <div class="modal-field" id="fld-sourcing"><label>Approvvigionamento</label>
         <select id="it-sourcing">${partSourcingOptions(it ? partSourcing(it) : defaultPartSourcing())}</select></div>
       <div class="modal-field" id="fld-assembly-note" style="grid-column:1/-1"><label>Composizione</label><span class="empty-text" style="padding:0">La distinta (componenti e lavorazioni) si gestisce in <strong>Distinta base → Gestione DB</strong>.</span></div>
@@ -1242,7 +1284,7 @@ function cycleRowLabel(row) {
   }
   const it = getItem(row.itemId);
   if (!it) return ico('warning', 'tinted') + ' articolo mancante';
-  return `<span class="bom-type-tag tt-${it.type}">${typeShort(it.type)}</span>
+  return `<span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span>
     <span class="cycle-code">${codeLink(it.id, it.code)}</span> ${esc(it.name)}${itemBadges(it)}`;
 }
 // ─── Selezione della parte (filtri in cima alla vista) ───
@@ -1318,7 +1360,7 @@ function cycleSourcingNote(it) {
 function renderCycles() {
   invalidateCaches();   // la cache dei costi vive dentro un singolo disegno
   updateCycleFamilyFilters();
-  filtScopeApply('cycles');   // dopo il sync, non prima: vedi nota in renderCatalog
+  filtScopeApply('cycles', updateCycleFamilyFilters);   // dopo il sync, non prima: vedi nota in renderCatalog
   const parts = cycleFilteredParts();
   ensureCurrentCycleItem(parts);
   const partSel = document.getElementById('cyc-part');
@@ -1381,7 +1423,7 @@ function cycleBomTable(bomRows) {
   if (!bomRows.length) return '<div class="empty-text" style="padding:8px 0">Nessun articolo. Usa "+ Articolo" per aggiungere commerciali e materie prime.</div>';
   const head = `<div class="cycle-row cycle-head">
     <span>Voce</span><span>Fornitore</span><span>U.M.</span><span class="num">Q.tà</span>
-    <span class="num" title="Costo di una unità: vuoto = quello calcolato dall'anagrafica">Costo (${esc(cur())}/U.M.)</span>
+    <span class="num" title="Costo dell'intera riga (quantità compresa) al posto di quello calcolato: vuoto = calcolato dall'anagrafica">Costo riga forzato (${esc(cur())})</span>
     <span class="num">Costo riga (${esc(cur())})</span><span></span></div>`;
   return head + bomRows.map(({ r, i }) => {
     const ci = getItem(r.itemId);
@@ -1392,7 +1434,7 @@ function cycleBomTable(bomRows) {
       <input class="num" type="number" min="0" step="0.001" value="${Number(r.qty) || 0}"
         onchange="updateCycleRow(${i})" id="cyc-qty-${i}">
       <input class="num" type="number" min="0" step="0.01" value="${r.costOverride != null ? r.costOverride : ''}"
-        placeholder="${cycleRowComputed(r).toFixed(2)}" title="Lascia vuoto per usare il costo calcolato"
+        placeholder="${cycleRowComputed(r).toFixed(2)}" title="Costo della riga intera, non di un'unità. Lascia vuoto per usare quello calcolato"
         onchange="updateCycleRow(${i})" id="cyc-ovr-${i}">
       <span class="num cost" id="cyc-cost-${i}">${fmtN(cycleRowCost(r))}</span>
       <button class="mini-btn danger" title="Elimina" onclick="delCycleRow(${i})">${ico('trash', 'tinted', 'Elimina')}</button>
@@ -1496,7 +1538,8 @@ function cycleExportSpec() {
           const ci = getItem(r.itemId);
           return [ci ? (ci.code || '') : '(articolo mancante)', ci ? (ci.name || '') : '',
             supplierName(ci && ci.supplierId) || '', ci ? (ci.uom || '') : '',
-            Number(r.qty) || 0, +cycleRowComputed(r).toFixed(4), +cycleRowCost(r).toFixed(2)];
+            // Il costo di un'unità, come dice la colonna: prima c'era quello della riga.
+            Number(r.qty) || 0, +(ci ? costOf(ci.id).total : 0).toFixed(4), +cycleRowCost(r).toFixed(2)];
         }),
         totali: bom.length ? ['Totale distinta parte', '', '', '', '', '', tot(bom)] : null,
       },
@@ -1670,9 +1713,15 @@ function pickCycleItem(id) {
   if (!child || !CYCLE_CHILD_TYPES.includes(child.type)) { showToast('Nella distinta parte vanno solo commerciali e materie prime', 'error'); return; }
   if (createsCycle(it.id, id)) { showToast('Operazione annullata: creerebbe un ciclo', 'error'); return; }
   if (!Array.isArray(it.cycle)) it.cycle = [];
-  it.cycle.push({ kind: 'item', itemId: id, qty: 1, costOverride: null });
+  // Come nella distinta base (dalla 0.105.7): un articolo già presente prende
+  // una unità in più invece di una seconda riga. Non se la riga ha un costo
+  // forzato: quello vale per la riga intera, e aumentandone la quantità il
+  // pezzo in più resterebbe gratis.
+  const gia = it.cycle.find(r => r.kind !== 'op' && r.itemId === id && r.costOverride == null);
+  if (gia) gia.qty = Math.round(((Number(gia.qty) || 0) + 1) * 1e6) / 1e6;
+  else it.cycle.push({ kind: 'item', itemId: id, qty: 1, costOverride: null });
   closeCyclePicker();
-  touch(it); saveDB(); renderCycles(); savedToast('Articolo aggiunto alla distinta parte');
+  touch(it); saveDB(); renderCycles(); savedToast(gia ? 'Quantità aumentata: l\'articolo era già nella distinta parte' : 'Articolo aggiunto alla distinta parte');
 }
 // Selettore inline di una lavorazione da un centro di lavoro esistente:
 // interna o conto lavoro (a seconda del fornitore scelto), a costo fisso o
@@ -1815,6 +1864,14 @@ function applyItemSource(id) {
     setVal('it-name', src.name + ' (copia)');
   }
   setVal('it-uom', src.uom || defaultUom());
+  // L'unità alternativa e il fattore viaggiano con le quotazioni copiate (dalla
+  // 0.105.3): una quotazione a kg su una copia senza kg diventava un prezzo al
+  // metro, e il costo usciva sbagliato del fattore (8 volte, su una barra).
+  if (document.getElementById('it-altuom')) {
+    setVal('it-altuom', src.altUom || '');
+    setVal('it-altfactor', src.altFactor != null ? src.altFactor : '');
+    if (typeof itemUomLabelsRefresh === 'function') itemUomLabelsRefresh();
+  }
   if (src.type === 'parte') setVal('it-sourcing', partSourcing(src));
   setVal('it-notes', src.notes || '');
   setVal('it-code', '');
@@ -1845,8 +1902,15 @@ function readItemForm(it) {
       it.name = val('it-name');
     }
   }
-  it.uom = val('it-uom') || defaultUom();
+  // L'unità di un articolo già usato non cambia (dalla 0.105.5): giacenza,
+  // quantità di distinta, scorta, lotto e costo sono numeri in quell'unità, e
+  // cambiarla li reinterpreterebbe tutti senza toccarli.
+  if (!lock.structLocked) it.uom = val('it-uom') || defaultUom();
   it.notes = val('it-notes');
+  // L'approvvigionamento prima del listino: la quotazione in uso si applica
+  // solo a una parte comprata, e passando da «fabbrica» a «compra» il costo
+  // restava quello vecchio (dalla 0.105.5).
+  if (it.type === 'parte') { const s = val('it-sourcing'); if (PART_SOURCING[s]) it.sourcing = s; }
   // Parametri di scorta: solo su ciò che si tiene a magazzino. Vuoto resta
   // vuoto — zero e "non impostato" qui vogliono dire la stessa cosa, ma un
   // campo lasciato in bianco non deve comparire come 0 alla riapertura.
@@ -1882,7 +1946,7 @@ function readItemForm(it) {
   // da qui: li scrive solo applyPriceRow() quando si sceglie una quotazione.
   // Solo un valore valido sovrascrive: in creazione il campo può non esserci
   // ancora, e lì vale il default delle impostazioni scritto da saveNewItem.
-  if (it.type === 'parte') { const s = val('it-sourcing'); if (PART_SOURCING[s]) it.sourcing = s; }
+  // (L'approvvigionamento si legge più su, prima del listino.)
   if (usesFamily(it.type) && !lock.structLocked) { it.familyId = val('it-family'); it.subFamilyId = val('it-subfamily'); }
   // Codifica gerarchica: schema sulla macchina, appartenenza sugli altri tipi
   if (!lock.structLocked) {
@@ -1977,6 +2041,12 @@ function saveNewItem() {
     it.priceListSeeded = true;
     if (src && hasPriceList(src)) {
       const rimappa = {};
+      // Rete di sicurezza: le quotazioni copiate in un'unità alternativa
+      // vogliono quell'unità anche sulla copia.
+      if (hasAltUom(src) && !hasAltUom(it) && (it.uom || '') === (src.uom || '')
+          && priceRows(src).some(r => r.priceUom && r.priceUom === src.altUom)) {
+        it.altUom = src.altUom; it.altFactor = src.altFactor;
+      }
       it.priceList = priceRows(src).map(r => {
         const n = stampNew(Object.assign({}, r, { id: gid() }));
         rimappa[r.id] = n.id;
@@ -1988,12 +2058,16 @@ function saveNewItem() {
       }
     }
   }
-  Store.insert('items', it);
-  closeModal(); renderCatalogs(); savedToast(src ? 'Copia creata' : 'Articolo creato');
-  // Un articolo appena creato non ha modo di ricevere un prezzo: la scheda non
-  // lo chiede più. Il listino si apre da solo, ma solo se non è già arrivato
-  // dalla copia — lì il prezzo c'è già.
-  if (hasPriceList(it) && !priceRows(it).length) priceListModal(it.id);
+  // Con l'archivio condiviso il codice si impegna sul server prima di salvare:
+  // se un collega l'ha appena preso, quello automatico si ricalcola.
+  return conCodiceImpegnato(it, itemCodeAuto ? () => genItemCode(it) : null, () => {
+    Store.insert('items', it);
+    closeModal(); renderCatalogs(); savedToast(src ? 'Copia creata' : 'Articolo creato');
+    // Un articolo appena creato non ha modo di ricevere un prezzo: la scheda non
+    // lo chiede più. Il listino si apre da solo, ma solo se non è già arrivato
+    // dalla copia — lì il prezzo c'è già.
+    if (hasPriceList(it) && !priceRows(it).length) priceListModal(it.id);
+  });
 }
 // La scheda articolo ricorda chi si sta modificando: chiusa, non deve
 // ricordarlo più — itemDraftFromForm legge questa variabile.
@@ -2021,9 +2095,15 @@ function saveItemEdit(id) {
   if (codErr) { showToast(codErr, 'error'); return; }
   const dupErr = validateItemCode(val('it-code'), id, it.code);
   if (dupErr) { showToast(dupErr, 'error'); return; }
-  readItemForm(it);
-  touch(it);
-  saveDB(); closeModal(); renderCatalogs(); savedToast('Articolo aggiornato');
+  const fare = () => {
+    readItemForm(it);
+    touch(it);
+    saveDB(); closeModal(); renderCatalogs(); savedToast('Articolo aggiornato');
+  };
+  // Solo un codice cambiato va impegnato: quello che l'articolo ha già è suo.
+  const nuovo = val('it-code');
+  if (!nuovo || itemCodeKey(nuovo) === itemCodeKey(it.code) || itemLockState(it).structLocked) return fare();
+  return conCodiceImpegnato({ id: it.id, code: nuovo }, null, fare);
 }
 function delItem(id) {
   if (!roleGuard('catalog')) return;
@@ -2041,10 +2121,16 @@ function delItem(id) {
     showToast('Articolo già movimentato (magazzino, cicli, documenti o piani): non può essere eliminato. Segnalo come obsoleto per impedirne il riuso.', 'error');
     return;
   }
-  askConfirm(`Eliminare "${it.name}"?`, () => {
+  if (!articoloUltimo(it)) { showToast(ARTICOLO_NON_ULTIMO(it.code), 'error'); return; }
+  askConfirm(`Eliminare "${it.name}"?`, () => eliminaSeAncoraUltimo(() => {
+    const x = getItem(id);
+    if (x && articoloUltimo(x)) return true;
+    if (x) showToast(ARTICOLO_NON_ULTIMO(x.code), 'error');
+    return false;
+  }, () => {
     if (currentBomId === id) currentBomId = null;
     removeConUndo('items', id, `"${it.name}" eliminato`, renderCatalogs);
-  });
+  }));
 }
 
 // ─── Azioni su più articoli insieme ───
@@ -2095,14 +2181,29 @@ function bulkDelete(ids) {
   // facendo fallire l'intero invio.
   const inUso = it => usedBy(it.id).length > 0 || isItemUsedAnywhere(it.id);
   const usati = items.filter(inUso);
-  const liberi = items.filter(it => !inUso(it));
+  // Senza buchi nella codifica: se ne vanno solo quelli in coda alla propria
+  // serie, contando che anche gli altri scelti se ne vanno.
+  const candidati = items.filter(it => !inUso(it));
+  const via = new Set(candidati.map(it => it.id));
+  let liberi = candidati;
+  for (;;) {
+    const restano = liberi.filter(it => articoloUltimo(it, via));
+    if (restano.length === liberi.length) break;
+    liberi = restano;
+    via.clear(); liberi.forEach(it => via.add(it.id));
+  }
+  const inMezzo = candidati.length - liberi.length;
   if (!liberi.length) {
-    showToast(`${usati.length === 1 ? 'L\'articolo è usato' : 'Sono tutti usati'} in distinte, documenti o magazzino: rimuovili prima, o segnali come obsoleti.`, 'error');
+    showToast(usati.length
+      ? `${usati.length === 1 ? 'L\'articolo è usato' : 'Sono tutti usati'} in distinte, documenti o magazzino: rimuovili prima, o segnali come obsoleti.`
+      : (inMezzo === 1 ? ARTICOLO_NON_ULTIMO(candidati[0].code) : 'Nessuno di questi codici è l\'ultimo della sua serie: eliminandoli resterebbero buchi nella codifica. Segnali come obsoleti invece di eliminarli.'), 'error');
     return;
   }
-  const avviso = usati.length
+  const avviso = (usati.length
     ? `\n\n${usati.length} ${usati.length === 1 ? 'articolo resta' : 'articoli restano'} dov'${usati.length === 1 ? 'è' : 'erano'}: ${usati.length === 1 ? 'è usato' : 'sono usati'} in distinte, documenti o magazzino.`
-    : '';
+    : '') + (inMezzo
+    ? `\n\n${inMezzo} ${inMezzo === 1 ? 'articolo resta' : 'articoli restano'}: ${inMezzo === 1 ? 'non è l\'ultimo' : 'non sono gli ultimi'} della serie, e ${inMezzo === 1 ? 'il suo codice lascerebbe' : 'i loro codici lascerebbero'} un buco. ${inMezzo === 1 ? 'Segnalo' : 'Segnali'} come obsolet${inMezzo === 1 ? 'o' : 'i'}.`
+    : '');
   askConfirm(`Eliminare ${liberi.length} ${liberi.length === 1 ? 'articolo' : 'articoli'}?${avviso}`, () => {
     const cestinati = [];
     liberi.forEach(it => {
@@ -2114,7 +2215,12 @@ function bulkDelete(ids) {
     // gesto, non di una riga.
     showToast(`${cestinati.length} ${cestinati.length === 1 ? 'articolo eliminato' : 'articoli eliminati'}`, 'success', {
       label: '↶ Annulla',
-      fn: () => { cestinati.forEach(v => Store.restore(v)); renderCatalogs(); savedToast('Ripristinati'); },
+      fn: () => {
+        let no = '';
+        cestinati.forEach(v => { if (!Store.restore(v)) no = no || Store.rifiutoRipristino(); });
+        renderCatalogs();
+        if (no) showToast(no, 'error'); else savedToast('Ripristinati');
+      },
     });
   });
 }

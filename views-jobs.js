@@ -25,12 +25,7 @@ function jobList() { return db.jobs || []; }
 function getJob(id) { return jobList().find(j => j.id === id); }
 function jobLabel(j) { return j ? (j.number + (j.customer ? ' — ' + j.customer : '')) : ''; }
 // Progressivo per anno, come richieste, ordini e piani: COM-<anno>-NNN
-function nextJobNumber() {
-  const prefix = `COM-${new Date().getFullYear()}-`;
-  const seqs = jobList().filter(j => (j.number || '').startsWith(prefix))
-    .map(j => parseInt((j.number || '').slice(prefix.length), 10) || 0);
-  return prefix + String((seqs.length ? Math.max(...seqs) : 0) + 1).padStart(3, '0');
-}
+function nextJobNumber() { return numeroProgressivo('COM'); }
 function jobOptions(selectedId) {
   // Le commesse chiuse restano selezionabili solo se già scelte: non si
   // aggancia lavoro nuovo a una commessa finita, ma i piani vecchi non devono
@@ -103,6 +98,25 @@ function jobLate(j) {
 // Funzione pura: nessun DOM, nessuna lettura del toggle della vista Fabbisogno
 // (`netMode` è forzato a true, come in homeSegnali) — o due utenti sulla stessa
 // base dati leggerebbero due risposte diverse.
+// «Documentato» vuol dire che il documento per quello che manca c'è e non è
+// ancora partito: un ordine o un ordine di lavoro in bozza, o una richiesta
+// d'offerta ancora aperta. Prima bastava un riferimento qualsiasi, e un ordine
+// già inviato per 40 pezzi su 100 faceva dire «manca solo l'invio» ai 60 che
+// nessuno aveva ancora ordinato (dalla 0.105.6). I documenti inviati sono già
+// nel netto come merce in arrivo: qui contano solo quelli che il netto non vede,
+// e solo se le loro quantità coprono quello che resta da ordinare.
+function jobBozzeCoprono(item, refs, daOrdinare) {
+  const doc = ref => ref.kind === 'rfq' ? (db.rfqs || []).find(d => d.id === ref.id)
+    : ref.kind === 'order' ? (db.orders || []).find(d => d.id === ref.id)
+      : ref.kind === 'odl' ? (db.workOrders || []).find(d => d.id === ref.id) : null;
+  const ferma = ref => {
+    const d = doc(ref); if (!d) return false;
+    return ref.kind === 'rfq' ? d.status !== 'chiusa' : d.status === 'bozza';
+  };
+  const coperto = (refs || []).filter(ferma)
+    .reduce((s, ref) => s + fromAltUom(item, ref.qty, ref.uom || itemUom(item)), 0);
+  return coperto > 0 && coperto >= daOrdinare - 0.000001;
+}
 function jobCoverage(jobId) {
   const j = getJob(jobId);
   const tutti = jobPlans(jobId);
@@ -154,7 +168,7 @@ function jobCoverage(jobId) {
     const arr = incomingEntro(e.item.id, serve);
     const netEntro = netRequirement(Math.max(0, e.qty - r.prelevato), r.onHand, arr.inTempo, r.safety, r.lotSize, r.committed, r.lotMode);
     let livello = 'ok';
-    if (r.qtyOrder > 0) livello = refs.length ? 'documentato' : 'ordinare';
+    if (r.qtyOrder > 0) livello = jobBozzeCoprono(e.item, refs, r.qtyOrder) ? 'documentato' : 'ordinare';
     else if (netEntro > 0) livello = 'tardi';
     return { itemId: e.item.id, code: e.item.code || '', name: e.item.name || '', uom: r.uom,
       qty: e.qty, qtyOrder: r.qtyOrder, livello, due: serve, orderBy: r.orderBy, urgenza: r.urgenza,
@@ -209,9 +223,9 @@ function jobCoverageHtml(cov) {
         + (r.orderBy ? `, da ordinare entro ${fmtDateIt(r.orderBy)}` : ''),
       azione: dove(r),
     }))
-    + gruppo(cov.documentate, 'in una richiesta o in un ordine non ancora inviato', r => ({
+    + gruppo(cov.documentate, 'in una richiesta aperta o in un ordine non ancora inviato', r => ({
       testo: r.code,
-      titolo: `${r.name} — ${r.docs.map(d => d.number).join(', ')}: il documento c'è, manca l'invio`,
+      titolo: `${r.name} — ${r.docs.map(d => d.number).join(', ')}: il documento c'è, manca l'ordine inviato`,
       azione: dove(r),
     }))
     + gruppo(cov.tardive, 'in arrivo dopo la data in cui servono', r => ({
@@ -239,7 +253,7 @@ function jobCoverageDomanda(j, cov) {
     parti.push(`${cov.daOrdinare.length === 1 ? 'Un articolo non è ancora ordinato' : cov.daOrdinare.length + ' articoli non sono ancora ordinati'}: ${nomi(cov.daOrdinare)}.`);
   }
   if (cov.documentate.length) {
-    parti.push(`${cov.documentate.length === 1 ? 'Un articolo è' : cov.documentate.length + ' articoli sono'} in un documento non ancora inviato: ${nomi(cov.documentate)}.`);
+    parti.push(`${cov.documentate.length === 1 ? 'Un articolo è' : cov.documentate.length + ' articoli sono'} in una richiesta aperta o in un ordine non ancora inviato: ${nomi(cov.documentate)}.`);
   }
   if (cov.tardive.length) {
     parti.push(`${cov.tardive.length === 1 ? 'Un articolo arriva' : cov.tardive.length + ' articoli arrivano'} dopo la data in cui ${cov.tardive.length === 1 ? 'serve' : 'servono'}: `
@@ -433,9 +447,11 @@ function apriOdlDaCommessa(id) { docLeave('odl'); currentOdlId = id; odlView = '
 // ─── Mutatori ───
 function newJob() {
   if (!roleGuard('docs')) return;
-  const j = Store.insert('jobs', { id: gid(), number: nextJobNumber(), customer: '', title: '',
-    customerRef: '', status: 'aperta', date: oggiISO(), dueDate: '', notes: '', active: true });
-  currentJobId = j.id; jobView = 'edit'; renderJobs();
+  return conNumeri({ COM: 1 }, () => {
+    const j = Store.insert('jobs', { id: gid(), number: nextJobNumber(), customer: '', title: '',
+      customerRef: '', status: 'aperta', date: oggiISO(), dueDate: '', notes: '', active: true });
+    currentJobId = j.id; jobView = 'edit'; renderJobs();
+  });
 }
 function openJobEdit(id) { currentJobId = id; jobView = 'edit'; renderJobs(); }
 function jobBackToList() { jobView = 'list'; currentJobId = null; renderJobs(); }
@@ -480,6 +496,7 @@ function jobApplyField(id, field, value) {
 function delJob(id) {
   if (!roleGuard('docs')) return;
   const j = getJob(id); if (!j) return;
+  if (!guardiaDocumentoUltimo(j, jobList(), 'Annullala invece di eliminarla.')) return;
   const piani = jobPlans(id);
   const { rfqs, orders, workOrders } = jobDocs(id);
   // Non si cancella una commessa che regge del lavoro: si lascerebbero piani e
@@ -493,8 +510,11 @@ function delJob(id) {
     showToast('Commessa collegata a ' + usi.join(', ') + ': scollegali prima, oppure chiudila.', 'error');
     return;
   }
-  askConfirm(`Eliminare la commessa ${j.number}?`, () => {
+  askConfirm(`Eliminare la commessa ${j.number}?`, () => eliminaSeAncoraUltimo(() => {
+    const x = getJob(id);
+    return !!x && guardiaDocumentoUltimo(x, jobList(), 'Annullala invece di eliminarla.');
+  }, () => {
     if (currentJobId === id) { currentJobId = null; jobView = 'list'; }
     removeConUndo('jobs', id, `Commessa ${j.number} eliminata`, renderJobs);
-  });
+  }));
 }

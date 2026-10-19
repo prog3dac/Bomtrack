@@ -68,6 +68,9 @@ function onBomSelect() { currentBomId = val('bom-select'); bomExpanded = new Set
 
 function renderBom() {
   invalidateCaches();   // rete di sicurezza: la cache dei costi vive dentro un singolo disegno
+  // Chi ha aperto la distinta dall'avviso dell'anello e ha tolto la riga lo
+  // vede sparire qui, al ridisegno: il controllo si rifà solo se l'avviso c'è.
+  if (_avvisiFissi.has('anelli')) controllaAnelliDistinta();
   updateBomMachineFilter();
   filtScopeApply('bom');   // dopo il sync, non prima: vedi nota in renderCatalog (views-catalog.js)
   ensureCurrentBom();
@@ -164,7 +167,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
   let h = `<div class="bom-node" style="padding-left:${18 + indent}px">
     <span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${toggle}
       <span class="bom-code">${codeLink(child.id, child.code)}</span>
-      <span class="bom-type-tag tt-${child.type}">${typeShort(child.type)}</span>
+      <span class="bom-type-tag tt-${typeKey(child.type)}">${typeShort(child.type)}</span>
       <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}</span>
     </span>
     <span class="num">${qty}</span>
@@ -207,7 +210,7 @@ function renderCycleBomNode(row, level, pos) {
     const ci = getItem(row.itemId);
     if (!ci) return `<div class="bom-node" style="padding-left:${18 + indent}px"><span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${ico('warning', 'tinted')} articolo mancante</span></div>`;
     name = `<span class="bom-code">${codeLink(ci.id, ci.code)}</span>
-      <span class="bom-type-tag tt-${ci.type}">${typeShort(ci.type)}</span>
+      <span class="bom-type-tag tt-${typeKey(ci.type)}">${typeShort(ci.type)}</span>
       <span class="nm" title="${esc(ci.name)}">${esc(ci.name)}</span>`;
     qtyCell = Number(row.qty) || 0; uom = ci.uom || ''; unit = costOf(row.itemId).total;
   }
@@ -231,7 +234,7 @@ function renderBomRootNode(it) {
       <span class="bom-pos"></span>
       <span class="bom-toggle leaf">•</span>
       <span class="bom-code">${codeLink(it.id, it.code)}</span>
-      <span class="bom-type-tag tt-${it.type}">${typeShort(it.type)}</span>
+      <span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span>
       <span class="nm" title="${esc(it.name)}">${esc(it.name)}</span>
     </span>
     <span class="num">1</span>
@@ -272,17 +275,21 @@ function toggleBom(key) { if (bomExpanded.has(key)) bomExpanded.delete(key); els
 function expandAllBom(on) {
   bomExpanded = new Set();
   if (on) {
-    const walk = (item, prefix) => {
+    // Gli antenati si portano come elenco di id, come fa renderBomNode. Prima si
+    // cercavano tra i pezzi della chiave, che sono `itemId#indice`: l'id nudo
+    // c'era solo per la radice, e un giro chiuso più in basso (S1 dentro S2
+    // dentro S1, possibile in archivio condiviso) riempiva lo stack (dalla 0.105.6).
+    const walk = (item, prefix, antenati) => {
       (item.components || []).forEach((comp, idx) => {
         const key = prefix + '>' + comp.itemId + '#' + idx;
         const child = getItem(comp.itemId);
-        if (!child || prefix.split('>').includes(comp.itemId)) return;
-        if (isAssembly(child.type)) { bomExpanded.add(key); walk(child, key); }
+        if (!child || antenati.includes(comp.itemId)) return;
+        if (isAssembly(child.type)) { bomExpanded.add(key); walk(child, key, antenati.concat(comp.itemId)); }
         // Una Parte col ciclo si espande, ma non ha figli da percorrere oltre
         else if (child.type === 'parte' && (child.cycle || []).length) bomExpanded.add(key);
       });
     };
-    const it = getItem(currentBomId); if (it) walk(it, it.id);
+    const it = getItem(currentBomId); if (it) walk(it, it.id, [it.id]);
   }
   renderBom();
 }
@@ -643,7 +650,12 @@ function bomPanelInsertAll() {
   let added = 0, skipped = 0;
   bomPanelQty.forEach((qty, itemId) => {
     if (!isAllowedChild(it.type, itemId) || createsCycle(it.id, itemId)) { skipped++; return; }
-    it.components.push({ itemId, qty, scrapPct: 0 });
+    // Un articolo che c'è già non fa una seconda riga: se ne aumenta la
+    // quantità (dalla 0.105.7). Due righe dello stesso codice si leggevano
+    // come due voci diverse, e chi correggeva la quantità ne vedeva una sola.
+    const gia = it.components.find(c => c.itemId === itemId);
+    if (gia) gia.qty = Math.round(((Number(gia.qty) || 0) + qty) * 1e6) / 1e6;
+    else it.components.push({ itemId, qty, scrapPct: 0 });
     added++;
   });
   bomPanelQty = new Map();
@@ -683,6 +695,60 @@ function createsCycle(parentId, childId) {
   return dfs(childId);
 }
 
+// ─── Anelli arrivati da fuori (dalla 0.105.6) ───
+// createsCycle() protegge solo le modifiche fatte su questo PC. In archivio
+// condiviso due colleghi possono mettere, nello stesso giro, S2 dentro S1 e S1
+// dentro S2: ciascuno controlla il proprio archivio, dove l'anello non c'è
+// ancora, e il server accetta entrambe le righe. L'anello si forma solo quando
+// le due modifiche si incontrano, cioè qui, alla ricezione. Fino ad allora
+// l'unico segnale era la riga rossa nel riepilogo costi di quell'assieme — e i
+// costi di quel ramo restano troncati, l'esplosione MRP si ferma lì.
+//
+// Ogni anello si riporta una volta, come elenco di id nell'ordine del giro.
+// Basta trovarne uno per ciascun intreccio: chi lo apre vede gli altri.
+function anelliDistinta() {
+  const items = db.items || [];
+  const perId = new Map(items.map(i => [i.id, i]));
+  const figli = it => (isAssembly(it.type) ? (it.components || []).map(c => c.itemId)
+    : it.type === 'parte' ? (it.cycle || []).filter(r => r.kind !== 'op').map(r => r.itemId) : []);
+  const stato = new Map();   // 1 = sul cammino aperto, 2 = già esplorato fino in fondo
+  const cammino = [], anelli = [], visti = new Set();
+  const visita = id => {
+    stato.set(id, 1); cammino.push(id);
+    (figli(perId.get(id)) || []).forEach(f => {
+      if (!perId.has(f)) return;
+      const s = stato.get(f);
+      if (s === 1) {
+        const giro = cammino.slice(cammino.indexOf(f));
+        const k = giro.slice().sort().join('|');
+        if (!visti.has(k)) { visti.add(k); anelli.push(giro); }
+      } else if (!s) visita(f);
+    });
+    cammino.pop(); stato.set(id, 2);
+  };
+  items.forEach(i => { if (!stato.get(i.id)) visita(i.id); });
+  return anelli;
+}
+// Lo dice con un avviso che resta, coi codici del giro e il modo di arrivarci.
+// Si richiama dopo ogni ricezione (Store.applicaRemoto) e all'apertura di una
+// distinta: quando l'anello sparisce, sparisce anche l'avviso.
+function controllaAnelliDistinta() {
+  const anelli = anelliDistinta();
+  if (!anelli.length) { avvisoFissoTogli('anelli'); return anelli; }
+  const codice = id => esc((getItem(id) || {}).code || id);
+  const giri = anelli.slice(0, 3).map(g => g.concat(g[0]).map(codice).join(' → ')).join('; ')
+    + (anelli.length > 3 ? ` e altri ${anelli.length - 3}` : '');
+  const primo = anelli[0].find(id => { const x = getItem(id); return x && isAssembly(x.type); }) || anelli[0][0];
+  avvisoFisso('anelli', `<strong>Distinta ad anello</strong>: ${giri}. Un articolo contiene sé stesso, di solito per due modifiche fatte insieme da due PC: costi e fabbisogni di quel ramo sono incompleti finché non si toglie una delle righe.
+    <button class="avviso-fisso-azione" onclick="apriAnelloDistinta(${jsAttr(primo)})">Apri distinta</button>`);
+  return anelli;
+}
+function apriAnelloDistinta(id) {
+  const it = getItem(id); if (!it) return;
+  if (isAssembly(it.type)) { currentBomId = it.id; bomExpanded = new Set(); setView('bom'); }
+  else { setView(scopeOf(it.type)); editItemModal(it.id); }
+}
+
 function supplierName(id) { const s = getSupplier(id); return s ? s.name : ''; }
 function supplierOptions(selectedId) {
   return `<option value="">—</option>` + db.suppliers
@@ -705,13 +771,18 @@ function wcSupplierOptions(wc, selectedId) {
 }
 // Solo il nome del centro: la tariffa oraria del centro non si applica da sé
 // alle righe di ciclo, ci sono anche quelle a costo fisso (vedi cycleOpsTable).
+// Il centro già scelto resta in elenco anche se sospeso, come fa uomOptions:
+// senza, il menu mostrava il primo centro attivo e salvare la lavorazione la
+// spostava lì senza dirlo (dalla 0.105.5).
+function wcScelti(selectedId) { return db.workCenters.filter(w => w.active !== false || w.id === selectedId); }
+const wcSospeso = w => w.active === false ? ' (sospeso)' : '';
 function wcOptionsNoRate(selectedId) {
-  return db.workCenters.filter(w => w.active !== false)
-    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)}</option>`).join('');
+  return wcScelti(selectedId)
+    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)}${wcSospeso(w)}</option>`).join('');
 }
 function wcOptions(selectedId) {
-  return db.workCenters.filter(w => w.active !== false)
-    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)} (${fmtN(w.hourlyRate)}/h)</option>`).join('');
+  return wcScelti(selectedId)
+    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)} (${fmtN(w.hourlyRate)}/h)${wcSospeso(w)}</option>`).join('');
 }
 function addOperationModal() {
   if (!roleGuard('bom')) return;
@@ -823,10 +894,16 @@ function deleteCurrentMachine() {
     showToast('Articolo già movimentato (magazzino, cicli, documenti o piani): non può essere eliminato. Segnalo come obsoleto per impedirne il riuso.', 'error');
     return;
   }
-  askConfirm(`Eliminare "${it.name}" e la sua distinta?`, () => {
+  if (!articoloUltimo(it)) { showToast(ARTICOLO_NON_ULTIMO(it.code), 'error'); return; }
+  askConfirm(`Eliminare "${it.name}" e la sua distinta?`, () => eliminaSeAncoraUltimo(() => {
+    const x = getItem(it.id);
+    if (x && articoloUltimo(x)) return true;
+    if (x) showToast(ARTICOLO_NON_ULTIMO(x.code), 'error');
+    return false;
+  }, () => {
     currentBomId = null;
     removeConUndo('items', it.id, `"${it.name}" eliminato`, renderBom);
-  });
+  }));
 }
 // Chi contiene questo articolo, dall'indice inverso: una lettura invece di una
 // scansione del catalogo. La copia protegge l'indice da chi ordina il risultato.

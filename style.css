@@ -98,6 +98,17 @@ input,select,button,textarea{font-family:var(--font)}
 .toast-action{margin-left:10px;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.5);color:#fff;
   font-weight:700;font-size:12px;padding:3px 10px;border-radius:6px;cursor:pointer}
 .toast-action:hover{background:rgba(255,255,255,.35)}
+/* Avvisi che restano (core.js, avvisoFisso): in basso, stretti, sopra il
+   lavoro ma senza coprirlo — la versione nuova dell'app, un anello di distinta.
+   Il contenitore lascia passare i click, solo le strisce li prendono. */
+#avvisi-fissi{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:998;display:flex;flex-direction:column;gap:8px;
+  width:max-content;max-width:calc(100vw - 32px);pointer-events:none}
+.avviso-fisso{display:flex;align-items:center;gap:10px;pointer-events:auto;background:var(--card);color:var(--text);
+  border:1px solid var(--orange);border-radius:10px;padding:8px 10px 8px 14px;font-size:13px;box-shadow:0 4px 20px var(--shadow-soft)}
+.avviso-fisso-testo{flex:1;min-width:0}
+.avviso-fisso-azione{margin-left:8px;background:var(--accent-solid);color:#fff;border:0;border-radius:6px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
+.avviso-fisso-chiudi{background:none;border:0;color:var(--text-dim);font-size:18px;line-height:1;cursor:pointer;padding:2px 6px}
+@media print{#avvisi-fissi{display:none!important}}
 
 /* Modal */
 /* Le schede sono finestre mobili, non modali: niente velo scuro sopra la
@@ -119,9 +130,13 @@ body:has(#modal-root > .panel) #app-main:not(:hover){opacity:.82}
 .panel > h3:active{cursor:grabbing}
 .panel-x{position:absolute;top:10px;right:12px;background:transparent;border:none;color:var(--text-dim);font-size:15px;line-height:1;padding:6px 8px;border-radius:6px;cursor:pointer}
 .panel-x:hover{color:var(--text);background:var(--card-hover)}
-/* Su schermo stretto trascinare non ha senso: la scheda occupa la pagina. */
+/* Su schermo stretto trascinare non ha senso: la scheda occupa la pagina.
+   L'altezza in dvh (dalla 0.105.6): sui telefoni 100vh è la finestra con le
+   barre del browser nascoste, e il fondo di un modulo lungo — dove stanno
+   Salva e Annulla — finiva sotto la barra. Il valore in vh resta per i
+   browser che dvh non lo conoscono. */
 @media(max-width:640px){
-  .panel,.panel-wide{left:8px!important;top:8px!important;width:calc(100vw - 16px);max-height:calc(100vh - 16px);resize:none;padding:20px}
+  .panel,.panel-wide{left:8px!important;top:8px!important;width:calc(100vw - 16px);max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);resize:none;padding:20px}
   .panel > h3{cursor:default}
 }
 /* L'icona nativa del calendario è nera: sul fondo scuro dei campi sparisce e va
@@ -722,6 +737,12 @@ textarea.notes-internal{border-style:dashed}
 .dd[open] > summary{border-color:var(--accent);color:var(--accent)}
 .dd-caret{font-size:10px;opacity:.7}
 .dd-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:60;min-width:190px;display:flex;flex-direction:column;padding:4px;background:var(--card);border:1px solid var(--border);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+/* Il menu non esce mai dallo schermo (dalla 0.105.6): sul telefono la barra
+   va a capo e «Esporta ▾» può stare sul bordo sinistro, dove il menu
+   ancorato a destra tagliava le voci. tendinaPosiziona() lo gira a sinistra
+   (.dd-sx) quando non ci sta; il max-width tiene il resto. */
+.dd-menu{max-width:calc(100vw - 16px)}
+.dd-menu.dd-sx{right:auto;left:0}
 .dd-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;border-radius:6px;padding:8px 10px;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap;min-height:34px}
 .dd-item:hover,.dd-item:focus-visible{background:var(--card-hover)}
 .dd-item.danger{color:var(--red)}
@@ -1305,3 +1326,19 @@ select.combo-nascosto{display:none!important}
 @media print{.combo-list{display:none!important}}
 .combo::after{content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text-dim);font-size:11px}
 .combo .combo-in{padding-right:28px}
+
+/* ─── Archivio condiviso (cloud.js) ─── */
+.cloud-stato{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text-dim);font:inherit;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer}
+.cloud-stato .ico{font-size:15px}
+.cloud-stato.cs-ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,transparent)}
+.cloud-stato.cs-invio,.cloud-stato.cs-attesa{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.cloud-stato.cs-offline{color:var(--text-dim)}
+.cloud-stato.cs-errore,.cloud-stato.cs-accesso{color:#fff;background:var(--red-solid);border-color:var(--red-solid)}
+/* Sincronizzato è lo stato normale: basta l'icona. Le parole servono quando c'è qualcosa da sapere. */
+.cloud-stato.cs-ok .cs-testo{display:none}
+@media (max-width:700px){.cloud-stato .cs-testo{display:none}}
+.cl-esito{font-size:13px;min-height:1.2em;margin:4px 0 0}
+.cl-err{color:var(--red)}
+.cl-ok{color:var(--green)}
+.cl-nota{font-size:12px;color:var(--text-dim);margin:2px 0 8px}
+.login-note a{color:var(--accent)}

@@ -485,7 +485,7 @@ function importCatalogSheets(byName, scope, opts) {
   const o = opts || {};
   const rep = { scope, dryRun: !!o.dryRun, sheets: [], missing: [], foreign: [], legacy: false,
     errors: [], warnings: [], createdSuppliers: 0, createdFamilies: 0, createdSubFamilies: 0,
-    createdUoms: [], preview: [] };
+    createdUoms: [], preview: [], nuoviCodici: [] };
   const ctx = { rep, scope, seen: new Map(), touched: new Map() };
   const norm = {};
   Object.keys(byName || {}).forEach(n => { norm[normHeader(n)] = byName[n]; });
@@ -577,12 +577,21 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   let it = code ? getItemByCode(code) : null;
   if (it && it.type !== type) { err(`il codice "${esc(code)}" è già di ${typeLabel(it.type)}: il tipo di un articolo non si cambia da un foglio`); return; }
   const isNew = !it;
+  if (isNew && code && codicePresoAltrove(code)) { err(`codice "${esc(code)}" appena preso da un collega sull'archivio condiviso`); return; }
   if (isNew) {
     it = { id: gid(), type, active: true };
     if (isAssembly(type)) { it.components = []; it.operations = []; }
     if (type === 'parte') { it.cycle = []; it.sourcing = defaultPartSourcing(); }
     if (hasPriceList(it)) { it.priceList = []; it.priceListSeeded = true; }
   }
+  // Un articolo che c'è già si modifica su una copia, e la copia entra solo se
+  // la riga arriva in fondo senza errori (dalla 0.105.5): prima una riga
+  // segnalata come errore restava applicata a metà. E un articolo già usato
+  // tiene codice, famiglia, codifica, unità e — per chi non amministra — il
+  // nome, come nella sua scheda: l'import li scavalcava.
+  const orig = isNew ? null : it;
+  if (!isNew) it = JSON.parse(JSON.stringify(orig));
+  const lock = isNew ? { structLocked: false, nameLocked: false } : itemLockState(orig);
 
   // ── Descrizione ──
   if (type === 'parte') {
@@ -607,6 +616,7 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   }
 
   // ── U.M. e doppia unità (prima del prezzo: la conversione dipende da qui) ──
+  const conversionePrima = [it.uom || '', altUomOf(it) || '', altFactorOf(it)].join('|');
   const um = catCell(row, 'UM *');
   if (um) it.uom = catEnsureUom(um, ctx);
   else if (isNew) it.uom = defaultUom();
@@ -632,18 +642,11 @@ function catApplyItemRow(row, def, ctx, ln, st) {
       }
     }
   }
-
-  // ── Famiglia ──
-  if (usesFamily(type)) {
-    const fam = catCell(row, 'Macrofamiglia');
-    const sub = catCell(row, 'Sottofamiglia');
-    if (fam !== null || sub !== null) {
-      if (fam) {
-        const f = findOrCreateFamily(fam, sub || '', type, rep);
-        it.familyId = f.familyId; it.subFamilyId = f.subFamilyId;
-      } else if (fam === '') { it.familyId = ''; it.subFamilyId = ''; }
-    }
-  }
+  // Cambiata la conversione, il costo della quotazione in uso va ricalcolato
+  // anche se la riga non porta un prezzo (dalla 0.105.3): restava al valore
+  // vecchio, sbagliato del rapporto fra il fattore vecchio e il nuovo. Si
+  // segna qui e si fa quando la riga entra.
+  const conversioneDopo = () => [it.uom || '', altUomOf(it) || '', altFactorOf(it)].join('|');
 
   // ── Codifica gerarchica ──
   if (type === 'macchina') {
@@ -730,8 +733,24 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   const note = catCell(row, 'Note');
   if (note !== null) it.notes = note;
 
+  // ── Famiglia ── (dopo i controlli: una riga sbagliata non crea famiglie)
+  if (usesFamily(type)) {
+    const fam = catCell(row, 'Macrofamiglia');
+    const sub = catCell(row, 'Sottofamiglia');
+    if ((fam !== null || sub !== null) && !lock.structLocked) {
+      if (fam) {
+        const f = findOrCreateFamily(fam, sub || '', type, rep);
+        it.familyId = f.familyId; it.subFamilyId = f.subFamilyId;
+      } else if (fam === '') { it.familyId = ''; it.subFamilyId = ''; }
+    } else if (fam && lock.structLocked) {
+      const attuale = (db.families || []).find(f => f.id === it.familyId);
+      if (!attuale || String(attuale.name || '').toLowerCase() !== String(fam).trim().toLowerCase()) it.__famigliaDiversa = true;
+    }
+  }
+
   // ── Codice ──
-  if (code) it.code = code;
+  // Lo stesso codice scritto in un altro modo (minuscole) non lo rinomina.
+  if (code && !(orig && itemCodeKey(code) === itemCodeKey(orig.code))) it.code = code;
   else if (isNew) {
     const auto = genItemCode(it);
     if (!auto) {
@@ -747,10 +766,38 @@ function catApplyItemRow(row, def, ctx, ln, st) {
     ctx.seen.set(itemCodeKey(auto), ln);
   }
 
+  if (!isNew) {
+    const bloccati = [];
+    const tieni = (campi, etichetta) => {
+      if (campi.some(k => JSON.stringify(it[k] == null ? '' : it[k]) !== JSON.stringify(orig[k] == null ? '' : orig[k]))) bloccati.push(etichetta);
+      campi.forEach(k => { if (k in orig) it[k] = orig[k]; else delete it[k]; });
+    };
+    if (lock.structLocked) {
+      tieni(['code'], 'codice');
+      if (it.__famigliaDiversa) bloccati.push('famiglia');
+      tieni(['familyId', 'subFamilyId'], 'famiglia');
+      tieni(['machineItemId', 'groupItemId', 'sigla'], 'codifica');
+      tieni(['uom'], 'unità di misura');
+    }
+    if (lock.nameLocked) tieni(['name', 'conceptId', 'nameFree'], 'descrizione');
+    delete it.__famigliaDiversa;
+    if (bloccati.length) avviso(`${esc(orig.code || '')} è già usato: ${Array.from(new Set(bloccati)).join(', ')} restano com'erano`);
+    const cambiaConversione = activePriceRow(orig) && conversionePrima !== conversioneDopo();
+    Object.keys(orig).forEach(k => { if (!(k in it)) delete orig[k]; });
+    Object.assign(orig, it);
+    it = orig;
+    if (cambiaConversione) {
+      const s = catStage(ctx, it);
+      if (!s.inline && !s.forced) s.inline = activePriceRow(it);
+    }
+  }
+  delete it.__famigliaDiversa;
+
   if (isNew) {
     stampNew(it);
     db.items.push(it);
     codeIndexAdd(it);
+    rep.nuoviCodici.push(it.code);
     st.created++;
     if (rep.preview.length < 20) rep.preview.push(`${it.code} — ${it.name}`);
   } else { touch(it); st.updated++; }
@@ -823,7 +870,13 @@ function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
     // qualunque altra verrebbe ignorata in silenzio, e il silenzio qui è un
     // prezzo giusto nell'unità sbagliata.
     if (pu === altUomOf(it)) r.priceUom = pu;
-    else if (pu !== it.uom) rep.warnings.push(`${foglio}, riga ${ln}: "UM prezzo" ${esc(pu)} non è l'unità di acquisto di ${esc(it.code)}: ignorata`);
+    // L'unità di gestione vuol dire «prezzo nella mia unità»: un'unità
+    // d'acquisto rimasta da prima moltiplicherebbe il prezzo per il fattore.
+    else if (pu === it.uom) delete r.priceUom;
+    else rep.warnings.push(`${foglio}, riga ${ln}: "UM prezzo" ${esc(pu)} non è l'unità di acquisto di ${esc(it.code)}: ignorata`);
+  } else if (pu === '') {
+    // Colonna presente e vuota: come per gli altri campi, si svuota (0.105.3).
+    delete r.priceUom;
   }
   for (const [h, campo] of [['Q.tà min', 'minQty'], ['GG consegna', 'leadDays']]) {
     const v = catNum(row, h);
@@ -899,7 +952,7 @@ function catLegacySheets(byName, ctx) {
     const type = resolveType(tipoRaw);
     if (!type) {
       if (Object.values(row).some(v => String(v == null ? '' : v).trim())) {
-        ctx.rep.errors.push(`${primo}, riga ${ln}: tipo non valido ("${esc(tipoRaw)}")`);
+        ctx.rep.errors.push(`${esc(primo)}, riga ${ln}: tipo non valido ("${esc(tipoRaw)}")`);
       } else st.skipped++;
       return;
     }
@@ -912,11 +965,11 @@ function catLegacySheets(byName, ctx) {
     if ((type === 'materiale' || type === 'parte') && pick(row, 'CostoUnitario', 'Costo') !== '') {
       riga['Prezzo'] = pick(row, 'CostoUnitario', 'Costo');
     }
-    catApplyItemRow(riga, { name: primo, type }, ctx, ln, st);
+    catApplyItemRow(riga, { name: esc(primo), type }, ctx, ln, st);   // i messaggi del report sono HTML già escapato
   });
   if (altri) {
     const altro = ctx.scope === 'buy' ? 'Progetto' : 'Acquisti';
-    ctx.rep.warnings.push(`${primo}: ${altri} righe sono di tipi che appartengono al file ${altro} — ricarica lo stesso file dal pulsante ${altro}.`);
+    ctx.rep.warnings.push(`${esc(primo)}: ${altri} righe sono di tipi che appartengono al file ${altro} — ricarica lo stesso file dal pulsante ${altro}.`);
   }
   ctx.rep.sheets.push(Object.assign({ name: primo + ' (formato precedente)' }, st));
 }
@@ -937,6 +990,7 @@ function catRunImport(dryRun) {
   const pending = window.__lastCatalogImport;
   if (!pending) { showToast('Nessun file da importare', 'error'); return; }
   if (!roleGuard('catalog')) return;
+  if (!dryRun && cloudCondiviso()) return catImportaImpegnando(pending);
   let rep;
   try {
     rep = importCatalogSheets(pending.byName, pending.scope, { dryRun });
@@ -946,6 +1000,42 @@ function catRunImport(dryRun) {
     return;
   }
   showCatalogReport(rep);
+}
+// Con l'archivio condiviso i codici nuovi si impegnano sul server prima di
+// scrivere: una prova a vuoto dice quali sarebbero, il server dice quali sono
+// già di un collega, e si riprova finché non ne resta nessuno conteso. I codici
+// automatici si ricalcolano da soli (codicePresoAltrove), quelli scritti nel
+// foglio diventano errori della loro riga. Intanto i giri di sincronizzazione
+// aspettano: un articolo arrivato fra la prova e l'import vero cambierebbe i
+// codici automatici rispetto a quelli impegnati.
+async function catImportaImpegnando(pending) {
+  _cloud.pausa++;
+  // Tutto ciò che si è impegnato strada facendo: alla fine quello che l'import
+  // non ha usato torna libero, o resterebbe un buco nella codifica.
+  const impegnati = new Set();
+  let usati = [];
+  try {
+    for (let giro = 0; giro < 6; giro++) {
+      const prova = importCatalogSheets(pending.byName, pending.scope, { dryRun: true });
+      const presi = prova.nuoviCodici.length ? await cloudImpegnaCodici(prova.nuoviCodici.map(codice => ({ codice }))) : [];
+      const rifiutati = new Set(presi.map(itemCodeKey));
+      prova.nuoviCodici.forEach(c => { if (!rifiutati.has(itemCodeKey(c))) impegnati.add(c); });
+      if (presi.length) continue;
+      const rep = importCatalogSheets(pending.byName, pending.scope, {});
+      usati = rep.nuoviCodici;
+      showCatalogReport(rep);
+      return rep;
+    }
+    showToast('I codici continuano a essere presi da qualcun altro: riprova fra poco', 'error');
+  } catch (e) {
+    if (e && e.cloud) cloudErroreRiserva(e, 'i codici degli articoli');
+    else { console.error(e); showToast('Import non riuscito: ' + e.message, 'error'); }
+  } finally {
+    _cloud.pausa--;
+    const tenuti = new Set(usati.map(itemCodeKey));
+    await cloudLiberaCodici([...impegnati].filter(c => !tenuti.has(itemCodeKey(c))));
+  }
+  return null;
 }
 // «Saltate», non «vuote»: in `skipped` finiscono tre cose diverse — la riga
 // davvero vuota, quella senza un tipo riconoscibile e quella che appartiene

@@ -120,6 +120,40 @@ describe('Lo scope condiviso segue la navigazione', () => {
   });
 });
 
+// Un <select> come quello del browser: prende solo un valore che ha fra le sue
+// <option>, e rifacendo le opzioni tiene quella marcata «selected».
+function selectVero(a, id) {
+  const el = a.el(id);
+  let v = '', html = '';
+  const ha = x => x === '' || html.includes('value="' + x + '"');
+  Object.defineProperty(el, 'value', { configurable: true, get: () => v, set: x => { v = ha(String(x)) ? String(x) : ''; } });
+  Object.defineProperty(el, 'innerHTML', { configurable: true, get: () => html, set: x => {
+    html = String(x);
+    const m = html.match(/value="([^"]*)"[^>]*selected/);
+    v = m ? m[1] : '';
+  } });
+}
+
+describe('Sottofamiglia e gruppo condivisi entrano subito', () => {
+  it('in Magazzino la sottofamiglia e il gruppo scelti altrove sono già applicati', () => {
+    const a = app(makeDb({
+      families: [{ id: 'fa', name: 'Meccanico', kind: 'acquistato', subs: [{ id: 's1', name: 'Viti' }] }],
+      items: [
+        asm('mac1', 'macchina'),
+        asm('grp1', 'gruppo', { machineItemId: 'mac1' }),
+        Object.assign(acq('c1', 5), { familyId: 'fa', subFamilyId: 's1' }),
+      ],
+    }));
+    ['stk-family', 'stk-subfamily', 'stk-machine', 'stk-group'].forEach(id => selectVero(a, id));
+    a.eval('filtScope = { familyId: "fa", subFamilyId: "s1", machineId: "mac1", groupId: "grp1" };');
+    a.eval("setView('stock')");
+    assert.equal(a.el('stk-family').value, 'fa');
+    assert.equal(a.el('stk-subfamily').value, 's1', 'senza aspettare il prossimo ridisegno');
+    assert.equal(a.el('stk-machine').value, 'mac1');
+    assert.equal(a.el('stk-group').value, 'grp1');
+  });
+});
+
 // Nel browser vero, una famiglia di un ambito diverso (parti vs. acquisti)
 // scritta da filtScopeApply viene invalidata da syncFamilyFilters, che
 // ricostruisce le <option> e sceglie quella "selected" — esattamente come già

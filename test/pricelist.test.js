@@ -306,6 +306,34 @@ describe('registrazione dei prezzi da una richiesta di offerta', () => {
     assert.equal(righe.length, 2, 'lo storico deve conservare entrambe');
     assert.deepEqual(righe.map(r => r.price).sort((x, y) => x - y), [8, 9.5]);
   });
+
+  it('un prezzo corretto sulla richiesta dopo la registrazione aggiorna la quotazione', () => {
+    const app = conRfq([{ id: 'l1', itemId: 'a', price: 8 }]);
+    app.eval('rfqRecordPrices("r1")');
+    app.eval('getRfq("r1").lines[0].price = 7.5');
+    assert.equal(app.eval('rfqPriceCandidates(getRfq("r1")).length'), 1, 'la riga cambiata torna candidata');
+    app.eval('rfqRecordPrices("r1")');
+    const righe = app.snapshot().items.find(i => i.code === 'A').priceList;
+    assert.equal(righe.length, 1, 'si aggiorna, non si aggiunge');
+    assert.equal(righe[0].price, 7.5);
+    assert.equal(app.eval('rfqPriceCandidates(getRfq("r1")).length'), 0);
+  });
+
+  it('se la quotazione aggiornata è quella in uso, il costo la segue', () => {
+    const app = conRfq([{ id: 'l1', itemId: 'a', price: 8 }]);
+    app.eval('rfqRecordPrices("r1")');
+    app.eval('{ const it = getItem("a"); applyPriceRow(it, it.priceList[0]); getRfq("r1").lines[0].price = 7.5; rfqRecordPrices("r1"); }');
+    approx(app.ref('getItem')('a').purchasePrice, 7.5);
+  });
+
+  it('la quotazione ha lo stesso id su ogni PC: nasce da richiesta e riga', () => {
+    const app = conRfq([{ id: 'l1', itemId: 'a', price: 8 }, { id: 'l2', itemId: 'b', price: 9 }]);
+    app.eval('rfqRecordPrices("r1")');
+    const id = app.eval('getItem("a").priceList[0].id');
+    assert.equal(id, app.eval('rfqQuoteId("r1", "l1")'));
+    assert.notEqual(id, app.eval('getItem("b").priceList[0].id'));
+    assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
 });
 
 describe('permessi', () => {

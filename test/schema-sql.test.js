@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { describe, it } = require('./tap.js');
 const { loadApp } = require('./harness.js');
-const { makeDb } = require('./fixtures.js');
+const { makeDb, dbCloudCompleto, U, T0 } = require('./fixtures.js');
 const pg = require('./pg.js');
 
 const SQL = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'schema.sql'), 'utf8');
@@ -59,63 +59,9 @@ function registroSql() {
 }
 const SQL_A_CLOUD = { boolean: 'bool', integer: 'int' };
 
-// ── Un database che tocca tutte le tabelle, con id veri ──
-const U = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
-const T0 = '2026-03-01T08:00:00.000Z';
-const st = o => Object.assign({ createdAt: T0, updatedAt: T0 }, o);
-function dbCompleto() {
-  const [s1, s2, wc1, fam, sub, job, m1, c1, p1, g1, mac, pr1, pr2, rfq, rl1, rl2, ord, ol1, plan, pll,
-    odp, ph1, ph2, mt1, odl, wl1, dec, mv1, mv2, rc1, prd, rev, adoc, att, rem, trash, cust, wcs, usr, cn] =
-    Array.from({ length: 40 }, (_, i) => U(i + 1));
-  return makeDb({
-    users: [st({ id: usr, name: 'Anna', username: 'anna', email: 'a@x.it', role: 'admin', color: '#3A7BE8', active: true, passwordHash: 'h', passwordSalt: 's' })],
-    suppliers: [st({ id: s1, name: 'SKF', referente: '', email: '', phone: '', vat: '', street: '', streetNumber: '', zip: '', city: '', province: '', country: '', defaultTransport: '', defaultPayment: '', active: true }),
-      st({ id: s2, name: 'Beta lavorazioni', active: true })],
-    customers: [st({ id: cust, name: 'Rossi', referente: '', email: '', phone: '', vat: '', notes: '', active: true })],
-    workCenters: [st({ id: wc1, name: 'Tornitura', hourlyRate: 40, capacityHours: 38, active: true,
-      suppliers: [st({ id: wcs, supplierId: s2, rate: 55, note: '' })] })],
-    families: [st({ id: fam, name: 'Acciaio', kind: 'materiale', sigla: 'ACC', subs: [st({ id: sub, name: 'Barre', sigla: 'BAR' })] })],
-    jobs: [st({ id: job, number: 'COM-2026-001', customer: 'Rossi', title: 'Linea', customerRef: '', status: 'aperta', date: '2026-03-01', dueDate: '2026-06-30', notes: '', active: true })],
-    items: [
-      st({ id: m1, code: 'MAT-ACC-BAR-001', name: 'Barra', type: 'materiale', uom: 'kg', unitCost: 4.5, familyId: fam, subFamilyId: sub, notes: '', active: true,
-        activePriceId: pr1, priceListSeeded: true, altUom: 'm', altFactor: 2.5, conceptId: 'cn-albero',
-        priceList: [st({ id: pr1, supplierId: s1, price: 4.5, minQty: '', leadDays: 10, code: 'B1', desc: 'Barra', date: '2026-02-01', rfqId: rfq, lineId: rl1, note: '', priceUom: 'kg' }),
-          st({ id: pr2, supplierId: null, price: 4.8, minQty: 100, leadDays: '', code: '', desc: '', date: '2026-01-01', rfqId: null, note: '' })] }),
-      st({ id: c1, code: 'CMM-001', name: 'Cuscinetto', type: 'acquistato', uom: 'pz', purchasePrice: 12, supplierId: s1, familyId: '', subFamilyId: '', notes: '', active: true, favorite: true, priceList: [] }),
-      st({ id: p1, code: 'PRT-001', name: 'Albero', type: 'parte', uom: 'pz', unitCost: 0, sourcing: 'make', active: true, lotSize: 10, lotMode: 'min', safetyStock: 5, priceList: [],
-        cycle: [{ kind: 'item', itemId: m1, qty: 1.2, costOverride: null },
-          { kind: 'op', workCenterId: wc1, supplierId: null, costMode: 'orario', cost: 0, hours: 0.5, days: 0, rate: 40, note: 'tornitura' },
-          { kind: 'op', workCenterId: wc1, supplierId: s2, costMode: 'fisso', cost: 3, hours: 0, days: 4, rate: 0, note: 'tempra' }] }),
-      st({ id: g1, code: 'GRP-001', name: 'Gruppo', type: 'gruppo', uom: 'pz', active: true, machineItemId: mac, groupItemId: '',
-        components: [{ itemId: p1, qty: 2, scrapPct: 0 }, { itemId: c1, qty: 4, scrapPct: 2 }], operations: [{ workCenterId: wc1, hours: 1, note: 'montaggio' }] }),
-      st({ id: mac, code: 'NT-1', name: 'Macchina', type: 'macchina', uom: 'pz', active: true, rev: 'B',
-        components: [{ itemId: g1, qty: 1, scrapPct: 0 }], operations: [] }),
-    ],
-    plans: [st({ id: plan, number: 'FAB-2026-001', title: 'Lotto', date: '2026-03-01', dueDate: '2026-05-01', notes: '', jobId: job, active: true,
-      lines: [st({ id: pll, itemId: mac, qty: 2, dueDate: '' })] })],
-    rfqs: [st({ id: rfq, number: 'RDO-2026-001', title: '', date: '2026-02-01', status: 'ricevuta', supplierId: s1, transport: '', payment: '', planId: plan, jobId: job, notes: '', notesInternal: '', active: true,
-      lines: [st({ id: rl1, itemId: m1, code: 'MAT-ACC-BAR-001', description: 'Barra', uom: 'kg', qty: 100, price: 4.5, deliveryDate: '', note: '', phaseKey: null, phaseKeys: null }),
-        st({ id: rl2, itemId: null, code: 'PRT-001', description: 'Tempra', uom: 'pz', qty: 10, price: '', deliveryDate: '2026-04-01', note: '', phaseKey: p1 + '#1#' + wc1, phaseKeys: p1 + '#1#' + wc1 })] })],
-    orders: [st({ id: ord, number: 'ODA-2026-001', title: '', date: '2026-02-05', status: 'parziale', supplierId: s1, transport: '', payment: '', rfqId: rfq, planId: plan, jobId: job, supplierConfirmation: 'OC-1', notes: '', notesInternal: '', active: true,
-      lines: [st({ id: ol1, itemId: m1, code: 'MAT-ACC-BAR-001', description: 'Barra', uom: 'kg', qty: 100, price: 4.5, deliveryDate: '2026-03-01', confirmedDate: '2026-03-03', received: 40, note: '', phaseKey: null, phaseKeys: null })] })],
-    prodOrders: [st({ id: odp, number: 'ODP-2026-001', itemId: p1, code: 'PRT-001', name: 'Albero', uom: 'pz', qty: 10, date: '2026-03-02', dueDate: '2026-04-15', status: 'corso', title: '', notes: '', notesInternal: '', planId: plan, jobId: job, active: true,
-      phases: [st({ id: ph1, seq: 10, opIndex: 0, phaseKey: p1 + '#0#' + wc1, workCenterId: wc1, wcName: 'Tornitura', supplierId: null, supplierName: '', runFrom: 0, runTo: 0, passata: 0, costMode: 'orario', hours: 0.5, days: 0, rate: 40, cost: 0, note: '' }),
-        st({ id: ph2, seq: 20, opIndex: 1, phaseKey: p1 + '#1#' + wc1, workCenterId: wc1, wcName: 'Tornitura', supplierId: s2, supplierName: 'Beta lavorazioni', runFrom: 1, runTo: 1, passata: 1, costMode: 'fisso', hours: 0, days: 4, rate: 0, cost: 3, note: '' })],
-      materials: [st({ id: mt1, itemId: m1, code: 'MAT-ACC-BAR-001', name: 'Barra', uom: 'kg', perPezzo: 1.2, qty: 12 })] })],
-    workOrders: [st({ id: odl, number: 'ODL-2026-001', title: '', date: '2026-03-05', status: 'inviato', supplierId: s2, transport: '', payment: '', rfqId: null, planId: plan, jobId: job, odpId: odp, supplierConfirmation: '', notes: '', notesInternal: '', active: true,
-      lines: [st({ id: wl1, itemId: null, code: 'PRT-001', description: 'Tempra', uom: 'pz', qty: 10, price: 3, deliveryDate: '2026-03-12', confirmedDate: '', received: 0, note: '', phaseKey: p1 + '#1#' + wc1, phaseKeys: p1 + '#1#' + wc1, odpId: odp, odpPhaseId: ph2 })] })],
-    prodDecls: [st({ id: dec, odpId: odp, phaseId: ph1, kind: 'avvio', date: '2026-03-02T09:00:00.000Z', qty: 0, scrap: 0, note: '', motivo: '' })],
-    movements: [st({ id: mv1, itemId: m1, kind: 'scarico', qty: -12, date: '2026-03-02T09:00:00.000Z', note: '', supplierId: null, fromSupplierId: null, orderId: odp, lineId: ph1, declId: dec }),
-      st({ id: mv2, itemId: p1, kind: 'clStep', qty: 10, date: '2026-03-05T09:00:00.000Z', note: '', supplierId: s2, fromSupplierId: null, orderId: odl, lineId: wl1, declId: null })],
-    receipts: [st({ id: rc1, coll: 'orders', orderId: ord, lineId: ol1, qty: 40, kind: 'ricevimento', date: '2026-03-03', note: '' })],
-    productions: [st({ id: prd, planId: plan, itemId: mac, qty: 1, date: '2026-03-10T15:00:00.000Z', note: '' })],
-    revisions: [st({ id: rev, itemId: mac, rev: 'A', date: '2026-02-20T10:00:00.000Z', motivo: 'prima emissione', snapshot: { components: [{ itemId: g1, qty: 1 }], cost: 123.4 } })],
-    attachmentDocs: [st({ id: adoc, path: 'cataloghi/skf.pdf', description: 'Catalogo SKF' })],
-    attachments: [st({ id: att, itemId: c1, docId: adoc, page: 12 })],
-    reminders: [st({ id: rem, date: '2026-03-20', title: 'Sollecitare SKF', notes: '', gravita: 'media', done: false, jobId: job, active: true })],
-    trash: [{ id: trash, coll: 'suppliers', deletedAt: T0, deletedBy: usr, record: { id: U(99), name: 'Vecchio' } }],
-  });
-}
+// Un database che tocca tutte le tabelle, con id veri: test/fixtures.js.
+const dbCompleto = dbCloudCompleto;
+
 const app = db => { const a = loadApp({ silent: true }); a.setDb(db); return a; };
 const ev = (a, code) => JSON.parse(a.eval(`JSON.stringify(${code})`));
 // Nel modello locale null, assente e — sui campi «vuoti» — `''` dicono la
@@ -148,6 +94,12 @@ describe('schema.sql dice le stesse cose del codice', () => {
       return o;
     })()`);
     assert.deepEqual(reg, atteso);
+  });
+
+  // 0.106.0: il cestino lo pulisce il server; la finestra è la stessa dell'app.
+  it('la pulizia del server tiene il cestino quanto TRASH_DAYS', () => {
+    const corpo = /function public\.pulizia_archivio[\s\S]*?\nend \$\$;/.exec(SQL)[0];
+    assert.match(corpo, new RegExp(`from public\\.trash where deleted_at < ora - interval '${a.eval('TRASH_DAYS')} days'`));
   });
 
   it('ogni tabella del registro ha il suo create table', () => {
@@ -205,6 +157,32 @@ describe('Postgres: invio e lettura', () => {
     Object.keys(righe).forEach(t => assert.equal(r.applied[t], righe[t].length, t));
   }));
 
+  // 0.105.4: il primo caricamento va a pezzi. Ogni pezzo cita solo righe
+  // già arrivate, articoli che si citano fra loro e righe di distinta compresi.
+  it('il primo caricamento entra anche a pezzi di una riga sola', conDb(d => {
+    d.utenti(utenti);
+    const lotti = ev(a, `cloudLottiCaricamento({ upsert: dbVersoCloud(db), settings: { data: { currency: '€' } } }, 1)`);
+    assert.ok(lotti.length > Object.keys(righe).length);
+    lotti.forEach(l => assert.deepEqual(d.push(l).rejected, []));
+    Object.keys(righe).forEach(t => assert.equal(d.sql(`select count(*) from ${t}`), String(righe[t].length), t));
+    const g = righe.items.find(x => x.machine_item_id);
+    assert.equal(d.sql(`select machine_item_id from items where id = '${g.id}'`), g.machine_item_id, 'il riferimento fra articoli torna');
+  }));
+
+  // 0.105.4: lo scaricamento completo a pagine porta le stesse righe del pull intero.
+  it('la lettura a pagine porta le stesse righe del pull intero', conDb(d => {
+    pieno(d);
+    d.push({ remove: { reminders: [righe.reminders[0].id] } });
+    const tutto = d.pull(null);
+    const pagina = (tab, dopo) => JSON.parse(d.sql(`select public.pull_pagina('${tab}', ${dopo == null ? 'null' : `'${dopo}'`}, 2)`)).rows;
+    const tutte = (tab, chiave) => { let r = [], p, dopo = null; do { p = pagina(tab, dopo); r = r.concat(p); if (p.length) dopo = chiave(p[p.length - 1]); } while (p.length === 2); return r; };
+    const perId = x => [...x].sort((u, v) => String(u.id).localeCompare(String(v.id)));
+    Object.keys(tutto.tables).forEach(t => assert.deepEqual(perId(tutte(t, x => x.id)), perId(tutto.tables[t]), t));
+    assert.deepEqual(tutte('sync_tombstones', x => x.tab + '\t' + x.id), [{ tab: 'reminders', id: righe.reminders[0].id }]);
+    assert.deepEqual(pagina('settings', null)[0].data, { currency: '€' });
+    assert.throws(() => d.sql(`select public.pull_pagina('pg_authid', null, 2)`), /tabella sconosciuta/);
+  }));
+
   it('e torna identico, passando da dbDaCloud', conDb(d => {
     pieno(d);
     const p = d.pull(null);
@@ -231,6 +209,63 @@ describe('Postgres: invio e lettura', () => {
     assert.equal(d.sql(`select name from suppliers where id = '${s.id}'`), 'Nuovo');
   }));
 
+  // 0.105.6: con la versione di partenza decide la versione, non l'orologio
+  // del PC. Un PC con l'orologio indietro scriveva una data più vecchia di
+  // quella che il server aveva, e la sua modifica — fatta sulla copia giusta —
+  // tornava respinta a ogni salvataggio. Vale anche per le righe figlie.
+  it('con la versione di partenza giusta la modifica passa, anche con l\'orologio del PC indietro', conDb(d => {
+    pieno(d);
+    const s = righe.suppliers[0], ol = righe.order_lines[0];
+    const indietro = '2020-01-01T00:00:00.000Z';
+    const r = d.push({
+      upsert: { suppliers: [Object.assign({}, s, { name: 'Da un PC indietro', updated_at: indietro })],
+        order_lines: [Object.assign({}, ol, { note: 'riga da un PC indietro', updated_at: indietro })] },
+      base: { suppliers: { [s.id]: s.updated_at }, order_lines: { [ol.id]: ol.updated_at } },
+    });
+    assert.deepEqual(r.rejected, []);
+    assert.equal(d.sql(`select name from suppliers where id = '${s.id}'`), 'Da un PC indietro');
+    assert.equal(d.sql(`select note from order_lines where id = '${ol.id}'`), 'riga da un PC indietro');
+    // Una copia vecchia resta respinta, per quanto recente sia la sua data.
+    const vecchia = d.push({
+      upsert: { suppliers: [Object.assign({}, s, { name: 'Copia vecchia', updated_at: new Date().toISOString() })] },
+      base: { suppliers: { [s.id]: s.updated_at } },
+    });
+    assert.deepEqual(vecchia.rejected, [{ tab: 'suppliers', id: s.id }]);
+    assert.equal(d.sql(`select name from suppliers where id = '${s.id}'`), 'Da un PC indietro');
+  }));
+
+  // 0.105.6: i numeri dei documenti sono unici sul server. Un numero nuovo già
+  // di un altro documento ferma l'invio, e il DETAIL dice quale riga.
+  it('un numero di documento già usato da un altro non entra, e l\'errore dice quale', conDb(d => {
+    pieno(d);
+    const o = righe.orders[0];
+    const doppio = Object.assign({}, o, { id: U(950), updated_at: new Date().toISOString() });
+    let errore = null;
+    try { d.push({ upsert: { orders: [doppio] } }); } catch (e) { errore = e; }
+    assert.ok(errore, 'il doppione non deve entrare');
+    assert.match(errore.message, /violates unique constraint "orders_numero_unico"/);
+    const det = JSON.parse(/DETAIL:\s+(.*)/.exec(errore.message)[1]);
+    assert.deepEqual(det, [{ tab: 'orders', id: U(950), numero: o.number }]);
+    assert.equal(d.sql(`select count(*) from orders where number = '${o.number}'`), '1');
+    // Anche passando di lato a push_changes c'è l'indice.
+    assert.throws(() => d.sql(`insert into orders (id, number) values ('${U(951)}', '${o.number}')`), /orders_numero_unico/);
+    // Il documento che il numero l'ha già si modifica come sempre.
+    assert.deepEqual(d.push({ upsert: { orders: [Object.assign({}, o, { title: 'ritocco', updated_at: new Date().toISOString() })] } }).rejected, []);
+  }));
+
+  // Un archivio che ha già numeri doppi: lo schema si carica lo stesso, senza
+  // l'indice su quella tabella, e i documenti doppi si modificano ancora.
+  it('con doppioni già presenti lo schema si ricarica, e i doppioni si modificano ancora', conDb(d => {
+    pieno(d);
+    const o = righe.orders[0];
+    d.sql(`drop index orders_numero_unico; insert into orders (id, number, updated_at) values ('${U(952)}', '${o.number}', '2026-03-01')`);
+    d.sql(fs.readFileSync(path.join(__dirname, '..', 'supabase', 'schema.sql'), 'utf8'));
+    assert.equal(d.sql(`select count(*) from pg_indexes where indexname = 'orders_numero_unico'`), '0');
+    assert.equal(d.sql(`select count(*) from pg_indexes where indexname = 'rfqs_numero_unico'`), '1');
+    assert.deepEqual(d.push({ upsert: { orders: [Object.assign({}, o, { title: 'ancora', updated_at: new Date().toISOString() })] } }).rejected, []);
+    assert.throws(() => d.push({ upsert: { orders: [Object.assign({}, o, { id: U(953), updated_at: new Date().toISOString() })] } }), /orders_numero_unico/);
+  }));
+
   it('la distinta si sostituisce intera, e una vecchia non la tocca', conDb(d => {
     pieno(d);
     const g = righe.items.find(i => i.code === 'GRP-001');
@@ -255,6 +290,50 @@ describe('Postgres: invio e lettura', () => {
     const ripristino = Object.assign({}, att, { updated_at: new Date(Date.now() + 60000).toISOString() });
     assert.deepEqual(d.push({ upsert: { attachments: [ripristino] } }).rejected, []);
     assert.equal(d.sql(`select count(*) from sync_tombstones where id = '${att.id}'`), '0');
+  }));
+
+  // 0.105.3: con la versione di partenza è la modifica di una copia di prima
+  // della cancellazione. Passava perché la sua data batteva la lapide, e il
+  // padre tornava senza le righe che il delete aveva portato via.
+  it('una modifica con la versione di partenza non passa sopra una lapide, per quanto recente', conDb(d => {
+    pieno(d);
+    const att = righe.attachments[0];
+    d.push({ remove: { attachments: [att.id] } });
+    const ritocco = Object.assign({}, att, { name: 'ritoccato', updated_at: new Date(Date.now() + 60000).toISOString() });
+    const r = d.push({ upsert: { attachments: [ritocco] }, base: { attachments: { [att.id]: att.updated_at } } });
+    assert.equal(r.rejected.length, 1, 'la cancellazione vince');
+    assert.equal(d.sql(`select count(*) from attachments where id = '${att.id}'`), '0');
+    assert.deepEqual(d.push({ upsert: { attachments: [ritocco] } }).rejected, [], 'un ripristino, senza versione di partenza, passa');
+  }));
+
+  // 0.105.4: un ripristino dichiarato toglie la lapide anche con una data più
+  // vecchia (l'orologio del PC indietro). Solo per le righe che rimanda.
+  it('un ripristino dichiarato passa sopra la lapide anche con una data vecchia', conDb(d => {
+    pieno(d);
+    const att = righe.attachments[0], altro = righe.reminders[0];
+    d.push({ remove: { attachments: [att.id], reminders: [altro.id] } });
+    const r = d.push({ upsert: { attachments: [att] }, ripristina: { attachments: [att.id], reminders: [altro.id] } });
+    assert.deepEqual(r.rejected, []);
+    assert.equal(d.sql(`select count(*) from attachments where id = '${att.id}'`), '1');
+    assert.equal(d.sql(`select count(*) from sync_tombstones where id = '${altro.id}'`), '1', 'una riga che non viaggia resta cancellata');
+  }));
+
+  // 0.105.5: una riga scritta all'inizio di una transazione lunga ha un
+  // synced_at più vecchio del pull fatto mentre era aperta. Il `now` di quel
+  // pull ora non va oltre l'inizio della transazione, e il pull dopo la vede.
+  it('una riga scritta da un invio ancora aperto arriva al pull successivo', conDb(d => {
+    pieno(d);
+    const { spawn } = require('node:child_process');
+    const dorme = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    const rem = righe.reminders[0];
+    spawn('psql', [process.env.BOMTRACK_PG + ' dbname=' + d.nome, '-q', '-c',
+      `begin; update reminders set title = 'lento' where id = '${rem.id}'; select pg_sleep(2); commit;`], { stdio: 'ignore' });
+    dorme(700);
+    const durante = d.pull(null);
+    assert.equal(durante.tables.reminders.find(r => r.id === rem.id).title === 'lento', false, 'mentre è aperta non si vede');
+    for (let i = 0; i < 50 && d.sql(`select title from reminders where id = '${rem.id}'`) !== 'lento'; i++) dorme(200);
+    const dopo = d.pull(durante.now);
+    assert.ok((dopo.tables.reminders || []).some(r => r.id === rem.id && r.title === 'lento'), 'il pull dopo, dal suo istante, la porta');
   }));
 
   it('il pull da un istante porta solo ciò che è cambiato dopo', conDb(d => {
@@ -340,7 +419,7 @@ describe('Postgres: permessi per ruolo (D6)', () => {
   const righe = ev(a, 'dbVersoCloud(db)');
   const ADMIN = righe.profiles[0].id;
   const ACQ = U(601), PROG = U(602), LETT = U(603), SOSP = U(604), OFF = U(605);
-  const conDb = fn => () => {
+  const conDb = fn => async () => {
     const d = pg.nuovoDatabase();
     try {
       d.utenti([ADMIN, ACQ, PROG, LETT, SOSP, OFF]);
@@ -349,7 +428,7 @@ describe('Postgres: permessi per ruolo (D6)', () => {
         ('${ACQ}', 'Bruno', 'acquisti', true), ('${PROG}', 'Carla', 'progettazione', true),
         ('${LETT}', 'Dario', 'lettore', true), ('${SOSP}', 'Elena', 'acquisti', false),
         ('${OFF}', 'Franco', 'officina', true);`);
-      fn(d);
+      await fn(d);
     } finally { d.chiudi(); }
   };
   const dopo = (r, campi) => Object.assign({}, r, campi, { updated_at: '2026-05-01T00:00:00.000Z' });
@@ -385,10 +464,71 @@ describe('Postgres: permessi per ruolo (D6)', () => {
     assert.throws(() => d.come(OFF).push({ upsert: { rfqs: [dopo(righe.rfqs[0], { title: 'x' })] } }), /il ruolo officina non scrive: rfqs/);
   }));
 
+  // 0.105.4: le policy dicono quali tabelle, non quali colonne. Dall'API
+  // l'officina cambiava fornitore e prezzi di un ordine, o lo eliminava.
+  it('l\'officina sui documenti cambia lo stato e basta, anche dall\'API', conDb(d => {
+    const o = righe.orders[0], ol = righe.order_lines[0], odp = righe.production_orders[0];
+    assert.deepEqual(d.come(OFF).push({ upsert: { orders: [dopo(o, { status: 'evaso' })] } }).rejected, []);
+    assert.equal(d.sql(`select status from orders where id = '${o.id}'`), 'evaso');
+    const r = d.come(OFF).push({ upsert: { orders: [Object.assign(dopo(o, { status: 'evaso', supplier_id: null }), { updated_at: '2026-06-01T00:00:00.000Z' })],
+      order_lines: [dopo(ol, { price: 0.01 })], production_orders: [dopo(odp, { qty: 999 })] } });
+    assert.deepEqual(r.rejected.map(x => x.tab).sort(), ['order_lines', 'orders', 'production_orders']);
+    assert.notEqual(d.sql(`select coalesce(supplier_id::text, '-') from orders where id = '${o.id}'`), '-');
+    assert.notEqual(d.sql(`select price from order_lines where id = '${ol.id}'`), '0.01');
+    assert.equal(d.come(OFF).push({ upsert: { orders: [dopo(o, { id: U(720), number: 'ODA-2026-720' })] } }).rejected.length, 1, 'un ordine nuovo no');
+    assert.throws(() => d.come(OFF).push({ remove: { orders: [o.id] } }), /il ruolo officina non elimina orders/);
+    assert.throws(() => d.come(OFF).push({ remove: { order_lines: [ol.id] } }), /non elimina order_lines/);
+    assert.equal(d.sql('select count(*) from sync_tombstones'), '0');
+    // L'ODL che nasce da una fase esterna dell'ordine di produzione sì.
+    const w = righe.work_orders[0], wl = righe.work_order_lines[0];
+    const odl = dopo(w, { id: U(721), number: 'ODL-2026-721' }), riga = dopo(wl, { id: U(722), work_order_id: U(721) });
+    assert.deepEqual(d.come(OFF).push({ upsert: { work_orders: [odl], work_order_lines: [riga] } }).rejected, []);
+    // Acquisti invece scrive tutto.
+    assert.deepEqual(d.come(ACQ).push({ upsert: { order_lines: [dopo(ol, { price: 0.01 })] } }).rejected, []);
+  }));
+
+  // 0.105.4: una voce del cestino la scrive solo chi scrive il record che contiene.
+  it('il cestino: una voce la scrive chi scrive il suo record, e la toglie chiunque elimini', conDb(d => {
+    const voce = (id, coll) => ({ id, coll, deleted_at: '2026-05-01T00:00:00.000Z', deleted_by: OFF, record: { id: U(731), name: 'finto' } });
+    assert.throws(() => d.come(OFF).push({ upsert: { trash: [voce(U(730), 'items')] } }), /row-level security/);
+    assert.deepEqual(d.come(OFF).push({ upsert: { trash: [voce(U(732), 'prodDecls')] } }).rejected, []);
+    assert.deepEqual(d.come(PROG).push({ upsert: { trash: [voce(U(730), 'items')] } }).rejected, []);
+    d.come(OFF).push({ remove: { trash: [U(730)] } });
+    assert.equal(d.sql(`select count(*) from trash where id = '${U(730)}'`), '0', 'svuotare il cestino resta di tutti');
+  }));
+
+  // 0.106.0: la pulizia la chiede chiunque abbia un profilo attivo, anche un
+  // lettore; un profilo sospeso no.
+  it('la pulizia del server: un lettore la chiede, un sospeso no', conDb(d => {
+    assert.throws(() => d.come(SOSP).sql('select public.pulizia_archivio();'), /nessun profilo attivo/);
+    assert.equal(JSON.parse(d.come(LETT).sql('select public.pulizia_archivio();')).fatta, true);
+    assert.equal(d.come(LETT).sql('select count(*) from sync_stato;'), '0', 'lo stato non si legge direttamente');
+  }));
+
+  it('la tabella di ogni collezione è quella di SCHEMA', conDb(d => {
+    const attese = ev(a, 'Object.fromEntries(Object.keys(SCHEMA).map(c => [c, SCHEMA[c].table]))');
+    Object.keys(attese).forEach(c => assert.equal(d.sql(`select coalesce(public.tabella_di_coll('${c}'), '-')`), attese[c], c));
+    assert.equal(d.sql(`select coalesce(public.tabella_di_coll('nessuna'), '-')`), '-');
+  }));
+
   it('una cancellazione vietata si ferma, invece di lasciare una lapide senza cancellare', conDb(d => {
     assert.throws(() => d.come(ACQ).push({ remove: { attachments: [righe.attachments[0].id] } }), /non scrive: attachments/);
     assert.equal(d.sql('select count(*) from sync_tombstones'), '0');
     assert.equal(d.sql(`select count(*) from attachments`), '1');
+  }));
+
+  // 0.105.4: l'ultimo amministratore attivo non si elimina, nemmeno dal
+  // pannello; e un archivio con dei profili non regala più l'amministrazione.
+  it('l\'ultimo amministratore non si elimina, e il primo arrivato è amministratore solo su un archivio vuoto', conDb(d => {
+    assert.throws(() => d.push({ remove: { profiles: [ADMIN] } }), /deve restare almeno un amministratore attivo/);
+    assert.throws(() => d.sql(`delete from auth.users where id = '${ADMIN}'`), /deve restare almeno un amministratore attivo/);
+    d.sql(`update profiles set role = 'admin' where id = '${ACQ}'`);
+    d.push({ remove: { profiles: [ACQ] } });
+    assert.equal(d.sql(`select count(*) from profiles where id = '${ACQ}'`), '0', 'con un altro amministratore si elimina');
+    // Un archivio rimasto senza amministratori attivi (com'era possibile prima).
+    d.sql(`set session_replication_role = replica; update profiles set active = false where id = '${ADMIN}'; set session_replication_role = origin;`);
+    d.invita(U(740), 'nuovo@x.it', 'Nuovo');
+    assert.equal(d.sql(`select role || ' ' || active from profiles where id = '${U(740)}'`), 'lettore false');
   }));
 
   it('il lettore legge tutto e non scrive niente', conDb(d => {
@@ -398,7 +538,9 @@ describe('Postgres: permessi per ruolo (D6)', () => {
 
   it('un utente sospeso non legge più niente, anche con la sessione aperta', conDb(d => {
     const p = d.come(SOSP).pull(null);
-    assert.deepEqual(Object.keys(p.tables).filter(t => p.tables[t].length), []);
+    assert.deepEqual(Object.keys(p.tables).filter(t => p.tables[t].length), ['profiles'],
+      'solo il proprio profilo: è così che la sospensione arriva al suo PC');
+    assert.deepEqual(p.tables.profiles.map(x => [x.id, x.active]), [[SOSP, false]]);
     assert.throws(() => d.come(SOSP).push({ upsert: { orders: [ordine()] } }), /nessun profilo attivo/);
   }));
 
@@ -413,6 +555,101 @@ describe('Postgres: permessi per ruolo (D6)', () => {
     assert.equal(d.sql(`select color from profiles where id = '${ACQ}'`), '#123456');
     assert.throws(() => d.come(ACQ).sql(`update profiles set role = 'admin' where id = '${ACQ}'`), /solo la gestione utenti/);
     assert.equal(d.sql(`select role from profiles where id = '${ACQ}'`), 'acquisti');
+  }));
+
+  // 0.105.3: con l'email dell'amministratore nel proprio profilo, il link per
+  // reimpostare la password chiesto «per sé» portava al suo account.
+  it('la propria email non si cambia dall\'API; il SQL Editor ripara un profilo', conDb(d => {
+    assert.throws(() => d.come(LETT).sql(`update profiles set email = 'admin@x.it' where id = '${LETT}'`), /solo la gestione utenti/);
+    d.sql(`update profiles set role = 'acquisti', email = 'nuova@x.it' where id = '${LETT}'`);
+    assert.equal(d.sql(`select role || ' ' || email from profiles where id = '${LETT}'`), 'acquisti nuova@x.it');
+  }));
+
+  it('una lapide la scrive solo chi scrive la sua tabella', conDb(d => {
+    assert.throws(() => d.come(OFF).sql(`insert into sync_tombstones (tab, id) values ('items', '${righe.items[0].id}')`), /row-level security/);
+    assert.equal(d.sql('select count(*) from sync_tombstones'), '0');
+  }));
+
+  it('un updated_at nel futuro non entra: un PC con l\'orologio avanti non blocca i colleghi', conDb(d => {
+    const futuro = Object.assign({}, righe.items[0], { name: 'dal futuro', updated_at: '2099-01-01T00:00:00.000Z' });
+    assert.throws(() => d.come(PROG).push({ upsert: { items: [futuro] } }), /orologio di questo PC è avanti/);
+    assert.throws(() => d.come(PROG).sql(`update items set updated_at = '2099-01-01' where id = '${righe.items[0].id}'`), /orologio/);
+    assert.deepEqual(d.come(PROG).push({ upsert: { items: [articolo()] } }).rejected, []);
+  }));
+
+  // 0.105.6: le richieste d'offerta sono dei documenti. La progettazione le
+  // poteva scrivere dall'API, anche quelle già spedite.
+  it('progettazione non scrive le richieste d\'offerta', conDb(d => {
+    assert.throws(() => d.come(PROG).push({ upsert: { rfqs: [dopo(righe.rfqs[0], { title: 'x' })] } }), /il ruolo progettazione non scrive: rfqs/);
+    assert.throws(() => d.come(PROG).push({ upsert: { rfq_lines: [dopo(righe.rfq_lines[0], { price: 1 })] } }), /non scrive: rfq_lines/);
+    assert.deepEqual(d.come(ACQ).push({ upsert: { rfqs: [dopo(righe.rfqs[0], { title: 'x' })] } }).rejected, []);
+  }));
+
+  // 0.105.6: chi ha scritto lo dice il server, non il PC. Un invio poteva
+  // dichiarare autore chiunque, e lo storico lo mostrava.
+  it('autore di una modifica, di un documento nuovo, di una voce del cestino e delle impostazioni: chi invia', conDb(d => {
+    const o = righe.orders[0];
+    const creatore = d.sql(`select coalesce(created_by::text, '-') from orders where id = '${o.id}'`);
+    assert.deepEqual(d.come(ACQ).push({ upsert: { orders: [dopo(o, { title: 'di Bruno', updated_by: ADMIN, created_by: ADMIN })] } }).rejected, []);
+    assert.equal(d.sql(`select updated_by from orders where id = '${o.id}'`), ACQ);
+    assert.equal(d.sql(`select coalesce(created_by::text, '-') from orders where id = '${o.id}'`), creatore, 'chi l\'ha creato non cambia');
+    // Un documento nato adesso: anche chi l'ha creato è chi invia.
+    const ora = new Date().toISOString();
+    const nuovo = Object.assign({}, o, { id: U(740), number: 'ODA-2026-740', created_at: ora, updated_at: ora, created_by: ADMIN, updated_by: ADMIN });
+    assert.deepEqual(d.come(ACQ).push({ upsert: { orders: [nuovo] } }).rejected, []);
+    assert.equal(d.sql(`select created_by || ' ' || updated_by from orders where id = '${U(740)}'`), ACQ + ' ' + ACQ);
+    // L'officina che cambia lo stato di un ordine appena creato da un altro passa ancora.
+    assert.deepEqual(d.come(OFF).push({ upsert: { orders: [Object.assign({}, nuovo, { status: 'evaso', updated_at: new Date().toISOString() })] } }).rejected, []);
+    assert.equal(d.sql(`select created_by || ' ' || updated_by || ' ' || status from orders where id = '${U(740)}'`), ACQ + ' ' + OFF + ' evaso');
+    // Il cestino e le impostazioni.
+    const voce = { id: U(741), coll: 'orders', deleted_at: new Date().toISOString(), deleted_by: ADMIN, record: { id: U(742) } };
+    d.come(ACQ).push({ upsert: { trash: [voce] } });
+    assert.equal(d.sql(`select deleted_by from trash where id = '${U(741)}'`), ACQ);
+    d.come(ADMIN).push({ settings: { data: { currency: '€' }, updated_at: new Date().toISOString(), updated_by: ACQ } });
+    assert.equal(d.sql('select updated_by from settings'), ADMIN);
+    // Il caricamento iniziale, di righe vecchie, tiene i loro autori.
+    const storico = Object.assign({}, o, { id: U(743), number: 'ODA-2026-743', created_by: ADMIN, updated_by: ADMIN });
+    d.come(ACQ).push({ upsert: { orders: [storico] } });
+    assert.equal(d.sql(`select created_by || ' ' || updated_by from orders where id = '${U(743)}'`), ADMIN + ' ' + ADMIN);
+  }));
+
+  // 0.105.6: riserva_numeri leggeva i numeri usati prima di prendere il
+  // lucchetto della serie, e l'invio che chiudeva un impegno non lo prendeva.
+  // Un documento arrivato mentre la riserva aspettava il lucchetto non era né
+  // fra gli usati (letti prima) né fra gli impegni (chiusi dopo): il suo
+  // numero tornava libero, e lo prendeva un altro.
+  it('un numero chiuso da un invio mentre la riserva aspetta non si dà due volte', conDb(d => {
+    const { spawn } = require('node:child_process');
+    const prefisso = 'ODA-' + new Date().getFullYear() + '-';
+    const n = JSON.parse(d.come(ACQ).sql(`select to_jsonb(public.riserva_numeri('${prefisso}', 1, 0))`))[0];
+    const conn = process.env.BOMTRACK_PG + ' dbname=' + d.nome;
+    const come = uid => `set role authenticated; select set_config('request.jwt.claim.sub', '${uid}', false);`;
+    const lancia = sql => new Promise(ok => {
+      let out = '';
+      const p = spawn('psql', [conn, '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', sql]);
+      p.stdout.on('data', x => { out += x; });
+      p.stderr.on('data', x => { out += x; });
+      p.on('close', () => ok(out.trim()));
+    });
+    const doc = Object.assign({}, righe.orders[0], { id: U(760), number: prefisso + String(n).padStart(3, '0'), updated_at: new Date().toISOString() });
+    const lettera = `$j$${JSON.stringify({ upsert: { orders: [doc] } })}$j$::jsonb`;
+    return Promise.all([
+      // Un'altra riserva della stessa serie, lenta: tiene il lucchetto.
+      lancia(`begin; select pg_advisory_xact_lock(hashtext('bomtrack-numeri:${prefisso}')); select pg_sleep(2); commit;`),
+      // La riserva di Carla arriva e aspetta il lucchetto.
+      lancia(`select pg_sleep(0.4); ${come(ADMIN)} select 'R' || (public.riserva_numeri('${prefisso}', 1, 0))[1];`),
+      // Intanto arriva l'ordine di Bruno con il numero che aveva riservato.
+      lancia(`select pg_sleep(0.9); ${come(ACQ)} select 'P' || public.push_changes(${lettera})::text;`),
+    ]).then(([, carla]) => {
+      const preso = Number((/R(\d+)/.exec(carla) || [])[1]);
+      assert.ok(preso, carla);
+      assert.notEqual(preso, n, 'lo stesso numero dato a due');
+    });
+  }));
+
+  it('il tipo di un articolo è uno dei sei', conDb(d => {
+    const strano = dopo(righe.items[0], { type: '<img src=x onerror=alert(1)>' });
+    assert.throws(() => d.come(PROG).push({ upsert: { items: [strano] } }), /items_tipo_noto/);
   }));
 
   it('i registri si leggono e non si scrivono', conDb(d => {

@@ -54,6 +54,18 @@ describe('Backup automatico: cosa scrive', () => {
     assert.equal(dati.items[0].id, 'm1');
   });
 
+  // 0.105.3: dopo un archivio illeggibile in memoria ci sono i dati d'esempio,
+  // e il backup di stamattina veniva riscritto con quelli.
+  it('con l\'archivio non letto non riscrive il backup di oggi', async () => {
+    const a = app();
+    const files = { [nomeOggi(a)]: 'il backup vero di stamattina' };
+    a.cartellaBackup(files);
+    a.eval('dbLoadError = { kind: "parse" }');
+    const e = await esegui(a, false, true);
+    assert.equal(e.stato, 'pausa');
+    assert.equal(files[nomeOggi(a)], 'il backup vero di stamattina');
+  });
+
   it('conta come backup: il promemoria dei sette giorni si azzera', async () => {
     const a = app();
     a.storage.setItem('bomtrack_ultimo_backup', a.eval('addDays(oggiISO(), -20)'));

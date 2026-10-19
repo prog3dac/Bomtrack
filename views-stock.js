@@ -116,13 +116,8 @@ function articoliInUbicazione(codice) {
   return (db.items || []).filter(i => hasStock(i) && ubicazioneOf(i) === k)
     .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
 }
-// Un testo libero dentro un onclick="…": letterale JS fra apici singoli, con
-// le virgolette e gli altri caratteri dell'HTML resi innocui. Un'ubicazione
-// è scritta dall'utente e può contenere qualunque cosa.
-function jsAttrStr(v) {
-  return "'" + String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + "'";
-}
+// Un testo libero dentro un onclick="…" (un'ubicazione è scritta dall'utente e
+// può contenere qualunque cosa) passa da jsAttr() di core.js.
 // La forma che il QR e le etichette si aspettano: { id, code, items }.
 function ubicazioneRec(codice) {
   const k = ubicazioneNorm(codice);
@@ -146,7 +141,7 @@ function stockIndex() {
   const idx = new Map();
   const tocca = id => {
     let e = idx.get(id);
-    if (!e) { e = { onHand: 0, incoming: 0, arrivi: [] }; idx.set(id, e); }
+    if (!e) { e = { onHand: 0, incoming: 0, arrivi: [], nMov: 0 }; idx.set(id, e); }
     return e;
   };
   (db.orders || []).forEach(o => {
@@ -179,6 +174,11 @@ function stockIndex() {
   });
   (db.movements || []).forEach(m => {
     if (!m.itemId) return;
+    // Quanti movimenti ha l'articolo, passaggi compresi: è il numero sul
+    // pulsante «Movimenti», che prima chiamava movementsOf() per ogni riga —
+    // tutti i movimenti filtrati e ordinati, una volta per articolo, tre
+    // secondi su 2000 righe (dalla 0.105.6).
+    tocca(m.itemId).nMov++;
     // Il passaggio di lavorazione sposta un pezzo, non lo carica: vedi
     // movimentoToccaMagazzino.
     if (!movimentoToccaMagazzino(m.kind)) return;
@@ -187,8 +187,9 @@ function stockIndex() {
   _stockIdx = idx;
   return idx;
 }
-function invalidateStock() { _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; }
-function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, arrivi: [] }; }
+let _esplosi = new Map();   // mrpExplodePlan
+function invalidateStock() { _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; _ordinePiani = null; _esplosi = new Map(); }
+function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, arrivi: [], nMov: 0 }; }
 function onHandOf(itemId) { return stockOf(itemId).onHand; }
 function incomingOf(itemId) { return stockOf(itemId).incoming; }
 // Quanto di ciò che è in arrivo arriva ENTRO una data, e cosa arriva dopo.
@@ -303,26 +304,52 @@ function planUrgenza(p) {
   const date = (p.lines || []).map(l => l.dueDate || p.dueDate || '').filter(Boolean).sort();
   return date[0] || '9999-12-31';
 }
+// I piani aperti in ordine di urgenza, gli stessi e nello stesso ordine per
+// chiunque li chieda: lo scaffale e l'impegnato si spartiscono con questo.
+let _ordinePiani = null;
+function pianiInOrdine() {
+  if (_ordinePiani) return _ordinePiani;
+  const piani = (db.plans || []).filter(p => p.active !== false && (p.lines || []).length)
+    .sort((a, b) => planUrgenza(a).localeCompare(planUrgenza(b))
+      || String(a.date || '').localeCompare(String(b.date || ''))
+      || String(a.number || '').localeCompare(String(b.number || '')));
+  _ordinePiani = { piani, posto: new Map(piani.map((p, i) => [p.id, i])) };
+  return _ordinePiani;
+}
 function scaffaleIndex() {
   if (_scaffaleIdx) return _scaffaleIdx;
   const idx = new Map();
   _scaffaleIdx = idx;                   // prima del calcolo: niente rientri
   if (typeof mrpExplode !== 'function') return idx;
-  const piani = (db.plans || []).filter(p => p.active !== false && (p.lines || []).length)
-    .sort((a, b) => planUrgenza(a).localeCompare(planUrgenza(b))
-      || String(a.date || '').localeCompare(String(b.date || ''))
-      || String(a.number || '').localeCompare(String(b.number || '')));
-  // Versato dagli ODP di ciascun piano, per parte.
+  const piani = pianiInOrdine().piani;
+  // Versato dagli ODP di ciascun piano, per parte, e dalle parti dichiarate
+  // fatte sul piano (che dalla 0.105.5 entrano a magazzino).
   const versato = new Map();
+  const aggiungi = (planId, itemId, v) => {
+    let m = versato.get(planId);
+    if (!m) { m = new Map(); versato.set(planId, m); }
+    m.set(itemId, (m.get(itemId) || 0) + v);
+  };
+  // Quello che gli ODP aperti di un piano stanno ancora facendo: è coperto,
+  // come il versato, e lo scaffale comune non deve darglielo una seconda volta.
+  const attesi = new Map();
   if (typeof opVersato === 'function') {
     (db.prodOrders || []).forEach(o => {
       if (!o.planId || o.status === 'annullato') return;
-      const v = opVersato(o); if (!(v > 0)) return;
-      let m = versato.get(o.planId);
-      if (!m) { m = new Map(); versato.set(o.planId, m); }
-      m.set(o.itemId, (m.get(o.itemId) || 0) + v);
+      const v = opVersato(o);
+      if (v > 0) aggiungi(o.planId, o.itemId, v);
+      const a = typeof odpAttesi === 'function' ? odpAttesi(o) : 0;
+      if (a > 0) {
+        let m = attesi.get(o.planId);
+        if (!m) { m = new Map(); attesi.set(o.planId, m); }
+        m.set(o.itemId, (m.get(o.itemId) || 0) + a);
+      }
     });
   }
+  const dichiarazioni = new Map((db.productions || []).filter(d => d.planId).map(d => [d.id, d.planId]));
+  if (dichiarazioni.size) (db.movements || []).forEach(m => {
+    if (m.kind === 'versamento' && m.orderId && dichiarazioni.has(m.orderId)) aggiungi(dichiarazioni.get(m.orderId), m.itemId, Number(m.qty) || 0);
+  });
   const aperti = new Set(piani.map(p => p.id));
   // Quanto di una parte resta in mano al piano che l'ha fatta, e quanto il
   // piano ha consumato dallo scaffale comune (oltre i suoi).
@@ -338,15 +365,25 @@ function scaffaleIndex() {
     }
     return comune.get(itemId);
   };
+  // I pezzi che il piano fa da sé (versati dai suoi ODP o dichiarati, più
+  // quelli che i suoi ODP aperti stanno facendo) coprono per primi il suo
+  // bisogno: restano «da fabbricare», documentati dal loro ODP, e lo scaffale
+  // comune copre solo il resto. Prima la quota libera si sommava ai pezzi
+  // propri, e un piano col suo ODP prendeva anche quelli di un altro.
+  const copertiDi = (planId, itemId) => ((versato.get(planId) || new Map()).get(itemId) || 0)
+    + ((attesi.get(planId) || new Map()).get(itemId) || 0);
   piani.forEach(p => {
-    const preso = new Map(), consumato = new Map(), budget = new Map();
+    const preso = new Map(), consumato = new Map(), budget = new Map(), coperto = new Map();
     const scaffale = { prendi(itemId, q) {
       if (!budget.has(itemId)) {
         const c = dalComune(p.id, itemId);
         consumato.set(itemId, c);
         budget.set(itemId, c + comuneDi(itemId));
+        coperto.set(itemId, copertiDi(p.id, itemId));
       }
-      const t = Math.min(q, budget.get(itemId));
+      const proprio = Math.min(q, coperto.get(itemId));
+      coperto.set(itemId, coperto.get(itemId) - proprio);
+      const t = Math.min(q - proprio, budget.get(itemId));
       if (!(t > 0)) return 0;
       budget.set(itemId, budget.get(itemId) - t);
       preso.set(itemId, (preso.get(itemId) || 0) + t);
@@ -359,7 +396,9 @@ function scaffaleIndex() {
       comune.set(itemId, Math.max(0, comuneDi(itemId) - dalloScaffale));
       impegno.set(itemId, dalloScaffale);
     });
-    idx.set(p.id, { quota: preso, impegno });
+    const copertura = new Map();
+    budget.forEach((b, itemId) => copertura.set(itemId, copertiDi(p.id, itemId)));
+    idx.set(p.id, { quota: preso, impegno, coperto: copertura });
   });
   return idx;
 }
@@ -370,9 +409,13 @@ function scaffaleIndex() {
 function mrpScaffale(planId) {
   const sc = planId ? scaffaleIndex().get(planId) : null;
   if (!sc || !sc.quota.size) return null;
-  const resto = new Map(sc.quota);
+  const resto = new Map(sc.quota), coperto = new Map(sc.coperto || []);
   return { prendi(itemId, q) {
-    const t = Math.min(q, resto.get(itemId) || 0);
+    // Prima i pezzi propri, come nella spartizione: le parti dello scaffale
+    // finiscono negli stessi rami.
+    const proprio = Math.min(q, coperto.get(itemId) || 0);
+    if (proprio) coperto.set(itemId, coperto.get(itemId) - proprio);
+    const t = Math.min(q - proprio, resto.get(itemId) || 0);
     if (!(t > 0)) return 0;
     resto.set(itemId, resto.get(itemId) - t);
     return t;
@@ -382,7 +425,20 @@ function mrpOpzPiano(planId) { return { scaffale: mrpScaffale(planId) }; }
 // L'esplosione di un piano **com'è davvero**: al netto delle parti pronte che
 // gli toccano. È quella che usano tutte le viste di un piano; la lorda resta per
 // costi e anteprime.
-function mrpExplodePlan(p) { return mrpExplode((p && p.lines) || [], mrpOpzPiano(p && p.id)); }
+//
+// Una volta per piano fra un salvataggio e l'altro (dalla 0.105.5): una
+// schermata del piano la chiedeva una quarantina di volte. La chiave porta le
+// righe, così una modifica non ancora salvata non legge un'esplosione vecchia.
+// Il risultato si legge e basta: chi deve cambiarlo se ne fa una copia.
+function mrpExplodePlan(p) {
+  if (!p || !p.id) return mrpExplode((p && p.lines) || [], mrpOpzPiano(p && p.id));
+  const chiave = JSON.stringify(p.lines || []);
+  const gia = _esplosi.get(p.id);
+  if (gia && gia.chiave === chiave) return gia.exp;
+  const exp = mrpExplode(p.lines || [], mrpOpzPiano(p.id));
+  _esplosi.set(p.id, { chiave, exp });
+  return exp;
+}
 // Il materiale già uscito dal magazzino **per un piano**: piano → articolo →
 // quantità. Conta i movimenti che portano l'id di un documento del piano (ODP,
 // ODL, ordine di conto lavoro): lo `scarico` e l'uscita a conto lavoro tolgono,
@@ -428,10 +484,25 @@ function prelevatoPer(itemId, piani) {
 // della stessa commessa non si fanno concorrenza, sono la stessa domanda scritta
 // su due fogli. Senza questo, con 100 pz a magazzino e due piani che ne chiedono
 // 100 a testa, ognuno dei due si vedrebbe scoperto per colpa dell'altro.
+//
+// E dei piani rimasti contano solo quelli **più urgenti** (pianiInOrdine), come
+// per lo scaffale: chi consegna prima prende prima. Fino alla 0.105.2 contavano
+// tutti, e senza merce ogni piano comprava anche la domanda degli altri: due
+// piani da 100 e 50 a magazzino vuoto mostravano 150 da comprare ciascuno, e
+// generare gli ordini da entrambi ne ordinava 300. Un piano chiuso, o che non
+// è in fila, guarda dopo tutti gli aperti. Senza esclusione (`null`) contano
+// tutti: è l'impegnato totale che mostrano la scheda e il magazzino.
 function commitsOn(itemId, except) {
   const escl = except instanceof Set ? except
     : new Set(Array.isArray(except) ? except : (except ? [except] : []));
-  return (commitIndex().get(itemId) || []).filter(c => !escl.has(c.planId));
+  const tutti = (commitIndex().get(itemId) || []).filter(c => !escl.has(c.planId));
+  if (!escl.size) return tutti;
+  const posto = pianiInOrdine().posto;
+  // Una commessa guarda dal suo piano meno urgente: un piano che le sta in mezzo
+  // prende prima di quello.
+  let mio = -1;
+  escl.forEach(id => { mio = Math.max(mio, posto.has(id) ? posto.get(id) : Infinity); });
+  return tutti.filter(c => posto.has(c.planId) && posto.get(c.planId) < mio);
 }
 function committedOf(itemId, exceptPlanId) {
   return commitsOn(itemId, exceptPlanId).reduce((s, c) => s + c.qty, 0);
@@ -460,10 +531,16 @@ function lotModeOf(it) { return (it && it.lotMode === 'min') ? 'min' : 'multiple
 // dalla parte del magazzino: sono entrambi merce che c'è ma non si può usare.
 // Scriverlo come sottrazione dall'esistente darebbe lo stesso numero e la
 // domanda sbagliata — «quanto ne ho» invece di «quanto me ne serve».
+//
+// L'impegnato però toglie solo merce che c'è: quando i piani più urgenti ne
+// chiedono più di quanta ne esista, la loro parte scoperta la comprano loro, e
+// questo piano compra la sua e basta. Il buco della scorta minima lo copre il
+// primo della fila, quello senza impegnato davanti; agli altri non si ricarica.
 function netRequirement(lordo, onHand, incoming, safety, lotSize, committed, lotMode) {
   const l = Number(lordo) || 0;
-  const mancante = l + (Number(safety) || 0) + (Number(committed) || 0)
-    - (Number(onHand) || 0) - (Number(incoming) || 0);
+  const imp = Number(committed) || 0;
+  const disp = (Number(onHand) || 0) + (Number(incoming) || 0) - (Number(safety) || 0) - imp;
+  const mancante = l - (imp > 0 ? Math.max(0, disp) : disp);
   if (!(mancante > 0)) return 0;
   const lot = Number(lotSize) || 0;
   if (!(lot > 0)) return mancante;
@@ -512,13 +589,22 @@ function addMovement(itemId, kind, qty, note, extra) {
   const q = Number(qty) || 0;
   if (!q) return null;                       // un movimento da zero non è un movimento
   const e = extra || {};
-  const rec = { id: gid(), itemId, kind: MOVEMENT_KINDS[kind] ? kind : 'rettifica',
+  const rec = { id: e.id || gid(), itemId, kind: MOVEMENT_KINDS[kind] ? kind : 'rettifica',
     qty: q, date: nowISO(), note: String(note || '').trim(),
     supplierId: e.supplierId || null, fromSupplierId: e.fromSupplierId || null,
     orderId: e.orderId || null, lineId: e.lineId || null,
     // Quale dichiarazione di produzione l'ha generato: serve ad annullare
     // esattamente i suoi movimenti, non tutti quelli della fase.
     declId: e.declId || null };
+  // `differito`: il movimento entra in memoria e si salva con gli altri, una
+  // volta sola, da chi lo chiede (saveDB). Un inventario di 300 righe faceva
+  // 300 salvataggi dell'archivio intero, una dozzina di secondi (dalla 0.105.5).
+  if (e.differito) {
+    stampNew(rec);
+    if (!Array.isArray(db.movements)) db.movements = [];
+    db.movements.push(rec);
+    return rec;
+  }
   return Store.insert('movements', rec);
 }
 
@@ -722,7 +808,7 @@ function stockPanelHtml(it) {
       ${impQty > 0 ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">Impegnato dai piani di fabbisogno <strong>aperti</strong>: ${esc(elencoImp)}. <em>Libero = esistente + in arrivo − impegnato</em>: è quanto se ne può ancora promettere. Chiudere un piano libera la sua quota.</p>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-outline" onclick="stockAdjustModal('${it.id}')">${ico('scale', 'tinted', '')} Rettifica giacenza</button>
-        <button class="btn-outline" onclick="stockMovementsModal('${it.id}')">${ico('clock', 'tinted', '')} Movimenti (${movementsOf(it.id).length})</button>
+        <button class="btn-outline" onclick="stockMovementsModal('${it.id}')">${ico('clock', 'tinted', '')} Movimenti (${s.nMov})</button>
         <button class="btn-outline" onclick="qrEtichetteModal(['${it.id}'])">${ico('qr', 'tinted', '')} Etichetta QR</button>
       </div>
     </div></div>`;
@@ -739,7 +825,7 @@ function stockAdjustModal(itemId) {
         ${MOVEMENT_MANUAL_KINDS.map(k => `<option value="${k}">${esc(MOVEMENT_KINDS[k])}</option>`).join('')}
       </select></div>
       <div class="modal-field"><label>${labelUom('Quantità contata / movimentata', itemUom(it))}</label>
-        <input type="number" id="mv-qty" step="any" value="${attuale}"></div>
+        <input type="number" id="mv-qty" step="any" min="0" value="${MOVEMENT_MANUAL_KINDS[0] === 'rettifica' ? attuale : ''}"></div>
     </div>
     <div class="modal-grid" id="mv-cl-box" style="display:none">
       <div class="modal-field"><label>Terzista</label><select id="mv-sup" class="sel-cerca">
@@ -762,7 +848,16 @@ function stockAdjustModal(itemId) {
       <button class="add-btn-sm" onclick="saveStockAdjust('${it.id}')">Registra</button>
     </div>`, false, 'form');
   stockAdjustHint(itemId);
-  const sel = document.getElementById('mv-kind'); if (sel) sel.onchange = () => stockAdjustHint(itemId);
+  const sel = document.getElementById('mv-kind'); if (sel) sel.onchange = () => stockAdjustKindChange(itemId);
+}
+// Cambiando tipo cambia la domanda, e il numero scritto per l'altra non vale
+// più (dalla 0.105.6). Il campo nasceva con l'esistente anche per un carico:
+// passare a «Carico manuale» e confermare caricava di nuovo tutta la giacenza.
+// L'esistente si propone solo dove è la risposta di partenza, la rettifica.
+function stockAdjustKindChange(itemId) {
+  const campo = document.getElementById('mv-qty');
+  if (campo) campo.value = val('mv-kind') === 'rettifica' ? String(onHandOf(itemId)) : '';
+  stockAdjustHint(itemId);
 }
 // La rettifica si inserisce come quantità *contata*, gli altri come quantità
 // *movimentata*: sono due domande diverse e confonderle produce giacenze
@@ -805,16 +900,34 @@ function saveStockAdjust(itemId) {
     showToast('Scrivi la quantità', 'error'); return;
   }
   const inserita = rawNum('mv-qty');
-  if (kind !== 'rettifica' && inserita < 0) { showToast('Inserisci una quantità positiva: è il tipo a decidere il verso', 'error'); return; }
+  // Nemmeno la rettifica è negativa (dalla 0.105.6): è quanti ce ne sono
+  // contati, e chi scriveva −5 per dire «cinque in meno» portava la giacenza
+  // a −5. L'inventario guidato lo rifiuta già (invConta).
+  if (inserita < 0) {
+    showToast(kind === 'rettifica' ? 'Una quantità contata non è negativa: scrivi quanti ce ne sono' : 'Inserisci una quantità positiva: è il tipo a decidere il verso', 'error');
+    return;
+  }
   // Senza terzista il movimento non è ricostruibile: il prospetto non saprebbe
   // da chi andare a riprendere la merce, e il saldo resterebbe appeso a nessuno.
   const supplierId = isContoLavoroKind(kind) ? val('mv-sup') : '';
   if (isContoLavoroKind(kind) && !supplierId) { showToast('Scegli il terzista: senza, non si sa da chi sta la merce', 'error'); return; }
   const uscita = kind === 'scarico' || kind === 'clOut';
-  const delta = kind === 'rettifica' ? (inserita - onHandOf(it.id)) : (uscita ? -inserita : inserita);
-  if (!delta) { showToast('Nessuna differenza da registrare'); closeModal(); return; }
+  // L'ordine di conto lavoro vale solo per i movimenti di conto lavoro: la
+  // tendina resta nascosta ma piena se si cambia tipo, e un consumo con
+  // l'ODL attaccato contava come materiale prelevato per il suo piano
+  // (dalla 0.105.6).
+  const note = val('mv-note'), orderId = isContoLavoroKind(kind) ? val('mv-ord') : '';
+  const registra = () => {
+    // La rettifica si calcola sull'esistente aggiornato ai movimenti dei colleghi (dalla 0.105.5).
+    const delta = kind === 'rettifica' ? (inserita - onHandOf(it.id)) : (uscita ? -inserita : inserita);
+    if (!delta) { showToast('Nessuna differenza da registrare'); closeModal(); return; }
+    registraMovimentoManuale(it, kind, delta, inserita, uscita, note, supplierId, orderId);
+  };
+  return kind === 'rettifica' && typeof conArchivioAggiornato === 'function' ? conArchivioAggiornato(registra) : registra();
+}
+function registraMovimentoManuale(it, kind, delta, inserita, uscita, note, supplierId, orderId) {
   const sotto = uscita ? avvisoSottoZero([{ itemId: it.id, qty: inserita }]) : [];
-  addMovement(it.id, kind, delta, val('mv-note'), { supplierId, orderId: val('mv-ord') });
+  addMovement(it.id, kind, delta, note, { supplierId, orderId });
   closeModal();
   if (typeof renderCatalogs === 'function') renderCatalogs();
   // Il toast passa già da esc(): qui l'unità va concatenata cruda, non da fmtUom.
@@ -832,7 +945,8 @@ function stockMovementsModal(itemId) {
       <span class="empty-text" style="padding:0;width:90px">${esc(String(m.date || '').slice(0, 10))}</span>
       <span style="flex:1">${m.supplierId ? `<strong>${esc(supplierName(m.supplierId) || '')}</strong>${m.orderId ? ' · ' + esc((clDocById(m.orderId) || {}).number || '') : ''}${m.note ? ' — ' : ''}` : ''}${esc(m.note || '')}</span>
       <span style="font-family:var(--mono);color:${m.qty < 0 ? 'var(--red)' : 'var(--green)'}">${m.qty > 0 ? '+' : ''}${fmtUom(m.qty, u)}</span>
-      <button class="mini-btn danger" onclick="delMovement('${m.id}','${it.id}')" title="Elimina movimento">${ico('trash', 'tinted', 'Elimina movimento')}</button>
+      ${movimentoDiDocumento(m) ? `<span class="empty-text" style="padding:0" title="${esc(movimentoDiDocumento(m))}">dal documento</span>`
+    : `<button class="mini-btn danger" onclick="delMovement('${m.id}','${it.id}')" title="Elimina movimento">${ico('trash', 'tinted', 'Elimina movimento')}</button>`}
     </div>`).join('');
   const righeOrd = ordini.map(o => {
     const q = (o.lines || []).filter(l => l.itemId === it.id).reduce((s, l) => s + (Number(l.received) || 0), 0);
@@ -1174,8 +1288,22 @@ function contoLavoroExportSpec() {
     }],
   };
 }
+// I movimenti che un ordine di produzione o un montaggio ha scritto sono suoi:
+// si annullano da lì (Annulla dichiarazione), che tiene d'accordo stato, fasi e
+// impegni. Eliminarli da qui lasciava il documento a dire una cosa e il
+// magazzino un'altra. → il motivo, o '' se il movimento si può eliminare.
+function movimentoDiDocumento(m) {
+  if (!m) return '';
+  if (m.declId || (typeof opMovimentoDiOdp === 'function' && opMovimentoDiOdp(m)))
+    return 'Scritto da un ordine di produzione: si annulla dall\'ordine, con «Annulla dichiarazione»';
+  if (m.orderId && (db.productions || []).some(d => d.id === m.orderId))
+    return 'Scritto da una dichiarazione di montaggio: si annulla da lì';
+  return '';
+}
 function delMovement(id, itemId) {
   if (!roleGuardShop('catalog')) return;
+  const perche = movimentoDiDocumento((db.movements || []).find(m => m.id === id));
+  if (perche) { showToast(perche, 'error'); return; }
   askConfirm('Eliminare questo movimento? La giacenza cambia di conseguenza.', () => {
     removeConUndo('movements', id, 'Movimento eliminato', () => stockMovementsModal(itemId));
   });
@@ -1255,6 +1383,10 @@ function stockState(it) {
 const STOCK_STATE_FILTERS = {
   sotto: st => st.sotto,
   zero: st => st.onHand <= 0,
+  // L'esistente sotto zero è un errore di registrazione da ricontare
+  // (avvisoSottoZero lo dice): «Giacenza a zero» li mescola con gli zeri veri,
+  // «Libero negativo» parla d'altro (dalla 0.105.6).
+  sottozero: st => st.onHand < -1e-6,
   con: st => st.onHand > 0,
   arrivo: st => st.incoming > 0,
   negativo: st => st.libero < 0,
@@ -1267,7 +1399,7 @@ const STOCK_STATE_FILTERS = {
 // Le stesse voci del menu in pagina: servono all'export, che scrive nel file i
 // filtri per esteso e non il valore interno.
 const STOCK_STATE_LABELS = {
-  sotto: 'Sotto la scorta minima', zero: 'Giacenza a zero',
+  sotto: 'Sotto la scorta minima', zero: 'Giacenza a zero', sottozero: 'Esistente negativo',
   con: 'Con giacenza', arrivo: 'Con merce in arrivo', negativo: 'Libero negativo', terzi: 'Presso terzi o in lavorazione',
 };
 
@@ -1280,12 +1412,12 @@ function stockRow(it) {
   const flags = `${it.favorite ? '<span class="pick-fav" title="Preferito">★</span>' : ''}${it.obsolete ? `<span class="obs-mark" title="Obsoleto">${ico('blocked', 'tinted', '')}</span>` : ''}`
     + (st.sotto ? '<span title="Sotto la scorta minima">' + ico('warning', 'tinted', '') + '</span>' : '');
   const num = (v, colore, col) => `<td class="col-${col}" style="font-family:var(--mono);text-align:right${colore ? ';color:' + colore : ''}">${fmtQty(v)}</td>`;
-  const nMov = movementsOf(it.id).length;
+  const nMov = stockOf(it.id).nMov;
   return `<tr data-sel="${it.id}" class="${it.obsolete ? 'row-obsolete' : ''}">
     <td class="col-flags" style="width:1%;white-space:nowrap">${flags}</td>
     <td class="col-code" style="font-family:var(--mono)">${codeLink(it.id, it.code)}</td>
     <td class="col-name">${esc(it.name)}</td>
-    <td class="col-type"><span class="bom-type-tag tt-${it.type}">${typeShort(it.type)}</span> ${typeLabel(it.type)}</td>
+    <td class="col-type"><span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span> ${typeLabel(it.type)}</td>
     <td class="col-family" style="color:var(--text-dim)">${esc(codingLabel(it) || familyLabel(it))}</td>
     <td class="col-uom">${esc(u)}</td>
     <td class="col-location" style="font-family:var(--mono)${ubicazioneOf(it) ? '' : ';color:var(--text-dim)'}">${esc(ubicazioneOf(it) || '—')}</td>
@@ -1344,17 +1476,18 @@ function renderStock() {
   syncFamilyFilters(STOCK_PFX, STOCK_TYPES);
   syncMachineFilters(STOCK_PFX);
   stockLocSync();
-  filtScopeApply('stock');   // dopo il sync, non prima: vedi nota in renderCatalog
+  filtScopeApply('stock', () => { syncFamilyFilters(STOCK_PFX, STOCK_TYPES); syncMachineFilters(STOCK_PFX); });   // dopo il sync, non prima: vedi nota in renderCatalog
   const rows = stockFilteredRows();
 
   // I conteggi in testa parlano di **tutto** il magazzino, non del filtro
   // attivo: sono lì per dire se c'è qualcosa da guardare, e un numero che
   // cambia con il filtro non risponderebbe più a quella domanda.
   const tutti = (db.items || []).filter(hasStock);
-  let sotto = 0, inArrivo = 0, valore = 0;
+  let sotto = 0, inArrivo = 0, valore = 0, negativi = 0;
   tutti.forEach(i => {
     const st = stockState(i);
     if (st.sotto) sotto++;
+    if (STOCK_STATE_FILTERS.sottozero(st)) negativi++;
     if (st.incoming > 0) inArrivo++;
     valore += valoreGiacenza(i);
   });
@@ -1369,7 +1502,10 @@ function renderStock() {
     kpi('Sotto scorta minima', String(sotto), sotto > 0 ? 'red' : '', { azione: "stockFiltraStato('sotto')", attiva: statoOra === 'sotto', titolo: 'Filtra gli articoli sotto la scorta minima' }),
     kpi('Con merce in arrivo', String(inArrivo), 'accent', { azione: "stockFiltraStato('arrivo')", attiva: statoOra === 'arrivo', titolo: 'Filtra gli articoli con merce in arrivo' }),
     kpi(`Valore giacenza (${esc(cur())})`, fmtN(valore), 'purple', { azione: "setView('dash')", titolo: 'Apri il Cruscotto: valore per tipo e per famiglia' }),
-  ].join('');
+  ].concat(negativi || statoOra === 'sottozero' ? [
+    // Solo quando ce n'è: è un avviso da ricontare, non una misura del magazzino.
+    kpi('Esistente negativo', String(negativi), negativi ? 'red' : '', { azione: "stockFiltraStato('sottozero')", attiva: statoOra === 'sottozero', titolo: 'Filtra gli articoli con esistente sotto zero: vanno ricontati' }),
+  ] : []).join('');
 
   const head = `<thead><tr><th scope="col" class="col-flags"></th><th scope="col" class="col-code">Codice</th><th scope="col" class="col-name">Descrizione</th>
     <th scope="col" class="col-type">Tipo</th><th scope="col" class="col-family">Famiglia</th><th scope="col" class="col-uom">U.M.</th>
@@ -1414,11 +1550,10 @@ function stockExportSpec(soloIds) {
   const fam = getFamily(leggi('family'));
   const sub = (fam && (fam.subs || []).find(s => s.id === leggi('subfamily'))) || null;
   const mac = getItem(leggi('machine')), grp = getItem(leggi('group'));
-  const righe = stockFilteredRows(soloIds).map(it => {
-    const st = stockState(it);
-    return [it.code || '', it.name || '', typeLabel(it.type), codingLabel(it) || familyLabel(it),
-      itemUom(it), ubicazioneOf(it), st.onHand, st.incoming, st.committed, st.libero, st.safety, st.lotSize];
-  });
+  // Le colonne sono quelle accese a schermo (dalla 0.105.6, vedi export-lists.js).
+  // Lo stato si calcola una volta per riga, non una per colonna.
+  const vis = listColonneVisibili('stock', STOCK_EXPORT_COLS);
+  const righe = stockFilteredRows(soloIds).map(it => vis.riga({ it, st: stockState(it) }));
   return {
     titolo: 'Magazzino',
     slug: 'magazzino',
@@ -1435,16 +1570,33 @@ function stockExportSpec(soloIds) {
     ],
     sezioni: [{
       nome: 'Magazzino',
-      colonne: [
-        { h: 'Codice', w: 18 }, { h: 'Descrizione', w: 34 }, { h: 'Tipo', w: 16 }, { h: 'Famiglia', w: 24 },
-        { h: 'U.M.', w: 8 }, { h: 'Ubicazione', w: 14 }, { h: 'Esistente', w: 12, num: true }, { h: 'In arrivo', w: 12, num: true },
-        { h: 'Impegnato', w: 12, num: true }, { h: 'Libero', w: 12, num: true },
-        { h: 'Scorta minima', w: 14, num: true }, { h: 'Lotto', w: 10, num: true },
-      ],
+      colonne: vis.colonne,
       righe,
     }],
   };
 }
+// Le colonne del magazzino nel file, per chiave del registro (COLUMNS.stock).
+// Ogni valore riceve { it, st }: l'articolo e il suo stato di giacenza.
+const STOCK_EXPORT_COLS = {
+  code: { h: 'Codice', w: 18, v: x => x.it.code || '' },
+  name: { h: 'Descrizione', w: 34, v: x => x.it.name || '' },
+  type: { h: 'Tipo', w: 16, v: x => typeLabel(x.it.type) },
+  family: { h: 'Famiglia', w: 24, v: x => codingLabel(x.it) || familyLabel(x.it) },
+  uom: { h: 'U.M.', w: 8, v: x => itemUom(x.it) },
+  location: { h: 'Ubicazione', w: 14, v: x => ubicazioneOf(x.it) },
+  onhand: { h: 'Esistente', w: 12, num: true, v: x => x.st.onHand },
+  incoming: { h: 'In arrivo', w: 12, num: true, v: x => x.st.incoming },
+  committed: { h: 'Impegnato', w: 12, num: true, v: x => x.st.committed },
+  free: { h: 'Libero', w: 12, num: true, v: x => x.st.libero },
+  safety: { h: 'Scorta minima', w: 14, num: true, v: x => x.st.safety },
+  lot: { h: 'Lotto', w: 10, num: true, v: x => x.st.lotSize },
+  subfamily: { h: 'Sottofamiglia', w: 20, v: x => (usesFamily(x.it.type) && x.it.familyId ? subFamilyName(x.it.familyId, x.it.subFamilyId) || '' : '') },
+  lotmode: { h: 'Modalità lotto', w: 14, v: x => (x.it.lotSize ? LOT_MODE_LABELS[lotModeOf(x.it)] || '' : '') },
+  atsupplier: { h: 'Presso terzi', w: 12, num: true, v: x => Number(x.st.atSupplier) || 0 },
+  inwork: { h: 'In lavorazione', w: 12, num: true, v: x => Number(x.st.inWork) || 0 },
+  notes: { h: 'Note', w: 30, v: x => x.it.notes || '' },
+  autore: { h: 'Creato/aggiornato da', w: 24, v: x => recordAuthorShort(x.it) },
+};
 
 // ═══════════════════════════════════════════════════════════
 //  Riordino sotto scorta
@@ -1495,14 +1647,18 @@ function riordinoProposte() {
 // Una bozza d'ordine per fornitore, con le righe scelte. Le righe senza
 // fornitore restano fuori: un ordine senza intestatario non si manda a
 // nessuno, e il modale lo dice prima. Torna gli ordini creati.
-function riordinoGenera(itemIds) {
-  if (!roleGuard('docs')) return [];
+function riordinoPerFornitore(itemIds) {
   const scelti = new Set(itemIds || []);
   const perFornitore = new Map();
   riordinoProposte().filter(p => scelti.has(p.it.id) && p.supplierId).forEach(p => {
     if (!perFornitore.has(p.supplierId)) perFornitore.set(p.supplierId, []);
     perFornitore.get(p.supplierId).push(p);
   });
+  return perFornitore;
+}
+function riordinoGenera(itemIds) {
+  if (!roleGuard('docs')) return [];
+  const perFornitore = riordinoPerFornitore(itemIds);
   const oggi = oggiISO();
   const creati = [];
   perFornitore.forEach((ps, supplierId) => {
@@ -1557,10 +1713,13 @@ function riordinoModal() {
 function riordinoConferma() {
   const ids = Array.prototype.map.call(document.querySelectorAll('.riordino-sel'), el => (el.checked ? el.value : null)).filter(Boolean);
   if (!ids.length) { showToast('Nessun articolo scelto', 'error'); return; }
-  const creati = riordinoGenera(ids);
-  closeModal();
-  if (!creati.length) return;
-  showToast(creati.length === 1 ? `Creato l'ordine ${creati[0].number} in bozza` : `Creati ${creati.length} ordini in bozza: ${creati.map(o => o.number).join(', ')}`);
-  setView('orders');
-  openOrderEdit(creati[0].id);
+  if (!roleGuard('docs')) return;
+  return conNumeri({ ODA: riordinoPerFornitore(ids).size }, () => {
+    const creati = riordinoGenera(ids);
+    closeModal();
+    if (!creati.length) return;
+    showToast(creati.length === 1 ? `Creato l'ordine ${creati[0].number} in bozza` : `Creati ${creati.length} ordini in bozza: ${creati.map(o => o.number).join(', ')}`);
+    setView('orders');
+    openOrderEdit(creati[0].id);
+  });
 }

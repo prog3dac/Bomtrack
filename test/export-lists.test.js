@@ -526,3 +526,65 @@ describe('L\'Excel', () => {
     assert.equal(a.eval('exportListXlsx(stockExportSpec())'), false);
   });
 });
+
+describe('L\'export segue la scelta delle colonne (dalla 0.105.6)', () => {
+  const intestazioni = (a, e) => spec(a, e).sezioni[0].colonne.map(c => c.h);
+  it('di serie le colonne sono quelle di sempre', () => {
+    const a = app();
+    assert.deepEqual(intestazioni(a, 'catalogExportSpec("buy")').slice(0, 5), ['Codice', 'Descrizione', 'Tipo', 'Famiglia', 'U.M.']);
+    assert.ok(!intestazioni(a, 'catalogExportSpec("buy")').includes('Fornitore'));
+  });
+  it('accesa «Fornitore», il file la porta, col nome del fornitore', () => {
+    const a = app();
+    a.eval('colToggle("buy", "supplier")');
+    const sp = spec(a, 'catalogExportSpec("buy")');
+    const k = sp.sezioni[0].colonne.findIndex(c => c.h === 'Fornitore');
+    assert.ok(k >= 0, 'la colonna accesa a schermo deve arrivare nel file');
+    const c1 = sp.sezioni[0].righe.find(r => r[0] === 'C1');
+    assert.equal(c1[k], 'SKF');
+  });
+  it('spenta una colonna, il file non la porta; codice e descrizione restano sempre', () => {
+    const a = app();
+    a.eval('colToggle("buy", "family"); colToggle("buy", "cost")');
+    const h = intestazioni(a, 'catalogExportSpec("buy")');
+    assert.ok(!h.includes('Famiglia'));
+    assert.ok(!h.some(x => /Costo/.test(x)));
+    assert.deepEqual(h.slice(0, 2), ['Codice', 'Descrizione']);
+  });
+  it('anche il magazzino: «Presso terzi» acceso arriva, «Ubicazione» spenta no', () => {
+    const a = app();
+    a.eval('colToggle("stock", "atsupplier"); colToggle("stock", "location")');
+    const sp = spec(a, 'stockExportSpec()');
+    const h = sp.sezioni[0].colonne.map(c => c.h);
+    assert.ok(h.includes('Presso terzi'));
+    assert.ok(!h.includes('Ubicazione'));
+    sp.sezioni[0].righe.forEach(r => assert.equal(r.length, h.length));
+  });
+  it('tutte le colonne accese: ogni riga ha tante celle quante intestazioni, e i numeri sono numeri', () => {
+    const a = app();
+    ['buy', 'design', 'stock'].forEach(v => a.eval(`COLUMNS[${JSON.stringify(v)}].filter(c => c.defaultHidden).forEach(c => colToggle(${JSON.stringify(v)}, c.key))`));
+    ['catalogExportSpec("buy")', 'catalogExportSpec("design")', 'stockExportSpec()'].forEach(e => {
+      const s = spec(a, e).sezioni[0];
+      s.righe.forEach(r => {
+        assert.equal(r.length, s.colonne.length, e);
+        s.colonne.forEach((c, k) => { if (c.num) assert.equal(typeof r[k], 'number', e + ' · ' + c.h); });
+      });
+    });
+  });
+});
+
+describe('Excel: un testo che comincia come una formula resta testo (dalla 0.105.6)', () => {
+  it('=, +, @ e i trattini davanti a una parola si neutralizzano; numeri e trattini soli no', () => {
+    const a = app();
+    const t = v => a.eval(`xlsxTesto(${JSON.stringify(v)})`);
+    assert.equal(t('=HYPERLINK("http://x","clic")'), '\'=HYPERLINK("http://x","clic")');
+    assert.equal(t('+39 02 123'), '\'+39 02 123');
+    assert.equal(t('@SOMMA(A1)'), '\'@SOMMA(A1)');
+    assert.equal(t('-cmd|calc'), '\'-cmd|calc');
+    assert.equal(t('\t=1+1'), '\'\t=1+1');
+    assert.equal(t('-'), '-');
+    assert.equal(t('-3,5'), '-3,5');
+    assert.equal(t('Cuscinetto = 6204'), 'Cuscinetto = 6204');
+    assert.equal(a.eval('xlsxTesto(-3)'), -3);
+  });
+});

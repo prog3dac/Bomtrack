@@ -347,11 +347,59 @@ describe('Impegnato: la giacenza vista da un piano è quella che resta libera', 
   it('due piani non si dichiarano coperti entrambi con la stessa merce', () => {
     const a = piano(piano(app(), 'pl1', 10), 'pl2', 10);
     a.eval('addMovement("m1", "carico", 100, "")');   // 100 in casa, 40 + 40 richiesti
+    const r2 = rigaAcq(a, 'pl2', 'M1');
+    assert.equal(r2.onHand, 100);
+    assert.equal(r2.committed, 40, 'quaranta sono già promessi al piano che viene prima');
+    assert.equal(r2.libero, 60);
+    assert.equal(r2.qtyOrder, 0, 'sessanta liberi bastano per quaranta: questo piano è coperto davvero');
+  });
+
+  it('il piano che viene prima non conta l\'impegno di quelli dopo', () => {
+    const a = piano(piano(app(), 'pl1', 10), 'pl2', 10);
+    a.eval('addMovement("m1", "carico", 50, "")');
     const r1 = rigaAcq(a, 'pl1', 'M1');
-    assert.equal(r1.onHand, 100);
-    assert.equal(r1.committed, 40, 'quaranta sono già promessi all\'altro piano');
-    assert.equal(r1.libero, 60);
-    assert.equal(r1.qtyOrder, 0, 'sessanta liberi bastano per quaranta: questo piano è coperto davvero');
+    assert.equal(r1.committed, 0, 'senza date la fila la decide il numero: FAB-pl1 prima di FAB-pl2');
+    assert.equal(r1.qtyOrder, 0, 'i 50 bastano ai suoi 40');
+    assert.equal(rigaAcq(a, 'pl2', 'M1').qtyOrder, 30, 'al secondo restano 10: compra solo i suoi 30');
+  });
+
+  it('a magazzino vuoto ogni piano compra la sua parte, non anche quella degli altri', () => {
+    const a = piano(piano(app(), 'pl1', 10), 'pl2', 5);   // 40 e 20 di M1, niente in casa
+    assert.equal(rigaAcq(a, 'pl1', 'M1').qtyOrder, 40);
+    assert.equal(rigaAcq(a, 'pl2', 'M1').qtyOrder, 20,
+      'fino alla 0.105.2 ciascuno ne comprava 60, e generare gli ordini da entrambi ne ordinava 120');
+  });
+
+  it('quando la merce non basta a quelli davanti, la loro parte scoperta non la compra chi viene dopo', () => {
+    const a = piano(piano(app(), 'pl1', 10), 'pl2', 10);
+    a.eval('addMovement("m1", "carico", 10, "")');    // 10 in casa, 40 + 40 richiesti
+    const q1 = rigaAcq(a, 'pl1', 'M1').qtyOrder, q2 = rigaAcq(a, 'pl2', 'M1').qtyOrder;
+    assert.equal(q1, 30);
+    assert.equal(q2, 40);
+    assert.equal(q1 + q2, 70, 'mancano 80 − 10: i due piani insieme comprano esattamente quelli');
+  });
+
+  it('la fila la decide la consegna: il piano che consegna prima prende prima', () => {
+    const a = piano(piano(app(), 'pl1', 10, { dueDate: '2026-12-01' }), 'pl2', 10, { dueDate: '2026-11-01' });
+    a.eval('addMovement("m1", "carico", 50, "")');
+    const r2 = rigaAcq(a, 'pl2', 'M1'), r1 = rigaAcq(a, 'pl1', 'M1');
+    assert.equal(r2.committed, 0, 'pl2 consegna a novembre: è il primo della fila');
+    assert.equal(r2.qtyOrder, 0);
+    assert.equal(r1.committed, 40);
+    assert.equal(r1.qtyOrder, 30);
+  });
+
+  it('il buco della scorta minima lo compra un piano solo', () => {
+    const a = piano(piano(app(), 'pl1', 10), 'pl2', 10);
+    a.eval('db.items.find(i => i.id === "m1").safetyStock = 20; saveDB();');
+    const q1 = rigaAcq(a, 'pl1', 'M1').qtyOrder, q2 = rigaAcq(a, 'pl2', 'M1').qtyOrder;
+    assert.equal(q1, 60, 'il primo della fila: i suoi 40 e i 20 della scorta');
+    assert.equal(q2, 40, 'il secondo solo i suoi: ricaricargli la scorta la comprerebbe due volte');
+  });
+
+  it('un piano chiuso guarda dopo tutti gli aperti', () => {
+    const a = piano(piano(app(), 'pl1', 10, { active: false }), 'pl2', 10);
+    assert.equal(rigaAcq(a, 'pl1', 'M1').committed, 40, 'non è in fila: tutto quello che promettono gli aperti gli è davanti');
   });
 
   it('quando la merce non basta per due, il secondo piano compra invece di credersi coperto', () => {
@@ -407,9 +455,10 @@ describe('Impegnato: la giacenza vista da un piano è quella che resta libera', 
     assert.equal(r.impegni[0].qty, 40, 'un numero che toglie merce senza dire chi se l\'è presa non si può contestare');
   });
 
-  it('più piani si sommano fra loro', () => {
+  it('più piani si sommano fra loro, quelli davanti', () => {
     const a = piano(piano(piano(app(), 'pl1', 1), 'pl2', 2), 'pl3', 3);
-    assert.equal(rigaAcq(a, 'pl1', 'M1').committed, 20, '(2 + 3) macchine × 4');
+    assert.equal(rigaAcq(a, 'pl1', 'M1').committed, 0, 'il primo della fila non ha nessuno davanti');
+    assert.equal(rigaAcq(a, 'pl2', 'M1').committed, 4, '1 macchina × 4');
     assert.equal(rigaAcq(a, 'pl3', 'M1').committed, 12, '(1 + 2) macchine × 4');
   });
 
@@ -695,7 +744,8 @@ describe('Chi impegna, e chi si guarda da fuori', () => {
 
   it('un piano non fa concorrenza a sé stesso', () => {
     const a = conDuePiani();
-    assert.equal(a.eval('committedOf("c1", "pl1")'), 20, 'resta solo quello che chiede l\'altro');
+    assert.equal(a.eval('committedOf("c1", "pl2")'), 30, 'resta solo quello che chiede l\'altro, che viene prima');
+    assert.equal(a.eval('committedOf("c1", "pl1")'), 0, 'e chi viene dopo non toglie niente a chi viene prima');
     assert.equal(a.eval('committedOf("c1", null)'), 50);
   });
 
@@ -703,7 +753,7 @@ describe('Chi impegna, e chi si guarda da fuori', () => {
     const a = conDuePiani();
     // È il caso della commessa: guarda dai suoi piani, tutti insieme.
     assert.equal(a.eval('commitsOn("c1", new Set(["pl1","pl2"])).length'), 0);
-    assert.equal(a.eval('commitsOn("c1", ["pl1"]).length'), 1, 'anche una lista, non solo un Set');
+    assert.equal(a.eval('commitsOn("c1", ["pl2"]).length'), 1, 'anche una lista, non solo un Set');
   });
 });
 

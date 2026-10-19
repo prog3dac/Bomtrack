@@ -39,16 +39,99 @@ function produzioniDi(planId) {
 // somma può essere corretta aggiungendo una dichiarazione negativa — come una
 // rettifica di magazzino, e per la stessa ragione: cancellare una riga sbagliata
 // è un'altra cosa dal dire che se ne erano contati troppi.
+//
+// Dalla 0.105.5 contano anche i pezzi buoni che gli ordini di produzione del
+// piano hanno versato: prima il piano non li vedeva, e una parte con un ODP
+// chiuso corto (scarti, una chiusura anticipata) sembrava fatta lo stesso.
 function prodottiDi(planId, itemId) {
   return (db.productions || [])
     .filter(p => p.planId === planId && p.itemId === itemId)
-    .reduce((s, p) => s + (Number(p.qty) || 0), 0);
+    .reduce((s, p) => s + (Number(p.qty) || 0), 0)
+    + odpDelPiano(planId, itemId).reduce((s, o) => s + opVersato(o), 0);
 }
+// Gli ordini di produzione vivi di un piano per una parte.
+function odpDelPiano(planId, itemId) {
+  if (!planId || typeof opVersato !== 'function') return [];
+  return (db.prodOrders || []).filter(o => o.planId === planId && o.itemId === itemId && o.status !== 'annullato');
+}
+// Un ODP ancora aperto promette i pezzi lanciati, meno gli scarti già
+// dichiarati e meno quelli già versati (che sono fra i fatti). Uno completato
+// o chiuso non promette più niente: quello che ha dato è quello che ha versato.
+function odpAttesi(o) {
+  if (['completato', 'chiuso'].includes(o.status)) return 0;
+  const scarti = (o.phases || []).reduce((s, f) => s + opScarti(o, f), 0);
+  return Math.max(0, (Number(o.qty) || 0) - scarti - opVersato(o));
+}
+function attesiDi(planId, itemId) { return odpDelPiano(planId, itemId).reduce((s, o) => s + odpAttesi(o), 0); }
 // Quanto resta da fare. Mai negativo: se se ne sono dichiarati più del previsto
 // il residuo è zero, non un numero che invita a produrre all'indietro. Il
 // sovrappiù resta visibile nella colonna «fatti», dove è un'informazione.
 function daFare(planId, itemId, richiesti) {
   return Math.max(0, (Number(richiesti) || 0) - prodottiDi(planId, itemId));
+}
+// Quanto resta da lanciare: il da fare, meno quello che gli ODP aperti stanno
+// ancora producendo.
+function daLanciare(planId, itemId, richiesti) {
+  return Math.max(0, daFare(planId, itemId, richiesti) - attesiDi(planId, itemId));
+}
+
+// ─── La scorta minima delle parti fabbricate (dalla 0.105.6) ───
+// La scheda di una parte chiede scorta minima e lotto, ma il fabbisogno li
+// ignorava: l'ordine di produzione nasceva per i pezzi del piano e basta, e il
+// riordino salta le parti fatte in casa. La scorta serviva solo a togliere
+// pezzi allo scaffale comune, e nessuno proponeva di rifarla.
+//
+// La regola è quella degli acquisti (netRequirement): il buco della scorta lo
+// copre **il primo della fila**, cioè il piano aperto più urgente che fabbrica
+// la parte. Il buco si misura a lavoro finito, come farebbe il netto: esistente,
+// più quello che gli ODP aperti stanno ancora facendo, più quello che i piani
+// devono ancora lanciare, meno quello che i piani devono ancora consumare.
+// Gli altri piani non se lo ricaricano, e una volta lanciato l'ODP che lo copre
+// i suoi pezzi attesi chiudono il buco: non si propone due volte.
+//
+// → articolo → { planId: il piano che lo copre, gap: i pezzi che mancano alla scorta }
+let _scortaParti = null;
+function scortaPartiIndex() {
+  if (_scortaParti) return _scortaParti;
+  const idx = new Map();
+  _scortaParti = idx;
+  if (typeof mrpExplodePlan !== 'function' || typeof pianiInOrdine !== 'function') return idx;
+  // Nessuna parte con una scorta: niente da esplodere (è il caso più comune).
+  if (!(db.items || []).some(it => it.type === 'parte' && safetyStockOf(it) > 0)) return idx;
+  const per = new Map();
+  const voce = id => { let e = per.get(id); if (!e) { e = { primo: null, lancio: 0, consumo: 0 }; per.set(id, e); } return e; };
+  pianiInOrdine().piani.forEach(p => {
+    const exp = mrpExplodePlan(p);
+    const serve = new Map();
+    const conta = (it, q) => { if (safetyStockOf(it) > 0) serve.set(it.id, (serve.get(it.id) || 0) + (Number(q) || 0)); };
+    exp.make.forEach(e => {
+      conta(e.item, e.qty);
+      if (!(safetyStockOf(e.item) > 0)) return;
+      const v = voce(e.item.id);
+      if (!v.primo) v.primo = p.id;
+      v.lancio += daLanciare(p.id, e.item.id, e.qty);
+    });
+    exp.stock.forEach(e => conta(e.item, e.qty));
+    serve.forEach((q, id) => { voce(id).consumo += Math.max(0, q - prelevatoPer(id, p.id)); });
+  });
+  if (!per.size) return idx;
+  const attesi = new Map();
+  (db.prodOrders || []).forEach(o => {
+    if (o.status === 'annullato' || !per.has(o.itemId)) return;
+    attesi.set(o.itemId, (attesi.get(o.itemId) || 0) + odpAttesi(o));
+  });
+  per.forEach((v, id) => {
+    if (!v.primo) return;
+    const fine = onHandOf(id) + (attesi.get(id) || 0) + v.lancio - v.consumo;
+    const gap = safetyStockOf(getItem(id)) - fine;
+    if (gap > 0.000001) idx.set(id, { planId: v.primo, gap });
+  });
+  return idx;
+}
+// I pezzi in più che **questo** piano lancia per riportare la parte alla scorta.
+function scortaDaLanciare(planId, itemId) {
+  const s = planId ? scortaPartiIndex().get(itemId) : null;
+  return s && s.planId === planId ? s.gap : 0;
 }
 
 // ─── Dichiarare ───
@@ -58,25 +141,34 @@ function produzioneDichiara(planId, itemId, qty, note) {
   if (!p || !it) return null;
   const q = Number(qty) || 0;
   if (!q) { showToast('Scrivi quanti pezzi sono stati fatti', 'error'); return null; }
-  return Store.insert('productions', {
+  const rec = Store.insert('productions', {
     planId, itemId, qty: q,
     date: nowISO(),
     note: String(note || '').trim(),
   });
+  // Dalla 0.105.5 una parte fatta entra a magazzino, come quella versata da un
+  // ODP: il montaggio la scarica (0.100.0), e senza il carico la giacenza
+  // andava sotto zero a ogni assieme. Una correzione negativa la toglie.
+  if (rec && hasStock(it) && !isAssembly(it.type)) {
+    addMovement(itemId, 'versamento', q, `Produzione ${it.code || ''} — ${p.number || ''}`.trim(), { orderId: rec.id });
+  }
+  return rec;
 }
 function produzioneElimina(id) {
   if (!roleGuardShop('docs')) return;
   const rec = (db.productions || []).find(p => p.id === id);
   if (!rec) return;
-  const mov = montaggioMovimenti(id);
-  askConfirm(mov.length
+  const mov = (db.movements || []).filter(m => m.orderId === id);
+  const montaggio = mov.some(m => m.kind === 'scarico');
+  askConfirm(montaggio
     ? `Eliminare questo montaggio? I ${mov.length === 1 ? 'componente scaricato torna' : mov.length + ' componenti scaricati tornano'} a magazzino.`
-    : 'Eliminare questa dichiarazione di produzione?', () => {
+    : mov.length ? 'Eliminare questa dichiarazione di produzione? I pezzi che aveva caricato escono dal magazzino.'
+      : 'Eliminare questa dichiarazione di produzione?', () => {
     // I movimenti del montaggio se ne vanno con lui: sono la sua conseguenza,
     // e lasciarli scaricherebbe componenti per un montaggio che non c'è più.
     mov.forEach(m => Store.remove('movements', m.id));
     Store.remove('productions', id);
-    savedToast(mov.length ? 'Montaggio eliminato, componenti restituiti' : 'Dichiarazione eliminata');
+    savedToast(montaggio ? 'Montaggio eliminato, componenti restituiti' : 'Dichiarazione eliminata');
     if (window.__montPlanId) montaggioRefresh();
     else if (window.__prodPlanId) produzioneRefresh();
     else renderMrp();
@@ -252,7 +344,7 @@ function produzioneBody() {
   const fatti = prodottiDi(planId, itemId);
   const resta = daFare(planId, itemId, richiesti);
   const u = itemUom(it);
-  const puoScrivere = canWrite('docs');
+  const puoScrivere = canWriteShop('docs');   // l'officina dichiara anche le parti (dalla 0.105.6), come il montaggio
   const storico = (db.productions || [])
     .filter(p => p.planId === planId && p.itemId === itemId)
     .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
@@ -260,6 +352,11 @@ function produzioneBody() {
       <span class="mgmt-item-name" style="font-family:var(--mono)">${p.qty > 0 ? '+' : ''}${fmtQty(p.qty)} ${esc(u)}</span>
       <span class="mgmt-item-meta">${esc(fmtDateIt(p.date))}${p.createdBy ? ' · ' + esc(actorName(p.createdBy)) : ''}${p.note ? ' · ' + esc(p.note) : ''}
         ${puoScrivere ? `<button class="mini-btn danger" title="Elimina la dichiarazione" onclick="produzioneElimina('${p.id}')">${ico('trash', 'tinted', 'Elimina')}</button>` : ''}</span>
+    </div>`).join('')
+    // I pezzi versati dagli ODP del piano sono fra i fatti (0.105.5): si dice da dove vengono.
+    + odpDelPiano(planId, itemId).filter(o => opVersato(o) > 0).map(o => `<div class="mgmt-item">
+      <span class="mgmt-item-name" style="font-family:var(--mono)">+${fmtQty(opVersato(o))} ${esc(u)}</span>
+      <span class="mgmt-item-meta">versati dall'ordine di produzione ${esc(o.number || '')}</span>
     </div>`).join('');
   // Il modulo propone il residuo: il gesto più frequente è «finito», e
   // riscrivere un numero che l'app conosce già è lavoro inutile.

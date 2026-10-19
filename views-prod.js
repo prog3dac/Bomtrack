@@ -119,7 +119,7 @@ function opFreezeMaterials(part, qty) {
 // ciclo di vita degli altri indici: azzerato da invalidateCaches().
 let _opDeclIdx = null;
 let _opOdlIdx = null;
-function invalidateProd() { _opDeclIdx = null; _opOdlIdx = null; _opMovIdx = null; _wipRows = null; _wipPer = null; }
+function invalidateProd() { _opDeclIdx = null; _opOdlIdx = null; _opOdlPianoIdx = null; _opMovIdx = null; _wipRows = null; _wipPer = null; _scortaParti = null; _bozzeIdx = null; }
 function opDeclIndex() {
   if (_opDeclIdx) return _opDeclIdx;
   const map = new Map();
@@ -159,6 +159,19 @@ function opDaFare(odp, fase) {
   const prec = opPrecedente(odp, fase);
   return prec ? opFatti(odp, prec) : (Number(odp.qty) || 0);
 }
+// I pezzi che una fase **riceverà**: i lanciati, meno gli scarti delle fasi
+// prima; una fase prima già chiusa dà quelli che ha dato. È la quantità da
+// commissionare a un terzista prima che le fasi precedenti abbiano finito
+// (dalla 0.105.5: l'ordine di lavoro nasceva coi pezzi arrivati fin lì, anche zero).
+function opAttesiFase(odp, fase) {
+  let n = Number(odp.qty) || 0;
+  const i = opPhaseIndex(odp, fase);
+  for (let k = 0; k < i; k++) {
+    const p = opPhaseAt(odp, k);
+    n = opChiusa(odp, p) ? opFatti(odp, p) : Math.max(opFatti(odp, p), n - opScarti(odp, p));
+  }
+  return Math.max(n, opDaFare(odp, fase));
+}
 function opResidua(odp, fase) { return Math.max(0, opDaFare(odp, fase) - opProcessati(odp, fase)); }
 
 function opAvviata(odp, fase) { return opDecls(odp.id, fase.id).some(d => d.kind === 'avvio'); }
@@ -167,10 +180,21 @@ function opForzata(odp, fase) { return opDecls(odp.id, fase.id).some(d => d.kind
 // quelli entrati. L'epsilon è lo stesso dei residui del conto lavoro: le
 // quantità sono numeri in virgola mobile, e un confronto secco lascerebbe fasi
 // «quasi chiuse» che bloccano la successiva per un miliardesimo.
+//
+// Una fase in cui non entra **nessun** pezzo buono è chiusa anche lei, se la
+// precedente è chiusa (dalla 0.105.6): quando la 10 finisce tutta in scarti, o
+// viene chiusa in difetto con zero buoni, alla 20 non arriverà mai niente.
+// Prima restava «avviabile» con zero da fare e senza un comando per chiuderla,
+// e l'ordine restava «in corso» — col suo materiale nel lavoro in corso — finché
+// qualcuno non avviava e chiudeva a mano ogni fase vuota. La prima fase non
+// cade qui: senza precedente, zero da fare è un ordine a zero, non un esito.
 function opChiusa(odp, fase) {
   if (opDecls(odp.id, fase.id).some(d => d.kind === 'chiusura')) return true;
   const daFare = opDaFare(odp, fase);
-  if (!(daFare > 0)) return false;
+  if (!(daFare > 0.000001)) {
+    const prec = opPrecedente(odp, fase);
+    return !!prec && opChiusa(odp, prec);
+  }
   return opProcessati(odp, fase) >= daFare - 0.000001;
 }
 function opTutteChiuse(odp) { return (odp.phases || []).length > 0 && odp.phases.every(f => opChiusa(odp, f)); }
@@ -394,29 +418,62 @@ function opAvvia(id, faseId, opz) {
     opDecl(o, fase, 'forzatura', { motivo, note: ok.motivo });
   }
   if (opAvviata(o, fase)) { showToast(`La fase ${fase.seq} è già avviata`, 'error'); return false; }
-  opDecl(o, fase, 'avvio', { note: String(opzioni.note || '').trim() });
+  // L'avvio e i suoi prelievi hanno id che nascono dall'ordine e dalla fase
+  // (dalla 0.105.3): nell'archivio condiviso due colleghi che avviano la stessa
+  // fase prima di essersi visti scrivono lo stesso avvio e lo stesso prelievo,
+  // invece di far uscire il materiale due volte.
+  const avvio = opDecl(o, fase, 'avvio', { id: idDaChiaveLibero(`avvio|${o.id}|${fase.id}`, 'prodDecls'),
+    note: String(opzioni.note || '').trim() });
   // Il materiale esce **all'avvio della prima fase**, e solo lì: è il primo dei
   // due estremi del ciclo. Le fasi successive non muovono il magazzino, e non
   // per pigrizia — fra le fasi i pezzi non hanno un codice che li nomini.
-  if (opEPrima(o, fase)) opPrelevaMateriale(o, opzioni.materiali, opzioni.note);
+  // I prelievi portano il `declId` dell'avvio (dalla 0.105.6): così annullare un
+  // avvio sbagliato rimette a scaffale proprio il materiale che ha fatto uscire.
+  if (opEPrima(o, fase)) opPrelevaMateriale(o, opzioni.materiali, opzioni.note, `avvio|${avvio.id}`, avvio.id);
   odpAutoStatus(o); touch(o); saveDB();
   return true;
 }
 // `righe` è [{ itemId, qty }]; senza, si preleva il residuo congelato.
-function opPrelevaMateriale(o, righe, note) {
+// `chiave`, quando c'è, fa nascere gli id dei movimenti da lei (vedi opAvvia).
+// `declId`, quando c'è, è la dichiarazione che ha fatto uscire il materiale.
+function opPrelevaMateriale(o, righe, note, chiave, declId) {
   const kind = opKindUscita(o);
   const fase = opPrima(o);
   const lista = righe && righe.length ? righe
     : opMaterialeResiduo(o).map(m => ({ itemId: m.itemId, qty: m.residuo }));
   let n = 0;
-  lista.forEach(r => {
+  lista.forEach((r, i) => {
     const q = Number(r.qty) || 0;
     if (!(q > 0)) return;                   // una riga a zero non è un movimento
-    const extra = { orderId: o.id, lineId: fase ? fase.id : null, declId: r.declId || null };
+    const extra = { orderId: o.id, lineId: fase ? fase.id : null, declId: declId || null };
+    if (chiave) extra.id = idDaChiaveLibero(`${chiave}|${i}|${r.itemId}`, 'movements');
     if (kind === 'clOut') extra.supplierId = fase.supplierId;
     if (addMovement(r.itemId, kind, -q, note || `Materiale per ${o.number}`, extra)) n++;
   });
   return n;
+}
+
+// ─── Il resto del materiale (dalla 0.105.4) ───
+// All'avvio della prima fase si può prelevare meno del previsto (lo scaffale
+// non bastava, il resto arriva dopo). Il residuo restava lì senza un comando
+// per farlo uscire: solo un movimento a mano, scollegato dall'ordine.
+// `righe` [{ itemId, qty }]; senza, tutto il residuo.
+function opPrelevaResto(id, righe, note) {
+  if (!opGuard(id, 'reception')) return false;
+  const o = getOdp(id); if (!o) return false;
+  const prima = opPrima(o);
+  if (!prima || !opAvviata(o, prima)) { showToast('La prima fase non è avviata: il materiale esce con il suo avvio', 'error'); return false; }
+  const lista = (righe || opMaterialeResiduo(o).map(m => ({ itemId: m.itemId, qty: m.residuo })))
+    .filter(r => (Number(r.qty) || 0) > 0);
+  if (!lista.length) { showToast('Non c\'è materiale da prelevare', 'error'); return false; }
+  const n = opPrelevaMateriale(o, lista, note);
+  touch(o); saveDB();
+  return n;
+}
+function opPuoPrelevareResto(o) {
+  const prima = opPrima(o);
+  return !!prima && ['lanciato', 'corso', 'completato'].includes(o.status) && opAvviata(o, prima)
+    && opMaterialeResiduo(o).some(m => m.residuo > 0.000001);
 }
 
 // ─── Dichiarazione di avanzamento ───
@@ -470,7 +527,9 @@ function opRiapriFase(id, faseId) {
   }
   const chiusure = opDecls(o.id, faseId).filter(d => d.kind === 'chiusura');
   if (!chiusure.length && opChiusa(o, o.phases[i])) {
-    showToast('La fase è chiusa perché i pezzi la coprono: per riaprirla annulla una dichiarazione', 'error');
+    showToast(opDaFare(o, o.phases[i]) > 0.000001
+      ? 'La fase è chiusa perché i pezzi la coprono: per riaprirla annulla una dichiarazione'
+      : 'La fase è chiusa perché non le arriva nessun pezzo buono: va riaperta una fase prima', 'error');
     return false;
   }
   chiusure.forEach(d => Store.remove('prodDecls', d.id));
@@ -479,11 +538,32 @@ function opRiapriFase(id, faseId) {
 }
 // Annullare una dichiarazione toglie **i suoi** movimenti, non quelli della
 // fase: è per questo che ogni movimento porta il `declId` di chi l'ha generato.
+//
+// Le stesse regole di opRiapriFase (dalla 0.105.6): una dichiarazione si
+// annulla solo se la fase dopo non è partita. Togliere un avanzamento della 10
+// a 20 già lavorata lasciava la 20 con zero da fare e dieci fatti, mai chiusa,
+// e l'ordine di nuovo «in corso» coi pezzi ormai a magazzino.
+// Un **avvio** si annulla finché la sua fase non ha dichiarazioni: è il rimedio
+// a una fase avviata per sbaglio, e sulla prima fase rimette a scaffale il
+// materiale uscito con lui (il resto prelevato dopo resta uscito).
+function opDichiarazioneAnnullabile(o, d) {
+  if (!o || !d || (d.kind !== 'avanzamento' && d.kind !== 'avvio')) return { ok: false, motivo: 'questa dichiarazione non si annulla' };
+  const fase = (o.phases || []).find(f => f.id === d.phaseId);
+  if (!fase) return { ok: true };
+  const seguente = opPhaseAt(o, opPhaseIndex(o, fase) + 1);
+  if (seguente && opAvviata(o, seguente)) return { ok: false, motivo: `la fase ${seguente.seq} è già avviata: annulla prima le sue dichiarazioni` };
+  if (d.kind === 'avvio' && opDecls(o.id, fase.id).some(x => x.kind === 'avanzamento' || x.kind === 'chiusura')) {
+    return { ok: false, motivo: `la fase ${fase.seq} ha già delle dichiarazioni: annulla prima quelle` };
+  }
+  return { ok: true };
+}
 function opAnnullaDichiarazione(declId) {
   if (!roleGuardShop('docs')) return false;
   const d = (db.prodDecls || []).find(x => x.id === declId); if (!d) return false;
   if (!opGuard(d.odpId, 'reception')) return false;
   const o = getOdp(d.odpId);
+  const ok = opDichiarazioneAnnullabile(o, d);
+  if (o && !ok.ok) { showToast(`Non si può annullare: ${ok.motivo}`, 'error'); return false; }
   (db.movements || []).filter(m => m.declId === declId).forEach(m => Store.remove('movements', m.id));
   Store.remove('prodDecls', declId);
   if (o) { const fase = (o.phases || []).find(f => f.id === d.phaseId); if (fase) opSyncOdlReceived(o, fase); odpAutoStatus(o); touch(o); }
@@ -502,13 +582,53 @@ function opAnnullaDichiarazione(declId) {
 function opOdlIndex() {
   if (_opOdlIdx) return _opOdlIdx;
   const map = new Map();
-  (db.workOrders || []).forEach(o => (o.lines || []).forEach(l => {
+  // Un ordine di lavoro annullato non commissiona più niente: la tratta si
+  // può commissionare di nuovo, e i rientri non si scrivono su di lui.
+  (db.workOrders || []).forEach(o => o.status !== 'annullato' && (o.lines || []).forEach(l => {
     if (l.odpPhaseId) map.set(l.odpPhaseId, { odl: o, line: l });
   }));
   _opOdlIdx = map;
   return map;
 }
 function opOdlDi(fase) { return fase ? (opOdlIndex().get(fase.id) || null) : null; }
+// ── L'ordine di lavoro generato dal fabbisogno (dalla 0.105.8) ──
+// Dal piano gli ordini di lavoro si generano anche **prima** dell'ordine di
+// produzione: la riga porta allora le `phaseKeys` della tratta e il `planId`
+// della testata, non `odpPhaseId`. L'ordine di produzione nato dopo dallo
+// stesso piano non la vedeva, e offriva «genera ordine di lavoro» sulla stessa
+// tratta: un secondo ordine allo stesso terzista per gli stessi pezzi.
+// Una riga così copre la tratta del **primo** ordine di produzione del piano
+// che ha quella fase (non annullato): un ODP rilanciato dopo, per i pezzi che
+// mancano, resta libero di commissionare i suoi. Il legame vale per dire «già
+// commissionata» e per aprire l'ordine, non per scriverne il ricevuto: quei
+// pezzi li registra l'ordine di lavoro stesso, che è nato senza padrone.
+let _opOdlPianoIdx = null;
+function opOdlPianoIndex() {
+  if (_opOdlPianoIdx && _opOdlPianoIdx.db === db) return _opOdlPianoIdx.map;
+  const map = new Map();
+  const odpPerChiave = new Map();
+  (db.prodOrders || []).filter(o => o.planId && o.status !== 'annullato')
+    .slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+      || String(a.number || '').localeCompare(String(b.number || ''), 'it', { numeric: true }))
+    .forEach(o => (o.phases || []).forEach(f => {
+      const k = o.planId + '|' + f.phaseKey;
+      if (f.phaseKey && !odpPerChiave.has(k)) odpPerChiave.set(k, o.id);
+    }));
+  (db.workOrders || []).forEach(w => w.status !== 'annullato' && w.planId && (w.lines || []).forEach(l => {
+    if (l.odpPhaseId) return;
+    const chiavi = String(l.phaseKeys || l.phaseKey || '').split(',').filter(Boolean);
+    chiavi.forEach(c => {
+      const k = w.planId + '|' + c;
+      const odpId = odpPerChiave.get(k);
+      if (odpId && !map.has(odpId + '|' + c)) map.set(odpId + '|' + c, { odl: w, line: l, dalPiano: true });
+    });
+  }));
+  _opOdlPianoIdx = { db, map };
+  return map;
+}
+function opOdlDalPiano(odp, fase) {
+  return (odp && fase && fase.phaseKey) ? (opOdlPianoIndex().get(odp.id + '|' + fase.phaseKey) || null) : null;
+}
 // Tutte le fasi della **tratta** cui la fase appartiene: è la tratta che diventa
 // una riga di ordine di lavoro, non la singola fase. Fasi consecutive dello
 // stesso terzista sono una lavorazione da commissionare, non due.
@@ -521,7 +641,8 @@ function opApreTratta(odp, fase) {
 }
 // Una fase esterna che apre la sua tratta e non è ancora commissionata.
 function opGenerabile(odp, fase) {
-  return !!fase.supplierId && opApreTratta(odp, fase) && !opRunFasi(odp, fase).some(f => opOdlDi(f));
+  return !!fase.supplierId && opApreTratta(odp, fase)
+    && !opRunFasi(odp, fase).some(f => opOdlDi(f) || opOdlDalPiano(odp, f));
 }
 // `received` sulla riga di ordine di lavoro significa **pezzi tornati**, e da
 // quando esiste l'ordine di produzione quel fatto lo dichiara lui. Il campo
@@ -637,16 +758,64 @@ function odpSetField(id, field, value) {
   }
   touch(o); saveDB(); renderOdp();
 }
+// La tendina dello stato non scrive il campo: passa dal comando (dalla
+// 0.105.4). «Annullato» scritto a mano non chiedeva del materiale da rendere,
+// «Lanciato» saltava i controlli del lancio, e «Bozza» su un ordine già
+// avviato riapriva fasi e materiale sotto movimenti già registrati.
+function odpCambiaStato(id, value) {
+  const o = getOdp(id); if (!o) return;
+  renderOdp();   // la tendina torna allo stato vero: lo cambia il comando, se passa
+  if (!value || value === o.status) return;
+  if (value === 'annullato') { odpAnnulla(id); return; }
+  if (value === 'chiuso') { odpChiudi(id); return; }
+  if (o.status === 'bozza') {
+    if (value === 'lanciato') odpLancia(id);
+    else showToast('Un ordine in bozza prima si lancia: «In corso» e «Completato» li dà l\'avanzamento delle fasi', 'error');
+    return;
+  }
+  if (!opGuard(id, 'ops')) return;
+  const dichiarato = opDeclsOf(o).length > 0;
+  if (value === 'bozza') {
+    if (dichiarato) { showToast('Su questo ordine ci sono già dichiarazioni: in bozza non torna. Si annulla, o si annullano prima le dichiarazioni', 'error'); return; }
+    o.status = 'bozza'; touch(o); saveDB(); renderOdp(); showToast('Stato: Bozza');
+    return;
+  }
+  // Lanciato, in corso, completato: li dà l'avanzamento. Da chiuso o annullato
+  // si riapre, e lo stato è quello che le fasi dicono.
+  o.status = 'lanciato'; odpAutoStatus(o); touch(o); saveDB(); renderOdp();
+  if (o.status === value) showToast('Stato: ' + ODP_STATUS[value]);
+  else showToast(`Stato: ${ODP_STATUS[o.status]}. Lo dà l'avanzamento delle fasi`, 'error');
+}
 function delOdp(id) {
   const o = getOdp(id); if (!o || !roleGuard('docs')) return;
+  if (!guardiaDocumentoUltimo(o, db.prodOrders, 'Annullalo invece di eliminarlo.')) return;
+  // Un ordine di lavoro nato da una sua fase si riceve solo dall'ODP: senza
+  // l'ODP quella riga non si potrebbe più ricevere da nessuna parte.
+  const odl = (db.workOrders || []).find(w => w.status !== 'annullato' && (w.lines || []).some(l => l.odpId === id));
+  if (odl) { showToast(`L'ordine di lavoro ${odl.number || ''} ha righe di questo ordine di produzione: annullalo o eliminalo prima.`, 'error'); return; }
   const mov = (db.movements || []).filter(m => m.orderId === id).length;
   const avviso = mov ? `\n\n⚠ Ha ${mov} ${mov === 1 ? 'movimento' : 'movimenti'} di magazzino: eliminandolo la merce torna com'era prima.` : '';
-  askConfirm(`Eliminare l'ordine di produzione ${o.number}?${avviso}`, () => {
-    (db.prodDecls || []).filter(d => d.odpId === id).forEach(d => Store.remove('prodDecls', d.id));
-    (db.movements || []).filter(m => m.orderId === id).forEach(m => Store.remove('movements', m.id));
+  askConfirm(`Eliminare l'ordine di produzione ${o.number}?${avviso}`, () => eliminaSeAncoraUltimo(() => {
+    const x = getOdp(id);
+    return !!x && guardiaDocumentoUltimo(x, db.prodOrders, 'Annullalo invece di eliminarlo.');
+  }, () => {
+    // Dichiarazioni e movimenti se ne vanno con lui, e con lui tornano: un
+    // «Annulla» che rimettesse solo la testata darebbe un ODP completato con le
+    // fasi a zero e il magazzino senza i suoi movimenti.
+    const voci = [];
+    (db.prodDecls || []).filter(d => d.odpId === id).forEach(d => { if (Store.remove('prodDecls', d.id)) voci.push(Store.lastRemoved()); });
+    (db.movements || []).filter(m => m.orderId === id).forEach(m => { if (Store.remove('movements', m.id)) voci.push(Store.lastRemoved()); });
     odpView = 'list'; currentOdpId = null;
-    removeConUndo('prodOrders', id, `Ordine di produzione ${o.number} eliminato`, renderOdp);
-  }, { title: 'Elimina ordine di produzione', ok: 'Elimina' });
+    if (!Store.remove('prodOrders', id)) { renderOdp(); return; }
+    const testa = Store.lastRemoved();
+    renderOdp();
+    toastEliminato(`Ordine di produzione ${o.number} eliminato`, () => {
+      if (!Store.restore(testa)) { showToast(Store.rifiutoRipristino() || 'Non c\'è più niente da ripristinare', 'error'); return; }
+      voci.forEach(v => Store.restore(v));
+      renderOdp();
+      showToast('Ripristinato');
+    });
+  }), { title: 'Elimina ordine di produzione', ok: 'Elimina' });
 }
 
 // ─── La scheda ───
@@ -697,7 +866,7 @@ function renderOdpEdit(id) {
       <div class="modal-field"><label>Commessa</label>
         <select class="lock-contract" onchange="odpSetField('${id}','jobId',this.value)">${jobOptions(o.jobId || '')}</select></div>
       <div class="modal-field"><label>Stato</label>
-        <select onchange="odpSetField('${id}','status',this.value)">
+        <select onchange="odpCambiaStato('${id}',this.value)">
           ${Object.entries(ODP_STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
         </select></div>
       <div class="modal-field" style="grid-column:1/-1"><label>Note</label>
@@ -740,7 +909,7 @@ function odpPhaseRows(o) {
   const id = o.id;
   return (o.phases || []).map(f => {
     const st = opStatoFase(o, f);
-    const legame = opOdlDi(f);
+    const legame = opOdlDi(f) || opOdlDalPiano(o, f);
     const forzata = opForzata(o, f);
     return `<tr class="odp-fase odp-fase-${st}">
       <td><span class="cycle-phase">${esc(String(f.seq))}</span></td>
@@ -787,7 +956,7 @@ function odpPhaseActions(o, f, st, legame) {
   }
   if (legame) {
     cmd.push(`<span class="plandoc-link plandoc-link-sm" ${clickAttrs(`openOdlFromOdp('${legame.odl.id}')`, "Apri l'ordine di lavoro che commissiona questa fase")}>${esc(legame.odl.number)}</span>`);
-  } else if (opGenerabile(o, f) && o.status !== 'bozza') {
+  } else if (opGenerabile(o, f) && o.status !== 'bozza' && canWrite('docs')) {
     cmd.push(link(`opGeneraOdlAsk('${id}','${f.id}')`, 'genera ordine di lavoro',
       'Commissiona questa tratta al terzista: ne nasce un ordine di lavoro con la tariffa del ciclo'));
   }
@@ -801,8 +970,10 @@ function odpMaterialBlock(o) {
       <p class="empty-text" style="text-align:left">Il ciclo di questa parte non ha materiale a magazzino: lo mette chi la lavora. Non c'è niente da prelevare, e infatti non c'è niente da scaricare.</p></div>`;
   }
   const prima = opPrima(o);
+  const resto = opPuoPrelevareResto(o) && canWriteShop('docs')
+    ? `<button class="add-btn-sm" onclick="opPrelevaRestoModal('${esc(o.id)}')" title="Fa uscire il materiale non prelevato all'avvio">Preleva il resto</button>` : '';
   return `<div class="mrp-section">
-    <div class="cycle-section-head"><h3>${ico('package', 'tinted pill', '')} Materiale del ciclo</h3></div>
+    <div class="cycle-section-head"><h3>${ico('package', 'tinted pill', '')} Materiale del ciclo</h3>${resto}</div>
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Esce <strong>una volta sola</strong>, all'avvio della fase ${prima ? esc(String(prima.seq)) : ''}${prima && prima.supplierId ? ` — e va da ${esc(prima.supplierName || '')}` : ''}. Le quantità vengono dal ciclo moltiplicate per i pezzi dell'ordine.</p>
     <div class="table-wrap"><table>
       <thead><tr><th scope="col">Codice</th><th scope="col">Articolo</th><th scope="col" style="width:100px">Per pezzo</th>
@@ -836,8 +1007,9 @@ function odpDeclBlock(o) {
         <td class="num">${d.qty ? fmtQty(d.qty) : '—'}</td>
         <td class="num">${d.scrap ? fmtQty(d.scrap) : '—'}</td>
         <td>${d.kind === 'forzatura' ? `<strong>${esc(d.motivo || '')}</strong>${d.note ? ` <span class="empty-text" style="padding:0">(${esc(d.note)})</span>` : ''}` : esc(d.note || '')}</td>
-        <td>${d.kind === 'avanzamento'
-    ? `<button class="mini-btn danger lock-reception" onclick="opAnnullaDichiarazioneAsk('${d.id}')" title="Annulla questa dichiarazione e i movimenti che ha generato">${ico('trash', 'tinted', 'Annulla')}</button>`
+        <td>${(d.kind === 'avanzamento' || d.kind === 'avvio') && opDichiarazioneAnnullabile(o, d).ok
+    ? `<button class="mini-btn danger lock-reception" onclick="opAnnullaDichiarazioneAsk('${d.id}')" title="${d.kind === 'avvio'
+      ? "Annulla l'avvio della fase e rimette a magazzino il materiale uscito con lui" : 'Annulla questa dichiarazione e i movimenti che ha generato'}">${ico('trash', 'tinted', 'Annulla')}</button>`
     : ''}</td></tr>`).join('')}</tbody>
     </table></div></div>`;
 }
@@ -1017,6 +1189,32 @@ function opAvviaSave(id, faseId) {
   if (sotto.length) showToast('Fase avviata, ma l\'esistente va sotto zero: ' + sotto.join('; '), 'error');
   else showToast('Fase avviata');
 }
+function opPrelevaRestoModal(id) {
+  const o = getOdp(id); if (!o || !roleGuardShop('docs')) return;
+  const prima = opPrima(o); if (!prima) return;
+  const righe = opMaterialeResiduo(o).filter(m => m.residuo > 0.000001);
+  window.__opRestoMat = righe.map(m => m.itemId);
+  openModal(`${opTestaModal(o, prima, 'Preleva il resto del materiale')}
+    <div style="display:flex;flex-direction:column;gap:6px">${righe.map((m, i) => `<div class="mgmt-item">
+      <span style="width:110px;font-family:var(--mono)">${esc(m.code)}</span>
+      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">già uscito ${fmtQty(m.gia)} ${esc(m.uom)} · a magazzino ${fmtQty(onHandOf(m.itemId))}</span></span>
+      <input class="num" type="number" id="op-pr-${i}" min="0" step="any" value="${esc(String(+m.residuo.toFixed(4)))}" style="width:110px" aria-label="Quantità di ${esc(m.code)} che esce">
+      <span class="empty-text" style="padding:0;width:40px">${esc(m.uom)}</span>
+    </div>`).join('')}</div>
+    <p class="empty-text" style="text-align:left;padding:8px 0">Esce come all'avvio: ${prima.supplierId ? `verso <strong>${esc(prima.supplierName || supplierName(prima.supplierId) || '')}</strong>, con un'uscita a conto lavoro` : 'come consumo di produzione'}.</p>
+    <div class="modal-field"><label>Nota</label><input id="op-pr-note" placeholder="es. lotto 13 / bolla 418" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="opPrelevaRestoSave('${esc(id)}')">Preleva</button>
+    </div>`, true, 'form');
+}
+function opPrelevaRestoSave(id) {
+  const righe = (window.__opRestoMat || []).map((itemId, i) => ({ itemId, qty: Math.max(0, rawNum('op-pr-' + i)) }));
+  const n = opPrelevaResto(id, righe, val('op-pr-note'));
+  if (n === false) return;
+  closeModal(); renderOdp();
+  showToast(n === 1 ? '1 materiale prelevato' : n + ' materiali prelevati');
+}
 function opDichiaraModal(id, faseId) {
   const x = opFaseDi(id, faseId); if (!x) return;
   const { o, f } = x;
@@ -1087,7 +1285,10 @@ function opRiapriFaseAsk(id, faseId) {
 }
 function opAnnullaDichiarazioneAsk(declId) {
   const d = (db.prodDecls || []).find(x => x.id === declId); if (!d) return;
-  askConfirm(`Annullare questa dichiarazione di ${fmtQty(d.qty)} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lei.`, () => {
+  const domanda = d.kind === 'avvio'
+    ? 'Annullare l\'avvio di questa fase?\nIl materiale uscito con lui torna a magazzino, e la fase torna da avviare.'
+    : `Annullare questa dichiarazione di ${fmtQty(d.qty)} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lei.`;
+  askConfirm(domanda, () => {
     if (!opAnnullaDichiarazione(declId)) return;
     renderOdp(); showToast('Dichiarazione annullata');
   }, { title: 'Annulla la dichiarazione', ok: 'Annulla' });
@@ -1100,12 +1301,7 @@ function opAnnullaDichiarazioneAsk(declId) {
 // piano è il caso normale: un urgente, un ricambio, una prova. Si sceglie la
 // parte fra quelle che un **ciclo** ce l'hanno — le altre aprirebbero un ordine
 // senza nessuna successione da seguire.
-function nextOdpNumber() {
-  const prefix = `ODP-${new Date().getFullYear()}-`;
-  const seqs = (db.prodOrders || []).filter(o => (o.number || '').startsWith(prefix))
-    .map(o => parseInt((o.number || '').slice(prefix.length), 10) || 0);
-  return prefix + String((seqs.length ? Math.max(...seqs) : 0) + 1).padStart(3, '0');
-}
+function nextOdpNumber() { return numeroProgressivo('ODP'); }
 // La fabbrica unica: dal fabbisogno e dalla mano passano di qui entrambe, così
 // un ordine scritto a mano non è una seconda specie di ordine.
 function odpNew(part, qty, dueDate, extra) {
@@ -1196,10 +1392,13 @@ function odpNewSave(partId) {
   const part = getItem(partId); if (!part || !roleGuard('docs')) return;
   const qty = rawNum('odp-new-qty');
   if (!(qty > 0)) { showToast('Serve una quantità maggiore di zero', 'error'); return; }
-  const o = odpNew(part, qty, val('odp-new-due'));
-  db.prodOrders.push(o); saveDB();
-  closeModal(); currentOdpId = o.id; odpView = 'edit'; renderOdp();
-  showToast(`Ordine di produzione ${o.number} creato`);
+  const due = val('odp-new-due');
+  return conNumeri({ ODP: 1 }, () => {
+    const o = odpNew(part, qty, due);
+    db.prodOrders.push(o); saveDB();
+    closeModal(); currentOdpId = o.id; odpView = 'edit'; renderOdp();
+    showToast(`Ordine di produzione ${o.number} creato`);
+  });
 }
 function openOdlFromOdp(odlId) { setView('odl'); openOdlEdit(odlId); }
 function openOdpFromOdl(odpId) { setView('odp'); openOdpEdit(odpId); }
@@ -1283,7 +1482,7 @@ function exportOdpExcel(id) { const o = getOdp(id); if (o) exportListXlsx(odpDoc
 // quello che l'ordine di produzione gli ha promesso.
 function opRunDocRow(o, fase) {
   const part = getItem(o.itemId); if (!part) return null;
-  const qty = opDaFare(o, fase);
+  const qty = opAttesiFase(o, fase);
   const fasi = opRunFasi(o, fase).map(f => mrpPhaseRow({
     item: part, row: f, opIndex: f.opIndex, phaseKey: f.phaseKey, phaseNo: f.seq,
     workCenterId: f.workCenterId || '', supplierId: f.supplierId || '',
@@ -1325,12 +1524,19 @@ function opDocHead(o, supplierId) {
     odpId: o.id, supplierConfirmation: '', notes: '', notesInternal: '', active: true,
   };
 }
+// Un ordine di lavoro è un documento con un prezzo e un fornitore: lo scrive chi
+// scrive gli ordini, non l'officina (dalla 0.105.6). La guardia della ricezione
+// da sola accettava l'area `shop`.
 function opGeneraOdl(id, faseId) {
-  if (!opGuard(id, 'reception')) return null;
+  if (!roleGuard('docs') || !opGuard(id, 'reception')) return null;
   const x = opFaseDi(id, faseId); if (!x) return null;
   const { o, f } = x;
   if (!f.supplierId) { showToast('Questa fase è interna: non c\'è nessun terzista a cui commissionarla', 'error'); return null; }
-  if (!opGenerabile(o, f)) { showToast('Questa tratta è già in un ordine di lavoro', 'error'); return null; }
+  if (!opGenerabile(o, f)) {
+    const gia = opRunFasi(o, f).map(x => opOdlDi(x) || opOdlDalPiano(o, x)).find(Boolean);
+    showToast(`Questa tratta è già in un ordine di lavoro${gia ? ' (' + gia.odl.number + ')' : ''}`, 'error');
+    return null;
+  }
   const r = opRunDocRow(o, f); if (!r) return null;
   const linea = Object.assign(planPhaseDocLine(r, true), { received: 0, odpId: o.id, odpPhaseId: f.id });
   const odl = stampNew(Object.assign({ id: gid(), number: nextOdlNumber() }, opDocHead(o, f.supplierId), { lines: [linea] }));
@@ -1343,11 +1549,11 @@ function opGeneraOdlAsk(id, faseId) {
   const { o, f } = x;
   const fasi = opRunFasi(o, f);
   const quali = fasi.length === 1 ? `la fase ${f.seq}` : `le fasi ${fasi[0].seq}-${fasi[fasi.length - 1].seq}`;
-  askConfirm(`Commissionare ${quali} a ${f.supplierName || supplierName(f.supplierId) || 'questo terzista'}?\n${fmtQty(opDaFare(o, f))} pezzi di ${o.code || ''}.`, () => {
+  askConfirm(`Commissionare ${quali} a ${f.supplierName || supplierName(f.supplierId) || 'questo terzista'}?\n${fmtQty(opAttesiFase(o, f))} pezzi di ${o.code || ''}.`, () => conNumeri({ ODL: 1 }, () => {
     const odl = opGeneraOdl(id, faseId); if (!odl) { renderOdp(); return; }
     renderOdp();
     showToast(`Ordine di lavoro ${odl.number} creato`, 'success');
-  }, { title: 'Genera ordine di lavoro', ok: 'Genera', safe: true });
+  }), { title: 'Genera ordine di lavoro', ok: 'Genera', safe: true });
 }
 // Il rimando che l'ordine di lavoro disegna al posto dei suoi comandi di conto
 // lavoro. Il magazzino ha **un padrone solo** per le parti coperte da un ordine

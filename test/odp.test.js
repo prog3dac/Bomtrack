@@ -534,6 +534,57 @@ describe('ODP: il fabbisogno', () => {
       'la fase coperta esce dalla generazione diretta; le altre restano, ed è la convivenza');
   });
 
+  // Dalla 0.105.8. Gli ordini di lavoro generati dal piano prima dell'ODP
+  // portano le chiavi di fase, non il legame con la fase dell'ordine: l'ODP
+  // nato dopo li ignorava e offriva di commissionare di nuovo la stessa tratta.
+  it('una tratta già commissionata dal piano non si rigenera dall\'ODP', () => {
+    const app = conDb({
+      plans: [{ id: 'pl1', number: 'FAB-2026-001', title: 'Lotto', date: '2026-07-01', notes: '',
+        lines: [{ id: 'l1', itemId: 'mista', qty: 4, dueDate: '2026-09-30' }], active: true, jobId: null }],
+    });
+    const odl = app.eval(`(() => { const p = getPlan('pl1');
+      const g = planDocGroups(planDocRows(p, 'odl'), 'odl')[0];
+      const w = planNewOdl(p, g.supplierId, g.rows); saveDB(); return w.number; })()`);
+    const r = JSON.parse(app.eval(`(() => { const p = getPlan('pl1');
+      const o = planNewOdp(p, planRowIndex(p).get('make#mista')); o.status = 'lanciato'; saveDB(); invalidateCaches();
+      const f = o.phases.find(x => x.supplierId);
+      const prima = db.workOrders.length;
+      const gen = opGenerabile(o, f);
+      const x = opGeneraOdl(o.id, f.id);
+      return JSON.stringify({ gen, creato: !!x, n: db.workOrders.length - prima, link: (opOdlDalPiano(o, f) || {}).odl ? opOdlDalPiano(o, f).odl.number : null }); })()`));
+    assert.equal(r.gen, false, 'la tratta risulta già commissionata');
+    assert.equal(r.creato, false);
+    assert.equal(r.n, 0, 'nessun secondo ordine di lavoro');
+    assert.equal(r.link, odl, 'e la fase rimanda all\'ordine nato dal piano');
+  });
+
+  it('un ODP rilanciato per i pezzi mancanti commissiona i suoi', () => {
+    const app = conDb({
+      plans: [{ id: 'pl1', number: 'FAB-2026-001', title: 'Lotto', date: '2026-07-01', notes: '',
+        lines: [{ id: 'l1', itemId: 'mista', qty: 4, dueDate: '2026-09-30' }], active: true, jobId: null }],
+    });
+    const r = JSON.parse(app.eval(`(() => { const p = getPlan('pl1');
+      const g = planDocGroups(planDocRows(p, 'odl'), 'odl')[0];
+      planNewOdl(p, g.supplierId, g.rows);
+      const o1 = planNewOdp(p, planRowIndex(p).get('make#mista')); o1.createdAt = '2026-07-01T08:00:00.000Z';
+      const o2 = odpNew(getItem('mista'), 1, '2026-09-30', { planId: 'pl1' }); o2.createdAt = '2026-07-02T08:00:00.000Z';
+      db.prodOrders.push(o2); o1.status = o2.status = 'lanciato'; saveDB(); invalidateCaches();
+      const f1 = o1.phases.find(x => x.supplierId), f2 = o2.phases.find(x => x.supplierId);
+      return JSON.stringify({ primo: opGenerabile(o1, f1), secondo: opGenerabile(o2, f2) }); })()`));
+    assert.equal(r.primo, false);
+    assert.equal(r.secondo, true);
+  });
+
+  it('il contrario resta vero: una tratta commissionata dall\'ODP non si ordina dal piano', () => {
+    const app = conDb({
+      plans: [{ id: 'pl1', number: 'FAB-2026-001', title: 'Lotto', date: '2026-07-01', notes: '',
+        lines: [{ id: 'l1', itemId: 'mista', qty: 4, dueDate: '2026-09-30' }], active: true, jobId: null }],
+    });
+    app.eval(`(() => { const p = getPlan('pl1'); const o = planNewOdp(p, planRowIndex(p).get('make#mista'));
+      o.status = 'lanciato'; saveDB(); invalidateCaches(); opGeneraOdl(o.id, o.phases.find(x => x.supplierId).id); invalidateCaches(); })()`);
+    assert.equal(Number(app.eval(`planDocsAvailable(getPlan('pl1'), 'odl')`)), 0);
+  });
+
   it('un ordine annullato smette di coprire, e la parte torna lanciabile', () => {
     const app = app0();
     app.eval(`(function(){ const p = getPlan('pl1'); const o = planNewOdp(p, planRowIndex(p).get('make#interna'));
@@ -570,5 +621,302 @@ describe('ODP: il fabbisogno', () => {
     assert.equal(dal.qty, mano.qty);
     assert.equal(dal.plan, 'pl1');
     assert.equal(mano.plan, null, "scritto a mano non è legato a nessun piano, e nel piano la parte resta da fabbricare");
+  });
+});
+
+// 0.105.4: la tendina dello stato passa dai comandi, e il materiale non
+// prelevato all'avvio ha un comando suo.
+describe('ODP: lo stato dai comandi, e il resto del materiale', () => {
+  const st = (app, id) => app.eval(`getOdp(${JSON.stringify(id)}).status`);
+
+  it('«Annullato» dalla tendina chiede del materiale da rendere, come il comando', () => {
+    const app = conDb();
+    app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`);
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    app.eval('globalThis.__m = ""; { const vero = openModal; openModal = (h, ...r) => { __m = h; return vero(h, ...r); }; }');
+    app.eval(`odpCambiaStato('odp-interna', 'annullato')`);
+    assert.equal(st(app, 'odp-interna'), 'corso', 'non cambia finché non si conferma');
+    assert.match(app.ctx.__m, /Quanto ne torna/);
+  });
+
+  it('«Bozza» e «Lanciato» non tornano indietro sopra le dichiarazioni', () => {
+    const app = conDb();
+    app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`);
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    app.eval(`odpCambiaStato('odp-interna', 'bozza')`);
+    assert.equal(st(app, 'odp-interna'), 'corso');
+    app.eval(`odpCambiaStato('odp-interna', 'lanciato')`);
+    assert.equal(st(app, 'odp-interna'), 'corso', 'lo stato lo dà l\'avanzamento');
+  });
+
+  it('dalla bozza si passa solo lanciando, con i controlli del lancio', () => {
+    const app = conDb();
+    lancia(app, 'interna', 10);
+    app.eval(`odpCambiaStato('odp-interna', 'bozza')`);
+    assert.equal(st(app, 'odp-interna'), 'bozza', 'senza dichiarazioni torna in bozza');
+    app.eval(`getOdp('odp-interna').qty = 0`);
+    app.eval(`odpCambiaStato('odp-interna', 'lanciato')`);
+    assert.equal(st(app, 'odp-interna'), 'bozza', 'a zero pezzi non si lancia');
+    app.eval(`getOdp('odp-interna').qty = 10; odpCambiaStato('odp-interna', 'corso')`);
+    assert.equal(st(app, 'odp-interna'), 'bozza');
+    app.eval(`odpCambiaStato('odp-interna', 'lanciato')`);
+    assert.equal(st(app, 'odp-interna'), 'lanciato');
+  });
+
+  it('«Chiuso» conferma, e si riapre allo stato che dicono le fasi', () => {
+    const app = conDb();
+    app.eval('askConfirm = (m, si) => si();');
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    app.eval(`odpCambiaStato('odp-interna', 'chiuso')`);
+    assert.equal(st(app, 'odp-interna'), 'chiuso');
+    app.eval(`odpUnlockedId = 'odp-interna'; odpCambiaStato('odp-interna', 'completato')`);
+    assert.equal(st(app, 'odp-interna'), 'corso');
+  });
+
+  it('«Preleva il resto» fa uscire quello che all\'avvio non era uscito', () => {
+    const app = conDb();
+    app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`);
+    lancia(app, 'esterna', 10);
+    assert.equal(app.eval(`opPrelevaResto('odp-esterna')`), false, 'prima dell\'avvio no');
+    avvia(app, 'odp-esterna', 0, { materiali: [{ itemId: 'tondo', qty: 12 }] });
+    assert.equal(onHand(app, 'tondo'), 88);
+    assert.equal(app.eval(`opPuoPrelevareResto(getOdp('odp-esterna'))`), true);
+    assert.match(app.eval(`odpMaterialBlock(getOdp('odp-esterna'))`), /Preleva il resto/);
+    assert.equal(app.eval(`opPrelevaResto('odp-esterna')`), 1);
+    assert.equal(onHand(app, 'tondo'), 80, 'esce il residuo, otto chili');
+    assert.deepEqual(movimenti(app).filter(m => m.kind === 'clOut').map(m => m.qty), [-12, -8], 'verso lo stesso terzista');
+    assert.equal(movimenti(app).filter(m => m.kind === 'clOut').every(m => m.sup === 'beta'), true);
+    assert.equal(app.eval(`opPuoPrelevareResto(getOdp('odp-esterna'))`), false, 'non resta niente');
+    assert.equal(app.eval(`opPrelevaResto('odp-esterna')`), false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  Il piano vede quello che l'ODP ha fatto (0.105.5)
+// ═══════════════════════════════════════════════════════════
+describe('Il piano e i suoi ordini di produzione', () => {
+  const riga = (app, id) => JSON.parse(app.eval(`(invalidateCaches(), JSON.stringify((() => {
+    const r = mrpMakeRows(getPlan('pl1')).find(x => x.item.id === ${JSON.stringify(id)});
+    return { qty: r.qty, ordina: r.qtyOrder, bloccata: planBloccata(planDocumentedKeys('pl1').get(r.makeKey), 'odp', r),
+      fatti: prodottiDi('pl1', r.item.id) };
+  })()))`));
+
+  it('un ODP aperto copre la parte: niente da rilanciare', () => {
+    const app = conDb();
+    lancia(app, 'interna', 6);
+    assert.deepEqual(riga(app, 'interna'), { qty: 6, ordina: 0, bloccata: true, fatti: 0 });
+  });
+
+  it('chiuso con meno pezzi buoni, il piano lo vede e propone quelli che mancano', () => {
+    const app = conDb();
+    lancia(app, 'interna', 6);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 4, scrap: 2 });
+    avvia(app, 'odp-interna', 1);
+    dichiara(app, 'odp-interna', 1, { qty: 4, scrap: 0 });
+    assert.equal(app.eval(`getOdp('odp-interna').status`), 'completato');
+    assert.deepEqual(riga(app, 'interna'), { qty: 6, ordina: 2, bloccata: false, fatti: 4 });
+    assert.equal(app.eval(`(invalidateCaches(), planDocsAvailable(getPlan('pl1'), 'odp'))`), 1);
+  });
+
+  it('i pezzi di un altro, liberi a scaffale, non vanno a un piano che ha già il suo ODP', () => {
+    const app = conDb();
+    lancia(app, 'interna', 6);
+    app.eval(`addMovement('interna', 'carico', 6, 'liberi')`);
+    // Il piano 2 ha bisogno anche lui di 6 pezzi, e consegna dopo: senza la
+    // correzione il piano 1, più urgente, si prendeva anche quelli liberi.
+    app.eval(`db.plans.push({ id: 'pl2', number: 'FAB-2026-002', date: '2026-07-02', active: true,
+      lines: [{ id: 'l2', itemId: 'grp', qty: 2, dueDate: '2026-10-30' }] }); invalidateCaches();`);
+    const sc = JSON.parse(app.eval(`(invalidateCaches(), JSON.stringify(['pl1', 'pl2'].map(id => (scaffaleIndex().get(id).quota.get('interna') || 0))))`));
+    assert.deepEqual(sc, [0, 6]);
+  });
+});
+
+describe('Ordine di lavoro da un ODP (0.105.5)', () => {
+  it('commissionato prima che i pezzi arrivino, chiede quelli che arriveranno', () => {
+    const app = conDb();
+    lancia(app, 'mista', 10);
+    avvia(app, 'odp-mista', 0);
+    dichiara(app, 'odp-mista', 0, { qty: 3, scrap: 1 });
+    const l = JSON.parse(app.eval(`(function(){ const o = getOdp('odp-mista');
+      return JSON.stringify(opGeneraOdl(o.id, o.phases[1].id).lines[0]); })()`));
+    assert.equal(l.qty, 9, 'dieci lanciati, uno scartato alla fase prima');
+  });
+
+  it('uno annullato si può sostituire, e i rientri non vanno più su di lui', () => {
+    const app = conDb();
+    lancia(app, 'esterna', 6);
+    const primo = app.eval(`(function(){ const o = getOdp('odp-esterna'); return opGeneraOdl(o.id, o.phases[0].id).id; })()`);
+    app.eval(`db.workOrders.find(w => w.id === '${primo}').status = 'annullato'; invalidateCaches();`);
+    const secondo = app.eval(`(function(){ const o = getOdp('odp-esterna'); const w = opGeneraOdl(o.id, o.phases[0].id); return w ? w.id : null; })()`);
+    assert.ok(secondo && secondo !== primo);
+  });
+});
+
+describe('ODP: annullare, chiudere da sole, chi commissiona (0.105.6)', () => {
+  const statoOdp = app => app.eval(`getOdp('odp-interna').status`);
+  const decl = (app, kind, i) => app.eval(`(function(){ const o = getOdp('odp-interna');
+    const d = db.prodDecls.filter(x => x.odpId === o.id && x.phaseId === o.phases[${i}].id && x.kind === '${kind}')[0];
+    return d ? d.id : null; })()`);
+  const annulla = (app, id) => app.eval(`opAnnullaDichiarazione(${JSON.stringify(id)})`);
+  const conTondo = () => { const app = conDb(); app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`); return app; };
+
+  it('un avanzamento della 10 non si annulla se la 20 è già partita', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 10 });
+    avvia(app, 'odp-interna', 1);
+    dichiara(app, 'odp-interna', 1, { qty: 10 });
+    assert.equal(statoOdp(app), 'completato');
+    assert.equal(annulla(app, decl(app, 'avanzamento', 0)), false);
+    assert.equal(statoOdp(app), 'completato', "l'ordine resta coerente coi pezzi a magazzino");
+    assert.equal(onHand(app, 'interna'), 10);
+    // Annullate prima le dichiarazioni della 20 (avanzamento e avvio), la 10 si annulla.
+    assert.equal(annulla(app, decl(app, 'avanzamento', 1)), true);
+    assert.equal(annulla(app, decl(app, 'avvio', 1)), true);
+    assert.equal(annulla(app, decl(app, 'avanzamento', 0)), true);
+  });
+
+  it('un avvio sbagliato si annulla e rimette a scaffale il materiale', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    assert.equal(onHand(app, 'tondo'), 80);
+    const avvio = decl(app, 'avvio', 0);
+    assert.ok(app.eval(`db.movements.filter(m => m.orderId === 'odp-interna').every(m => m.declId === ${JSON.stringify(avvio)})`),
+      "i prelievi portano l'avvio che li ha fatti");
+    assert.ok(app.eval(`odpDeclBlock(getOdp('odp-interna')).includes('opAnnullaDichiarazioneAsk')`), "e l'avvio ha il suo comando");
+    assert.equal(annulla(app, avvio), true);
+    assert.equal(onHand(app, 'tondo'), 100);
+    assert.equal(stato(app, 'odp-interna', 0), 'avviabile');
+    assert.equal(statoOdp(app), 'lanciato');
+    // Riavviata, il materiale esce di nuovo, una volta.
+    assert.equal(avvia(app, 'odp-interna', 0), true);
+    assert.equal(onHand(app, 'tondo'), 80);
+  });
+
+  it('un avvio con già delle dichiarazioni non si annulla', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 4 });
+    assert.equal(annulla(app, decl(app, 'avvio', 0)), false);
+    assert.equal(onHand(app, 'tondo'), 80);
+    assert.ok(!app.eval(`odpDeclBlock(getOdp('odp-interna')).includes("opAnnullaDichiarazioneAsk('${decl(app, 'avvio', 0)}')")`));
+  });
+
+  it('le fasi che non ricevono pezzi buoni si chiudono da sole', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 3);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 0, scrap: 3 });
+    assert.equal(stato(app, 'odp-interna', 1), 'chiusa');
+    assert.equal(statoOdp(app), 'completato');
+    assert.equal(app.eval(`(invalidateCaches(), prodWipInCasa('tondo'))`), 0, 'il materiale non resta nel lavoro in corso');
+  });
+
+  it('una fase vuota resta aperta finché la precedente non è chiusa', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 3);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 0, scrap: 1 });
+    assert.equal(stato(app, 'odp-interna', 1), 'attesa');
+  });
+
+  it("l'officina non commissiona fasi a un terzista, e non vede il comando", () => {
+    const app = conDb();
+    lancia(app, 'esterna', 10);
+    app.asRole('officina');
+    assert.equal(app.eval(`(function(){ const o = getOdp('odp-esterna'); return !!opGeneraOdl(o.id, o.phases[0].id); })()`), false);
+    assert.equal(app.eval('db.workOrders.length'), 0);
+    assert.ok(!app.eval(`odpPhaseRows(getOdp('odp-esterna')).includes('opGeneraOdlAsk')`));
+    app.asRole('acquisti');
+    assert.ok(app.eval(`odpPhaseRows(getOdp('odp-esterna')).includes('opGeneraOdlAsk')`));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  Lotto, scorta minima e importo delle parti da lanciare (0.105.6)
+// ═══════════════════════════════════════════════════════════
+// Le quantità dei piani con parti a lotto o a scorta cambiano di proposito: la
+// regola è quella degli acquisti (netRequirement), e i test la fissano qui.
+describe('ODP dal piano: lotto, scorta minima, importo', () => {
+  const ordina = (app, planId) => Number(app.eval(`(invalidateCaches(),
+    mrpMakeRows(getPlan(${JSON.stringify(planId || 'pl1')})).find(x => x.item.id === 'interna').qtyOrder)`));
+  const conParte = campi => {
+    const app = conDb();
+    app.eval(`Object.assign(getItem('interna'), ${JSON.stringify(campi || {})}); invalidateCaches();`);
+    return app;
+  };
+  const lanciaDalPiano = (app, planId) => app.eval(`(function(){ const p = getPlan(${JSON.stringify(planId || 'pl1')});
+    const o = planNewOdp(p, planRowIndex(p).get('make#interna')); saveDB(); invalidateCaches(); return o.qty; })()`);
+
+  it('la scheda di generazione mostra il costo dei pezzi da lanciare, non zero', () => {
+    const app = conDb();
+    const costo = Number(app.eval(`costOf('interna').total`));
+    assert.ok(costo > 0);
+    const html = () => app.eval(`(invalidateCaches(), planDocsBody(planDocGroups(planDocRows(getPlan('pl1'), 'odp')
+      .filter(r => r.qtyOrder > 0), 'odp'), 'pl1', 'odp'))`);
+    assert.ok(html().includes(app.eval(`fmtN(${costo * 6})`)), 'sei pezzi al loro costo');
+    // Dichiarati due pezzi fatti, l'importo è quello dei quattro che restano.
+    app.eval(`produzioneDichiara('pl1', 'interna', 2, '')`);
+    assert.equal(Number(app.eval(`(invalidateCaches(), mrpMakeRows(getPlan('pl1'))[0].amount)`)), costo * 4);
+    assert.ok(html().includes(app.eval(`fmtN(${costo * 4})`)));
+  });
+
+  it('senza lotto e senza scorta la quantità resta quella del piano', () => {
+    assert.equal(ordina(conParte()), 6);
+  });
+
+  it('la quantità si arrotonda al lotto di riordino della parte', () => {
+    assert.equal(ordina(conParte({ lotSize: 50 })), 50, 'a multipli');
+    assert.equal(ordina(conParte({ lotSize: 4 })), 8, 'sei pezzi sono due lotti da quattro');
+    assert.equal(ordina(conParte({ lotSize: 10, lotMode: 'min' })), 10, 'sotto la soglia si lancia la soglia');
+    assert.equal(ordina(conParte({ lotSize: 4, lotMode: 'min' })), 6, 'sopra la soglia si lancia quello che manca');
+  });
+
+  it('il piano più urgente riporta lo scaffale alla scorta minima, una volta sola', () => {
+    const app = conParte({ safetyStock: 20 });
+    app.eval(`db.plans.push({ id: 'pl2', number: 'FAB-2026-002', date: '2026-07-02', active: true,
+      lines: [{ id: 'l2', itemId: 'grp', qty: 1, dueDate: '2026-12-30' }] }); invalidateCaches();`);
+    assert.equal(ordina(app, 'pl1'), 26, 'sei per il piano, venti per la scorta');
+    assert.equal(ordina(app, 'pl2'), 3, 'il secondo della fila non se la ricarica');
+    assert.equal(lanciaDalPiano(app, 'pl1'), 26);
+    assert.equal(ordina(app, 'pl1'), 0, "lanciato l'ODP, i suoi pezzi attesi chiudono il buco");
+    assert.equal(ordina(app, 'pl2'), 3);
+  });
+
+  it('con la scorta e il lotto insieme si lancia il lotto che le copre', () => {
+    const app = conParte({ safetyStock: 20, lotSize: 50 });
+    assert.equal(ordina(app), 50);
+    lanciaDalPiano(app);
+    assert.equal(ordina(app), 0);
+    // Finito l'ODP e versati i 50, il piano non ne propone altri: i 44 in più
+    // sono a scaffale, sopra la scorta.
+    app.eval(`(function(){ addMovement('tondo', 'carico', 200, '');
+      const o = db.prodOrders[0]; opLancia(o.id);
+      o.phases.forEach(f => { opAvvia(o.id, f.id, {}); opDichiara(o.id, f.id, { qty: 50 }); }); })()`);
+    assert.equal(app.eval(`db.prodOrders[0].status`), 'completato');
+    assert.equal(onHand(app, 'interna'), 50);
+    assert.equal(ordina(app), 0);
+  });
+
+  it('uno scaffale già sopra la scorta non fa lanciare niente in più', () => {
+    const app = conParte({ safetyStock: 20 });
+    app.eval(`(addMovement('interna', 'carico', 22, ''), invalidateCaches())`);
+    // 22 a scaffale, 20 di scorta: il piano ne prende 2 e ne fabbrica 4.
+    assert.equal(ordina(app), 4);
+  });
+
+  it('la scheda dice da dove vengono i pezzi in più', () => {
+    const app = conParte({ safetyStock: 20, lotSize: 50 });
+    const html = app.eval(`(invalidateCaches(), planDocsBody(planDocGroups(planDocRows(getPlan('pl1'), 'odp')
+      .filter(r => r.qtyOrder > 0), 'odp'), 'pl1', 'odp'))`);
+    assert.match(html, /per la scorta minima/);
+    assert.match(html, /lotto di 50/);
   });
 });

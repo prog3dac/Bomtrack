@@ -327,6 +327,24 @@ describe('Dalla richiesta all\'ordine', () => {
     assert.equal(rfq(a).status, 'chiusa');
   });
 
+  // 0.105.5: ogni clic su «Crea ordine» ne creava uno nuovo.
+  it('un secondo ordine dalla stessa richiesta si chiede prima di crearlo', () => {
+    const a = conRfq(app(), 'ricevuta', [3]);
+    a.eval('orderFromRfq("r1")');
+    a.eval('orderFromRfq("r1")');
+    assert.equal(a.eval('db.orders.length'), 1, 'senza conferma non nasce');
+    a.eval('confirmYes()');
+    assert.equal(a.eval('db.orders.length'), 2, 'confermato sì');
+  });
+
+  it('un ordine creato mentre si aspettavano i numeri ferma il secondo', () => {
+    const a = conRfq(app(), 'ricevuta', [3]);
+    a.eval('globalThis.__attesa = []; conNumeri = (n, fn) => { __attesa.push(fn); };');
+    a.eval('orderFromRfq("r1"); orderFromRfq("r1")');
+    a.eval('__attesa.forEach(fn => fn())');
+    assert.equal(a.eval('db.orders.length'), 1);
+  });
+
   it('da una bozza si può generare un ordine di prova senza chiuderla', () => {
     const a = conRfq(app(), 'bozza', [3]);
     a.eval('orderFromRfq("r1")');
@@ -421,5 +439,25 @@ describe('Una riga da catalogo nasce nell\'unità dell\'articolo, mai in quella 
       lines: [{ id: 'ol1', itemId: 'bar', code: 'BAR', description: 'Barra', uom: 'm', qty: 5, price: 10, deliveryDate: '', note: '' }] });`);
     const warn = a.eval(`ordLineListinoWarn(getOrder("o1"), getOrder("o1").lines[0])`);
     assert.match(warn, /16/, 'il costo convertito (16/m), non il prezzo grezzo (2/kg), deve comparire nell\'avviso');
+  });
+});
+
+// 0.105.5: lo stato automatico riscriveva quello scelto a mano a ogni modifica.
+describe('Uno stato scelto a mano', () => {
+  it('una nota o una data confermata non lo cambiano', () => {
+    const a = conRfq(app(), 'ricevuta', [3]);
+    a.eval('orderFromRfq("r1")');
+    const id = a.eval('db.orders[0].id'), riga = a.eval('db.orders[0].lines[0].id');
+    a.eval(`getOrder('${id}').status = 'evaso'`);   // chiuso corto, a mano
+    a.eval(`docSetLine('order', '${id}', '${riga}', 'note', 'il resto non arriva')`);
+    a.eval(`docSetLine('order', '${id}', '${riga}', 'confirmedDate', '2026-11-02')`);
+    assert.equal(a.eval(`getOrder('${id}').status`), 'evaso');
+  });
+  it('«Confermato» resta anche senza il numero di conferma', () => {
+    const a = conRfq(app(), 'ricevuta', [3]);
+    a.eval('orderFromRfq("r1")');
+    const id = a.eval('db.orders[0].id');
+    a.eval(`getOrder('${id}').status = 'confermato'; ordAutoStatus(getOrder('${id}'))`);
+    assert.equal(a.eval(`getOrder('${id}').status`), 'confermato');
   });
 });

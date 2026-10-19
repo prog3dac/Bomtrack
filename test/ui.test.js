@@ -245,6 +245,20 @@ describe('Da dove viene questo costo', () => {
     approx(c[0].line, 50);
   });
 
+  // Il costo riga di una foglia è per un padre solo: sotto un gruppo usato due
+  // volte va moltiplicato per due, o la classifica indica il colpevole sbagliato.
+  it('un sottoassieme usato più volte moltiplica i suoi componenti', () => {
+    const a = app(makeDb({ items: [
+      asm('mac', 'macchina', { components: [comp('g1', 2)] }),
+      asm('g1', 'gruppo', { components: [comp('m1', 3)] }),
+      Object.assign(mat('m1', 10), { code: 'M1' }),
+    ] }));
+    const c = contributi(a);
+    assert.equal(c[0].qty, 6, '2 gruppi × 3 pezzi');
+    approx(c[0].line, 60);
+    approx(c[0].line, a.eval('costOf("mac").total'), 'M1 è tutto il costo della macchina');
+  });
+
   it('le voci a costo zero non ingombrano l\'elenco', () => {
     const a = app(makeDb({ items: [
       asm('mac', 'macchina', { components: [comp('m1', 1), comp('gratis', 5)] }),
@@ -314,5 +328,52 @@ describe('Riepilogo', () => {
     a.eval('renderHome()');
     assert.ok(a.html('view-home').includes('Riepilogo'));
     assert.ok(a.html('view-home').includes('Niente in sospeso'));
+  });
+});
+
+describe('Un codificatore solo per i dati dentro un onclick (dalla 0.105.6)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  // Quello che fa il browser: decodifica l'attributo, poi esegue il JavaScript.
+  const decodifica = s => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  const CATTIVI = ["L'albero", 'a"b', 'x\\y', "');alert(1);('", '"><img src=x onerror=alert(1)>', 'riga\nnuova', 'a&amp;b', ' ', '${1}'];
+
+  it('jsAttr dà un letterale che, decodificato ed eseguito, ridà la stringa intatta', () => {
+    const a = loadApp({ silent: true });
+    CATTIVI.forEach(v => {
+      const attr = a.eval(`jsAttr(${JSON.stringify(v)})`);
+      assert.ok(!/["<>]/.test(attr), 'niente che chiuda l\'attributo o apra un tag: ' + attr);
+      // eslint-disable-next-line no-eval
+      assert.equal((0, eval)(decodifica(attr)), v);
+    });
+  });
+
+  it('jsAttr regge un attributo fra apici singoli quanto fra virgolette', () => {
+    const a = loadApp({ silent: true });
+    assert.ok(!/'/.test(a.eval(`jsAttr("L'albero")`)));
+  });
+
+  it('il collegamento al documento toccato da una modifica tecnica non si rompe su dati strani', () => {
+    const a = loadApp({ silent: true });
+    a.setDb(require('./fixtures.js').makeDb({ plans: [{ id: "p'1", number: 'FAB-1', lines: [] }] }));
+    a.asRole('admin');
+    const html = a.eval(`ecoImpattoHtml([{ k: 'plan', id: "p'1", number: 'FAB-1', perche: 'x' }], true)`);
+    const m = html.match(/onclick="([^"]*)"/);
+    assert.ok(m, html);
+    assert.match(decodifica(m[1]), /ecoApri\("plan","p'1"\)/);
+  });
+
+  it('nei sorgenti non restano codificatori fatti a mano negli attributi', () => {
+    const ROOT = path.join(__dirname, '..');
+    const file = fs.readdirSync(ROOT).filter(f => f.endsWith('.js') && f !== 'sw.js');
+    const trovati = [];
+    file.forEach(f => {
+      const t = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      t.split('\n').forEach((r, i) => {
+        if (/esc\(JSON\.stringify\(/.test(r) && /on(click|change|input|keydown)=/.test(r)) trovati.push(`${f}:${i + 1}`);
+        if (/\bjsAttrStr\(/.test(r)) trovati.push(`${f}:${i + 1}`);
+      });
+    });
+    assert.deepEqual(trovati, [], 'si usa jsAttr() di core.js');
   });
 });

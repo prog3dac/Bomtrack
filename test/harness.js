@@ -13,7 +13,7 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 // Stessa sequenza di index.html: i file si caricano nello stesso contesto e
 // condividono lo scope globale, esattamente come i <script> della pagina.
-const SRC = ['icons.js', 'theme.js', 'store.js', 'cloud-map.js', 'core.js', 'auth.js', 'costing.js', 'calendario.js', 'shell.js', 'worklist.js',
+const SRC = ['icons.js', 'theme.js', 'store.js', 'cloud-map.js', 'cloud.js', 'core.js', 'auth.js', 'costing.js', 'calendario.js', 'shell.js', 'worklist.js',
   'views-bom.js', 'views-rev.js', 'views-stock.js', 'views-catalog.js', 'views-report.js', 'views-jobs.js', 'views-home.js', 'views-dash.js', 'produzione.js', 'views-mrp.js', 'allegati.js', 'archivio.js', 'views-item.js',
   'views-docs.js', 'views-prod.js', 'views-avanzamento.js', 'views-manage.js', 'export-lists.js', 'import-catalog.js', 'columns.js', 'filters.js', 'inspector.js', 'qr.js', 'inventario.js', 'combo.js', 'import-export.js'];
 
@@ -282,6 +282,8 @@ function loadApp(opts) {
   sandbox.confirm = () => true;   // le richieste di conferma si accettano: il test verifica l'effetto
   sandbox.setTimeout = (fn) => { void fn; return 0; };   // niente code differite nei test
   sandbox.clearTimeout = () => {};                       // globale della piattaforma, assente nei contesti vm
+  sandbox.setInterval = (fn) => { void fn; return 0; };
+  sandbox.clearInterval = () => {};
 
   const ref = name => vm.runInContext(name, ctx);
 

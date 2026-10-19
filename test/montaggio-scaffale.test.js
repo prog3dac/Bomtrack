@@ -198,3 +198,16 @@ describe('4. Un prelievo sotto zero si dice', () => {
     assert.equal(ev(a, "onHandOf('tondo')"), -15);
   });
 });
+
+// 0.105.5: la parte dichiarata fatta sul piano non entrava a magazzino, e il
+// montaggio la scaricava lo stesso.
+describe('Parti dichiarate sul piano, poi montate', () => {
+  it('la giacenza della parte non va sotto zero', () => {
+    const a = app();
+    a.eval("produzioneDichiara('pl1', 'p', 10)");
+    assert.equal(ev(a, "onHandOf('p')"), 10);
+    a.eval("addMovement('vite', 'carico', 200, ''); montaggioDichiara('pl1', 'grp', 10)");
+    assert.equal(ev(a, "onHandOf('p')"), 0);
+    assert.equal(esplosione(a, 'pl1').make.p || 0, 10, 'la parte resta del piano, fatta: non la si ricompra né la si prende due volte');
+  });
+});

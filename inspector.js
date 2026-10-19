@@ -296,7 +296,7 @@ function inspectorSommario(it) {
   const usi = directUses(it.id).length;
   const righe = [
     ['Articolo', esc(it.name)],
-    ['Tipo', `<span class="bom-type-tag tt-${it.type}">${typeShort(it.type)}</span> ${esc(typeLabel(it.type))}`],
+    ['Tipo', `<span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span> ${esc(typeLabel(it.type))}`],
     ['Costo unitario', `<strong>${fmtPer(itemUnitCost(it), u)}</strong>`],
     hasStock(it) ? ['Giacenza', `${fmtUom(st.onHand, u)}${st.incoming ? ' · in arrivo ' + fmtUom(st.incoming, u) : ''}`] : null,
     ['Dove è usato', usi ? `${usi} ${usi === 1 ? 'impiego diretto' : 'impieghi diretti'}` : 'nessun impiego'],

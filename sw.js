@@ -27,7 +27,7 @@
 // La versione la tiene allineata `test/pwa.test.js` a quella di core.js:
 // dimenticarla vorrebbe dire spedire una versione nuova che i browser già
 // visitati continuano a servire dalla cache vecchia, per sempre.
-const VERSIONE = '0.102.0';
+const VERSIONE = '0.106.0';
 const CACHE = 'bomtrack-v' + VERSIONE;
 
 // Tutto ciò che serve a disegnare la prima schermata. L'elenco ricalca
@@ -53,6 +53,7 @@ const FILE = [
   './theme.js',
   './store.js',
   './cloud-map.js',
+  './cloud.js',
   './core.js',
   './auth.js',
   './costing.js',
@@ -94,12 +95,19 @@ self.addEventListener('install', e => {
   // `addAll` è atomica: se un file dell'elenco non c'è, l'installazione
   // fallisce tutta invece di lasciare in giro una cache a metà — che offline
   // si manifesterebbe come una schermata bianca senza spiegazione.
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILE)).then(() => self.skipWaiting()));
+  // `cache: 'reload'`: i file si chiedono al server, non alla cache HTTP del
+  // browser (dalla 0.105.3). Altrimenti una versione nuova pubblicata entro i
+  // minuti di validità della vecchia si installava con i file vecchi, o con un
+  // misto, e restava così fino alla versione dopo.
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILE.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
   // Fuori i depositi delle versioni precedenti, e si prende il controllo delle
-  // schede già aperte senza aspettare che vengano chiuse.
+  // schede già aperte senza aspettare che vengano chiuse. Quelle schede però
+  // girano ancora col codice vecchio: il cambio di controllore che `claim()`
+  // provoca è il segnale con cui core.js (swAscoltaVersioni) mostra l'avviso
+  // «È disponibile una versione nuova — Ricarica» (dalla 0.105.6).
   e.waitUntil(
     caches.keys()
       .then(chiavi => Promise.all(chiavi.filter(k => k !== CACHE).map(k => caches.delete(k))))

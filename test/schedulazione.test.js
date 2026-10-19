@@ -72,6 +72,18 @@ describe('Programmazione: la catena a ritroso', () => {
     ], 'la tratta 20-30 parte martedì 6 e rientra lunedì 12, quando comincia la fresatura');
   });
 
+  // 0.105.5: la stessa parte in due rami si fabbrica in un lotto solo, e i
+  // tempi sono quelli del lotto. Prima ciascun ramo si programmava sui suoi pezzi.
+  it('una parte comune a due righe si programma sul lotto intero', () => {
+    const due = conDb({ plans: [{ id: 'pl1', number: 'FAB-2026-001', title: '', date: '2026-09-01', notes: '', active: true,
+      lines: [{ id: 'l1', itemId: 'grp', qty: 1, dueDate: '2026-10-16' }, { id: 'l2', itemId: 'grp', qty: 1, dueDate: '2026-10-16' }] }] });
+    const m = esplodi(due).make.find(x => x.code === 'PERNO');
+    assert.equal(m.qty, 8);
+    assert.equal(m.start, '2026-10-05', 'come una riga sola da 2 gruppi');
+    const alberi = ev(due, `planFeasibility(getPlan('pl1')).map(f => f.tree.children[0].start)`);
+    assert.deepEqual(alberi, ['2026-10-05', '2026-10-05'], 'l\'albero dice la stessa data della riga aggregata');
+  });
+
   it('il materiale del ciclo serve quando parte la prima fase', () => {
     const t = esplodi(conDb()).buy.find(x => x.code === 'TONDO');
     assert.equal(t.due, '2026-10-05');
@@ -153,14 +165,15 @@ describe('Programmazione: i tempi', () => {
 
 describe('Programmazione: più domande e dati mancanti', () => {
   it('la stessa parte in due rami tiene le date più vicine', () => {
-    // In più un perno sciolto per venerdì 9: fresatura 2 h → 1 gg (gio 8),
-    // rientro gio 8 − 6 gg = ven 2, tornitura 1 gg → gio 1.
+    // In più un perno sciolto per venerdì 9. Il lotto è uno, da 9 pezzi
+    // (0.105.5), e i tempi sono i suoi: fresatura 18 h → 3 gg (mar 6), rientro
+    // mar 6 − 6 gg = mer 30, tornitura 9 h → 2 gg → lun 28.
     const app = conDb();
     app.eval("getPlan('pl1').lines.push({ id: 'l2', itemId: 'perno', qty: 1, dueDate: '2026-10-09' }); invalidateCaches();");
     const e = esplodi(app);
-    assert.deepEqual(e.make.map(x => [x.qty, x.due, x.start]), [[9, '2026-10-09', '2026-10-01']]);
-    assert.deepEqual(e.phases.map(x => [x.start, x.due]), [['2026-10-02', '2026-10-08'], ['2026-10-02', '2026-10-08']]);
-    assert.equal(e.buy[0].due, '2026-10-01');
+    assert.deepEqual(e.make.map(x => [x.qty, x.due, x.start]), [[9, '2026-10-09', '2026-09-28']]);
+    assert.deepEqual(e.phases.map(x => [x.start, x.due]), [['2026-09-30', '2026-10-06'], ['2026-09-30', '2026-10-06']]);
+    assert.equal(e.buy[0].due, '2026-09-28');
   });
 
   it('senza tempi dichiarati le date restano quelle della consegna, come prima', () => {
@@ -296,6 +309,25 @@ describe('Programma: la data fattibile', () => {
       invalidateCaches();`);
     // Lun 28: tornitura 28→29, zincatura 29/9→5/10, fresatura 5→7, montaggio 7→9.
     assert.equal(fattibile(app).fattibile, '2026-10-09');
+  });
+
+  // Dalla 0.105.6 gli arrivi sono quelli del netto: nell'unità di gestione, e
+  // anche senza data.
+  it("una riga d'ordine nell'altra unità si converte prima di coprire", () => {
+    const app = oggi(conDb(), '2026-09-21');
+    app.eval(`Object.assign(getItem('tondo'), { altUom: 'm', altFactor: 2.5 });
+      db.orders.push({ id: 'o1', number: 'ODA-2026-001', status: 'inviato', supplierId: 'beta', active: true,
+      lines: [{ id: 'ol1', itemId: 'tondo', qty: 16, uom: 'm', received: 0, confirmedDate: '2026-09-28' }] });
+      invalidateCaches();`);
+    // 16 m sono 6,4 kg su 16: il resto va comprato col tempo del fornitore.
+    assert.equal(fattibile(app).fattibile, '2026-10-14');
+  });
+
+  it('il materiale ordinato senza data non si ricompra: vale come in tempo', () => {
+    const app = oggi(conDb(), '2026-09-21');
+    app.eval(`db.orders.push({ id: 'o1', number: 'ODA-2026-001', status: 'inviato', supplierId: 'beta', active: true,
+      lines: [{ id: 'ol1', itemId: 'tondo', qty: 16, received: 0 }] }); invalidateCaches();`);
+    assert.equal(fattibile(app).fattibile, '2026-10-02');
   });
 
   it('la tabella del piano mostra fattibile e margine, e il percorso critico si apre', () => {

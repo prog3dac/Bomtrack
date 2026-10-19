@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.102.0';
+const APP_VERSION = '0.106.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -63,6 +63,14 @@ function numIt(n, decimali) {
   return (v < 0 && Number(s) !== 0 ? '-' : '') + gruppi + (fraz ? ',' + fraz : '');
 }
 function fmtN(n) { return cur() + ' ' + numIt(n, 2); }
+// Il prezzo unitario di un documento, con i decimali che ha (da 2 a 4): un
+// listino a 4 decimali stampato a 2 è un prezzo diverso da quello concordato, e
+// prezzo × quantità non tornava con l'importo della riga.
+function fmtPrezzo(n) {
+  const v = Number(n) || 0;
+  const fraz = (String(+v.toFixed(4)).split('.')[1] || '').length;
+  return cur() + ' ' + numIt(v, Math.min(4, Math.max(2, fraz)));
+}
 // ─── L'importo di una riga di documento ───
 // Quantità × prezzo, arrotondato ai centesimi **una volta sola**.
 //
@@ -85,6 +93,18 @@ function totaleRighe(lines) { return (lines || []).reduce((s, l) => s + importoR
 // primo onclick="fn('${esc(it.name)}')" si romperebbe su un articolo chiamato
 // «L'albero», e su uno chiamato peggio farebbe altro.
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// ─── Un dato dentro un onclick ───
+// esc() rende innocuo un testo **per l'HTML**, non per il JavaScript che
+// l'attributo contiene: il browser prima decodifica l'attributo, poi esegue, e
+// un apice decodificato chiude la stringa. Ogni dato scritto da qualcuno — un
+// codice, un nome, un percorso, un'ubicazione — che finisce come argomento di
+// un comando passa da qui (dalla 0.105.6): JSON.stringify ne fa un letterale
+// JavaScript corretto (apici, barre, a capo), esc() lo rende innocuo per
+// l'attributo, fra virgolette o fra apici. Il risultato porta già le sue
+// virgolette: onclick="fn(${jsAttr(x)})", senza apici intorno.
+// Prima c'erano tre ricette a mano (jsAttrStr, esc(JSON.stringify(…)), e
+// niente): una sola si controlla, tre si copiano sbagliate.
+function jsAttr(v) { return esc(JSON.stringify(String(v == null ? '' : v))); }
 
 // ─── L'unità di misura accanto al numero ───
 // Un numero senza unità è un numero da indovinare. «15» in una riga di
@@ -290,6 +310,20 @@ function isItemUsedAnywhere(id) {
       if (recs.some(rec => (rec[figlio] || []).some(r => chiavi.some(k => r[k] === id)))) return true;
     }
   }
+  // Le revisioni congelate (dalla 0.105.6). REFS conosce solo il proprietario
+  // della revisione (`itemId`), non quello che la fotografia contiene: le righe
+  // di distinta e di ciclo stanno dentro `snapshot`, che è un oggetto libero e
+  // non una collezione figlia. Un articolo tolto dalla Rev B ma presente nella
+  // Rev A restava così eliminabile, e da quel momento la Rev A — e il registro
+  // delle modifiche — diceva «(articolo eliminato)» al posto di quello che
+  // c'era davvero. Le lavorazioni (`kind: 'op'`) non puntano a un articolo.
+  const inFotografia = (db.revisions || []).some(r => {
+    const s = r && r.snapshot;
+    if (!s) return false;
+    return (s.components || []).some(c => c && c.itemId === id)
+      || (s.cycle || []).some(c => c && c.kind !== 'op' && c.itemId === id);
+  });
+  if (inFotografia) return true;
   // Le righe ODL non hanno un campo itemId proprio: lo portano dentro
   // `phaseKey` (`itemId#indice#workCenterId`), la stessa eccezione che REFS
   // documenta per la migrazione — va controllata a parte.
@@ -438,17 +472,41 @@ const ROLE_WRITE = {
 // gesti accetta l'una o l'altra, invece di spostarli e togliere qualcosa a
 // qualcuno.
 function canWriteShop(oppure) { return canWrite('shop') || canWrite(oppure); }
-function roleGuardShop(oppure) { return canWriteShop(oppure) || roleGuard(oppure); }
+// Senza collegamento (dalla 0.105.6) chi i gesti di officina li fa davvero
+// legge che manca il server, non che il suo ruolo non può: roleGuard(oppure)
+// guardava solo l'area alternativa, e all'officina — che `catalog` o `docs` non
+// li ha — dava la colpa al ruolo proprio nel momento in cui era la rete.
+function roleGuardShop(oppure) {
+  if (canWriteShop(oppure)) return true;
+  if (canWriteRuolo('shop') || canWriteRuolo(oppure)) { showToast(CLOUD_SOLA_LETTURA_MSG, 'error'); return false; }
+  return roleGuard(oppure);
+}
 const AREA_LABELS = { catalog: 'anagrafiche articoli', bom: 'distinte base', docs: 'richieste e ordini', manage: 'gestione', agenda: 'promemoria', shop: 'avanzamento, ricevimenti e giacenze' };
 function roleLabel(r) { return ROLES[r] || r || '—'; }
-function canWrite(area) {
+// Il ruolo dice che cosa si può scrivere; il collegamento, se si può adesso.
+// Con l'archivio condiviso un PC senza collegamento consulta soltanto
+// (cloudSolaLettura): numeri e codici li assegna il server, e una modifica
+// fatta al buio arriverebbe ai colleghi chissà quando, magari su un documento
+// che nel frattempo hanno cambiato loro.
+function canWriteRuolo(area) {
   if (!currentUser) return false;
   return (ROLE_WRITE[currentUser.role] || []).includes(area);
+}
+function canWrite(area) {
+  return canWriteRuolo(area) && !(typeof cloudSolaLettura === 'function' && cloudSolaLettura());
 }
 function isAdmin() { return !!currentUser && currentUser.role === 'admin'; }
 // Guardia dei mutatori, sul modello di rfqGuard: blocca e spiega.
 function roleGuard(area) {
   if (canWrite(area)) return true;
+  if (canWriteRuolo(area)) { showToast(CLOUD_SOLA_LETTURA_MSG, 'error'); return false; }
+  showToast(`Il ruolo "${roleLabel(currentUser && currentUser.role)}" non può modificare ${AREA_LABELS[area] || area}`, 'error');
+  return false;
+}
+// La guardia dei gesti che leggono soltanto (esportare, fare un backup) ma
+// sono riservati a un ruolo: valgono anche senza collegamento.
+function roleGuardRuolo(area) {
+  if (canWriteRuolo(area)) return true;
   showToast(`Il ruolo "${roleLabel(currentUser && currentUser.role)}" non può modificare ${AREA_LABELS[area] || area}`, 'error');
   return false;
 }
@@ -472,7 +530,11 @@ function scopeOf(type) { return CATALOG_SCOPES.buy.types.includes(type) ? 'buy' 
 const CYCLE_CHILD_TYPES = ['acquistato', 'materiale'];
 const TYPE_LABELS = { macchina: 'Macchina', gruppo: 'Gruppo', sottogruppo: 'Sottogruppo', parte: 'Parte', materiale: 'Materia prima', acquistato: 'Commerciale' };
 const TYPE_SHORTS = { macchina: 'MAC', gruppo: 'GRP', sottogruppo: 'SGR', parte: 'PRT', materiale: 'MAT', acquistato: 'CMM' };
-function typeLabel(t) { return TYPE_LABELS[t] || t; }
+// Il tipo arriva dall'archivio, e nell'archivio condiviso lo scrive un collega:
+// un valore fuori elenco non deve mai finire nell'HTML così com'è.
+function typeLabel(t) { return TYPE_LABELS[t] || esc(t); }
+// Per le classi CSS (tt-…): solo i tipi noti.
+function typeKey(t) { return TYPE_LABELS[t] ? t : 'x'; }
 function typeShort(t) { return TYPE_SHORTS[t] || '?'; }
 
 // ─── Unità di misura (elenco gestito in Gestione › Unità di misura) ───
@@ -691,19 +753,146 @@ function prefixIndex() {
   const m = new Map();
   arr.forEach(it => {
     // La coda di cifre e ciò che le sta davanti: «MAT-ACC-001» → «MAT-ACC-» + 1.
-    const t = String(it.code || '').match(/^(.*?)(\d+)$/);
+    // La chiave è quella dei doppioni, itemCodeKey(): senza spazi ai bordi e in
+    // minuscolo (dalla 0.105.6). Era il testo grezzo, e un «mat-acc-002»
+    // importato da Excel non contava per MAT-ACC-: la generazione proponeva
+    // MAT-ACC-002, e il controllo dei doppioni — che le maiuscole le ignora —
+    // lo rifiutava come già usato. Ogni volta, per tutta la famiglia.
+    const t = String(it.code || '').trim().match(/^(.*?)(\d+)$/);
     if (!t) return;
     const n = parseInt(t[2], 10);
-    const era = m.get(t[1]);
-    if (era === undefined || n > era) m.set(t[1], n);
+    const k = itemCodeKey(t[1]);
+    const era = m.get(k);
+    if (era === undefined || n > era) m.set(k, n);
   });
   _prefixIdx = m; _prefixIdxArr = arr; _prefixIdxLen = arr.length;
   return m;
 }
 function nextCodeForPrefix(prefix) {
-  const max = prefixIndex().get(prefix) || 0;
-  return prefix + String(max + 1).padStart(codeDigits(), '0');
+  let n = (prefixIndex().get(itemCodeKey(prefix)) || 0) + 1;
+  while (codicePresoAltrove(prefix + String(n).padStart(codeDigits(), '0'))) n++;
+  return prefix + String(n).padStart(codeDigits(), '0');
 }
+// I codici che l'archivio condiviso ha detto già presi da un collega, anche se
+// il suo articolo qui non è ancora arrivato (cloud.js, _codiciAltrui): la
+// generazione automatica li salta come salta quelli che vede.
+function codicePresoAltrove(code) {
+  return typeof _codiciAltrui !== 'undefined' && _codiciAltrui.has(itemCodeKey(code));
+}
+// Le code numeriche dei codici presi altrove con quel prefisso.
+function numeriPresiAltrove(prefisso) {
+  if (typeof _codiciAltrui === 'undefined' || !_codiciAltrui.size) return [];
+  const p = itemCodeKey(prefisso), out = [];
+  _codiciAltrui.forEach(k => { if (k.startsWith(p) && /^\d+$/.test(k.slice(p.length))) out.push(parseInt(k.slice(p.length), 10)); });
+  return out;
+}
+// ─── Numeri dei documenti ───
+// Progressivo per anno: <SIGLA>-<anno>-NNN, una serie per tipo di documento.
+// Con l'archivio condiviso il numero lo dà il server (conNumeri in cloud.js
+// lo riserva prima di creare il documento e lo lascia in _numeriRiservati);
+// in locale, o se una serie non ne ha di riservati, si continua dal più alto
+// che c'è qui.
+const SERIE_DOCUMENTI = {
+  RFQ: () => db.rfqs || [], ODA: () => db.orders || [], ODL: () => db.workOrders || [],
+  ODP: () => db.prodOrders || [], FAB: () => db.plans || [], COM: () => db.jobs || [],
+  MT: () => (db.revisions || []).map(r => ({ id: r.id, number: r.ecoNumber })),   // le modifiche tecniche
+};
+const SERIE_COLLEZIONE = { RFQ: 'rfqs', ODA: 'orders', ODL: 'workOrders', ODP: 'prodOrders', FAB: 'plans', COM: 'jobs', MT: 'revisions' };
+function seriePrefisso(sigla) { return `${sigla}-${new Date().getFullYear()}-`; }
+function serieMassimo(prefisso, lista) {
+  return (lista || []).reduce((m, d) => {
+    const n = (d.number || '').startsWith(prefisso) ? (parseInt(d.number.slice(prefisso.length), 10) || 0) : 0;
+    return n > m ? n : m;
+  }, 0);
+}
+// ─── Doppioni e buchi nelle serie (dalla 0.105.6) ───
+// Per i codici articolo c'è il Controllo dati; per i numeri dei documenti non
+// c'era niente, e un ODA-2026-008 doppio (un ripristino, due PC che numeravano
+// da soli prima dell'archivio condiviso) o un COM-2026-002 mancante (una
+// prenotazione scaduta) li scopriva il fornitore o il revisore dei conti.
+// Per ogni serie e per ciascuno degli anni chiesti: i numeri usati più volte,
+// con i loro documenti, e quelli che mancano sotto il più alto.
+function controlloSerieDocumenti(anni) {
+  const out = [];
+  Object.keys(SERIE_DOCUMENTI).forEach(sigla => {
+    const docs = SERIE_DOCUMENTI[sigla]();
+    (anni || []).forEach(anno => {
+      const prefisso = `${sigla}-${anno}-`;
+      const perNumero = new Map();
+      docs.forEach(d => {
+        const num = String((d && d.number) || '').trim();
+        if (!num.startsWith(prefisso)) return;
+        const coda = num.slice(prefisso.length);
+        if (!/^\d+$/.test(coda)) return;
+        const n = parseInt(coda, 10);
+        if (!perNumero.has(n)) perNumero.set(n, []);
+        perNumero.get(n).push(d);
+      });
+      if (!perNumero.size) return;
+      const massimo = Math.max(...perNumero.keys());
+      const doppi = [], buchi = [];
+      perNumero.forEach((ds, n) => { if (ds.length > 1) doppi.push({ n, numero: prefisso + String(n).padStart(3, '0'), docs: ds }); });
+      for (let n = 1; n < massimo; n++) if (!perNumero.has(n)) buchi.push(n);
+      doppi.sort((a, b) => a.n - b.n);
+      if (doppi.length || buchi.length) out.push({ sigla, prefisso, doppi, buchi, massimo });
+    });
+  });
+  return out;
+}
+function numeroProgressivo(sigla) {
+  const prefisso = seriePrefisso(sigla);
+  const riservati = typeof _numeriRiservati !== 'undefined' ? _numeriRiservati[prefisso] : null;
+  const n = riservati && riservati.length ? riservati.shift() : serieMassimo(prefisso, SERIE_DOCUMENTI[sigla]()) + 1;
+  return prefisso + String(n).padStart(3, '0');
+}
+// ─── Niente buchi: si elimina solo l'ultimo della serie ───
+// Un documento o un codice in mezzo alla serie, eliminato, lascerebbe un buco
+// nella numerazione. Si elimina solo l'ultimo, il cui numero torna al
+// prossimo; gli altri si annullano, si chiudono o si segnano obsoleti.
+function serieDiNumero(s) {
+  const m = /^(.*?)(\d+)$/.exec(String(s == null ? '' : s).trim());
+  return m ? { prefisso: m[1].toLowerCase(), n: parseInt(m[2], 10) } : null;
+}
+function documentoUltimo(doc, lista) {
+  const x = serieDiNumero(doc && doc.number);
+  if (!x) return true;
+  return !(lista || []).some(d => {
+    if (d === doc || d.id === doc.id) return false;
+    const s = serieDiNumero(d.number);
+    return s && s.prefisso === x.prefisso && s.n > x.n;
+  });
+}
+function guardiaDocumentoUltimo(doc, lista, invece) {
+  if (documentoUltimo(doc, lista)) return true;
+  showToast(`${doc.number} non è l'ultimo della serie: eliminandolo resterebbe un buco nella numerazione. ${invece}`, 'error');
+  return false;
+}
+// I sottogruppi contano a scendere (da 999), tutti gli altri a salire: l'ultimo
+// è quello più in là nella propria direzione. `via`: gli id che se ne vanno
+// insieme a questo (un'eliminazione di più articoli).
+// Vale per i codici **fatti come quelli della numerazione dell'app**, con il
+// numero dopo un trattino (MAT-ACC-007, TRN-BAS-999, TRN-S01) (dalla 0.105.5):
+// un codice scritto a mano che per caso finisce con un numero (VITE-M6X20,
+// SKF 6205) non è in nessuna serie, e bloccava l'eliminazione degli altri.
+function articoloUltimo(it, via) {
+  const x = serieDiNumero(it && it.code);
+  if (!x || !/-s?$/.test(x.prefisso)) return true;
+  const giu = it.type === 'sottogruppo';
+  return !(db.items || []).some(o => {
+    if (o.id === it.id || (via && via.has(o.id)) || (o.type === 'sottogruppo') !== giu) return false;
+    const s = serieDiNumero(o.code);
+    return s && s.prefisso === x.prefisso && (giu ? s.n < x.n : s.n > x.n);
+  });
+}
+// Con l'archivio condiviso «l'ultimo» di questo PC può non esserlo più: un
+// collega può aver appena creato il successivo, non ancora arrivato. Prima di
+// eliminare si manda e si riceve, e la guardia si ripete sull'archivio
+// aggiornato (dalla 0.105.5). Senza archivio condiviso `fn` parte subito.
+function eliminaSeAncoraUltimo(guardia, fn) {
+  const vai = () => { if (guardia()) fn(); };
+  return typeof conArchivioAggiornato === 'function' ? conArchivioAggiornato(vai) : vai();
+}
+const ARTICOLO_NON_ULTIMO = c => `Il codice ${c} non è l'ultimo della sua serie: eliminandolo resterebbe un buco nella codifica. Segnalo come obsoleto invece di eliminarlo.`;
 // Codice per famiglia: materie prime, commerciali e parti non legate a una macchina
 function genFamilyCode(type, familyId, subFamilyId) {
   let base = '';
@@ -766,9 +955,9 @@ function usedCodeNumbers(items) {
 // blocchi si incontravano l'app generava un codice già preso — per poi
 // rifiutarlo da sé con «codice già in uso», sullo stesso codice a ogni
 // tentativo. Un vicolo cieco da cui si usciva solo scrivendolo a mano.
-function nextCodeNumber(type, siblings, sm, altri) {
+function nextCodeNumber(type, siblings, sm, altri, prefisso) {
   const used = usedCodeNumbers(siblings);
-  const presi = new Set(usedCodeNumbers((siblings || []).concat(altri || [])));
+  const presi = new Set(usedCodeNumbers((siblings || []).concat(altri || [])).concat(prefisso ? numeriPresiAltrove(prefisso) : []));
   const max = 10 ** sm.incrN - 1;
   // Si continua nella direzione del proprio blocco finché non si trova un
   // numero che nessuno dei due sta usando.
@@ -786,7 +975,7 @@ function nextCodeNumber(type, siblings, sm, altri) {
   }
   // macchina e gruppo: progressivo S## a salire da 0
   const n = used.length ? Math.max(...used) + 1 : 0;
-  return n > 10 ** sm.incrS - 1 ? null : n;
+  return libero(n, 1, 10 ** sm.incrS - 1);
 }
 // ─── Perché il codice non è stato generato ───
 // genItemCode() è logica di dominio e non deve parlare all'interfaccia: durante
@@ -816,7 +1005,7 @@ function genItemCode(it) {
     const sm = machineScheme(it);
     // Progressivo tra le macchine che condividono la stessa sigla (esclusa se stessa in modifica)
     const siblings = machineItems().filter(m => m.sigla === it.sigla && m.id !== it.id);
-    const n = nextCodeNumber('macchina', siblings, sm);
+    const n = nextCodeNumber('macchina', siblings, sm, null, `${it.sigla}-S`);
     if (n == null) return codeFallito('Numerazione macchine esaurita');
     return `${it.sigla}-S${String(n).padStart(sm.incrS, '0')}`;
   }
@@ -826,7 +1015,7 @@ function genItemCode(it) {
     if (!mac || !it.sigla) return '';
     const sm = machineScheme(mac);
     const siblings = groupItemsFor(mac.id).filter(g => g.sigla === it.sigla && g.id !== it.id);
-    const n = nextCodeNumber('gruppo', siblings, sm);
+    const n = nextCodeNumber('gruppo', siblings, sm, null, `${mac.sigla}-${it.sigla}-S`);
     if (n == null) return codeFallito('Numerazione gruppi esaurita');
     return `${mac.sigla}-${it.sigla}-S${String(n).padStart(sm.incrS, '0')}`;
   }
@@ -836,13 +1025,18 @@ function genItemCode(it) {
     // La parte senza macchina/gruppo mantiene la codifica per famiglia
     if (!mac || !grp) return type === 'parte' ? genFamilyCode(type, it.familyId, it.subFamilyId) : '';
     const sm = machineScheme(mac);
-    const stessoGruppo = i => i.machineItemId === mac.id && i.groupItemId === grp.id && i.id !== it.id;
+    // Lo stesso **prefisso**, non lo stesso gruppo (dalla 0.105.5): due gruppi
+    // con la stessa sigla (TRN-BAS-S00, TRN-BAS-S01) scrivono i codici delle
+    // loro parti nello stesso TRN-BAS-###, e contando per gruppo il secondo
+    // ripartiva da 001, già preso.
+    const stessoGruppo = i => i.machineItemId === mac.id && i.id !== it.id
+      && (i.groupItemId === grp.id || itemSigla(i.groupItemId) === grp.sigla);
     const siblings = (db.items || []).filter(i => i.type === type && stessoGruppo(i));
     // L'altro blocco che abita lo stesso prefisso: le parti per un sottogruppo,
     // i sottogruppi per una parte. Vedi il commento su nextCodeNumber.
     const altroTipo = type === 'parte' ? 'sottogruppo' : 'parte';
     const altri = (db.items || []).filter(i => i.type === altroTipo && stessoGruppo(i));
-    const n = nextCodeNumber(type, siblings, sm, altri);
+    const n = nextCodeNumber(type, siblings, sm, altri, `${mac.sigla}-${grp.sigla}-`);
     if (n == null) return codeFallito(`Numerazione ${type === 'parte' ? 'parti' : 'sottogruppi'} esaurita`);
     return `${mac.sigla}-${grp.sigla}-${String(n).padStart(sm.incrN, '0')}`;
   }
@@ -856,6 +1050,40 @@ function codingLabel(it) {
   if (!ms) return '';
   const gs = it.type === 'gruppo' ? it.sigla : itemSigla(it.groupItemId);
   return gs ? ms + ' › ' + gs : ms;
+}
+
+// ─── Avvisi che restano (dalla 0.105.6) ───
+// Il toast dura due secondi e mezzo: va bene per «salvato», non per una cosa
+// che resta vera finché qualcuno non la sistema — una distinta ad anello
+// arrivata da un collega, una versione nuova dell'app che aspetta di essere
+// caricata. Questi stanno in basso, in una striscia che non copre il lavoro,
+// finché la causa non sparisce o chi legge non li chiude.
+// `chiave` identifica l'avviso (uno per chiave: ridarlo lo aggiorna); `html` è
+// già pronto, e chi chiama ne fa l'escape. La chiave finisce in un onclick:
+// va scelta fra le costanti del codice, mai da un dato.
+const _avvisiFissi = new Map();
+function avvisoFisso(chiave, html) {
+  _avvisiFissi.set(chiave, html);
+  disegnaAvvisiFissi();
+}
+function avvisoFissoTogli(chiave) {
+  if (!_avvisiFissi.delete(chiave)) return;
+  disegnaAvvisiFissi();
+}
+function disegnaAvvisiFissi() {
+  if (typeof document === 'undefined') return;
+  let el = document.getElementById('avvisi-fissi');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'avvisi-fissi';
+    if (document.body) document.body.appendChild(el);
+  }
+  // `polite`: sono notizie, non errori che interrompono quello che si sta facendo.
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.innerHTML = Array.from(_avvisiFissi, ([k, h]) => `<div class="avviso-fisso" data-avviso="${esc(k)}">
+    <span class="avviso-fisso-testo">${h}</span>
+    <button class="avviso-fisso-chiudi" onclick="avvisoFissoTogli('${esc(k)}')" title="Chiudi l'avviso" aria-label="Chiudi l'avviso">×</button></div>`).join('');
 }
 
 // `azione` opzionale: { label, fn }. È l'annulla subito dopo un'eliminazione —
@@ -900,7 +1128,7 @@ function removeConUndo(coll, id, msg, dopo) {
   const voce = Store.lastRemoved();
   if (typeof dopo === 'function') dopo();
   toastEliminato(msg, () => {
-    Store.restore(voce);
+    if (!Store.restore(voce)) { showToast(Store.rifiutoRipristino() || 'Non c\'è più niente da ripristinare', 'error'); return; }
     if (typeof dopo === 'function') dopo();
     showToast('Ripristinato');
   });
@@ -930,6 +1158,10 @@ function showPersistErrorModal(kind, info) {
     ? `<p>Lo spazio che il browser riserva a questa app è esaurito${mb}.</p>
        <p><strong>Le modifiche fatte da ora in poi non vengono salvate.</strong> I dati che vedi sono ancora tutti in memoria, ma chiudendo questa scheda andrebbero persi.</p>
        <p>Esporta subito un backup JSON, poi libera spazio: elimina richieste e ordini vecchi, oppure azzera il database e reimporta solo ciò che serve.</p>`
+    : kind === 'rescue'
+      ? `<p>L'archivio di questo computer non si è potuto leggere, e non è stato possibile metterne da parte una copia.</p>
+         <p><strong>Per non scriverci sopra, l'app non salva niente</strong> finché non lo scarichi come file. Poi potrai lavorare, o reimportare l'ultimo backup.</p>
+         ${Store.grezzoIlleggibile() ? `<p><button class="add-btn-sm" onclick="closeModal(); scaricaIlleggibile()">${ico('download', 'tinted', '')} Scarica i dati illeggibili</button></p>` : ''}`
     : kind === 'storage'
       ? `<p>Questo browser non consente il salvataggio locale: succede in navigazione privata o quando i dati dei siti sono bloccati.</p>
          <p><strong>L'app funziona, ma alla chiusura non resterà nulla.</strong> Esporta un backup JSON prima di uscire.</p>`
@@ -998,11 +1230,19 @@ function onLoadError(info) {
 }
 function showLoadErrorModal(info) {
   const kb = info && info.bytes ? ` (erano circa ${Math.round(info.bytes / 1024)} KB)` : '';
-  const dove = info && info.rescued
+  // Tre casi (dalla 0.105.6): copia fatta, copia che c'era già, copia non
+  // riuscita. Nel terzo l'originale esiste solo al suo posto, e l'app non
+  // salva niente finché non lo si scarica: va detto, non rassicurato.
+  const dove = info && info.rescueFailed
+    ? `<strong style="color:var(--red)">Non è stato possibile metterne da parte una copia</strong> (lo spazio del browser non basta). Esistono solo al loro posto: <strong>scaricali adesso come file</strong>. Finché non lo fai, l'app non salva nessuna modifica, per non scriverci sopra.`
+    : info && info.rescued
     ? (Store.archivio === 'indexeddb'
       ? `Sono stati messi da parte così com'erano, alla voce <span style="font-family:var(--mono)">illeggibile</span> del database <span style="font-family:var(--mono)">${esc(IDB_NOME)}</span> del browser, e restano recuperabili a mano.`
       : `Sono stati messi da parte così com'erano, sotto la voce <span style="font-family:var(--mono)">${esc(DB_KEY_RESCUE)}</span> dell'archivio locale del browser, e restano recuperabili a mano.`)
     : 'Una copia di scorta era già stata messa da parte in precedenza, e non è stata toccata.';
+  // Il file si offre sempre: è la copia più facile da portare a chi deve recuperarla.
+  const btnScarica = info && info.kind === 'parse' && Store.grezzoIlleggibile()
+    ? `<button class="${info.rescueFailed ? 'add-btn-sm' : 'btn-outline'}" onclick="scaricaIlleggibile()">${ico('download', 'tinted', '')} Scarica i dati illeggibili</button>` : '';
   const testo = info && info.kind === 'parse'
     ? `<p>I dati salvati su questo computer non si riescono più a leggere${kb}: il contenuto risulta interrotto o alterato.</p>
        <p><strong>Non sono stati cancellati.</strong> ${dove}</p>
@@ -1015,7 +1255,54 @@ function showLoadErrorModal(info) {
   // Chiave propria, come per l'avviso di salvataggio: si affianca a ciò che è
   // aperto invece di buttar via un form a metà.
   openModal(`<h3>${ico('warning', 'tinted pill', '')} Dati non caricati</h3>${testo}
-    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Ho capito</button></div>`, false, 'avviso');
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Ho capito</button>${btnScarica}</div>`, false, 'avviso');
+}
+// ─── Una versione nuova dell'app (dalla 0.105.6) ───
+// sw.js, alla versione nuova, si installa e prende il controllo delle schede
+// aperte (skipWaiting + clients.claim). Ma una scheda già aperta continua a
+// girare con il codice che ha caricato: in officina il PC resta acceso per
+// settimane, e la versione nuova arrivava solo al primo F5 di qualcuno. Il
+// cambio di controllore è il segnale: lo si dice con un avviso che resta, e il
+// ricaricamento lo sceglie chi lavora — a metà di un ordine non si ricarica
+// niente da soli.
+// Il primo controllore di una pagina appena installata non è una versione
+// nuova: per questo si guarda se ce n'era già uno all'apertura.
+function swAscoltaVersioni(sw) {
+  if (!sw || typeof sw.addEventListener !== 'function') return;
+  let precedente = !!sw.controller;
+  sw.addEventListener('controllerchange', () => {
+    if (!precedente) { precedente = true; return; }
+    avvisoFisso('versione', `<strong>È disponibile una versione nuova</strong> di Bomtrack.
+      <button class="avviso-fisso-azione" onclick="swRicarica()">Ricarica</button>`);
+  });
+}
+// Il browser cerca un sw.js nuovo solo a una navigazione, o al massimo una
+// volta al giorno: una scheda che resta aperta lo chiede ogni ora.
+const SW_CONTROLLO_MS = 60 * 60 * 1000;
+function swControllaOgni(reg) {
+  if (!reg || typeof reg.update !== 'function' || typeof setInterval !== 'function') return;
+  setInterval(() => { Promise.resolve().then(() => reg.update()).catch(() => { /* offline: si riprova al giro dopo */ }); }, SW_CONTROLLO_MS);
+}
+// Ricaricare con un documento a metà o un salvataggio in volo perderebbe
+// lavoro: lo si chiede prima, con la stessa domanda dell'uscita.
+function swRicarica() {
+  if (lavoroInSospeso() && !confirm('Ci sono modifiche non ancora salvate: ricaricando andrebbero perse. Ricaricare lo stesso?')) return;
+  location.reload();
+}
+
+// L'archivio illeggibile, così com'era, in un file (dalla 0.105.6). È anche ciò
+// che sblocca i salvataggi quando la copia di soccorso non è riuscita: da qui
+// in poi una copia esiste, nella cartella dei download.
+function scaricaIlleggibile() {
+  const grezzo = Store.grezzoIlleggibile();
+  if (!grezzo) { showToast('Non c\'è nessun archivio illeggibile da scaricare', 'error'); return; }
+  const url = URL.createObjectURL(new Blob([grezzo], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `bomtrack_illeggibile_${oggiISO()}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  const eraBloccato = Store.senzaCopia();
+  Store.scaricatoIlleggibile();
+  showToast(eraBloccato ? 'File scaricato: da ora le modifiche si salvano' : 'File scaricato');
 }
 // ─── C'è del lavoro che una chiusura porterebbe via? ───
 // Due sorgenti distinte, e basta una delle due:
@@ -1028,6 +1315,12 @@ function showLoadErrorModal(info) {
 function lavoroInSospeso() {
   if (typeof Store !== 'undefined' && Store.isUnsaved && Store.isUnsaved()) return true;
   if (typeof Store !== 'undefined' && Store.scrittureInVolo && Store.scrittureInVolo() > 0) return true;
+  return documentoInModifica();
+}
+// I tre flag in un posto solo (dalla 0.105.6): li legge anche l'archivio
+// condiviso, che non ridisegna sopra un documento a metà. Lì i flag erano due,
+// e l'ordine di lavoro in modifica veniva sostituito dalla versione del collega.
+function documentoInModifica() {
   return !!(typeof rfqDirty !== 'undefined' && rfqDirty)
     || !!(typeof orderDirty !== 'undefined' && orderDirty)
     || !!(typeof odlDirty !== 'undefined' && odlDirty);
@@ -1151,7 +1444,12 @@ function openModal(h, wide, key) {
   // una richiamata. Sostituirlo qui vorrebbe dire rendere asincrona l'apertura
   // di ogni scheda dell'app. Il prezzo è un riquadro di sistema fuori tema in un
   // caso che capita di rado; il resto dell'app askConfirm ce l'ha.
-  if (p && k === 'form' && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
+  //
+  // Dalla 0.105.6 si chiede solo se quel form è stato **davvero** cambiato:
+  // la domanda arrivava anche su una scheda appena aperta e mai toccata, e una
+  // domanda che non ha mai niente da proteggere si impara a confermare senza
+  // leggerla — proprio la volta che conta.
+  if (p && k === 'form' && panelModificato(p) && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
   const nuovo = !p;
   if (nuovo) {
     p = document.createElement('div');
@@ -1180,8 +1478,24 @@ function openModal(h, wide, key) {
   panelRaise(p);
   a11yFields(p);
   panelFocus(p);
+  // Lo stato di partenza dei campi, per sapere poi se il form è cambiato. Si
+  // fissa subito e di nuovo al giro di coda: molti chiamanti riempiono i campi
+  // dopo che openModal ha restituito il pannello (le tendine, i valori
+  // calcolati), e quei valori sono la partenza, non una modifica. Chi scrive
+  // non può farlo prima di quel giro: è lo stesso tratto sincrono.
+  panelFissaStato(p);
+  Promise.resolve().then(() => panelFissaStato(p));
   return p;
 }
+// I valori dei campi di una scheda, in una stringa sola da confrontare.
+function panelStato(p) {
+  if (!p || typeof p.querySelectorAll !== 'function') return '';
+  return Array.prototype.map.call(p.querySelectorAll('input, select, textarea'), c =>
+    (c.type === 'checkbox' || c.type === 'radio' ? (c.checked ? '1' : '0') : String(c.value == null ? '' : c.value))).join('\u0000');
+}
+function panelFissaStato(p) { if (p) p._statoIniziale = panelStato(p); }
+// Senza uno stato di partenza si risponde «cambiato»: nel dubbio si chiede.
+function panelModificato(p) { return !p || p._statoIniziale == null || panelStato(p) !== p._statoIniziale; }
 // ─── Etichette, pulsanti-icona e titolo della scheda ───
 // I template scrivono `<div class="modal-field"><label>Nome</label><input id="…">`:
 // l'associazione fra i due c'è per posizione ma non per il browser, quindi
@@ -1473,7 +1787,10 @@ if (typeof document !== 'undefined') {
   // niente che non va, e un avviso a ogni avvio sarebbe rumore. Le librerie di
   // export stanno in vendor/ proprio perché l'offline non dipenda da qui.
   if (typeof navigator !== 'undefined' && navigator.serviceWorker && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* niente cache: l'app funziona lo stesso */ });
+    swAscoltaVersioni(navigator.serviceWorker);
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => swControllaOgni(reg))
+      .catch(() => { /* niente cache: l'app funziona lo stesso */ });
   }
   window.addEventListener('hashchange', () => onHashChange());
   window.addEventListener('unhandledrejection', e => {

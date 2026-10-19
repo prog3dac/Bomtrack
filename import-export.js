@@ -532,7 +532,7 @@ function settingsInfoAoa() {
 // ─── Esporta ───
 function exportSettingsXlsx() {
   // Il foglio Utenti elenca nomi, email e ruoli: come il backup, solo agli amministratori
-  if (!roleGuard('manage')) return;
+  if (!roleGuardRuolo('manage')) return;
   if (!requireXlsx()) return;
   const wb = XLSX.utils.book_new();
   settingsSheets().forEach(sh => {
@@ -909,6 +909,13 @@ function applyUsersSheet(rows, rep) {
     const u = findUserByEmail(email);
     if (!u) {
       if (!name) { rep.errors.push(`Utenti, riga ${i + 2}: nome richiesto per creare "${esc(email)}"`); return; }
+      // Con l'archivio condiviso un utente esiste solo se Supabase lo conosce:
+      // uno creato qui il server lo rifiuterebbe, e fermerebbe in coda tutto
+      // quello che questo PC manda dopo (dalla 0.105.5).
+      if (typeof cloudInUso === 'function' && cloudInUso()) {
+        rep.errors.push(`Utenti, riga ${i + 2}: "${esc(email)}" non c'è. Con l'archivio condiviso un collega nuovo si aggiunge da Gestione → Utenti, che gli manda l'invito`);
+        return;
+      }
       Store.insert('users', { id: gid(), name, email, username: cell(row, 'Username') || '',
         role: role || 'lettore', color: safeColor(cell(row, 'Colore', 'Color')), active: attivo !== false });
       out.created++;
@@ -1141,7 +1148,7 @@ function backupAutoHandle() {
 // Va chiamata da un clic. Scelta la cartella, il primo backup parte subito:
 // è la prova, sotto gli occhi di chi l'ha appena configurato, che funziona.
 function backupAutoScegli() {
-  if (!roleGuard('manage')) return Promise.resolve(false);
+  if (!roleGuardRuolo('manage')) return Promise.resolve(false);
   if (!archivioSupportato()) {
     showToast('Questo browser non consente di collegare una cartella: servono Chrome o Edge', 'error');
     return Promise.resolve(false);
@@ -1165,7 +1172,7 @@ function backupAutoScegli() {
     });
 }
 function backupAutoDisattiva() {
-  if (!roleGuard('manage')) return Promise.resolve(false);
+  if (!roleGuardRuolo('manage')) return Promise.resolve(false);
   try { localStorage.removeItem(BACKUP_AUTO_NOME_KEY); } catch (e) { /* niente da rompere */ }
   _backupAuto = { stato: null }; _backupAutoScritto = '';
   return _archivioTx('readwrite', st => st.delete(BACKUP_AUTO_KEY)).catch(() => null).then(() => {
@@ -1194,6 +1201,13 @@ function _backupAutoPota(dir, tenere) {
 function backupAutoEsegui(chiedi, forza) {
   if (!backupAutoAttivo()) return Promise.resolve(_backupAuto);
   if (_backupAutoInCorso) return _backupAutoInCorso;
+  // Non quando in memoria non c'è l'archivio vero (dalla 0.105.3): dopo un
+  // archivio illeggibile l'app mostra i dati d'esempio, e una scheda superata da
+  // un'altra ha dati vecchi. Il backup di oggi veniva riscritto con quelli, e il
+  // promemoria dei sette giorni taceva.
+  const finto = (typeof dbLoadError !== 'undefined' && dbLoadError) ? 'archivio non letto: il backup di oggi resta com\'era'
+    : (Store.superata && Store.superata()) ? 'Bomtrack è aperto in un\'altra scheda più recente' : '';
+  if (finto) { _backupAuto = { stato: 'pausa', ora: _oraLocale(), errore: finto }; return Promise.resolve(_backupAuto); }
   let payload;
   try { payload = Store.exportSnapshot(); }
   catch (e) { _backupAuto = { stato: 'errore', ora: _oraLocale(), errore: String(e && e.message || e) }; return Promise.resolve(_backupAuto); }
@@ -1224,7 +1238,7 @@ function backupAutoEsegui(chiedi, forza) {
 }
 // Il pulsante «Riprendi» del Riepilogo e «Salva ora» della scheda Backup.
 function backupAutoOra() {
-  if (!roleGuard('manage')) return Promise.resolve(null);
+  if (!roleGuardRuolo('manage')) return Promise.resolve(null);
   return backupAutoEsegui(true, true).then(e => {
     if (e.stato === 'ok') showToast('Backup salvato in ' + backupAutoNome());
     else if (e.stato === 'pausa') showToast('Il browser non ha concesso di scrivere nella cartella dei backup', 'error');
@@ -1250,6 +1264,69 @@ function backupAutoAvvia() {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') backupAutoEsegui(false); });
   }
 }
+// ─── Una copia prima di buttare via tutto (dalla 0.105.6) ───
+// Importa JSON, Ripristina dati esempio e Azzera tutto sostituiscono l'intero
+// archivio. La conferma c'era, ma chiedeva «hai esportato un backup?» e si
+// fidava della risposta. Adesso la copia la fa l'app, prima, con i due mezzi
+// che ha già:
+//   - con il backup automatico attivo, un file a parte nella sua cartella,
+//     `bomtrack_prima_di_<cosa>_AAAA-MM-GG_HHMM.json`. Non il file del giorno:
+//     quello si riscrive da solo nella mezz'ora successiva con i dati nuovi, e
+//     la copia sparirebbe proprio quando serve. Un nome diverso, quindi, che la
+//     potatura degli ultimi quattordici non tocca;
+//   - altrimenti, il download del JSON, come Esporta JSON.
+// Se la cartella non risponde lo si dice e si chiede se scaricare il file e
+// proseguire: senza una copia l'operazione non parte.
+//
+// Niente copia se in memoria c'è un archivio illeggibile (i dati d'esempio al
+// posto di quelli veri): salvarli non proteggerebbe niente, e importare un
+// backup è proprio il modo di uscirne. L'originale lo protegge già loadDB().
+//
+// `fn` riceve il nome della copia, o '' quando non se n'è fatta nessuna.
+function copiaPrimaDi(cosa, fn) {
+  if (typeof dbLoadError !== 'undefined' && dbLoadError) return Promise.resolve(fn(''));
+  let payload;
+  try { payload = Store.exportSnapshot(); }
+  catch (e) {
+    showToast('Copia di sicurezza non riuscita (' + (e && e.message || e) + '): operazione annullata', 'error');
+    return Promise.resolve(null);
+  }
+  const d = new Date();
+  const ora = String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+  const nome = `bomtrack_prima_di_${cosa}_${oggiISO()}_${ora}.json`;
+  const scarica = () => {
+    scaricaJson(nome, payload);
+    return fn(nome);
+  };
+  if (!backupAutoAttivo()) return Promise.resolve(scarica());
+  return backupAutoHandle()
+    .then(h => {
+      if (!h) throw new Error('cartella non disponibile');
+      return _permesso(h, true).then(ok => {
+        if (!ok) throw new Error('il browser non ha concesso di scriverci');
+        return h.getFileHandle(nome, { create: true })
+          .then(fh => fh.createWritable())
+          .then(w => Promise.resolve(w.write(payload)).then(() => w.close()));
+      });
+    })
+    .then(() => {
+      showToast('Copia di sicurezza salvata in ' + backupAutoNome() + ': ' + nome);
+      return fn(nome);
+    }, e => {
+      console.error('Copia di sicurezza non riuscita:', e);
+      return new Promise(fatto => {
+        askConfirm(`La copia di sicurezza nella cartella ${backupAutoNome()} non è riuscita (${String(e && e.message || e)}).\n\nPosso scaricarla come file e proseguire, oppure fermarmi qui.`,
+          () => fatto(scarica()), { title: 'Copia di sicurezza non riuscita', ok: 'Scarica e prosegui' });
+      });
+    });
+}
+// Lo stesso <a download> usa e getta di Esporta JSON.
+function scaricaJson(nome, testo) {
+  const url = URL.createObjectURL(new Blob([testo], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nome;
+  a.click(); URL.revokeObjectURL(url);
+}
 function backupAutoLine() {
   if (!archivioSupportato()) {
     return '<p style="margin-top:6px"><strong>Backup automatico:</strong> non disponibile in questo browser. Servono Chrome o Edge, con Bomtrack aperta da un indirizzo https o localhost.</p>';
@@ -1272,7 +1349,7 @@ function backupAutoLine() {
     </div>`;
 }
 function renderBackup() {
-  return `<div class="cloud-section">
+  return `${renderArchivioCondiviso()}<div class="cloud-section">
     <div style="flex:1">
       <strong>${ico('save', 'tinted', '')} Backup locale</strong>
       <p>I dati sono salvati nel browser (${inIndexedDb() ? 'IndexedDB' : 'localStorage'}). Esporta un file JSON per conservare un backup o trasferire i dati su un altro PC. L'import sovrascrive i dati attuali.</p>
@@ -1293,6 +1370,7 @@ function renderBackup() {
   ${renderTrash()}
   ${renderStorico()}
   ${renderDuplicateCodes()}
+  ${renderSerieDocumenti()}
   <div class="cloud-section" style="margin-top:16px">
     <div style="flex:1">
       <strong>${ico('warning', 'tinted', '')} Registro errori</strong>
@@ -1351,7 +1429,7 @@ function restoreFromTrash(trashId) {
   if (!roleGuard('manage')) return;
   const t = Store.restore(trashId);
   renderManage();
-  showToast(t ? `${TRASH_LABELS[t.coll] || t.coll} "${trashDescr(t)}" ripristinato` : 'Voce non trovata', t ? 'success' : 'error');
+  showToast(t ? `${TRASH_LABELS[t.coll] || t.coll} "${trashDescr(t)}" ripristinato` : (Store.rifiutoRipristino() || 'Voce non trovata'), t ? 'success' : 'error');
 }
 function purgeFromTrash(trashId) {
   if (!roleGuard('manage')) return;
@@ -1401,9 +1479,66 @@ function renderDuplicateCodes() {
     </div></div>`;
 }
 
+// Lo stesso controllo per i numeri dei documenti (dalla 0.105.6): doppioni e
+// buchi delle serie di quest'anno e dell'anno scorso — vedi
+// controlloSerieDocumenti() in core.js. Come per i codici, l'app non rinumera
+// niente da sola: un numero sta già su un ordine spedito o su una fattura.
+const SERIE_APRI = {
+  RFQ: id => { setView('rfq'); openRfqEdit(id); },
+  ODA: id => { setView('orders'); openOrderEdit(id); },
+  ODL: id => { setView('odl'); openOdlEdit(id); },
+  ODP: id => { setView('odp'); openOdpEdit(id); },
+  FAB: id => { setView('mrp'); openPlanEdit(id); },
+  COM: id => { setView('jobs'); openJobEdit(id); },
+  // Una modifica tecnica sta dentro la sua revisione: si apre l'articolo.
+  MT: id => { const r = getRevision(id); if (r) apriAnelloDistinta(r.itemId); },
+};
+function apriDocumentoDiSerie(sigla, id) { if (SERIE_APRI[sigla]) SERIE_APRI[sigla](id); }
+function renderSerieDocumenti() {
+  const anno = new Date().getFullYear();
+  const serie = controlloSerieDocumenti([anno, anno - 1]);
+  if (!serie.length) {
+    return `<div class="cloud-section" style="margin-top:16px"><div style="flex:1">
+      <strong>${ico('search', 'tinted', '')} Numeri dei documenti</strong>
+      <p>Nessun numero doppio e nessun buco nelle serie del ${anno} e del ${anno - 1}.</p>
+    </div></div>`;
+  }
+  const MAX_BUCHI = 30;
+  const blocchi = serie.map(s => {
+    const doppi = s.doppi.map(d => `<div style="margin-top:4px">
+        <span style="font-family:var(--mono);font-weight:700;color:var(--red)">${esc(d.numero)}</span> — ${d.docs.length} documenti:
+        ${d.docs.map((doc, i) => `<button class="btn-ghost" onclick="apriDocumentoDiSerie('${s.sigla}', ${jsAttr(doc.id)})">${ico('edit', 'tinted', '')} ${i + 1}°${doc.date ? ' del ' + esc(String(doc.date).slice(0, 10)) : ''}</button>`).join(' ')}
+      </div>`).join('');
+    const buchi = s.buchi.length
+      ? `<div style="margin-top:4px">${s.buchi.length === 1 ? 'Manca 1 numero' : `Mancano ${s.buchi.length} numeri`} sotto il ${String(s.massimo).padStart(3, '0')}:
+          <span style="font-family:var(--mono)">${s.buchi.slice(0, MAX_BUCHI).map(n => String(n).padStart(3, '0')).join(', ')}${s.buchi.length > MAX_BUCHI ? ` e altri ${s.buchi.length - MAX_BUCHI}` : ''}</span></div>`
+      : '';
+    return `<div class="mgmt-item" style="display:block">
+      <div style="font-family:var(--mono);font-weight:700">${esc(s.prefisso)}…</div>${doppi}${buchi}</div>`;
+  }).join('');
+  const conDoppi = serie.some(s => s.doppi.length);
+  return `<div class="cloud-section" style="border-color:${conDoppi ? 'var(--red)' : 'var(--orange)'};margin-top:16px">
+    <div style="flex:1">
+      <strong style="color:${conDoppi ? 'var(--red)' : 'var(--orange)'}">${ico('search', 'tinted', '')} Numeri dei documenti — ${serie.length} serie da guardare</strong>
+      <p>Un numero doppio nasce da un ripristino o da due PC che numeravano ciascuno per conto suo; un buco da una prenotazione dell'archivio condiviso mai usata. L'app non rinumera niente da sola: quel numero può essere già su un ordine spedito. Apri i documenti, decidi quale tiene il numero e, se serve, annota il buco per chi controlla.</p>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">${blocchi}</div>
+    </div></div>`;
+}
+
+// Il riquadro dell'archivio condiviso, in testa al Backup: dice dove stanno
+// i dati e porta alla scheda del collegamento (cloud.js).
+function renderArchivioCondiviso() {
+  const c = cloudConfig();
+  return `<div class="cloud-section" style="margin-bottom:16px"><div style="flex:1">
+    <strong>${ico('cloud', 'tinted', '')} Archivio condiviso</strong>
+    ${c ? `<p>Questo PC lavora sull'archivio condiviso di <strong>${esc(c.url)}</strong>. I dati di questo browser sono la sua copia: le modifiche partono da sole, e quelle dei colleghi arrivano ogni 25 secondi.</p>`
+      : `<p>Oggi i dati stanno solo in questo browser. Con un progetto Supabase diventano un archivio unico per tutti i colleghi, con i permessi dei ruoli applicati dal server. Prima di collegare: un PC solo porta i dati buoni, gli altri li scaricano.</p>`}
+    <div style="margin-top:8px"><button class="${c ? 'btn-outline' : 'add-btn-sm'}" onclick="cloudPannello()">${ico('cloud', 'tinted', '')} ${c ? 'Stato e collegamento' : 'Collega un archivio condiviso'}</button></div>
+  </div></div>`;
+}
 function exportBackup() {
   // Il backup contiene tutto, utenti e hash compresi: solo agli amministratori
-  if (!roleGuard('manage')) return;
+  if (!roleGuardRuolo('manage')) return;
   const blob = new Blob([Store.exportSnapshot()], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1414,6 +1549,7 @@ function exportBackup() {
 }
 function importBackup(ev) {
   if (!roleGuard('manage')) return;
+  if (cloudBlocca(ev)) return;
   const file = ev.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
@@ -1430,27 +1566,28 @@ function importBackup(ev) {
     const cosa = [`${n.items} articoli`, `${n.suppliers} fornitori`, `${n.rfqs} richieste`,
       `${n.orders} ordini`, `${n.plans} piani`, `${n.users} utenti`].join(', ');
     const attuale = `${db.items.length} articoli, ${db.suppliers.length} fornitori, ${db.rfqs.length} richieste, ${db.orders.length} ordini`;
-    askConfirm(`Il backup contiene: ${cosa}.\n\nSostituirà i dati attuali (${attuale}), che andranno persi.`, () => {
+    askConfirm(`Il backup contiene: ${cosa}.\n\nSostituirà i dati attuali (${attuale}). Prima ne salvo una copia.`, () => copiaPrimaDi('import', copia => {
       try {
         Store.importSnapshot(data);
       } catch (e) { showToast('Import non riuscito: ' + e.message, 'error'); return; }
       resetViewState();
       if (!reconcileSession()) return;   // il backup può contenere altri utenti
-      setView('bom'); showToast('Backup importato');
-    }, { title: '📥 Importa backup', ok: 'Importa e sovrascrivi' });
+      setView('bom'); showToast(copia ? 'Backup importato. I dati di prima sono in ' + copia : 'Backup importato');
+    }), { title: '📥 Importa backup', ok: 'Importa e sovrascrivi' });
   };
   reader.onerror = () => { console.error(reader.error); showToast('Impossibile leggere il file', 'error'); };
   reader.readAsText(file);
   ev.target.value = '';
 }
 function resetDB() {
+  if (cloudBlocca()) return;
   if (!roleGuard('manage')) return;
-  askConfirm('Ripristinare i dati di esempio? Tutti i dati attuali saranno persi.', () => {
+  askConfirm('Ripristinare i dati di esempio? I dati attuali saranno sostituiti: prima ne salvo una copia.', () => copiaPrimaDi('ripristino', copia => {
     Store.reset();
     resetViewState();
     if (!reconcileSession()) return;
-    setView('bom'); showToast('Dati ripristinati');
-  }, { title: '↩ Ripristina dati di esempio', ok: 'Ripristina' });
+    setView('bom'); showToast(copia ? 'Dati ripristinati. Quelli di prima sono in ' + copia : 'Dati ripristinati');
+  }), { title: '↩ Ripristina dati di esempio', ok: 'Ripristina' });
 }
 // Dopo un reset o un import il database sotto i piedi è cambiato: l'utente della
 // sessione può non esserci più. Se il nuovo database non ha utenti si ricrea
@@ -1472,12 +1609,13 @@ function reconcileSession() {
 // Azzeramento totale: doppia conferma, la seconda va digitata (il click distratto non basta).
 function wipeAll() {
   if (!roleGuard('manage')) return;
+  if (cloudBlocca()) return;
   const size = Store.sizeInfo();
   openModal(`<h3>${ico('warning', 'tinted pill', '')} Azzera tutto</h3>
     <p class="confirm-text">Il database verrà svuotato <strong>completamente</strong> e in modo <strong>irreversibile</strong>:
       ${db.items.length} articoli, ${db.rfqs.length} richieste, ${db.orders.length} ordini, ${(db.plans || []).length} piani
       (${size.mb.toFixed(2)} MB). Resti dentro come amministratore, tutto il resto sparisce.</p>
-    <p class="confirm-text">Hai esportato un backup JSON? Scrivi <strong>AZZERA</strong> qui sotto per confermare.</p>
+    <p class="confirm-text">Prima di azzerare ne salvo una copia: nella cartella del backup automatico, se è attivo, altrimenti come file scaricato. Scrivi <strong>AZZERA</strong> qui sotto per confermare.</p>
     <div class="modal-field"><input id="wipe-word" placeholder="AZZERA" autocomplete="off"
       style="text-transform:uppercase;font-family:var(--mono);font-weight:700"></div>
     <div class="modal-actions">
@@ -1490,25 +1628,28 @@ function wipeAllConfirm() {
   if (!roleGuard('manage')) return;
   if (val('wipe-word').toUpperCase() !== 'AZZERA') { showToast('Scrivi AZZERA per confermare', 'error'); return; }
   closeModal();
-  // L'utente che azzera sopravvive come amministratore: la sessione resta valida
-  Store.clearAll(currentUser ? JSON.parse(JSON.stringify(currentUser)) : null);
-  currentUser = currentUser ? getUser(currentUser.id) : null;
-  resetViewState();
-  renderUserPill();
-  setView('bom'); showToast('Database azzerato');
+  return copiaPrimaDi('azzera', copia => {
+    // L'utente che azzera sopravvive come amministratore: la sessione resta valida
+    Store.clearAll(currentUser ? JSON.parse(JSON.stringify(currentUser)) : null);
+    currentUser = currentUser ? getUser(currentUser.id) : null;
+    resetViewState();
+    renderUserPill();
+    setView('bom'); showToast(copia ? 'Database azzerato. I dati di prima sono in ' + copia : 'Database azzerato');
+  });
 }
 // Nessun documento o articolo sopravvive a un reset: azzera anche ciò che le viste tengono aperto
 function resetViewState() {
   currentBomId = null; reportBomId = null;
-  currentRfqId = null; currentOrderId = null;
-  rfqView = 'list'; orderView = 'list';
-  rfqUnlockedId = null; orderUnlockedId = null;
-  rfqDirty = false; orderDirty = false;
+  currentRfqId = null; currentOrderId = null; currentOdlId = null;
+  rfqView = 'list'; orderView = 'list'; odlView = 'list';
+  rfqUnlockedId = null; orderUnlockedId = null; odlUnlockedId = null;
+  rfqDirty = false; orderDirty = false; odlDirty = false;
   rfqCompareSel = []; bomExpanded = new Set(); favOnly = false;
   // Dalla funzione che li disegna, non a mano: scritti qui, i due estremi del
   // filtro per periodo erano già rimasti fuori il giorno stesso in cui sono nati.
   docFilters.rfq = docFiltersVuoti();
   docFilters.order = docFiltersVuoti();
+  docFilters.odl = docFiltersVuoti();   // gli ordini di lavoro erano rimasti fuori (dalla 0.105.6)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1520,12 +1661,19 @@ async function init() {
   await Store.preparaArchivio();
   if (Store.archivio === 'indexeddb') aggiornaStimaSpazio();
   Store.load();
+  // Un anello ricevuto nella sessione precedente è ancora lì: l'avviso deve
+  // tornare anche dopo aver ricaricato la pagina (dalla 0.105.6).
+  controllaAnelliDopoArrivo();
+  cloudAvvio();
   const ver = 'v' + APP_VERSION;
   ['app-version', 'app-version-login'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = ver;
   });
   // Sessione salvata → si rientra diretti; altrimenti accesso (o setup del primo admin)
-  if (!restoreSession()) renderLogin();
+  // Un link d'invito, di recupero password o di collegamento prende lui la
+  // schermata d'accesso (cloud.js).
+  if (cloudAllAvvio()) renderLogin();
+  else if (!restoreSession()) renderLogin();
   richiediPersistenza();
   backupAutoAvvia();
 }

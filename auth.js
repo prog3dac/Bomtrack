@@ -63,7 +63,9 @@ function _loginError(msg) {
 }
 // Primo avvio: senza utenti si crea il primo amministratore, invece di
 // spedire l'app con credenziali predefinite scritte nel codice.
-function needsSetup() { return userList().length === 0; }
+// Con l'archivio condiviso il primo amministratore nasce su Supabase, non qui.
+function needsSetup() { return !cloudInUso() && userList().length === 0; }
+function cloudInUso() { return typeof cloudAttivo === 'function' && cloudAttivo(); }
 function renderLogin() {
   const setup = needsSetup();
   document.getElementById('login-setup-fields').style.display = setup ? '' : 'none';
@@ -72,6 +74,12 @@ function renderLogin() {
     ? 'Primo avvio — crea l\'amministratore' : 'Distinte base & Costificazione';
   document.getElementById('login-submit').textContent = setup ? 'Crea amministratore' : 'Accedi';
   const err = document.getElementById('login-error'); if (err) err.style.display = 'none';
+  // La riga sotto il modulo dice dove stanno i dati, e da lì si collega o si
+  // controlla l'archivio condiviso.
+  const nota = document.getElementById('login-note');
+  if (nota) nota.innerHTML = cloudInUso()
+    ? `${ico('cloud', 'tinted', '')} Archivio condiviso: accedi con l'email e la password di Supabase. <a href="#" onclick="cloudPasswordDimenticata();return false">Password dimenticata?</a> · <a href="#" onclick="cloudPannello();return false">Collegamento</a>`
+    : `I dati risiedono in questo browser: l'accesso separa i ruoli tra colleghi, non protegge i dati. <a href="#" onclick="cloudPannello();return false">Collega un archivio condiviso…</a>`;
   const saved = !setup && emailRicordata();
   if (saved) {
     setVal('login-email', saved);
@@ -85,12 +93,30 @@ function renderLogin() {
   }
 }
 function submitLogin() {
+  if (cloudInUso()) return submitLoginCloud();
   if (needsSetup()) return createFirstAdmin();
   const email = val('login-email');
   const password = document.getElementById('login-password').value;
   if (!email) return _loginError('Inserisci la tua email');
   if (!password) return _loginError('Inserisci la password');
   const u = findUserByEmail(email);
+  // Un PC scollegato dall'archivio condiviso tiene gli utenti di Supabase, ma
+  // senza password locali: quelle le aveva Supabase. Senza questa strada
+  // nessuno potrebbe più entrare, nemmeno per ricollegarlo. Vale solo finché
+  // **nessuno** ha una password qui, e solo per un amministratore attivo: la
+  // prima password scritta diventa la sua. Dalla 0.105.4 è solo di chi ha
+  // scollegato (cloudPrimaPasswordPer).
+  if (u && u.role === 'admin' && u.active !== false && !userList().some(x => x.passwordHash)
+      && (typeof cloudPrimaPasswordPer !== 'function' || cloudPrimaPasswordPer(u))) {
+    if (password.length < 4) return _loginError('Scegli una password di almeno 4 caratteri: diventa la tua password su questo PC');
+    setUserPassword(u, password);
+    Store.update('users', u.id, { passwordHash: u.passwordHash, passwordSalt: u.passwordSalt });
+    ricordaEmail(document.getElementById('login-remember').checked ? (u.email || '') : '');
+    setVal('login-password', '');
+    doLogin(u, true);
+    showToast('Password di questo PC impostata: d\'ora in poi entri con questa');
+    return;
+  }
   // Un solo messaggio per utente inesistente e password errata: non si rivela
   // quali email esistono.
   if (!u || !verifyPassword(u, password)) {
@@ -102,6 +128,37 @@ function submitLogin() {
   ricordaEmail(document.getElementById('login-remember').checked ? (u.email || '') : '');
   setVal('login-password', '');
   doLogin(u, true);
+}
+// Con l'archivio condiviso le credenziali le controlla Supabase Auth.
+let _loginInCorso = false;
+async function submitLoginCloud() {
+  if (_loginInCorso) return;
+  const email = val('login-email');
+  const password = document.getElementById('login-password').value;
+  if (!email) return _loginError('Inserisci la tua email');
+  if (!password) return _loginError('Inserisci la password');
+  const btn = document.getElementById('login-submit');
+  _loginInCorso = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Accesso…'; }
+  try {
+    await cloudAccediConPassword(email, password);
+    ricordaEmail(document.getElementById('login-remember').checked ? email : '');
+    setVal('login-password', '');
+    await cloudLoginCompleta();
+  } catch (e) {
+    _loginError(e && e.cloud === 'rete' ? 'Server non raggiungibile: controlla la connessione'
+      : /invalid login credentials/i.test(e && e.message) ? 'Email o password errati' : cloudMsgErrore(e));
+    setVal('login-password', '');
+  } finally {
+    _loginInCorso = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Accedi'; }
+  }
+}
+async function cloudPasswordDimenticata() {
+  const email = val('login-email');
+  if (!email) return _loginError('Scrivi la tua email, poi premi di nuovo «Password dimenticata?»');
+  try { await cloudRecuperaPassword(email); showToast('Se l\'email è registrata, arriva un messaggio con il link per la nuova password'); }
+  catch (e) { _loginError(cloudMsgErrore(e)); }
 }
 function createFirstAdmin() {
   const name = val('login-name'), email = val('login-email');
@@ -153,6 +210,7 @@ function sessionExpired(s) {
 // Sessione salvata: si riapre l'app senza credenziali, purché l'utente esista
 // ancora, non sia stato sospeso nel frattempo e la sessione non sia scaduta.
 function restoreSession() {
+  if (cloudInUso()) return cloudRipristinaSessione();
   const s = sessioneSalvata();
   const u = s && s.userId ? getUser(s.userId) : null;
   if (!u || u.active === false || sessionExpired(s)) { dimenticaSessione(); return false; }
@@ -164,7 +222,10 @@ function restoreSession() {
   doLogin(u, true);
   return true;
 }
-function logout() {
+// `daCloud`: l'uscita la sta già facendo cloud.js (sessione scaduta, accesso
+// sospeso), che ha fermato il giro e chiuso la sessione per conto suo.
+function logout(daCloud) {
+  if (cloudInUso() && daCloud !== true) { cloudFerma(); cloudEsci(); }
   dimenticaSessione();
   currentUser = null;
   Store.setActor(null);
@@ -216,6 +277,15 @@ function safeColor(c) { return /^#[0-9A-Fa-f]{6}$/.test(String(c || '')) ? c : '
 // Cambio password del proprio account
 function changePassword() {
   if (!currentUser) return;
+  if (cloudInUso()) {
+    openModal(`<h3>${ico('key', 'tinted pill', '')} Cambia password</h3>
+      <p>È la password del tuo accesso all'archivio condiviso, su ogni PC.</p>
+      <div class="modal-field"><label>Nuova password</label><input type="password" id="cp-new" autocomplete="new-password"></div>
+      <div class="modal-field"><label>Ripeti nuova password</label><input type="password" id="cp-new2" autocomplete="new-password"></div>
+      <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+        <button class="add-btn-sm" onclick="saveOwnPasswordCloud()">Salva</button></div>`);
+    return;
+  }
   openModal(`<h3>${ico('key', 'tinted pill', '')} Cambia password</h3>
     <div class="modal-field"><label>Password attuale</label><input type="password" id="cp-old"></div>
     <div class="modal-field"><label>Nuova password</label><input type="password" id="cp-new"></div>
@@ -235,4 +305,11 @@ function saveOwnPassword() {
   // per la stessa collezione nello stesso file sono una di troppo.
   Store.update('users', u.id, { passwordHash: u.passwordHash, passwordSalt: u.passwordSalt });
   closeModal(); savedToast('Password aggiornata');
+}
+async function saveOwnPasswordCloud() {
+  const n1 = document.getElementById('cp-new').value, n2 = document.getElementById('cp-new2').value;
+  if (n1.length < 8) { showToast('La nuova password deve avere almeno 8 caratteri', 'error'); return; }
+  if (n1 !== n2) { showToast('Le due password non coincidono', 'error'); return; }
+  try { await cloudAggiornaPassword(n1); closeModal(); showToast('Password aggiornata'); }
+  catch (e) { showToast(cloudMsgErrore(e), 'error'); }
 }

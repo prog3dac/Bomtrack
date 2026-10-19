@@ -104,7 +104,7 @@
       <div id="login-error" class="login-error" role="alert" style="display:none"></div>
       <button class="add-btn-sm" id="login-submit" style="width:100%;justify-content:center" onclick="submitLogin()">Accedi</button>
     </form>
-    <p class="login-note">I dati risiedono in questo browser: l'accesso separa i ruoli tra colleghi, non protegge i dati.</p>
+    <p class="login-note" id="login-note">I dati risiedono in questo browser: l'accesso separa i ruoli tra colleghi, non protegge i dati.</p>
   </div>
 </div>
 
@@ -121,6 +121,7 @@
   <nav class="nav" id="main-nav"></nav>
   <div class="header-right">
     <span class="unsaved-badge" id="unsaved-badge" style="display:none"></span>
+    <button class="cloud-stato" id="cloud-stato" style="display:none" onclick="cloudPannello()"></button>
     <span class="header-clock" id="header-clock"></span>
     <span class="user-pill" id="user-pill"></span>
     <button class="btn-outline btn-icon" onclick="globalSearchModal()" title="Cerca ovunque (Ctrl+K)" aria-label="Cerca ovunque"><svg class="ico tinted ic-search" aria-hidden="true"><use href="#ic-search"></use></svg></button>
@@ -337,6 +338,7 @@
           <option value="">Tutti gli stati</option>
           <option value="sotto">Sotto la scorta minima</option>
           <option value="zero">Giacenza a zero</option>
+          <option value="sottozero">Esistente negativo</option>
           <option value="con">Con giacenza</option>
           <option value="arrivo">Con merce in arrivo</option>
           <option value="negativo">Libero negativo</option>
@@ -457,6 +459,7 @@
 <!-- Traduzione annidato ↔ normalizzato: legge SCHEMA da store.js, non dipende
      da altro. Nessun codice di rete: l'app resta locale. -->
 <script src="cloud-map.js"></script>
+<script src="cloud.js"></script>
 <script src="core.js"></script>
 <script src="auth.js"></script>
 <script src="costing.js"></script>

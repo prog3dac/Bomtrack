@@ -1,17 +1,36 @@
-# Bomtrack — Schema dati cloud (contratto per il futuro adapter)
+# Bomtrack — Schema dati cloud (contratto dell'archivio condiviso)
 
-Stato attuale: **nessun codice di rete, e lo spostamento su un backend non è previsto per
-ora.** I dati vivono in `localStorage` (chiave `bomtrack_v1`) come unico blob JSON, gestito da
-`store.js`, e l'app deve funzionare così. Questo documento definisce il contratto verso cui il
-layer dati è predisposto: un backend condiviso per un piccolo team (Supabase / Cloudflare D1)
-con **tabelle normalizzate**.
+Stato attuale (dalla 0.103.0): **l'adattatore esiste ed è `cloud.js`.** Senza collegamento i
+dati vivono nel browser (IndexedDB, o `localStorage` dove manca) come unico documento JSON,
+gestito da `store.js`, e l'app si comporta come sempre. Collegato un progetto Supabase, quel
+documento diventa lo specchio di un database condiviso con **tabelle normalizzate**, e la coda
+di ciò che non è ancora partito. Questo documento è il contratto fra i due.
 
-> **Predisposto, ma spento (dalla 0.83.1).** La contabilità che serve solo a un backend —
+**Come lavora `cloud.js`** (il «vero percorso» qui sotto, fatto):
+- `Store.dopoCommit` programma un invio dopo ogni salvataggio riuscito; il lotto di
+  `Store.takeChanges()` diventa **una** chiamata a `push_changes()`, mai spezzata
+  (`cloudPayload()`: le radici con la loro `pos`, le figlie `row` di un padre già noto solo se
+  cambiate dall'ultimo invio, le `replace` intere, le impostazioni solo con la gestione);
+- `pull_changes(since)` ogni 25 s, al ritorno sulla finestra e della rete, applicato con
+  `Store.applicaRemoto()` (`cloudApplica()`) solo senza modifiche in sospeso e senza schede o
+  campi aperti; le righe che arrivano non tornano indietro e non si datano di nuovo;
+- la fotografia dell'ultimo invio riuscito (`Store.baseSalvabile()` →
+  `localStorage.bomtrack_cloud_base`) sopravvive alla chiusura della finestra, così la coda
+  resta;
+- Auth e RPC con `fetch()`, senza `supabase-js`; il rinnovo del token è uno alla volta;
+- primo collegamento: `cloudCaricaArchivio()` (server vuoto, amministratore: utenti per
+  email, `remapIds()`, invio a gruppi nell'ordine delle chiavi esterne) o
+  `cloudScaricaArchivio()` (`Store.sostituisciDaRemoto()`).
+
+Le prove stanno in `test/cloud.test.js` e `test/cloud-ui.test.js`, contro
+`test/supabase-finto.js`: Auth e RPC finti, con dietro Postgres e `supabase/schema.sql` veri.
+
+> **Spento finché non si collega (dalla 0.83.1).** La contabilità che serve solo a un backend —
 > date e cancellazioni riga per riga delle tabelle figlie, ricevimenti come eventi — costava
 > in locale spazio (+40% e +45% di archivio, misurati, in un localStorage da ~5 MB) e tempo
 > di salvataggio, senza alcun vantaggio per chi lavora da solo. Sta dietro un interruttore,
-> `Store.modoCondiviso`, **spento di serie**; lo accenderà l'adattatore cloud prima di
-> `Store.load()`, e accenderlo dopo non perde niente. Tutto ciò che questo documento descrive
+> `Store.modoCondiviso`, **spento di serie**; lo accende `cloud.js` prima di
+> `Store.load()` quando il PC è collegato, e accenderlo dopo non perde niente. Tutto ciò che questo documento descrive
 > resta vero e testato con l'interruttore acceso; in locale l'app si comporta come prima.
 
 ## Predisposizioni già attive (schema v2, aggiornate alla 0.24.0)
@@ -82,7 +101,7 @@ immaginarle.
 | `plans` | `production_plans` | id uuid PK, number unique per anno, title, date, notes, active, created_at, updated_at |
 | `plans[].lines` | `production_plan_lines` | id uuid PK, plan_id uuid FK, item_id uuid FK, qty numeric |
 | `revisions` | `item_revisions` | id uuid PK, item_id uuid FK, rev, date, motivo, **snapshot jsonb**, created_by, created_at |
-| `trash` | `trash` | id uuid PK, coll, deleted_at, deleted_by uuid FK, **record jsonb** — le eliminazioni recuperabili, ripulite dopo `TRASH_DAYS` |
+| `trash` | `trash` | id uuid PK, coll, deleted_at, deleted_by uuid FK, **record jsonb** — le eliminazioni recuperabili, ripulite dopo `TRASH_DAYS` dal server (`pulizia_archivio()`, dalla 0.106.0) |
 | `jobs` | `jobs` | id uuid PK, number unique per anno, customer, title, customer_ref, status ('aperta'\|'produzione'\|'chiusa'\|'annullata'), date, due_date, notes, active, created_at, updated_at |
 | `reminders` | `reminders` | id uuid PK, date, title, notes, gravita ('alta'\|'media'\|'info'), done bool, job_id FK nullable, active, created_by, created_at, updated_at |
 | `movements` | `stock_movements` | id uuid PK, item_id uuid FK, kind ('rettifica'\|'carico'\|'scarico'\|'clOut'\|'clIn'\|'clStep'\|'versamento'), qty numeric **con segno** (positiva e senza effetto sulla giacenza su `clStep`), date, note, supplier_id uuid FK **nullable** (su `clStep`: **dove va**, nullo = torna da noi), from_supplier_id uuid FK **nullable** (solo `clStep`: **da dove viene**, nullo = parte da noi), order_id uuid FK **nullable** (un ordine d'acquisto, di lavoro **o di produzione**), line_id **nullable** (su un ordine di produzione è l'id della **fase**), decl_id **nullable** (la dichiarazione che l'ha generato), created_by, created_at |
@@ -525,6 +544,18 @@ funzionante è `timetrack-supabase` (`migrations/schema.sql`, `supabase/function
 | `db.users` da `Store.load()` | `select * from profiles` |
 | `canWrite(area)` / `roleGuard(area)` | restano **invariati**, raddoppiati da policy RLS per ruolo |
 
+**Dalla 0.105.0** `addUser()` con l'archivio condiviso chiama la funzione
+`supabase/functions/bomtrack-utenti` (`cloudUtenti` in `cloud.js`): `invita`
+crea l'utente Auth con `generateLink({ type: 'invite' })` e restituisce il link,
+`reimposta` genera quello di recupero. A differenza del precedente di timetrack,
+il ruolo **non** viaggia nei metadati dell'utente Auth: il trigger
+`profilo_da_utente` lo fa nascere lettore sospeso, e ruolo e stato li scrive la
+funzione **con il token dell'amministratore**, sotto RLS e `profiles_guardia`.
+Così una registrazione lasciata aperta non può chiedersi da sola un ruolo. La
+funzione risponde solo a un amministratore attivo e non genera il link di
+recupero di un altro amministratore. `profiles_guardia` impedisce anche di
+declassare o sospendere l'ultimo amministratore attivo.
+
 Schema delle policy: scritto in `supabase/schema.sql` dalla 0.83.0 — vedi
 «Accesso» nella sezione sullo schema SQL. La matrice è quella di `ROLE_WRITE`
 in `core.js`, applicata tabella per tabella.
@@ -618,11 +649,33 @@ cosa lo decide l'app:
 ```json
 { "upsert": { "tabella": [righe di dbVersoCloud] },
   "remove": { "tabella": [id] },
-  "settings": { "data": {}, "updated_at": "…", "updated_by": "…" } }
+  "settings": { "data": {}, "updated_at": "…", "updated_by": "…" },
+  "base": { "items": { "<uuid>": "2026-10-16T07:00:00.000Z" } } }
 ```
 
-- radici e figlie per riga: last-write-wins su `updated_at`; chi perde torna in
-  `rejected` e l'app lo deve dire;
+- `base` (facoltativo, dalla 0.103.2 per le radici, dalla 0.105.6 anche per
+  le figlie per riga): `{ tabella: { id: updated_at } }`, la versione da cui il
+  client è partito per le righe che già conosceva. Con `base` decide solo la
+  versione (dalla 0.105.6): se sul server la riga è ancora quella la modifica
+  passa, qualunque data porti — l'orologio del PC non conta più; se è intanto
+  cambiata, la modifica è fatta su una copia vecchia e viene respinta, per
+  quanto recente sia la sua data. Confronto al millesimo;
+- senza `base` (righe nuove, ripristini, client di prima della 0.103.2):
+  last-write-wins su `updated_at`; chi perde torna in `rejected` e l'app lo
+  deve dire;
+- le figlie per riga partono se diverse dalla fotografia dell'ultimo invio
+  (dalla 0.105.6; prima: se datate dopo l'ultimo invio, meno un margine);
+- `created_by`, `updated_by`, `trash.deleted_by` e `settings.updated_by` li
+  scrive il server con l'utente che invia (dalla 0.105.6); le righe vecchie che
+  arrivano nuove (primo caricamento, ripristino) tengono i loro autori;
+- numeri dei documenti unici (indice parziale `<tabella>_numero_unico` sui
+  numeri `SIGLA-ANNO-N`, dalla 0.105.6): un numero nuovo già di un altro
+  documento ferma l'invio con `23505` e il DETAIL elenca le righe in JSON
+  (`[{tab, id, numero}]`); l'app le rinumera con `riserva_numeri` e rimanda
+  (`cloudRiparaNumeri`);
+- un riferimento che non regge (`23503`) l'app lo ripara e rimanda il lotto:
+  vince chi usa — un record eliminato ma ancora citato torna, una
+  cancellazione di un record citato si ritira (`cloudRiparaRiferimento`);
 - figlie `replace`: per ogni padre accettato l'insieme si sostituisce con
   quello inviato, vuoto compreso — il client manda sempre l'insieme intero;
 - `remove`: cancella e lascia una lapide in `sync_tombstones`; la lapide cede
@@ -645,6 +698,33 @@ Le figlie `replace` tornano per padre, intere. `now` va ripassato come `since`
 al giro successivo **meno un margine**: una transazione lunga può scrivere un
 `synced_at` più vecchio di un pull già fatto, e rileggere una riga non costa
 niente.
+
+**Numeri e codici (dalla 0.104.0).** Con l'archivio condiviso un PC senza
+collegamento consulta soltanto (`cloudSolaLettura`, dentro `canWrite`), e chi
+crea è sempre in linea. Per questo numeri e codici si chiedono al server prima
+di usarli:
+
+- `riserva_numeri(prefisso, quanti, minimo)` → `quanti` numeri della serie
+  `«SIGLA-ANNO-»` (RFQ, ODA, ODL, ODP, FAB, COM, MT), in ordine: prima quelli
+  in `numeri_liberi` (restituiti mentre un collega andava avanti), poi i
+  successivi al più alto fra documenti, impegni aperti (`numeri_impegnati`) e
+  `minimo` (il massimo dei documenti ancora in coda sul client). Un lucchetto
+  per serie (`pg_advisory_xact_lock`) mette in fila le richieste. Un impegno si
+  chiude quando il documento arriva (trigger `numeri_chiudi_impegno`) e scade
+  dopo sette giorni. Serve il diritto di scrivere la tabella della serie. Lato
+  client, `conNumeri({ ODA: 2 }, fare)` riserva, esegue `fare` (che consuma i
+  numeri con le solite `next…Number()`) e restituisce con `libera_numeri`
+  quelli non usati: la serie non ha buchi;
+- `impegna_codici([{ codice, item }])` → i codici già presi: da un articolo
+  diverso da `item`, o impegnati da un altro utente nell'ultima ora
+  (`codici_impegnati`). Il confronto ignora maiuscole e spazi. Lato client
+  `conCodiceImpegnato` e l'import del catalogo; i codici rifiutati finiscono
+  in `_codiciAltrui`, che la generazione automatica salta fino al giro dopo.
+  Quelli impegnati e non usati tornano con `libera_codici`.
+
+Le tabelle hanno RLS senza policy: le toccano solo le due funzioni
+(`security definer`). La rinumerazione dopo il pull (`cloudNumeriDoppi`) resta
+come rete di sicurezza.
 
 **Accesso (dalla 0.83.0).** RLS attiva su ogni tabella, con la matrice
 dell'app scritta dove non si può aggirare. Due registri, e le policy si
