@@ -497,25 +497,75 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
 
 -- ─── synced_at: l'ora del server, per il pull ───────────────
--- updated_at è l'ora del client e decide chi vince; synced_at è quella del
--- server e decide che cosa un altro client non ha ancora visto. Sono due
--- domande diverse: un client con l'orologio indietro scrive un updated_at
--- vecchio, ma la sua riga va comunque mandata a chi fa pull dopo.
+-- updated_at è l'ora del client e fa da **versione** della riga; synced_at è
+-- quella del server e decide che cosa un altro client non ha ancora visto.
+-- Sono due domande diverse: un client con l'orologio indietro scrive un
+-- updated_at vecchio, ma la sua riga va comunque mandata a chi fa pull dopo.
 create or replace function public.sync_stamp() returns trigger language plpgsql as $$
-declare quando timestamptz;
+declare
+  quando timestamptz;
+  nuovo jsonb;
+  vecchio jsonb;
+  chi uuid;
+  campi jsonb := '{}'::jsonb;
+  recente timestamptz := clock_timestamp() - interval '1 day';
 begin
   new.synced_at := clock_timestamp();
-  -- Chi vince fra due modifiche lo decide l'updated_at, scritto dal PC (dalla
-  -- 0.105.3). Un PC con l'orologio avanti (una data del BIOS sbagliata, un
-  -- updated_at scritto a mano dall'API) bloccava per sempre le modifiche dei
-  -- colleghi a ogni cosa che toccava: le loro arrivavano sempre «più vecchie».
-  -- Dall'app e dall'API si rifiuta; dal SQL Editor (utente postgres) no.
-  if current_user in ('authenticated', 'anon') then
-    quando := (to_jsonb(new)->>'updated_at')::timestamptz;
-    if quando > clock_timestamp() + interval '5 minutes' then
-      raise exception 'L''orologio di questo PC è avanti rispetto al server: correggi data e ora del PC, poi le modifiche partono da sole';
+  if current_user not in ('authenticated', 'anon') then return new; end if;
+  nuovo := to_jsonb(new);
+  -- Un updated_at nel futuro (dalla 0.105.3). Un PC con l'orologio avanti (una
+  -- data del BIOS sbagliata, un updated_at scritto a mano dall'API) bloccava
+  -- le modifiche dei colleghi a ogni cosa che toccava, quando a decidere era
+  -- l'ordine delle date. Dall'app e dall'API si rifiuta; dal SQL Editor
+  -- (utente postgres) no.
+  quando := (nuovo->>'updated_at')::timestamptz;
+  if quando > clock_timestamp() + interval '5 minutes' then
+    raise exception 'L''orologio di questo PC è avanti rispetto al server: correggi data e ora del PC, poi le modifiche partono da sole';
+  end if;
+  -- Chi ha scritto lo dice il server (dalla 0.105.6). created_by, updated_by
+  -- e il deleted_by del cestino arrivavano dal PC e si salvavano com'erano:
+  -- dall'API si poteva far risultare autore di un prezzo chiunque. Ora:
+  --  - una modifica (updated_at cambiato) è di chi la invia; chi ha creato la
+  --    riga non cambia più;
+  --  - una riga nuova di oggi (creata, modificata o eliminata nell'ultimo
+  --    giorno) è di chi la invia. Le righe vecchie che arrivano nuove al
+  --    server — il primo caricamento dell'archivio, un ripristino dal cestino
+  --    — tengono gli autori che hanno: sono la storia, non un gesto di adesso.
+  -- Un trigger solo per tutte le tabelle: i campi che una tabella non ha,
+  -- jsonb_populate_record li ignora.
+  chi := auth.uid();
+  if chi is null then return new; end if;
+  if tg_op = 'UPDATE' then vecchio := to_jsonb(old); end if;
+  if nuovo ? 'created_by' then
+    if tg_op = 'INSERT' then
+      if coalesce((nuovo->>'created_at')::timestamptz, clock_timestamp()) > recente then
+        campi := campi || jsonb_build_object('created_by', chi);
+      end if;
+    else
+      campi := campi || jsonb_build_object('created_by', coalesce(vecchio->'created_by', nuovo->'created_by'));
     end if;
   end if;
+  if nuovo ? 'updated_by' then
+    if tg_op = 'INSERT' then
+      if coalesce(quando, clock_timestamp()) > recente then
+        campi := campi || jsonb_build_object('updated_by', chi);
+      end if;
+    elsif (nuovo->'updated_at') is distinct from (vecchio->'updated_at') then
+      campi := campi || jsonb_build_object('updated_by', chi);
+    else
+      campi := campi || jsonb_build_object('updated_by', vecchio->'updated_by');
+    end if;
+  end if;
+  if nuovo ? 'deleted_by' then
+    if tg_op = 'INSERT' then
+      if coalesce((nuovo->>'deleted_at')::timestamptz, clock_timestamp()) > recente then
+        campi := campi || jsonb_build_object('deleted_by', chi);
+      end if;
+    else
+      campi := campi || jsonb_build_object('deleted_by', coalesce(vecchio->'deleted_by', nuovo->'deleted_by'));
+    end if;
+  end if;
+  if campi <> '{}'::jsonb then new := jsonb_populate_record(new, campi); end if;
   return new;
 end $$;
 
@@ -528,6 +578,14 @@ begin
   end loop;
 end $$;
 
+-- La colonna del numero di un documento numerato in serie (SIGLA-ANNO-N), o
+-- null. Le stesse tabelle di numeri_serie_usati, più sotto.
+create or replace function public.colonna_numero(tab text) returns text
+language sql immutable set search_path = public as $$
+  select case when tab = 'item_revisions' then 'eco_number'
+              when tab in ('rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs') then 'number' end
+$$;
+
 -- ─── Invio ──────────────────────────────────────────────────
 -- payload = {
 --   "upsert":   { tabella: [righe di dbVersoCloud] },
@@ -538,16 +596,23 @@ end $$;
 -- Tutto in una transazione: se una riga viola un vincolo, non entra niente.
 --
 -- Regole:
---  - root e row: last-write-wins su updated_at. Una riga più vecchia di quella
---    che c'è non passa, e torna in `rejected` — l'app deve dirlo all'utente.
 --  - base: per le righe che il client ha modificato partendo da una versione
---    nota, l'updated_at di quella versione. Se intanto sul server la riga è
---    cambiata (un collega l'ha salvata dopo), la modifica è fatta su una copia
---    vecchia: passerebbe per più recente e cancellerebbe in silenzio quella del
---    collega. Viene respinta, come una più vecchia. Il confronto è al
---    millesimo: le date che il server scrive da sé (now()) hanno i
---    microsecondi, quelle che il browser rimanda no. Senza `base` vale il solo
---    last-write-wins (client di prima della 0.103.2).
+--    nota, l'updated_at di quella versione (radici dalla 0.103.2, righe figlie
+--    dalla 0.105.6). Decide **solo** la versione (dalla 0.105.6): se sul
+--    server la riga è ancora quella, la modifica passa, qualunque data porti;
+--    se intanto è cambiata (un collega l'ha salvata dopo), la modifica è fatta
+--    su una copia vecchia e viene respinta, per quanto recente sia la sua
+--    data. Prima contava anche l'ordine delle date, cioè l'orologio del PC: un
+--    PC con l'orologio indietro vedeva respinta ogni modifica a ciò che un
+--    collega aveva toccato, anche partendo dalla copia giusta. Il confronto è
+--    al millesimo: le date che il server scrive da sé (now()) hanno i
+--    microsecondi, quelle che il browser rimanda no.
+--  - senza base (una riga nuova, un ripristino, un client di prima della
+--    0.103.2): last-write-wins su updated_at. Una riga più vecchia di quella
+--    che c'è non passa, e torna in `rejected` — l'app deve dirlo all'utente.
+--  - numeri dei documenti: un numero nuovo per quella riga, già di un altro
+--    documento, ferma l'invio con 23505, e il DETAIL elenca le righe in JSON
+--    ({tab, id, numero}): l'app le rinumera con numeri riservati e rimanda.
 --  - replace: per ogni padre **accettato** in questo invio, l'insieme dei figli
 --    si sostituisce con quello inviato, vuoto compreso. Il client manda sempre
 --    l'insieme completo di ogni padre che invia (dbVersoCloud lo fa). Un padre
@@ -572,6 +637,8 @@ declare
   accettati jsonb := '{}'::jsonb;   -- tabella → [id accettati], per i figli replace
   padri text[];
   ids text[];
+  colnum text;
+  doppi jsonb;
 begin
   if payload is null or jsonb_typeof(payload) <> 'object' then
     raise exception 'push_changes: payload mancante';
@@ -643,6 +710,30 @@ begin
 
     select coalesce(array_agg(e->>'id'), '{}') into dati from jsonb_array_elements(righe) e;
 
+    -- Numeri dei documenti (dalla 0.105.6): l'indice unico c'è (più sotto), ma
+    -- con RLS attiva il suo errore non dice quale riga, e l'app non saprebbe
+    -- che cosa rinumerare. Qui sì: le righe che portano un numero nuovo per
+    -- loro, già di un altro documento (o di un'altra riga dello stesso invio).
+    -- Un numero che la riga ha già non conta: un doppione di prima
+    -- dell'indice si modifica ancora.
+    colnum := public.colonna_numero(reg.tab);
+    if colnum is not null then
+      execute format($q$
+        select jsonb_agg(jsonb_build_object('tab', %1$L, 'id', s.id, 'numero', s.%2$I) order by s.id)
+          from jsonb_populate_recordset(null::public.%1$I, $1) s
+         where s.%2$I ~ '^[A-Z]{2,3}-[0-9]{4}-[0-9]+$'
+           and not exists (select 1 from public.%1$I t where t.id = s.id and t.%2$I = s.%2$I)
+           and (exists (select 1 from public.%1$I t
+                         where t.%2$I = s.%2$I and t.%2$I ~ '^[A-Z]{2,3}-[0-9]{4}-[0-9]+$' and t.id <> s.id)
+                or exists (select 1 from jsonb_populate_recordset(null::public.%1$I, $1) u
+                            where u.%2$I = s.%2$I and u.id < s.id))
+      $q$, reg.tab, colnum) into doppi using righe;
+      if doppi is not null then
+        raise exception 'duplicate key value violates unique constraint "%_numero_unico"', reg.tab
+          using errcode = '23505', detail = doppi::text;
+      end if;
+    end if;
+
     if reg.merge = 'replace' then
       -- Solo i figli dei padri accettati in questo invio.
       select coalesce(array_agg(x), '{}') into padri
@@ -675,12 +766,16 @@ begin
                                  -- senza le sue righe, che il delete aveva portato via.
                                  or ($2 is not null and $2 ? s.id::text)))
         on conflict (id) do update set %3$s
-          where (public.%1$I.updated_at is null
-                 or excluded.updated_at >= public.%1$I.updated_at)
-            and ($2 is null or not ($2 ? public.%1$I.id::text)
-                 or date_trunc('milliseconds', public.%1$I.updated_at)
-                    = date_trunc('milliseconds', ($2->>public.%1$I.id::text)::timestamptz)
-                 or public.%1$I.updated_at is not distinct from excluded.updated_at)
+          where public.%1$I.updated_at is null
+             or case when $2 is not null and $2 ? public.%1$I.id::text
+                  -- Con la versione di partenza: è ancora quella? (O è la
+                  -- stessa che arriva: un invio ripetuto dopo una risposta persa.)
+                  then date_trunc('milliseconds', public.%1$I.updated_at)
+                       = date_trunc('milliseconds', ($2->>public.%1$I.id::text)::timestamptz)
+                    or public.%1$I.updated_at = excluded.updated_at
+                  -- Senza: la data più recente.
+                  else excluded.updated_at >= public.%1$I.updated_at
+                end
       $q$, reg.tab, reg.tab, agg)
       using righe, payload->'base'->reg.tab;
       -- Chi è passato: le righe che ora portano l'updated_at inviato. Una
@@ -719,11 +814,13 @@ begin
       on conflict (tab, id) do update set deleted_at = clock_timestamp(), deleted_by = excluded.deleted_by;
   end loop;
 
+  -- Chi le ha cambiate lo dice il server (dalla 0.105.6); dal SQL Editor,
+  -- senza utente, vale quello dichiarato.
   if payload ? 'settings' then
     insert into settings (id, data, updated_at, updated_by)
       values (1, coalesce(payload->'settings'->'data', '{}'),
               (payload->'settings'->>'updated_at')::timestamptz,
-              (payload->'settings'->>'updated_by')::uuid)
+              coalesce(auth.uid(), (payload->'settings'->>'updated_by')::uuid))
       on conflict (id) do update set data = excluded.data, updated_at = excluded.updated_at, updated_by = excluded.updated_by;
   end if;
 
@@ -868,7 +965,11 @@ select t, a from (values
   ('item_prices', 'catalog'), ('item_prices', 'bom'), ('item_prices', 'manage'),
   ('item_revisions', 'catalog'), ('item_revisions', 'bom'),
   ('attachments', 'catalog'), ('attachment_docs', 'catalog'),
-  ('rfqs', 'docs'), ('rfqs', 'catalog'), ('rfq_lines', 'docs'), ('rfq_lines', 'catalog'),
+  -- Le richieste d'offerta sono documenti (dalla 0.105.6 solo `docs`): la
+  -- registrazione dei prezzi a listino, dall'area `catalog`, scrive articoli
+  -- e quotazioni, non la richiesta. Prima la progettazione poteva cambiare
+  -- dall'API anche una richiesta già spedita.
+  ('rfqs', 'docs'), ('rfq_lines', 'docs'),
   ('orders', 'docs'), ('order_lines', 'docs'), ('order_receipts', 'docs'),
   ('work_orders', 'docs'), ('work_order_lines', 'docs'),
   ('production_plans', 'docs'), ('production_plan_lines', 'docs'),
@@ -977,7 +1078,10 @@ create trigger profiles_ultimo_admin before delete on public.profiles for each r
 -- Dal SQL Editor (auth.uid() nullo, current_user postgres) non vale.
 create or replace function public.officina_guardia() returns trigger language plpgsql as $$
 declare
-  liberi text[] := array['updated_at', 'updated_by', 'synced_at', 'pos'] || string_to_array(coalesce(tg_argv[0], ''), ',');
+  -- created_by: con ON CONFLICT la riga proposta passa prima dal trigger
+  -- d'inserimento, che la attribuisce a chi invia; sync_stamp, dopo questo,
+  -- rimette quello di prima.
+  liberi text[] := array['updated_at', 'updated_by', 'created_by', 'synced_at', 'pos'] || string_to_array(coalesce(tg_argv[0], ''), ',');
   c text;
   esiste boolean;
 begin
@@ -1214,8 +1318,13 @@ returns int[] language plpgsql security definer set search_path = public as $$
 declare usati int[]; alto int; presi int[] := '{}'; n int;
 begin
   if quanti is null or quanti < 1 or quanti > 500 then raise exception 'quantità non valida: %', quanti; end if;
-  usati := array(select public.numeri_serie_usati(prefisso));
+  -- Prima il lucchetto, poi i numeri usati (dalla 0.105.6). Letti prima, un
+  -- documento arrivato mentre si aspettava il lucchetto non stava né fra gli
+  -- usati né fra gli impegni (il suo invio li aveva chiusi), e il suo numero
+  -- si dava di nuovo. L'invio che chiude un impegno prende lo stesso
+  -- lucchetto (numeri_chiudi_impegno).
   perform pg_advisory_xact_lock(hashtext('bomtrack-numeri:' || prefisso));
+  usati := array(select public.numeri_serie_usati(prefisso));
   -- Gli impegni chiusi (il documento è arrivato) o scaduti non contano più.
   delete from public.numeri_impegnati
    where serie = prefisso and (numero = any(usati) or quando < now() - interval '7 days');
@@ -1247,8 +1356,8 @@ create or replace function public.libera_numeri(prefisso text, numeri int[])
 returns int language plpgsql security definer set search_path = public as $$
 declare usati int[]; n int;
 begin
+  perform pg_advisory_xact_lock(hashtext('bomtrack-numeri:' || prefisso));   -- prima, come in riserva_numeri
   usati := array(select public.numeri_serie_usati(prefisso));
-  perform pg_advisory_xact_lock(hashtext('bomtrack-numeri:' || prefisso));
   with tolti as (
     delete from public.numeri_impegnati
      where serie = prefisso and numero = any(coalesce(numeri, '{}')) and utente is not distinct from auth.uid()
@@ -1270,6 +1379,9 @@ declare v text;
 begin
   v := to_jsonb(new)->>(case when TG_TABLE_NAME = 'item_revisions' then 'eco_number' else 'number' end);
   if v ~ '^[A-Z]{2,3}-[0-9]{4}-[0-9]{1,9}$' then
+    -- Il lucchetto della serie (dalla 0.105.6): una riserva che sta leggendo
+    -- usati e impegni aspetta che questo invio si chiuda, e vede il documento.
+    perform pg_advisory_xact_lock(hashtext('bomtrack-numeri:' || substring(v from '^([A-Z]{2,3}-[0-9]{4}-)')));
     delete from public.numeri_impegnati
      where serie = substring(v from '^([A-Z]{2,3}-[0-9]{4}-)') and numero = substring(v from '([0-9]+)$')::int;
   end if;
@@ -1281,6 +1393,29 @@ begin
   foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions'] loop
     execute format('drop trigger if exists numeri_chiudi_impegno on public.%I', t);
     execute format('create trigger numeri_chiudi_impegno after insert or update on public.%I for each row execute function public.numeri_chiudi_impegno()', t);
+  end loop;
+end $$;
+
+-- Un numero, un documento (dalla 0.105.6): la rete sotto tutte le strade per
+-- cui un doppione poteva passare dal client (un ripristino dal cestino, una
+-- rinumerazione, due invii contemporanei). Prima il server teneva tutti e
+-- due, e il problema usciva su un ordine stampato. Solo i numeri della serie
+-- (SIGLA-ANNO-N): un numero scritto a mano in un'altra forma non c'entra.
+-- Un archivio che ha già dei doppioni non si blocca: l'indice di quella
+-- tabella non si crea, lo si dice, e il controllo di push_changes vale
+-- comunque per i numeri nuovi. Rieseguire il file dopo averli corretti lo crea.
+-- Per i codici articolo vale la nota A6 sopra.
+do $$
+declare t text;
+begin
+  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions'] loop
+    begin
+      execute format('create unique index if not exists %I on public.%I (%I) where %I ~ %L',
+        t || '_numero_unico', t, public.colonna_numero(t), public.colonna_numero(t), '^[A-Z]{2,3}-[0-9]{4}-[0-9]+$');
+    exception when unique_violation then
+      raise warning 'Bomtrack: in % ci sono numeri doppi, e l''indice unico % non si crea finché non si correggono',
+        t, t || '_numero_unico';
+    end;
   end loop;
 end $$;
 
