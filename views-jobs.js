@@ -98,6 +98,25 @@ function jobLate(j) {
 // Funzione pura: nessun DOM, nessuna lettura del toggle della vista Fabbisogno
 // (`netMode` è forzato a true, come in homeSegnali) — o due utenti sulla stessa
 // base dati leggerebbero due risposte diverse.
+// «Documentato» vuol dire che il documento per quello che manca c'è e non è
+// ancora partito: un ordine o un ordine di lavoro in bozza, o una richiesta
+// d'offerta ancora aperta. Prima bastava un riferimento qualsiasi, e un ordine
+// già inviato per 40 pezzi su 100 faceva dire «manca solo l'invio» ai 60 che
+// nessuno aveva ancora ordinato (dalla 0.105.6). I documenti inviati sono già
+// nel netto come merce in arrivo: qui contano solo quelli che il netto non vede,
+// e solo se le loro quantità coprono quello che resta da ordinare.
+function jobBozzeCoprono(item, refs, daOrdinare) {
+  const doc = ref => ref.kind === 'rfq' ? (db.rfqs || []).find(d => d.id === ref.id)
+    : ref.kind === 'order' ? (db.orders || []).find(d => d.id === ref.id)
+      : ref.kind === 'odl' ? (db.workOrders || []).find(d => d.id === ref.id) : null;
+  const ferma = ref => {
+    const d = doc(ref); if (!d) return false;
+    return ref.kind === 'rfq' ? d.status !== 'chiusa' : d.status === 'bozza';
+  };
+  const coperto = (refs || []).filter(ferma)
+    .reduce((s, ref) => s + fromAltUom(item, ref.qty, ref.uom || itemUom(item)), 0);
+  return coperto > 0 && coperto >= daOrdinare - 0.000001;
+}
 function jobCoverage(jobId) {
   const j = getJob(jobId);
   const tutti = jobPlans(jobId);
@@ -149,7 +168,7 @@ function jobCoverage(jobId) {
     const arr = incomingEntro(e.item.id, serve);
     const netEntro = netRequirement(Math.max(0, e.qty - r.prelevato), r.onHand, arr.inTempo, r.safety, r.lotSize, r.committed, r.lotMode);
     let livello = 'ok';
-    if (r.qtyOrder > 0) livello = refs.length ? 'documentato' : 'ordinare';
+    if (r.qtyOrder > 0) livello = jobBozzeCoprono(e.item, refs, r.qtyOrder) ? 'documentato' : 'ordinare';
     else if (netEntro > 0) livello = 'tardi';
     return { itemId: e.item.id, code: e.item.code || '', name: e.item.name || '', uom: r.uom,
       qty: e.qty, qtyOrder: r.qtyOrder, livello, due: serve, orderBy: r.orderBy, urgenza: r.urgenza,
@@ -204,9 +223,9 @@ function jobCoverageHtml(cov) {
         + (r.orderBy ? `, da ordinare entro ${fmtDateIt(r.orderBy)}` : ''),
       azione: dove(r),
     }))
-    + gruppo(cov.documentate, 'in una richiesta o in un ordine non ancora inviato', r => ({
+    + gruppo(cov.documentate, 'in una richiesta aperta o in un ordine non ancora inviato', r => ({
       testo: r.code,
-      titolo: `${r.name} — ${r.docs.map(d => d.number).join(', ')}: il documento c'è, manca l'invio`,
+      titolo: `${r.name} — ${r.docs.map(d => d.number).join(', ')}: il documento c'è, manca l'ordine inviato`,
       azione: dove(r),
     }))
     + gruppo(cov.tardive, 'in arrivo dopo la data in cui servono', r => ({
@@ -234,7 +253,7 @@ function jobCoverageDomanda(j, cov) {
     parti.push(`${cov.daOrdinare.length === 1 ? 'Un articolo non è ancora ordinato' : cov.daOrdinare.length + ' articoli non sono ancora ordinati'}: ${nomi(cov.daOrdinare)}.`);
   }
   if (cov.documentate.length) {
-    parti.push(`${cov.documentate.length === 1 ? 'Un articolo è' : cov.documentate.length + ' articoli sono'} in un documento non ancora inviato: ${nomi(cov.documentate)}.`);
+    parti.push(`${cov.documentate.length === 1 ? 'Un articolo è' : cov.documentate.length + ' articoli sono'} in una richiesta aperta o in un ordine non ancora inviato: ${nomi(cov.documentate)}.`);
   }
   if (cov.tardive.length) {
     parti.push(`${cov.tardive.length === 1 ? 'Un articolo arriva' : cov.tardive.length + ' articoli arrivano'} dopo la data in cui ${cov.tardive.length === 1 ? 'serve' : 'servono'}: `
