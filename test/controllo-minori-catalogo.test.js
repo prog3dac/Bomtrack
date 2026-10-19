@@ -209,6 +209,113 @@ describe('Allegati caricati nel database con l\'archivio condiviso', () => {
   });
 });
 
+describe('Una copia di sicurezza prima di sostituire tutto', () => {
+  const conDati = () => {
+    const a = app(makeDb({ items: [Object.assign(mat('m1', 1), { code: 'MIO-001' })],
+      users: [{ id: 'u-test', name: 'Test', email: 't@t.it', role: 'admin', active: true }] }));
+    a.eval('setView = () => {}; logout = () => {};');
+    return a;
+  };
+  const backup = JSON.stringify(makeDb({ items: [Object.assign(mat('b1', 1), { code: 'DAL-BACKUP' })],
+    users: [{ id: 'u-test', name: 'Test', email: 't@t.it', role: 'admin', active: true }] }));
+  const contiene = (testo, codice) => JSON.parse(testo).items.some(i => i.code === codice);
+
+  it('Ripristina dati esempio: senza cartella, prima scarica il JSON dei dati attuali', () => {
+    const a = conDati();
+    a.eval('resetDB()');
+    const s = a.scaricati();
+    assert.equal(s.length, 1);
+    assert.ok(contiene(s[0].contenuto, 'MIO-001'), 'la copia ha i dati di prima');
+    assert.ok(!a.eval('db.items.some(i => i.code === "MIO-001")'), 'e poi il ripristino è avvenuto');
+  });
+
+  it('Importa JSON: la copia ha i dati di prima, l\'archivio quelli del backup', () => {
+    const a = conDati();
+    a.eval('importBackup')(a.fileEvent('backup.json', backup));
+    const s = a.scaricati();
+    assert.equal(s.length, 1);
+    assert.ok(contiene(s[0].contenuto, 'MIO-001'));
+    assert.ok(a.eval('db.items.some(i => i.code === "DAL-BACKUP")'));
+  });
+
+  it('Azzera tutto: con il backup automatico la copia va nella cartella, con un nome che il backup del giorno non sovrascrive', async () => {
+    const a = conDati();
+    const files = {};
+    a.cartellaBackup(files);
+    a.el('wipe-word').value = 'AZZERA';
+    await a.eval('wipeAllConfirm()');
+    const nomi = Object.keys(files);
+    assert.equal(nomi.length, 1, nomi.join(','));
+    assert.match(nomi[0], /^bomtrack_prima_di_azzera_\d{4}-\d{2}-\d{2}_\d{4}\.json$/);
+    assert.doesNotMatch(nomi[0], a.eval('BACKUP_AUTO_FILE_RE'));
+    assert.ok(contiene(files[nomi[0]], 'MIO-001'));
+    assert.equal(a.eval('db.items.length'), 0);
+    assert.equal(a.scaricati().length, 0, 'nessun download in più');
+  });
+
+  it('se la cartella non risponde lo chiede, e senza un sì non tocca niente', async () => {
+    const a = conDati();
+    a.cartellaBackup({}, { permesso: 'denied' });
+    a.eval('globalThis.__chiesto = ""; askConfirm = (m) => { __chiesto = m; };');
+    a.el('wipe-word').value = 'AZZERA';
+    // Non si aspetta la promessa: resta in sospeso finché nessuno risponde.
+    a.eval('wipeAllConfirm(); undefined');
+    for (let i = 0; i < 10; i++) await new Promise(r => setImmediate(r));
+    assert.match(a.eval('__chiesto'), /copia di sicurezza .* non è riuscita/);
+    assert.ok(a.eval('db.items.some(i => i.code === "MIO-001")'), 'i dati sono ancora lì');
+  });
+});
+
+describe('Una versione nuova dell\'app con la scheda aperta', () => {
+  const swFinto = controller => {
+    const sw = { controller, ascolta: {}, addEventListener(t, fn) { this.ascolta[t] = fn; } };
+    return sw;
+  };
+
+  it('al cambio di controllore compare l\'avviso con «Ricarica»', () => {
+    const a = app();
+    const sw = swFinto({});
+    a.ctx.__sw = sw;
+    a.eval('swAscoltaVersioni(__sw)');
+    assert.equal(a.html('avvisi-fissi'), '');
+    sw.ascolta.controllerchange();
+    const h = a.html('avvisi-fissi');
+    assert.match(h, /È disponibile una versione nuova/);
+    assert.match(h, /onclick="swRicarica\(\)"[^>]*>Ricarica</);
+  });
+
+  it('la prima installazione non è una versione nuova', () => {
+    const a = app();
+    const sw = swFinto(null);
+    a.ctx.__sw = sw;
+    a.eval('swAscoltaVersioni(__sw)');
+    sw.ascolta.controllerchange();
+    assert.equal(a.html('avvisi-fissi'), '');
+    sw.ascolta.controllerchange();
+    assert.match(a.html('avvisi-fissi'), /versione nuova/, 'la successiva sì');
+  });
+
+  it('chiuso l\'avviso, sparisce', () => {
+    const a = app();
+    const sw = swFinto({});
+    a.ctx.__sw = sw;
+    a.eval('swAscoltaVersioni(__sw)');
+    sw.ascolta.controllerchange();
+    a.eval('avvisoFissoTogli("versione")');
+    assert.equal(a.html('avvisi-fissi'), '');
+  });
+
+  it('con un documento a metà, «Ricarica» chiede prima', () => {
+    const a = app();
+    a.eval('globalThis.__ricaricato = 0; globalThis.location = { reload() { __ricaricato++; } }; globalThis.__domande = 0; confirm = () => { __domande++; return false; }; rfqDirty = true;');
+    a.eval('swRicarica()');
+    assert.equal(a.eval('__domande'), 1);
+    assert.equal(a.eval('__ricaricato'), 0);
+    a.eval('rfqDirty = false; swRicarica()');
+    assert.equal(a.eval('__ricaricato'), 1);
+  });
+});
+
 describe('L\'app installata sul telefono', () => {
   it('non è bloccata in orizzontale: le etichette QR si inquadrano col telefono in piedi', () => {
     const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'));

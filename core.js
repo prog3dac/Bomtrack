@@ -1237,6 +1237,39 @@ function showLoadErrorModal(info) {
   openModal(`<h3>${ico('warning', 'tinted pill', '')} Dati non caricati</h3>${testo}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Ho capito</button>${btnScarica}</div>`, false, 'avviso');
 }
+// ─── Una versione nuova dell'app (dalla 0.105.6) ───
+// sw.js, alla versione nuova, si installa e prende il controllo delle schede
+// aperte (skipWaiting + clients.claim). Ma una scheda già aperta continua a
+// girare con il codice che ha caricato: in officina il PC resta acceso per
+// settimane, e la versione nuova arrivava solo al primo F5 di qualcuno. Il
+// cambio di controllore è il segnale: lo si dice con un avviso che resta, e il
+// ricaricamento lo sceglie chi lavora — a metà di un ordine non si ricarica
+// niente da soli.
+// Il primo controllore di una pagina appena installata non è una versione
+// nuova: per questo si guarda se ce n'era già uno all'apertura.
+function swAscoltaVersioni(sw) {
+  if (!sw || typeof sw.addEventListener !== 'function') return;
+  let precedente = !!sw.controller;
+  sw.addEventListener('controllerchange', () => {
+    if (!precedente) { precedente = true; return; }
+    avvisoFisso('versione', `<strong>È disponibile una versione nuova</strong> di Bomtrack.
+      <button class="avviso-fisso-azione" onclick="swRicarica()">Ricarica</button>`);
+  });
+}
+// Il browser cerca un sw.js nuovo solo a una navigazione, o al massimo una
+// volta al giorno: una scheda che resta aperta lo chiede ogni ora.
+const SW_CONTROLLO_MS = 60 * 60 * 1000;
+function swControllaOgni(reg) {
+  if (!reg || typeof reg.update !== 'function' || typeof setInterval !== 'function') return;
+  setInterval(() => { Promise.resolve().then(() => reg.update()).catch(() => { /* offline: si riprova al giro dopo */ }); }, SW_CONTROLLO_MS);
+}
+// Ricaricare con un documento a metà o un salvataggio in volo perderebbe
+// lavoro: lo si chiede prima, con la stessa domanda dell'uscita.
+function swRicarica() {
+  if (lavoroInSospeso() && !confirm('Ci sono modifiche non ancora salvate: ricaricando andrebbero perse. Ricaricare lo stesso?')) return;
+  location.reload();
+}
+
 // L'archivio illeggibile, così com'era, in un file (dalla 0.105.6). È anche ciò
 // che sblocca i salvataggi quando la copia di soccorso non è riuscita: da qui
 // in poi una copia esiste, nella cartella dei download.
@@ -1707,7 +1740,10 @@ if (typeof document !== 'undefined') {
   // niente che non va, e un avviso a ogni avvio sarebbe rumore. Le librerie di
   // export stanno in vendor/ proprio perché l'offline non dipenda da qui.
   if (typeof navigator !== 'undefined' && navigator.serviceWorker && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* niente cache: l'app funziona lo stesso */ });
+    swAscoltaVersioni(navigator.serviceWorker);
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => swControllaOgni(reg))
+      .catch(() => { /* niente cache: l'app funziona lo stesso */ });
   }
   window.addEventListener('hashchange', () => onHashChange());
   window.addEventListener('unhandledrejection', e => {

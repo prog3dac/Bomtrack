@@ -1264,6 +1264,69 @@ function backupAutoAvvia() {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') backupAutoEsegui(false); });
   }
 }
+// ─── Una copia prima di buttare via tutto (dalla 0.105.6) ───
+// Importa JSON, Ripristina dati esempio e Azzera tutto sostituiscono l'intero
+// archivio. La conferma c'era, ma chiedeva «hai esportato un backup?» e si
+// fidava della risposta. Adesso la copia la fa l'app, prima, con i due mezzi
+// che ha già:
+//   - con il backup automatico attivo, un file a parte nella sua cartella,
+//     `bomtrack_prima_di_<cosa>_AAAA-MM-GG_HHMM.json`. Non il file del giorno:
+//     quello si riscrive da solo nella mezz'ora successiva con i dati nuovi, e
+//     la copia sparirebbe proprio quando serve. Un nome diverso, quindi, che la
+//     potatura degli ultimi quattordici non tocca;
+//   - altrimenti, il download del JSON, come Esporta JSON.
+// Se la cartella non risponde lo si dice e si chiede se scaricare il file e
+// proseguire: senza una copia l'operazione non parte.
+//
+// Niente copia se in memoria c'è un archivio illeggibile (i dati d'esempio al
+// posto di quelli veri): salvarli non proteggerebbe niente, e importare un
+// backup è proprio il modo di uscirne. L'originale lo protegge già loadDB().
+//
+// `fn` riceve il nome della copia, o '' quando non se n'è fatta nessuna.
+function copiaPrimaDi(cosa, fn) {
+  if (typeof dbLoadError !== 'undefined' && dbLoadError) return Promise.resolve(fn(''));
+  let payload;
+  try { payload = Store.exportSnapshot(); }
+  catch (e) {
+    showToast('Copia di sicurezza non riuscita (' + (e && e.message || e) + '): operazione annullata', 'error');
+    return Promise.resolve(null);
+  }
+  const d = new Date();
+  const ora = String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+  const nome = `bomtrack_prima_di_${cosa}_${oggiISO()}_${ora}.json`;
+  const scarica = () => {
+    scaricaJson(nome, payload);
+    return fn(nome);
+  };
+  if (!backupAutoAttivo()) return Promise.resolve(scarica());
+  return backupAutoHandle()
+    .then(h => {
+      if (!h) throw new Error('cartella non disponibile');
+      return _permesso(h, true).then(ok => {
+        if (!ok) throw new Error('il browser non ha concesso di scriverci');
+        return h.getFileHandle(nome, { create: true })
+          .then(fh => fh.createWritable())
+          .then(w => Promise.resolve(w.write(payload)).then(() => w.close()));
+      });
+    })
+    .then(() => {
+      showToast('Copia di sicurezza salvata in ' + backupAutoNome() + ': ' + nome);
+      return fn(nome);
+    }, e => {
+      console.error('Copia di sicurezza non riuscita:', e);
+      return new Promise(fatto => {
+        askConfirm(`La copia di sicurezza nella cartella ${backupAutoNome()} non è riuscita (${String(e && e.message || e)}).\n\nPosso scaricarla come file e proseguire, oppure fermarmi qui.`,
+          () => fatto(scarica()), { title: 'Copia di sicurezza non riuscita', ok: 'Scarica e prosegui' });
+      });
+    });
+}
+// Lo stesso <a download> usa e getta di Esporta JSON.
+function scaricaJson(nome, testo) {
+  const url = URL.createObjectURL(new Blob([testo], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nome;
+  a.click(); URL.revokeObjectURL(url);
+}
 function backupAutoLine() {
   if (!archivioSupportato()) {
     return '<p style="margin-top:6px"><strong>Backup automatico:</strong> non disponibile in questo browser. Servono Chrome o Edge, con Bomtrack aperta da un indirizzo https o localhost.</p>';
@@ -1503,14 +1566,14 @@ function importBackup(ev) {
     const cosa = [`${n.items} articoli`, `${n.suppliers} fornitori`, `${n.rfqs} richieste`,
       `${n.orders} ordini`, `${n.plans} piani`, `${n.users} utenti`].join(', ');
     const attuale = `${db.items.length} articoli, ${db.suppliers.length} fornitori, ${db.rfqs.length} richieste, ${db.orders.length} ordini`;
-    askConfirm(`Il backup contiene: ${cosa}.\n\nSostituirà i dati attuali (${attuale}), che andranno persi.`, () => {
+    askConfirm(`Il backup contiene: ${cosa}.\n\nSostituirà i dati attuali (${attuale}). Prima ne salvo una copia.`, () => copiaPrimaDi('import', copia => {
       try {
         Store.importSnapshot(data);
       } catch (e) { showToast('Import non riuscito: ' + e.message, 'error'); return; }
       resetViewState();
       if (!reconcileSession()) return;   // il backup può contenere altri utenti
-      setView('bom'); showToast('Backup importato');
-    }, { title: '📥 Importa backup', ok: 'Importa e sovrascrivi' });
+      setView('bom'); showToast(copia ? 'Backup importato. I dati di prima sono in ' + copia : 'Backup importato');
+    }), { title: '📥 Importa backup', ok: 'Importa e sovrascrivi' });
   };
   reader.onerror = () => { console.error(reader.error); showToast('Impossibile leggere il file', 'error'); };
   reader.readAsText(file);
@@ -1519,12 +1582,12 @@ function importBackup(ev) {
 function resetDB() {
   if (cloudBlocca()) return;
   if (!roleGuard('manage')) return;
-  askConfirm('Ripristinare i dati di esempio? Tutti i dati attuali saranno persi.', () => {
+  askConfirm('Ripristinare i dati di esempio? I dati attuali saranno sostituiti: prima ne salvo una copia.', () => copiaPrimaDi('ripristino', copia => {
     Store.reset();
     resetViewState();
     if (!reconcileSession()) return;
-    setView('bom'); showToast('Dati ripristinati');
-  }, { title: '↩ Ripristina dati di esempio', ok: 'Ripristina' });
+    setView('bom'); showToast(copia ? 'Dati ripristinati. Quelli di prima sono in ' + copia : 'Dati ripristinati');
+  }), { title: '↩ Ripristina dati di esempio', ok: 'Ripristina' });
 }
 // Dopo un reset o un import il database sotto i piedi è cambiato: l'utente della
 // sessione può non esserci più. Se il nuovo database non ha utenti si ricrea
@@ -1552,7 +1615,7 @@ function wipeAll() {
     <p class="confirm-text">Il database verrà svuotato <strong>completamente</strong> e in modo <strong>irreversibile</strong>:
       ${db.items.length} articoli, ${db.rfqs.length} richieste, ${db.orders.length} ordini, ${(db.plans || []).length} piani
       (${size.mb.toFixed(2)} MB). Resti dentro come amministratore, tutto il resto sparisce.</p>
-    <p class="confirm-text">Hai esportato un backup JSON? Scrivi <strong>AZZERA</strong> qui sotto per confermare.</p>
+    <p class="confirm-text">Prima di azzerare ne salvo una copia: nella cartella del backup automatico, se è attivo, altrimenti come file scaricato. Scrivi <strong>AZZERA</strong> qui sotto per confermare.</p>
     <div class="modal-field"><input id="wipe-word" placeholder="AZZERA" autocomplete="off"
       style="text-transform:uppercase;font-family:var(--mono);font-weight:700"></div>
     <div class="modal-actions">
@@ -1565,12 +1628,14 @@ function wipeAllConfirm() {
   if (!roleGuard('manage')) return;
   if (val('wipe-word').toUpperCase() !== 'AZZERA') { showToast('Scrivi AZZERA per confermare', 'error'); return; }
   closeModal();
-  // L'utente che azzera sopravvive come amministratore: la sessione resta valida
-  Store.clearAll(currentUser ? JSON.parse(JSON.stringify(currentUser)) : null);
-  currentUser = currentUser ? getUser(currentUser.id) : null;
-  resetViewState();
-  renderUserPill();
-  setView('bom'); showToast('Database azzerato');
+  return copiaPrimaDi('azzera', copia => {
+    // L'utente che azzera sopravvive come amministratore: la sessione resta valida
+    Store.clearAll(currentUser ? JSON.parse(JSON.stringify(currentUser)) : null);
+    currentUser = currentUser ? getUser(currentUser.id) : null;
+    resetViewState();
+    renderUserPill();
+    setView('bom'); showToast(copia ? 'Database azzerato. I dati di prima sono in ' + copia : 'Database azzerato');
+  });
 }
 // Nessun documento o articolo sopravvive a un reset: azzera anche ciò che le viste tengono aperto
 function resetViewState() {
