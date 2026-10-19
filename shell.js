@@ -423,12 +423,18 @@ function showReadOnlyBanner(panel, area) {
   const old = panel.querySelector(':scope > .ro-banner');
   if (old) old.remove();
   if (!area || canWrite(area)) return;
+  // Nelle viste dove l'officina lavora (magazzino, ordini, ODL, ODP) non c'è
+  // niente da dire: setView non le mette in sola lettura, e il banner che
+  // diceva «il ruolo non modifica…» contraddiceva i ricevimenti e le giacenze
+  // che l'officina registra proprio lì (dalla 0.105.6).
+  const vistaShop = SHOP_VIEWS.has(activeView);
+  if (vistaShop && canWrite('shop')) return;
   const b = document.createElement('div');
   b.className = 'ro-banner';
   // innerHTML e non textContent: il testo porta un'icona, e i due pezzi che
   // vengono dai dati passano da esc() come ovunque.
   // Il ruolo scriverebbe: manca il collegamento all'archivio condiviso.
-  b.innerHTML = canWriteRuolo(area)
+  b.innerHTML = canWriteRuolo(area) || (vistaShop && canWriteRuolo('shop'))
     ? `${ico('cloud', 'tinted', '')} Sola lettura — senza collegamento all'archivio condiviso si consulta soltanto. Si torna a lavorare appena il server risponde.`
     : `${ico('eye', 'tinted', '')} Sola lettura — il ruolo "${esc(roleLabel(currentUser && currentUser.role))}" non modifica ${esc(AREA_LABELS[area])}.`;
   panel.insertBefore(b, panel.firstChild);

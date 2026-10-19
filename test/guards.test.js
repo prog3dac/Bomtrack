@@ -317,3 +317,49 @@ describe('Spazzata dei ruoli: ogni comando dell\'interfaccia rispetta le aree de
     });
   });
 });
+
+// ── L'officina nelle sue viste di lavoro (dalla 0.105.6) ──
+// Magazzino, ordini, ODL e ODP sono le viste dove l'officina registra
+// ricevimenti, giacenze e avanzamento: il banner «il ruolo non modifica…» lì
+// diceva il contrario di quello che il ruolo fa davvero. E senza collegamento
+// la colpa va data al collegamento, non al ruolo.
+describe('Officina: niente banner di sola lettura dove lavora, e il messaggio giusto senza rete', () => {
+  const banner = (a, vista) => {
+    a.eval(`activeView = ${JSON.stringify(vista)}`);
+    const p = a.el('pannello-' + vista);
+    p.children = [];
+    a.eval(`showReadOnlyBanner(document.getElementById(${JSON.stringify('pannello-' + vista)}), VIEW_AREA[${JSON.stringify(vista)}])`);
+    return p.children.map(c => c.innerHTML).join('');
+  };
+  it('su magazzino, ordini, ODL e ODP l\'officina non vede il banner', () => {
+    const a = app(makeDb({}), 'officina');
+    ['stock', 'orders', 'odl', 'odp'].forEach(v => assert.equal(banner(a, v), '', v));
+  });
+  it('sulle viste non sue il banner resta, e nomina il ruolo', () => {
+    const a = app(makeDb({}), 'officina');
+    assert.match(banner(a, 'rfq'), /il ruolo/);
+    assert.match(banner(a, 'buy'), /il ruolo/);
+  });
+  it('senza collegamento il banner sulle sue viste parla del collegamento', () => {
+    const a = app(makeDb({}), 'officina');
+    a.eval('cloudSolaLettura = () => true');
+    const t = banner(a, 'stock');
+    assert.match(t, /senza collegamento/);
+    assert.doesNotMatch(t, /il ruolo/);
+  });
+  it('senza collegamento roleGuardShop dice che manca il server, non che il ruolo non può', () => {
+    const a = app(makeDb({}), 'officina');
+    a.eval('cloudSolaLettura = () => true');
+    assert.equal(a.eval(`roleGuardShop('catalog')`), false);
+    const msg = a.el('toast').innerHTML;
+    assert.match(msg, /collegamento/);
+    assert.doesNotMatch(msg, /ruolo/);
+  });
+  it('il lettore, con o senza rete, resta respinto per il ruolo', () => {
+    const a = app(makeDb({}), 'lettore');
+    a.eval('cloudSolaLettura = () => true');
+    assert.equal(a.eval(`roleGuardShop('catalog')`), false);
+    assert.match(a.el('toast').innerHTML, /ruolo/);
+    assert.match(banner(a, 'stock'), /il ruolo/);
+  });
+});

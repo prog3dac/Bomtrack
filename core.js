@@ -446,7 +446,15 @@ const ROLE_WRITE = {
 // gesti accetta l'una o l'altra, invece di spostarli e togliere qualcosa a
 // qualcuno.
 function canWriteShop(oppure) { return canWrite('shop') || canWrite(oppure); }
-function roleGuardShop(oppure) { return canWriteShop(oppure) || roleGuard(oppure); }
+// Senza collegamento (dalla 0.105.6) chi i gesti di officina li fa davvero
+// legge che manca il server, non che il suo ruolo non può: roleGuard(oppure)
+// guardava solo l'area alternativa, e all'officina — che `catalog` o `docs` non
+// li ha — dava la colpa al ruolo proprio nel momento in cui era la rete.
+function roleGuardShop(oppure) {
+  if (canWriteShop(oppure)) return true;
+  if (canWriteRuolo('shop') || canWriteRuolo(oppure)) { showToast(CLOUD_SOLA_LETTURA_MSG, 'error'); return false; }
+  return roleGuard(oppure);
+}
 const AREA_LABELS = { catalog: 'anagrafiche articoli', bom: 'distinte base', docs: 'richieste e ordini', manage: 'gestione', agenda: 'promemoria', shop: 'avanzamento, ricevimenti e giacenze' };
 function roleLabel(r) { return ROLES[r] || r || '—'; }
 // Il ruolo dice che cosa si può scrivere; il collegamento, se si può adesso.
