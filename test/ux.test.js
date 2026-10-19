@@ -256,3 +256,62 @@ describe('Errori non previsti: il registro', () => {
     assert.equal(app.eval('appErrorLog().length'), 2);
   });
 });
+
+describe('Ricerca globale: commesse, fornitori, clienti e Invio subito (dalla 0.105.6)', () => {
+  const dbParti = () => makeDb({
+    suppliers: [{ id: 's1', name: 'SKF Italia', active: true }, { id: 's2', name: 'Beta lavorazioni', active: true }],
+    customers: [{ id: 'c1', name: 'Rossi Macchine', active: true }],
+    jobs: [{ id: 'j1', number: 'COM-2026-007', customer: 'Rossi Macchine', title: 'Linea di taglio', status: 'aperta', active: true }],
+    rfqs: [{ id: 'r1', number: 'RDO-2026-001', title: '', supplierId: 's1', lines: [] }],
+    orders: [{ id: 'o1', number: 'ODA-2026-001', title: '', supplierId: 's1', lines: [] }],
+    workOrders: [{ id: 'w1', number: 'ODL-2026-001', title: '', supplierId: 's2', lines: [] }],
+    items: [],
+  });
+  const cerca = (app, q) => JSON.parse(app.eval(`JSON.stringify(globalSearchHits(${JSON.stringify(q)}).map(h => h.kind + ':' + h.code))`));
+
+  it('trova le commesse per numero, titolo e cliente', () => {
+    const app = conDb(dbParti());
+    assert.deepEqual(cerca(app, 'COM-2026-007'), ['job:COM-2026-007']);
+    assert.deepEqual(cerca(app, 'taglio'), ['job:COM-2026-007']);
+    assert.deepEqual(cerca(app, 'rossi'), ['job:COM-2026-007']);
+  });
+
+  it('il nome del fornitore trova le sue richieste, i suoi ordini e i suoi ODL', () => {
+    const app = conDb(dbParti());
+    assert.deepEqual(cerca(app, 'skf').sort(), ['order:ODA-2026-001', 'rfq:RDO-2026-001']);
+    assert.deepEqual(cerca(app, 'beta'), ['odl:ODL-2026-001']);
+  });
+
+  it('chi cerca un numero lo trova prima di chi ha solo il nome del fornitore in comune', () => {
+    const app = conDb(makeDb({
+      suppliers: [{ id: 's1', name: 'ODA-2026 Forniture', active: true }],
+      orders: [{ id: 'o1', number: 'ODA-2026-009', title: '', supplierId: null, lines: [] },
+        { id: 'o2', number: 'ODA-2025-001', title: '', supplierId: 's1', lines: [] }],
+      items: [],
+    }));
+    assert.deepEqual(cerca(app, 'oda-2026'), ['order:ODA-2026-009', 'order:ODA-2025-001']);
+  });
+
+  it('una commessa si apre nel suo editor', () => {
+    const app = conDb(dbParti());
+    app.eval('gsHits = globalSearchHits("COM-2026-007"); globalSearchOpen(0)');
+    assert.equal(app.eval('activeView'), 'jobs');
+    assert.equal(app.eval('currentJobId'), 'j1');
+  });
+
+  it('Invio subito dopo l\'ultimo tasto apre il risultato di quel che è scritto, non del ritaglio di prima', () => {
+    // Un lettore di codici a barre scrive il codice e preme Invio in pochi
+    // millisecondi: la ricerca ritardata non ha ancora rifatto l'elenco.
+    const app = conDb(makeDb({
+      orders: [{ id: 'o2', number: 'ODA-2026-012', title: '', status: 'bozza', supplierId: null, lines: [] },
+        { id: 'o3', number: 'ODA-2026-0123', title: '', status: 'bozza', supplierId: null, lines: [] }],
+      items: [],
+    }));
+    app.eval('globalSearchModal()');
+    app.el('gs-input').value = 'ODA-2026-012';
+    app.eval('renderGlobalSearch()');
+    app.el('gs-input').value = 'ODA-2026-0123';   // l'ultimo tasto: il ridisegno è ancora in attesa
+    app.eval('globalSearchKey({ key: "Enter", preventDefault() {} })');
+    assert.equal(app.eval('currentOrderId'), 'o3');
+  });
+});

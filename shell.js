@@ -9,9 +9,13 @@
 // ═══════════════════════════════════════════════════════════
 //  RICERCA GLOBALE (Ctrl+K)
 // ═══════════════════════════════════════════════════════════
-// Un campo solo per tutto: articoli, richieste, ordini, piani. Serve a saltare
-// dove serve senza prima indovinare la vista giusta e i suoi filtri.
-let gsHits = [], gsSel = 0;
+// Un campo solo per tutto: articoli, commesse, richieste, ordini, piani. Serve
+// a saltare dove serve senza prima indovinare la vista giusta e i suoi filtri.
+// Dalla 0.105.6 si trovano anche le commesse, e un documento si trova anche col
+// nome del fornitore o del cliente: chi telefona dice «sono della SKF», non il
+// numero dell'ordine.
+// `gsDisegnata` è il testo per cui `gsHits` è stato calcolato.
+let gsHits = [], gsSel = 0, gsDisegnata = '';
 const GS_MAX = 25;
 function globalSearchHits(q) {
   const s = String(q || '').toLowerCase().trim();
@@ -24,15 +28,21 @@ function globalSearchHits(q) {
       meta: typeLabel(i.type), tag: typeShort(i.type), type: i.type,
       exact: String(i.code || '').toLowerCase().startsWith(s) ? 0 : 1 });
   });
-  const doc = (arr, kind, tag, meta) => (arr || []).forEach(d => {
+  // `parte(d)` è il fornitore o il cliente del documento: trova anche lui, ma
+  // in coda — chi scrive un numero lo vuole prima di chi ha solo il nome in comune.
+  const doc = (arr, kind, tag, meta, parte) => (arr || []).forEach(d => {
     const testo = ((d.number || '') + ' ' + (d.title || '')).toLowerCase();
-    if (!testo.includes(s)) return;
+    const diChi = parte ? String(parte(d) || '').toLowerCase() : '';
+    const proprio = testo.includes(s);
+    if (!proprio && !(diChi && diChi.includes(s))) return;
     hits.push({ kind, id: d.id, code: d.number || '', label: d.title || '(senza titolo)',
-      meta: meta(d), tag, exact: String(d.number || '').toLowerCase().startsWith(s) ? 0 : 1 });
+      meta: meta(d), tag, exact: !proprio ? 2 : String(d.number || '').toLowerCase().startsWith(s) ? 0 : 1 });
   });
-  doc(db.rfqs, 'rfq', 'RDO', d => 'Richiesta · ' + (supplierName(d.supplierId) || 'senza fornitore'));
-  doc(db.orders, 'order', 'ODA', d => 'Ordine · ' + (supplierName(d.supplierId) || 'senza fornitore'));
-  doc(db.workOrders, 'odl', 'ODL', d => 'Ordine di lavoro · ' + (supplierName(d.supplierId) || 'senza terzista'));
+  const fornitore = d => supplierName(d.supplierId);
+  doc(db.jobs, 'job', 'COM', d => 'Commessa' + (d.customer ? ' · ' + d.customer : ''), d => [d.customer, d.customerRef].filter(Boolean).join(' '));
+  doc(db.rfqs, 'rfq', 'RDO', d => 'Richiesta · ' + (fornitore(d) || 'senza fornitore'), fornitore);
+  doc(db.orders, 'order', 'ODA', d => 'Ordine · ' + (fornitore(d) || 'senza fornitore'), fornitore);
+  doc(db.workOrders, 'odl', 'ODL', d => 'Ordine di lavoro · ' + (fornitore(d) || 'senza terzista'), fornitore);
   doc(db.prodOrders, 'odp', 'ODP', d => 'Ordine di produzione · ' + ((d.code || '') + ' ' + (d.name || '')).trim());
   doc(db.plans, 'plan', 'FAB', d => 'Piano di produzione · ' + (d.lines || []).length + ' righe');
   // Chi ha il codice che inizia con quanto digitato viene prima: è la ricerca
@@ -53,7 +63,7 @@ function globalSearchModal() {
 function renderGlobalSearch() {
   const box = document.getElementById('gs-results'); if (!box) return;
   const q = val('gs-input');
-  gsHits = globalSearchHits(q);
+  gsHits = globalSearchHits(q); gsDisegnata = q;
   if (gsSel >= gsHits.length) gsSel = 0;
   if (!q) { box.innerHTML = ''; return; }
   box.innerHTML = gsHits.map((h, i) =>
@@ -63,6 +73,15 @@ function renderGlobalSearch() {
      </div>`).join('') || `<div class="picker-empty">Nessun risultato per "${esc(q)}"</div>`;
 }
 function globalSearchKey(e) {
+  // L'elenco si ridisegna 90 ms dopo l'ultimo tasto: chi preme Invio prima
+  // (chi scrive veloce, o un lettore di codici che manda codice e Invio in
+  // pochi millisecondi) apriva il risultato del ritaglio di prima, o niente.
+  // Per Invio e per le frecce l'elenco si rifà subito su quel che è scritto
+  // (dalla 0.105.6); se l'elenco è già quello del testo scritto non cambia nulla.
+  if ((e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') && val('gs-input') !== gsDisegnata) {
+    clearTimeout(_debounceTimers.gs);
+    renderGlobalSearch();
+  }
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     if (!gsHits.length) return;
     gsSel = (gsSel + (e.key === 'ArrowDown' ? 1 : gsHits.length - 1)) % gsHits.length;
@@ -82,7 +101,8 @@ function globalSearchOpen(i) {
     const it = getItem(h.id); if (!it) return;
     if (isAssembly(it.type)) { currentBomId = it.id; bomExpanded = new Set(); setView('bom'); }
     else { setView(scopeOf(it.type)); editItemModal(it.id); }
-  } else if (h.kind === 'rfq') { setView('rfq'); openRfqEdit(h.id); }
+  } else if (h.kind === 'job') { setView('jobs'); openJobEdit(h.id); }
+  else if (h.kind === 'rfq') { setView('rfq'); openRfqEdit(h.id); }
   else if (h.kind === 'order') { setView('orders'); openOrderEdit(h.id); }
   else if (h.kind === 'odl') { setView('odl'); openOdlEdit(h.id); }
   else if (h.kind === 'odp') { setView('odp'); openOdpEdit(h.id); }
