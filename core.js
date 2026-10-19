@@ -796,9 +796,13 @@ function guardiaDocumentoUltimo(doc, lista, invece) {
 // I sottogruppi contano a scendere (da 999), tutti gli altri a salire: l'ultimo
 // è quello più in là nella propria direzione. `via`: gli id che se ne vanno
 // insieme a questo (un'eliminazione di più articoli).
+// Vale per i codici **fatti come quelli della numerazione dell'app**, con il
+// numero dopo un trattino (MAT-ACC-007, TRN-BAS-999, TRN-S01) (dalla 0.105.5):
+// un codice scritto a mano che per caso finisce con un numero (VITE-M6X20,
+// SKF 6205) non è in nessuna serie, e bloccava l'eliminazione degli altri.
 function articoloUltimo(it, via) {
   const x = serieDiNumero(it && it.code);
-  if (!x) return true;
+  if (!x || !/-s?$/.test(x.prefisso)) return true;
   const giu = it.type === 'sottogruppo';
   return !(db.items || []).some(o => {
     if (o.id === it.id || (via && via.has(o.id)) || (o.type === 'sottogruppo') !== giu) return false;
@@ -947,7 +951,12 @@ function genItemCode(it) {
     // La parte senza macchina/gruppo mantiene la codifica per famiglia
     if (!mac || !grp) return type === 'parte' ? genFamilyCode(type, it.familyId, it.subFamilyId) : '';
     const sm = machineScheme(mac);
-    const stessoGruppo = i => i.machineItemId === mac.id && i.groupItemId === grp.id && i.id !== it.id;
+    // Lo stesso **prefisso**, non lo stesso gruppo (dalla 0.105.5): due gruppi
+    // con la stessa sigla (TRN-BAS-S00, TRN-BAS-S01) scrivono i codici delle
+    // loro parti nello stesso TRN-BAS-###, e contando per gruppo il secondo
+    // ripartiva da 001, già preso.
+    const stessoGruppo = i => i.machineItemId === mac.id && i.id !== it.id
+      && (i.groupItemId === grp.id || itemSigla(i.groupItemId) === grp.sigla);
     const siblings = (db.items || []).filter(i => i.type === type && stessoGruppo(i));
     // L'altro blocco che abita lo stesso prefisso: le parti per un sottogruppo,
     // i sottogruppi per una parte. Vedi il commento su nextCodeNumber.

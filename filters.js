@@ -125,9 +125,19 @@ function filtScopeChange(view, dim) {
 // valore non più coerente (una famiglia di un altro ambito, un gruppo di
 // un'altra macchina) tornando vuote, come fanno oggi con qualunque valore
 // rimasto da una scelta precedente.
-function filtScopeApply(view) {
+//
+// `sync` è la sincronizzazione della vista: sottofamiglia e gruppo hanno le
+// opzioni della famiglia/macchina scelta, e prima che il padre sia scritto e
+// le opzioni rifatte sono quelle del padre di prima — il valore non
+// prenderebbe, e comparirebbe solo al ridisegno successivo, facendo saltare
+// l'elenco sotto la mano. Quindi: prima i padri, poi le opzioni, poi i figli.
+const FILT_DIM_FIGLI = ['subfamily', 'group'];
+function filtScopeApply(view, sync) {
   const panel = filtPanelFor(view); if (!panel) return;
-  panel.dims.forEach(dim => setVal(panel.pfx + '-' + FILT_DIM_SUFFIX[dim], filtScope[FILT_DIM_SCOPEKEY[dim]] || ''));
+  const scrivi = dim => setVal(panel.pfx + '-' + FILT_DIM_SUFFIX[dim], filtScope[FILT_DIM_SCOPEKEY[dim]] || '');
+  panel.dims.filter(d => !FILT_DIM_FIGLI.includes(d)).forEach(scrivi);
+  if (typeof sync === 'function') sync();
+  panel.dims.filter(d => FILT_DIM_FIGLI.includes(d)).forEach(scrivi);
 }
 
 // ─── Rimuovi filtri ───

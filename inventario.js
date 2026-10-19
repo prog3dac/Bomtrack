@@ -312,12 +312,13 @@ function invRiepilogoModal() {
 function invRegistra(scelti, nota) {
   if (!roleGuardShop('catalog') || !_inv) return 0;
   const righe = invDifferenze().filter(r => r.diff !== 0 && (!scelti || scelti.includes(r.it.id)));
+  // Si ricalcola sull'esistente del momento, non su quello del riepilogo: tutte
+  // le differenze prima, poi i movimenti, e un salvataggio solo alla fine.
+  const testo = nota || ('Inventario del ' + fmtDateIt(oggiISO()));
+  const delta = righe.map(r => ({ id: r.it.id, d: r.contato - onHandOf(r.it.id) })).filter(x => x.d);
   let n = 0;
-  righe.forEach(r => {
-    // Si ricalcola sull'esistente del momento, non su quello del riepilogo.
-    const delta = r.contato - onHandOf(r.it.id);
-    if (delta && addMovement(r.it.id, 'rettifica', delta, nota || ('Inventario del ' + fmtDateIt(oggiISO())))) n++;
-  });
+  delta.forEach(x => { if (addMovement(x.id, 'rettifica', x.d, testo, { differito: true })) n++; });
+  if (n && saveDB() === false) return null;   // il salvataggio l'ha già detto: i conteggi restano
   invCancella();
   return n;
 }
@@ -340,6 +341,7 @@ function invRegistraDaModal() {
 function invRegistraEChiudi(scelti, nota) {
   if (!_inv) return;
   const n = invRegistra(scelti, nota);
+  if (n == null) return;
   closeModal();
   if (typeof activeView !== 'undefined' && activeView === 'stock' && typeof renderStock === 'function') renderStock();
   showToast(n ? (n === 1 ? '1 rettifica registrata' : n + ' rettifiche registrate') : 'Inventario chiuso: nessuna differenza da registrare');

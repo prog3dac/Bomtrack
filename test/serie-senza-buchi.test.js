@@ -97,6 +97,12 @@ describe('Articoli: si elimina solo l\'ultimo codice della serie', () => {
     assert.equal(a.eval(`articoloUltimo(getItem('p1'))`), true, 'le parti salgono per conto loro');
   });
 
+  // 0.105.5: VITE-M6X20 e VITE-M6X25 si bloccavano a vicenda.
+  it('un codice scritto a mano che finisce con un numero non è in una serie', () => {
+    const a = app(makeDb({ items: [codice('v1', 'VITE-TCEI-M6X20'), codice('v2', 'VITE-TCEI-M6X25'), codice('k1', 'SKF 6205'), codice('k2', 'SKF 6206')] }));
+    assert.equal(a.eval(`articoloUltimo(getItem('v1')) && articoloUltimo(getItem('k1'))`), true);
+  });
+
   it('un codice senza numero in fondo non è in una serie', () => {
     const a = app(makeDb({ items: [codice('m1', 'VITE-SPECIALE'), codice('m2', 'MAT-ACC-002')] }));
     assert.equal(a.eval(`articoloUltimo(getItem('m1'))`), true);

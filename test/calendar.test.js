@@ -138,7 +138,7 @@ describe('Calendario: griglia e navigazione', () => {
     const a = app();
     a.eval(`db.jobs = [{ id: 'j1', number: 'COM-1', status: 'aperta', dueDate: '2020-01-01', active: true }]`);
     a.eval('renderHome(); homeCalMove(3);');
-    const h = a.html('view-home');
+    const h = a.html('home-cal');   // sfogliare ridisegna solo il calendario
     assert.match(h, /Scadute e non risolte \(1\)/);
     assert.match(h, /COM-1/);
     assert.match(h, /class="cal-grid"/);
@@ -157,7 +157,24 @@ describe('Calendario: griglia e navigazione', () => {
     a.eval(`db.reminders = [{ id: 'r1', title: 'Collaudo in officina', date: '${d}', gravita: 'info', active: true }]`);
     a.eval(`renderHome(); homeCalPick('${d}')`);
     assert.equal(a.eval('homeCalMese'), d.slice(0, 7));
-    assert.match(a.html('view-home'), /Collaudo in officina/);
+    assert.match(a.html('home-cal'), /Collaudo in officina/);
+  });
+});
+
+describe('Il calendario si sfoglia senza ricalcolare il Riepilogo', () => {
+  // Le scadenze sono quelle dell'ultimo renderHome: un clic su un giorno, una
+  // freccia o un filtro ne mostra un'altra fetta, non rifà il fabbisogno di
+  // ogni piano aperto.
+  it('giorno, mese, oggi e filtri non rifanno i segnali né le scadenze', () => {
+    const a = app();
+    const d = giorni(a, 45);
+    a.eval(`db.reminders = [{ id: 'r1', title: 'Collaudo in officina', date: '${d}', gravita: 'info', active: true }]`);
+    a.eval('renderHome(); __conti = { segnali: 0, eventi: 0 };'
+      + ' { const s = homeSegnali, e = homeEventi;'
+      + ' homeSegnali = () => (__conti.segnali++, s()); homeEventi = () => (__conti.eventi++, e()); }');
+    a.eval(`homeCalPick('${d}'); homeCalMove(1); homeCalMove(-1); homeCalToday(); homeCalFiltro('promemoria'); homeCalTutti(); homeCalPick('${d}')`);
+    assert.deepEqual(JSON.parse(a.eval('JSON.stringify(__conti)')), { segnali: 0, eventi: 0 });
+    assert.match(a.html('home-cal'), /Collaudo in officina/);
   });
 });
 
@@ -286,7 +303,7 @@ describe('Calendario: filtri per tipo', () => {
     assert.match(h, /COM-1/);
     assert.match(h, /Collaudo/);
     a.eval("homeCalFiltro('commesse')");
-    h = a.html('view-home');
+    h = a.html('home-cal');
     assert.doesNotMatch(h, /Scadute e non risolte/);
     assert.match(h, /Collaudo/, 'gli altri tipi restano');
     assert.match(h, /1 scadenza nascosta dai filtri/);
@@ -300,7 +317,7 @@ describe('Calendario: filtri per tipo', () => {
     a.eval('homeCalNascosti = null; renderHome()');
     assert.doesNotMatch(a.html('view-home'), /Collaudo/);
     a.eval('homeCalTutti()');
-    assert.match(a.html('view-home'), /Collaudo/);
+    assert.match(a.html('home-cal'), /Collaudo/);
     assert.equal(a.eval('localStorage.getItem(CAL_FILTRI_KEY)'), '[]');
   });
 

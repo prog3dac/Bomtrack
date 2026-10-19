@@ -426,9 +426,9 @@ function calVisibile(e) { const f = calFiltroDi(e.tipo); return !f || !calNascos
 function homeCalFiltro(id) {
   const n = calNascosti();
   if (n.has(id)) n.delete(id); else n.add(id);
-  calFiltroSalva(); renderHome();
+  calFiltroSalva(); homeCalRidisegna();
 }
-function homeCalTutti() { calNascosti().clear(); calFiltroSalva(); renderHome(); }
+function homeCalTutti() { calNascosti().clear(); calFiltroSalva(); homeCalRidisegna(); }
 function calFiltriHtml(eventi) {
   const n = calNascosti();
   const conta = new Map();
@@ -470,9 +470,19 @@ function calGiorniGriglia(mese) {
   const inizio = addDays(primo, -lun);
   return Array.from({ length: celle }, (_, i) => addDays(inizio, i));
 }
-function homeCalMove(delta) { homeCalMese = calSpostaMese(homeCalMese || calMeseDi(oggiISO()), delta); renderHome(); }
-function homeCalToday() { homeCalGiorno = oggiISO(); homeCalMese = calMeseDi(homeCalGiorno); renderHome(); }
-function homeCalPick(iso) { homeCalGiorno = iso; homeCalMese = calMeseDi(iso); renderHome(); }
+function homeCalMove(delta) { homeCalMese = calSpostaMese(homeCalMese || calMeseDi(oggiISO()), delta); homeCalRidisegna(); }
+function homeCalToday() { homeCalGiorno = oggiISO(); homeCalMese = calMeseDi(homeCalGiorno); homeCalRidisegna(); }
+function homeCalPick(iso) { homeCalGiorno = iso; homeCalMese = calMeseDi(iso); homeCalRidisegna(); }
+// Un clic sul calendario cambia solo quale fetta delle scadenze si guarda: le
+// scadenze sono quelle calcolate dall'ultimo renderHome, e ricalcolarle (con
+// il fabbisogno di ogni piano aperto) a ogni giorno cliccato bloccava la
+// pagina per un secondo sugli archivi grandi. Si ridisegna il riquadro, basta.
+let _homeEventi = null;
+function homeCalRidisegna() {
+  const host = document.getElementById('home-cal');
+  if (!host || !_homeEventi) { renderHome(); return; }
+  host.innerHTML = renderHomeCalendar(_homeEventi);
+}
 
 const CAL_GRAV_COL = { alta: 'var(--red)', media: 'var(--orange)', info: 'var(--accent)' };
 function calRiga(e, conData) {
@@ -651,7 +661,7 @@ function renderHome() {
         : '<div class="empty-text">Niente in sospeso: nessuna data scaduta, nessun articolo senza prezzo, nessun codice duplicato.</div>'}
     </div>
 
-    ${renderHomeCalendar(homeEventi())}
+    <div id="home-cal" style="display:contents">${renderHomeCalendar(_homeEventi = homeEventi())}</div>
 
     ${ris.tot > 0 ? `<div class="cloud-section" style="margin-top:16px">
       <div style="flex:1">

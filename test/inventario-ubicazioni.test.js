@@ -200,6 +200,18 @@ describe('Inventario guidato: il riepilogo e le rettifiche', () => {
     a.eval('invRegistra()');
     assert.equal(a.eval("onHandOf('a1')"), 10);
   });
+  // 0.105.5: un salvataggio dell'archivio per rettifica, 12 s su 300 righe.
+  it('trecento rettifiche si salvano una volta sola', () => {
+    const a = app();
+    a.eval(`for (let i = 0; i < 300; i++) db.items.push(Object.assign({}, getItem('a1'), { id: 'x' + i, code: 'X' + i, location: 'A-2' }));
+      invalidateCaches(); inventarioAvvia({ ambito: 'tutto' });
+      _inv.conteggi = Object.fromEntries(db.items.map(it => [it.id, 3])); invSalva && invSalva();
+      globalThis.__salvati = 0; const c = Store.commit; Store.commit = function () { __salvati++; return c.apply(this, arguments); };`);
+    const n = a.eval('invRegistra()');
+    assert.ok(n >= 300, String(n));
+    assert.equal(a.eval('__salvati'), 1);
+    assert.equal(a.eval("(invalidateCaches(), onHandOf('x7'))"), 3);
+  });
   it('si registrano solo le righe scelte; i non contati restano come sono', () => {
     const a = app();
     a.eval("inventarioAvvia({ ambito: 'tutto' }); invConta(5); invConta(6)");

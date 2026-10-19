@@ -858,7 +858,7 @@ function renderCatalog(scope) {
   // hanno appena preso le loro <option> fresche da syncMachineFilters/
   // updateCatFamilyFilters, e un valore assegnato a un <select> senza
   // un'opzione corrispondente non prende — è per questo che l'ordine conta.
-  filtScopeApply(scope);
+  filtScopeApply(scope, () => { updateCatFamilyFilters(scope); syncMachineFilters(sc.pfx); });
   const pfx = sc.pfx;
   const rows = catalogFilteredRows(scope);
 
@@ -1343,7 +1343,7 @@ function cycleSourcingNote(it) {
 function renderCycles() {
   invalidateCaches();   // la cache dei costi vive dentro un singolo disegno
   updateCycleFamilyFilters();
-  filtScopeApply('cycles');   // dopo il sync, non prima: vedi nota in renderCatalog
+  filtScopeApply('cycles', updateCycleFamilyFilters);   // dopo il sync, non prima: vedi nota in renderCatalog
   const parts = cycleFilteredParts();
   ensureCurrentCycleItem(parts);
   const partSel = document.getElementById('cyc-part');

@@ -596,6 +596,15 @@ function addMovement(itemId, kind, qty, note, extra) {
     // Quale dichiarazione di produzione l'ha generato: serve ad annullare
     // esattamente i suoi movimenti, non tutti quelli della fase.
     declId: e.declId || null };
+  // `differito`: il movimento entra in memoria e si salva con gli altri, una
+  // volta sola, da chi lo chiede (saveDB). Un inventario di 300 righe faceva
+  // 300 salvataggi dell'archivio intero, una dozzina di secondi (dalla 0.105.5).
+  if (e.differito) {
+    stampNew(rec);
+    if (!Array.isArray(db.movements)) db.movements = [];
+    db.movements.push(rec);
+    return rec;
+  }
   return Store.insert('movements', rec);
 }
 
@@ -1444,7 +1453,7 @@ function renderStock() {
   syncFamilyFilters(STOCK_PFX, STOCK_TYPES);
   syncMachineFilters(STOCK_PFX);
   stockLocSync();
-  filtScopeApply('stock');   // dopo il sync, non prima: vedi nota in renderCatalog
+  filtScopeApply('stock', () => { syncFamilyFilters(STOCK_PFX, STOCK_TYPES); syncMachineFilters(STOCK_PFX); });   // dopo il sync, non prima: vedi nota in renderCatalog
   const rows = stockFilteredRows();
 
   // I conteggi in testa parlano di **tutto** il magazzino, non del filtro

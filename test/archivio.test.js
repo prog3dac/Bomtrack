@@ -193,6 +193,21 @@ describe('Archivio — leggere la cartella', () => {
     const nome = await a.eval('archivioNomeLibero("scheda.pdf")');
     assert.equal(nome, 'scheda (2).pdf');
   });
+
+  // L'elenco si legge una volta per sessione: un file messo da un collega dopo
+  // non c'è, e scriverci sopra cancellerebbe il suo su tutti i PC.
+  it('un file comparso dopo la lettura della cartella non si sovrascrive', async () => {
+    const files = { 'altro.pdf': 'x' };
+    const a = app(files);
+    await a.eval('archivioElenco(true)');
+    files['catalogo.pdf'] = 'DEL COLLEGA';
+    const nome = await a.eval('archivioNomeLibero("catalogo.pdf")');
+    assert.equal(nome, 'catalogo (2).pdf');
+    assert.equal(await a.eval('archivioSalva("catalogo.pdf", "MIO")'), null, 'il nome preso si rifiuta');
+    assert.equal(files['catalogo.pdf'], 'DEL COLLEGA');
+    assert.equal(await a.eval('archivioSalva(' + JSON.stringify(nome) + ', "MIO")'), 'catalogo (2).pdf');
+    assert.equal(files['catalogo (2).pdf'], 'MIO');
+  });
 });
 
 describe('Archivio — la verifica', () => {

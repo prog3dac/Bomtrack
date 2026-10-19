@@ -245,6 +245,20 @@ describe('Da dove viene questo costo', () => {
     approx(c[0].line, 50);
   });
 
+  // Il costo riga di una foglia è per un padre solo: sotto un gruppo usato due
+  // volte va moltiplicato per due, o la classifica indica il colpevole sbagliato.
+  it('un sottoassieme usato più volte moltiplica i suoi componenti', () => {
+    const a = app(makeDb({ items: [
+      asm('mac', 'macchina', { components: [comp('g1', 2)] }),
+      asm('g1', 'gruppo', { components: [comp('m1', 3)] }),
+      Object.assign(mat('m1', 10), { code: 'M1' }),
+    ] }));
+    const c = contributi(a);
+    assert.equal(c[0].qty, 6, '2 gruppi × 3 pezzi');
+    approx(c[0].line, 60);
+    approx(c[0].line, a.eval('costOf("mac").total'), 'M1 è tutto il costo della macchina');
+  });
+
   it('le voci a costo zero non ingombrano l\'elenco', () => {
     const a = app(makeDb({ items: [
       asm('mac', 'macchina', { components: [comp('m1', 1), comp('gratis', 5)] }),

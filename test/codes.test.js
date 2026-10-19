@@ -519,3 +519,19 @@ describe('Le colonne di Acquisti e Progetto sono separate davvero', () => {
       'concetto e approvvigionamento esistono solo per le parti, e le parti stanno solo in Progetto');
   });
 });
+
+// 0.105.5: due gruppi con la stessa sigla numerano le parti nello stesso
+// TRN-BAS-###, e il secondo ripartiva da 001.
+describe('Due gruppi con la stessa sigla', () => {
+  it('le parti e i sottogruppi del secondo continuano la numerazione comune', () => {
+    const a = app(makeDb({ items: [
+      { id: 'mac', code: 'TRN-S00', name: 'Tornio', type: 'macchina', uom: 'pz', sigla: 'TRN', components: [], operations: [] },
+      { id: 'g1', code: 'TRN-BAS-S00', name: 'Base', type: 'gruppo', uom: 'pz', sigla: 'BAS', machineItemId: 'mac', components: [], operations: [] },
+      { id: 'g2', code: 'TRN-BAS-S01', name: 'Base bis', type: 'gruppo', uom: 'pz', sigla: 'BAS', machineItemId: 'mac', components: [], operations: [] },
+      { id: 'p1', code: 'TRN-BAS-001', name: 'P1', type: 'parte', uom: 'pz', machineItemId: 'mac', groupItemId: 'g1', cycle: [] },
+      { id: 's1', code: 'TRN-BAS-999', name: 'S1', type: 'sottogruppo', uom: 'pz', machineItemId: 'mac', groupItemId: 'g1', components: [], operations: [] },
+    ] }));
+    assert.equal(a.eval('genItemCode({ id: "x", type: "parte", uom: "pz", machineItemId: "mac", groupItemId: "g2" })'), 'TRN-BAS-002');
+    assert.equal(a.eval('genItemCode({ id: "y", type: "sottogruppo", uom: "pz", machineItemId: "mac", groupItemId: "g2" })'), 'TRN-BAS-998');
+  });
+});
