@@ -165,6 +165,18 @@ la sessione aperta fino a **Esci**; quanto duri lo decide l'amministratore in
 Il numero di versione si legge **accanto al logo, in alto a sinistra** (es. `v0.94.0`).
 Corrisponde alla voce in cima al changelog: serve quando si segnala un problema.
 
+**Quando arriva una versione nuova** (dalla 0.105.6). In officina un PC resta acceso per
+settimane, con Bomtrack aperta, e la versione nuova arrivava solo al primo che ricaricava la
+pagina. Ora una scheda aperta controlla da sé, una volta l'ora, se c'è una versione nuova, e
+quando c'è lo dice con un avviso in basso che resta finché non lo si chiude: «**È disponibile una
+versione nuova** di Bomtrack», con il pulsante **Ricarica**. L'app non ricarica niente da sola,
+perché a metà di un ordine si perderebbe il lavoro: si ricarica quando si vuole, e se ci sono
+modifiche non salvate **Ricarica** lo chiede prima.
+
+**Sul telefono.** Bomtrack si può installare come un'app (dal menu del browser, *Installa app* o
+*Aggiungi a schermata Home*). Installata, dalla 0.105.6 segue la rotazione del telefono come ogni
+altra app, in verticale o in orizzontale: prima restava bloccata in orizzontale.
+
 ### Dove sta questo manuale
 
 Il pulsante 📖 **Manuale d'uso** nell'intestazione lo apre in una scheda nuova, da qualunque
@@ -182,7 +194,8 @@ legge in un editor o su GitHub.
 3. Apri `index.html`, crea l'amministratore, poi *Gestione → Backup → **Importa JSON***.
 
 > ⚠️ **Importa JSON sovrascrive l'archivio corrente.** Se sul PC di arrivo c'era già del lavoro,
-> esportalo prima.
+> dalla 0.105.6 l'app ne salva da sola una **copia di sicurezza** prima di sostituirlo
+> (→ [cap. 30](#30-backup-e-manutenzione)); il backup che porti con te resta comunque la copia buona.
 
 ---
 
@@ -246,7 +259,9 @@ menu con *Excel* e *PDF*: dove questo manuale dice «Esporta Excel» o «Esporta
 voci di quel menu. Il pulsante **⋯** raccoglie i comandi del documento che non sono il lavoro di
 tutti i giorni: *Duplica*, *Annulla*, *Crea ordine da questa richiesta* e **Elimina**, in rosso.
 Elimina sta lì apposta: in vista, accanto a *Salva*, era a un clic di distanza da un errore. I
-menu si chiudono con un clic fuori, con `Esc` o scegliendo una voce.
+menu si chiudono con un clic fuori, con `Esc` o scegliendo una voce. Sul telefono il menu
+**Esporta ▾** si apre sempre dentro lo schermo (dalla 0.105.6): prima, ancorato al bordo destro,
+poteva uscire a sinistra e lasciare fuori mezze voci.
 
 ### A che punto è un documento
 
@@ -295,6 +310,15 @@ Le finestre di dialogo **non bloccano la pagina**: si spostano trascinandole per
 ridimensionano dall'angolo in basso a destra e si chiudono con ✕ o con `Esc`. Dietro si continua a
 navigare, e più schede possono restare aperte insieme — per esempio il listino di un articolo e
 *Dove è usato* dello stesso, per confrontarli.
+
+**Una scheda al posto di un'altra.** Le schede di modifica (un articolo, una riga, una rettifica)
+sono una alla volta: aprendone una nuova mentre un'altra è aperta, l'app avverte che «le
+**modifiche non salvate** andranno perse». Dalla 0.105.6 lo chiede **solo se la scheda aperta è
+stata davvero cambiata**: una scheda aperta per guardare e mai toccata lascia il posto senza
+domande. Così la domanda, quando arriva, vuol dire che c'è davvero qualcosa da perdere.
+
+Sul telefono una scheda occupa tutta la pagina, e dalla 0.105.6 una scheda lunga finisce **sopra
+la barra del browser**: i pulsanti in fondo (*Salva*, *Registra*) restano raggiungibili.
 
 ### Il tema
 
@@ -595,6 +619,17 @@ Ogni segnale **nomina i codici e i numeri che lo riguardano** (fino a otto, poi 
 | 12 | Backup automatico in pausa o non riuscito — *solo amministratori, solo con il backup automatico attivo* | 🟠 media | **Riprendi** lo salva subito |
 | 13 | Spazio del browser occupato (dal 70%; 🔴 dal 90%) — *solo amministratori*. Con l'archivio in IndexedDB conta lo spazio di tutto il sito, allegati compresi | 🟠 media | a Gestione → Backup |
 
+**Tre precisazioni** (dalla 0.105.6):
+
+- **I più gravi in cima.** I segnali escono davvero nell'ordine *alta*, *media*, *informativa*:
+  prima l'allarme rosso del backup o dello spazio del browser finiva in fondo, sotto le
+  informazioni.
+- **Il ritardo di un ordine** (segnale 5) si guarda solo sulle righe **ancora da ricevere**. Un
+  ordine parziale non resta più in elenco per una riga confermata in ritardo ma già arrivata: conta
+  il ritardo di quello che deve ancora arrivare.
+- **Gli articoli obsoleti** non compaiono fra quelli sotto scorta minima o senza prezzo (segnali 7 e
+  8): non li riordina nessuno, e una scorta minima rimasta scritta li teneva lì per sempre.
+
 **Il backup che invecchia.** L'archivio esiste solo in questo browser: il segnale 11 conta i
 giorni dall'ultimo *Esporta JSON* fatto **da questo browser**, e porta il pulsante **Esporta ora**.
 Se non se n'è mai fatto uno, conta dal primo giorno in cui l'app l'ha tenuto d'occhio — una
@@ -641,7 +676,7 @@ insieme in una pagina sola. È in sola lettura, per tutti i ruoli.
 | Sezione | Cosa mostra |
 |---|---|
 | **Tessere** | Valore della giacenza, valore fermo, articoli sotto scorta, righe di consegna scadute |
-| **Valore per tipo / per famiglia** | Esistente × costo unitario, come la tessera del *Magazzino*; solo le giacenze positive |
+| **Valore per tipo / per famiglia** | Esistente × costo unitario, come la tessera del *Magazzino*; solo le giacenze positive. Dalla 0.105.6 la tessera e il cruscotto contano esattamente le stesse quantità |
 | **Articoli fermi** | Con giacenza e nessun movimento da 3, 6 o 12 mesi, dal più costoso: è il denaro immobilizzato a scaffale |
 | **Sotto scorta minima** | Quanto manca alla scorta e quanto è già in arrivo; ✓ se l'arrivo basta |
 | **Consegne scadute per fornitore** | Righe di ODA e ODL non ancora ricevute oltre la data confermata (o richiesta): quante, quanto valgono, il ritardo peggiore e i documenti, cliccabili |
@@ -683,7 +718,9 @@ Nella barra dei filtri, a destra: **Colonne** e **+ Nuovo articolo**.
 | ★ Solo preferiti | Interruttore: mostra solo gli articoli marcati preferiti |
 
 **Colonne disponibili** (pulsante **Colonne**): Indicatori, **Codice**, **Descrizione**, Tipo, Famiglia,
-U.M., Costo unitario, Dettaglio. Codice e descrizione non si nascondono: sono l'identità della riga.
+U.M., Costo unitario, Dettaglio; e, spente finché qualcuno non le accende, Sottofamiglia, Fornitore,
+UM acquisto, Fattore conversione, Scorta minima, Lotto, Note, Creato/aggiornato da. Codice e
+descrizione non si nascondono: sono l'identità della riga.
 La scelta resta anche domani, ed è **separata** da quella di *Progetto* — le due anagrafiche hanno
 le stesse colonne ma si guardano per motivi diversi.
 
@@ -694,8 +731,10 @@ le stesse colonne ma si guardano per motivi diversi.
   che li citano, ma si vedono spenti.
 - **Fornitore e prezzo non si scrivono qui.** La scheda li mostra in sola lettura e rimanda al
   **listino fornitori** (→ [cap. 10](#10-listino-fornitori)).
-- L'export **esporta l'elenco, non la vista**: le colonne nascoste ci sono comunque, e la
-  paginazione non taglia niente.
+- L'export **segue le colonne** (dalla 0.105.6): nel file ci sono le colonne accese con
+  **Colonne**, nello stesso ordine dello schermo, e quelle spente restano fuori. **Codice** e
+  **Descrizione** ci sono sempre; gli **Indicatori**, che a schermo sono icone, no. Le righe sono
+  tutte quelle che passano i filtri: la paginazione a schermo non taglia niente.
 
 ---
 
@@ -838,6 +877,14 @@ lo si scoprirebbe il giorno che qualcuno prova ad aprire il disegno.
 a funzionare, in una sezione separata della scheda. Di quelli il backup JSON porta l'elenco e non
 il contenuto: prima di trasferire i dati su un altro PC vanno riscaricati a mano.
 
+**Con l'archivio condiviso** (dalla 0.105.6 lo si dice chiaro). L'archivio condiviso porta ai
+colleghi l'**elenco** degli allegati, non i file. Un file caricato dentro l'app resta nel browser
+di **questo PC**: per questo il pulsante si chiama **+ Carica file solo su questo PC** e, accanto,
+un avviso in arancio dice che i colleghi vedranno l'allegato nell'elenco ma non potranno aprirlo.
+Per condividere un disegno si usa la cartella d'archivio comune, da Chrome o Edge. E chi apre un
+allegato che sul suo PC non c'è legge che **il file è stato caricato su un altro PC**, e da chi:
+è a lui che va chiesto, o va messo nella cartella d'archivio.
+
 ---
 
 ## 9. I codici automatici
@@ -880,6 +927,11 @@ PRT-…               parte non legata a una macchina
 I **prefissi** e il **numero di cifre** si cambiano in *Gestione → Impostazioni → Codifica
 automatica articoli*: di serie `CMM` per i commerciali, `MAT` per le materie prime, `PRT` per le
 parti, con 3 cifre.
+
+**Maiuscole e spazi non contano** (dalla 0.105.6). Per trovare il prossimo numero libero l'app
+guarda anche i codici scritti in minuscolo o con uno spazio ai bordi, come fa il controllo dei
+codici doppi. Prima un `mat-acc-002` arrivato da un Excel non contava per la serie `MAT-ACC-`:
+l'app proponeva `MAT-ACC-002`, e il controllo dei doppioni lo rifiutava subito come già usato.
 
 ---
 
@@ -1054,7 +1106,17 @@ Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta ape
   in cui l'assieme serve. **Zero = dalle ore** delle lavorazioni.
 - I **riferimenti ciclici** (A contiene B che contiene A) sono rilevati e impediti, sia nella
   distinta sia nel ciclo. Se ne resta uno, un **avviso rosso** nomina l'articolo coinvolto invece
-  di far comparire un costo tronco che sembrerebbe buono.
+  di far comparire un costo tronco che sembrerebbe buono. **⊞ Espandi tutto** si ferma
+  sull'anello invece di bloccarsi, anche quando l'anello sta più in basso della radice (dalla
+  0.105.6).
+- **Un anello arrivato da un collega** (dalla 0.105.6). Con l'archivio condiviso un anello può
+  nascere senza che nessuno lo veda: io metto S2 dentro S1, un collega nello stesso momento mette
+  S1 dentro S2, e ciascuno dei due PC, controllando il proprio archivio, non trova niente di male.
+  Per questo, dopo ogni ricezione dal server e alla riapertura dell'app, Bomtrack cerca gli anelli
+  in tutte le distinte e, se ne trova, lo dice con un **avviso in basso che resta**: «**Distinta ad
+  anello**», con i codici del giro (`S1 → S2 → S1`) e il pulsante **Apri distinta**. Costi e
+  fabbisogni di quel ramo sono incompleti finché non si toglie una delle righe; tolta la riga,
+  l'avviso sparisce da solo.
 
 ---
 
@@ -1166,6 +1228,11 @@ ordine le si scelga.
   identica alla precedente.
 - Il confronto fra revisioni guarda un livello: i componenti diretti. Un sottogruppo che ha
   cambiato la *sua* distinta lo dicono le revisioni del sottogruppo.
+- **Un articolo che sta in una revisione rilasciata non si elimina** (dalla 0.105.6), anche se
+  nella distinta di oggi non c'è più: la revisione è una fotografia, e deve continuare a dire che
+  cosa c'era. Prima un componente tolto dalla Rev. B si poteva eliminare, e da quel momento la
+  Rev. A — e il registro delle modifiche — diceva «(articolo eliminato)». Un articolo che non
+  serve più si segna **obsoleto**.
 
 ### Confrontare due distinte diverse
 
@@ -1245,6 +1312,15 @@ In testa quattro **KPI**: *Articoli a magazzino* · *Sotto scorta minima* · *Co
 **Valore giacenza (€)** (esistente × costo unitario). Il valore ripartito per tipo e per famiglia,
 e gli articoli fermi da mesi, stanno nel **Cruscotto** (→ [cap. 5](#il-cruscotto)).
 
+**Il valore conta solo le giacenze positive** (dalla 0.105.6). Un esistente sotto zero è un errore
+di registrazione — un consumo scritto prima dell'arrivo — non un debito: vale zero, e non abbassa
+più il valore di merce che sullo scaffale c'è. Così la tessera del Magazzino e il Cruscotto, che la
+tessera apre, dicono lo stesso numero.
+
+**Esistente negativo** (dalla 0.105.6). Quando qualche articolo ha l'esistente sotto zero compare
+una quinta card, in rosso, con quanti sono: un clic li filtra. Non è una misura del magazzino ma un
+promemoria: quegli articoli **vanno ricontati**, o manca un carico, un versamento o un ricevimento.
+
 Le card **filtrano la tabella** (dalla 0.101.0): *Sotto scorta minima* e *Con merce in arrivo*
 mettono il filtro di stato corrispondente, *Articoli a magazzino* lo toglie, *Valore giacenza* apre
 il Cruscotto. La card del filtro in uso resta evidenziata; un secondo clic lo toglie.
@@ -1290,6 +1366,7 @@ famiglia, sottofamiglia, **ubicazione** (una, o *senza ubicazione*), e il filtro
 
 - *Sotto la scorta minima*
 - *Giacenza a zero*
+- *Esistente negativo* (dalla 0.105.6) — l'esistente è sotto zero: è da ricontare
 - *Con giacenza*
 - *Con merce in arrivo* (dalla 0.101.0)
 - *Libero negativo* — si è promesso più di quanto si abbia e si aspetti
@@ -1300,6 +1377,14 @@ famiglia, sottofamiglia, **ubicazione** (una, o *senza ubicazione*), e il filtro
 **La finestra «Rettifica giacenza»** — dalla riga o dal pannello laterale. Campi: **Tipo
 movimento**, **Quantità**, (per il conto lavoro) **Terzista** e **Ordine di conto lavoro**,
 **Nota**, e il pulsante **Registra**. Ogni tipo porta il suo suggerimento contestuale.
+
+Dalla 0.105.6 la finestra fa tre controlli in più. **Una quantità negativa si rifiuta**: il verso
+lo dà il tipo (un consumo toglie, un carico aggiunge), e una rettifica d'inventario scrive quanti
+pezzi si sono contati, che non possono essere meno di zero. **Cambiando tipo il campo Quantità si
+svuota** (per la rettifica d'inventario riparte dall'esistente), perché il numero scritto per un
+tipo vuol dire un'altra cosa per l'altro: prima, passando a *Carico manuale* con l'esistente
+ancora scritto, si ricaricava tutta la giacenza. E l'**ordine di conto lavoro** si lega solo a un movimento di conto lavoro:
+scelto prima e poi cambiato il tipo, non resta appeso a un carico o a un consumo.
 
 **Gli otto tipi di movimento:**
 
@@ -1389,7 +1474,15 @@ documento:
 | Documento | Cosa mostra | Cosa offre |
 |---|---|---|
 | **ODP** | la fase su cui è fermo, quanti pezzi ha fatto, o perché non può partire | **Avvia la fase** o **Dichiara avanzamento**, e *Apri l'ordine* |
-| **ODA / ODL** | fornitore, stato, ogni riga con *ricevuto / ordinato* | **Ricevi tutto** (chiede conferma), e *Apri l'ordine* |
+| **ODA / ODL** | fornitore, stato, ogni riga con *ricevuto / ordinato* | **Ricevi tutto** (chiede conferma), **Ricevi una parte** e *Apri l'ordine* |
+
+**Ricevi una parte** (dalla 0.105.6). Una consegna porta spesso 40 pezzi su 100, e dal telefono
+prima c'era solo *Ricevi tutto*. Ora la finestra elenca le **righe ancora aperte**, una sotto
+l'altra, con il campo già pieno del **residuo**: si corregge solo la riga che arriva diversa, si
+svuota quella che non arriva, e la conferma registra e **salva subito**. Il numero da scrivere è
+**quanto arriva adesso** — quello sulla bolla in mano — non il totale ricevuto. Le righe di un ODL
+che vengono da un ordine di produzione restano fuori, come in *Ricevi tutto*: si dichiarano
+sull'ODP.
 
 I pulsanti aprono le **stesse finestre** dell'app, con le stesse regole: chi ha un ruolo in sola
 lettura vede i numeri ma non i comandi.
@@ -1449,13 +1542,20 @@ posto.
 
 **Il riepilogo.** **Riepilogo differenze** mostra ogni articolo contato con *esistente*,
 *contato* e *differenza*, quanti hanno una differenza, quanti non sono stati contati e il valore
-delle differenze. Le righe con una differenza sono spuntate: si tolgono quelle da non registrare.
+delle differenze. Dalla 0.105.6 quel valore usa lo **stesso costo del valore di giacenza**: prima
+usava il costo scritto a mano nella scheda, quasi sempre vuoto per i commerciali, e dieci pezzi
+mancanti valevano zero. Le righe con una differenza sono spuntate: si tolgono quelle da non registrare.
 **Registra** scrive una **Rettifica inventario** per ogni riga spuntata, con la nota proposta
 (*Inventario del …*). Gli articoli non contati restano come sono.
 
 > **Contare non tocca il magazzino**: finché non si registra non cambia niente. Il conteggio resta
 > in **questo browser**: si chiude con *Chiudi e continua dopo* e si riprende da **Inventario →
 > Riprendi**, anche dopo aver chiuso l'app. Un altro dispositivo non lo vede.
+>
+> **L'inventario in corso è di chi l'ha cominciato** (dalla 0.105.6), e dell'archivio su cui l'ha
+> cominciato, locale o condiviso. Su un tablet di magazzino usato da due persone ciascuno ritrova
+> il suo conteggio, e nessuno registra a suo nome le rettifiche contate da un collega; passando
+> dall'archivio locale a quello condiviso, il conteggio dell'altro archivio non si mescola.
 >
 > La differenza si calcola **quando si registra**: se fra il conteggio e la registrazione entra o
 > esce qualcosa, finisce nella rettifica. Si registra a fine giro, non il giorno dopo.
@@ -1504,7 +1604,11 @@ consegna**. Avvisa, non blocca: la decisione resta a chi la prende.
   copertura.
 - **Copertura materiale** — la sezione che risponde a «il materiale c'è?», divisa in tre:
   cosa è ancora **da ordinare**, cosa sta in un documento **non ancora inviato**, cosa
-  **arriva dopo la data in cui serve**.
+  **arriva dopo la data in cui serve**. *Documento non ancora inviato* (dalla 0.105.6) vuol dire
+  un ordine o un ordine di lavoro **in bozza**, o una richiesta d'offerta **ancora aperta**, che
+  copre quello che manca. Un ordine già inviato è merce in arrivo e sta già nel conto; se copriva
+  40 pezzi su 100, gli altri 60 restano **da ordinare**. Prima bastava un documento qualsiasi
+  sull'articolo, e quei 60 risultavano in attesa di un invio che non li riguardava.
 - **Fabbisogni**, **Richieste di offerta**, **Ordini a fornitore**, **Ordini di lavoro** — le
   quattro liste di quello che pende sotto la commessa, ogni riga con **Apri →**.
 
@@ -1581,6 +1685,14 @@ Gli **indicatori di riga**:
 | `↑ lotto` / `↑ minimo` | La quantità è stata alzata al lotto di riordino |
 | `✓ coperto` | Non serve ordinare niente |
 | *(impegno)* | Quanta parte è impegnata dai piani più urgenti |
+| *(bozze di altri)* | L'articolo sta già in un **ordine in bozza** che non è di questo piano (dalla 0.105.6) |
+
+**Le bozze d'ordine degli altri** (dalla 0.105.6). Una bozza non è merce in arrivo — non è
+partita — e il netto giustamente non la conta. Ma il piano prima non la vedeva nemmeno: una bozza
+del riordino sotto scorta, di un altro piano o scritta a mano, e gli ordini generati dal piano
+partivano entrambi, e la stessa merce si comprava due volte. Ora accanto alla riga d'acquisto
+compaiono le bozze degli altri con quell'articolo, e in **Genera ordini** la riga nasce **non
+spuntata**, come fa il riordino: chi la vuole comunque la spunta.
 
 **Da far lavorare fuori** — le fasi di ciclo affidate a un terzista. Le quantità sono **al netto
 dei pezzi dichiarati fatti** in *Da fabbricare*: una parte finita ha già attraversato tutte le sue
@@ -1598,7 +1710,20 @@ quante ne sono state fatte e quante ne restano. Il pulsante 🏭 in fondo alla r
 cui si dichiara: si scrive quanti pezzi sono stati fatti (il modulo propone il residuo, che è il
 caso più frequente), si può aggiungere una nota, e resta lo storico di chi ha dichiarato cosa e
 quando. Un numero **negativo** corregge un conteggio sbagliato, come una rettifica di magazzino:
-lo storico non si riscrive, si aggiunge.
+lo storico non si riscrive, si aggiunge. Dalla 0.105.6 dichiara anche il ruolo **Officina e
+magazzino**, come già per il montaggio: prima il pulsante e la scheda gli erano nascosti, e
+l'avanzamento delle parti lo doveva scrivere l'ufficio.
+
+**Lotto e scorta minima delle parti** (dalla 0.105.6). La quantità da fabbricare segue le stesse
+regole degli acquisti. Si arrotonda al **lotto di riordino** della parte, a multipli o con la
+soglia minima secondo il suo modo. E se lo scaffale della parte è sotto la **scorta minima**, il
+piano aperto **più urgente** che la fabbrica (il primo della fila, come per il netto) lancia anche i
+pezzi che la ripristinano, una volta sola: gli altri piani non se li ricaricano, e lanciato l'ODP
+che li copre il buco è chiuso. Il buco si misura a lavoro finito: esistente, più quello che gli
+ODP aperti stanno facendo e i piani devono ancora lanciare, meno quello che i piani devono ancora
+consumare. La riga dice da dove vengono i pezzi in più, perché un 50 al posto di 8 non sembri un
+errore. Prima la scorta e il lotto di una parte fatta in casa si scrivevano nella scheda ma il
+fabbisogno li ignorava.
 
 Dichiarare pezzi fatti **mette a magazzino** le parti che si tengono a scorta (dalla 0.105.5),
 con un versamento legato alla dichiarazione: il montaggio, scaricandole, non manda la giacenza sotto
@@ -1672,7 +1797,10 @@ pronto davvero?** È lo stesso albero, percorso in avanti con le stesse durate:
 - un materiale o un commerciale è pronto **oggi** se la giacenza libera (esistente meno quanto
   impegnano gli altri piani aperti) basta per tutto il piano; **all'arrivo** dell'ordine che lo
   copre, se basta con l'in arrivo (data confermata, o quella chiesta); altrimenti fra i **giorni
-  del listino** a partire da oggi;
+  del listino** a partire da oggi. Dalla 0.105.6 l'in arrivo è lo stesso del fabbisogno netto: le
+  righe d'ordine scritte in un'altra unità si **convertono** nell'unità dell'articolo (16 m di
+  barra non sono più 16 kg), e quelle **senza data** contano come arrivate in tempo. Prima si
+  perdevano, e merce già ordinata risultava da comprare col tempo del fornitore;
 - una parte comincia quando è pronto il suo materiale, poi le fasi in fila;
 - un assieme comincia quando sono pronti tutti i componenti, più il montaggio.
 
@@ -1844,6 +1972,10 @@ I tre pulsanti **Genera richieste / ordini / ordini di lavoro** aprono la stessa
 come netta o lorda secondo l'interruttore attivo. Si spunta cosa includere e si conferma. Ne esce
 **un documento per fornitore**.
 
+La finestra di **Genera ordini di produzione** mostra l'importo di ogni parte: dalla 0.105.6 è il
+**costo dei pezzi da lanciare** (prima diceva € 0,00 su ogni riga, perché una parte fatta in casa
+non ha listino né fornitore).
+
 ---
 
 ## 20. Richieste di offerta (RFQ)
@@ -1896,7 +2028,9 @@ italiano/inglese**.
 quotazioni negli articoli (→ [cap. 10](#10-listino-fornitori)).
 
 **Confronta offerte.** Sotto-vista che mette a fianco i prezzi di più richieste sullo stesso
-materiale.
+materiale. Il totale più basso, in verde, si cerca **solo fra le offerte complete** (dalla
+0.105.6): un fornitore che quota una riga su tre ha per forza il totale più basso, e prima finiva
+in verde. Ora il suo totale dice **incompleta (1/3)** — quante righe ha quotato su quante.
 
 **Da sapere.** Una richiesta può contenere **insieme materiale e lavorazioni** dello stesso
 fornitore — chiedere quanto costa il pezzo e quanto costa lavorarlo è una domanda sola.
@@ -1940,6 +2074,17 @@ In fondo il **Totale imponibile**.
 - **Il ricevimento carica il magazzino.** Non serve registrare anche un movimento; anzi, farlo
   raddoppierebbe la merce.
 - Lo stato passa da solo a **Parziale** e poi a **Evaso** man mano che si registrano i ricevimenti.
+- **Il listino del fornitore si propone** (dalla 0.105.6). Scelto o cambiato il fornitore di un
+  ordine — o il terzista di un ordine di lavoro — l'app guarda le sue quotazioni e, se ha a listino
+  articoli dell'ordine, chiede «**Applicare il listino di …?**». Di serie il prezzo va solo alle
+  righe **senza prezzo**; a quelle che ne hanno già uno diverso solo spuntandolo, perché quel numero
+  può essere un prezzo concordato. Rifiutando, nessun prezzo cambia: è la regola di sempre, il
+  prezzo non si sostituisce da sé. La richiesta d'offerta resta fuori: lì il prezzo è la risposta
+  del fornitore, non un listino da applicare.
+- **«Salva» a vuoto non tocca il documento** (dalla 0.105.6). Premuto su una richiesta, un ordine
+  o un ordine di lavoro senza modifiche, lo segnava come modificato anche per chi non può scriverlo,
+  e con l'archivio condiviso il server respingeva l'invio. Ora, se non è cambiato niente, non si
+  scrive niente.
 
 ---
 
@@ -2023,6 +2168,23 @@ copre i pezzi **entrati**.
 Una dichiarazione sbagliata si **annulla** dallo storico, e con lei se ne vanno i movimenti di
 magazzino che aveva generato — solo i suoi.
 
+**Si annulla rispettando la successione** (dalla 0.105.6), con le stesse regole di *riapri*: una
+dichiarazione si annulla solo se **la fase dopo non è ancora partita**. Se la 20 ha già lavorato
+i pezzi della 10, si annullano prima le dichiarazioni della 20, poi quella della 10. Prima si
+poteva togliere l'avanzamento della 10 a 20 già lavorata, e la 20 restava con zero da fare e dieci
+fatti, mai chiusa, con l'ordine di nuovo *in corso*.
+
+**Un avvio sbagliato si annulla** (dalla 0.105.6). Finché la fase non ha dichiarazioni, il suo
+avvio ha nello storico il suo **Annulla**: è il rimedio a una fase avviata per sbaglio. Sulla
+prima fase rimette a scaffale il materiale uscito **con quell'avvio**; quello prelevato dopo con
+*Preleva il resto* resta uscito.
+
+**Le fasi che non ricevono pezzi si chiudono da sole** (dalla 0.105.6). Se la 10 finisce tutta
+in scarti, o si chiude con zero pezzi buoni, alla 20 non arriverà mai niente: chiusa la 10, le
+fasi dopo si chiudono anche loro, e l'ordine si **completa** invece di restare *in corso* con il
+materiale nel lavoro in corso. Prima restavano *avviabili* con zero da fare, e bisognava avviarle e
+chiuderle a mano una per una.
+
 ### Il magazzino: due movimenti, e il silenzio in mezzo
 
 Vale identico per un ciclo **tutto interno**, **tutto esterno** o **misto**.
@@ -2063,6 +2225,11 @@ non quelli lanciati). La consegna chiesta sulla riga è il **rientro pianificato
 la fine dell'ordine (sugli ordini creati prima della 0.90.0, senza date di fase, resta la fine
 dell'ordine). Le fasi **consecutive** dello stesso terzista fanno **una riga sola**: sono
 una lavorazione da commissionare, non due.
+
+**Chi genera l'ordine di lavoro** (dalla 0.105.6): chi scrive gli ordini, cioè l'*Ufficio
+acquisti* e l'amministratore. Un ordine di lavoro è un documento con un prezzo e un fornitore, e
+il ruolo *Officina e magazzino* non lo genera più da un ODP: avvia, dichiara e riceve, ma il
+documento per il terzista lo emette l'ufficio.
 
 > Su quella riga i comandi di conto lavoro dell'ODL diventano un **rimando** all'ordine di
 > produzione. Il magazzino ha **un padrone solo**: due strade per lo stesso gesto sarebbero due
@@ -2404,10 +2571,21 @@ degli ordini e degli ODL, **avvia e dichiara** le fasi degli ODP (e le annulla),
 **produzione** e **rettifica le giacenze** o manda materiale ai terzisti. Non crea né modifica
 richieste, ordini, piani, articoli o distinte: prima per dichiarare l'avanzamento bisognava
 dare il ruolo *Ufficio acquisti*, che scrive anche gli ordini. Magazzino, ordini fornitore, ODL e
-ODP non gli compaiono in sola lettura.
+ODP non gli compaiono in sola lettura: dalla 0.105.6 lì non vede più nemmeno il banner «il ruolo
+non modifica…», che contraddiceva i ricevimenti e le giacenze che registra proprio in quelle
+viste. Dalla stessa versione dichiara anche l'avanzamento delle **parti** dal piano
+(→ [cap. 19](#19-fabbisogno-materiali)), mentre gli **ordini di lavoro** da un ODP li genera chi
+scrive gli ordini (→ [cap. 22](#22-ordini-di-produzione-odp)).
 
 Nelle sezioni non scrivibili compare un **banner di sola lettura** e i pulsanti di creazione ed
-eliminazione spariscono; ogni tentativo di modifica viene comunque fermato con un messaggio.
+eliminazione spariscono; ogni tentativo di modifica viene comunque fermato con un messaggio. Con
+l'archivio condiviso e **senza collegamento** (dalla 0.105.6) il banner e il messaggio dicono che
+manca il collegamento, non che il ruolo non può: la causa è la rete, non il ruolo.
+
+**Una prova per ogni comando** (dalla 0.105.6). Fra i test dell'app ce n'è uno che chiama ogni
+comando dell'interfaccia con ogni ruolo e verifica che scriva solo le tabelle che il server gli
+concede. È così che si è trovato il *Salva* a vuoto di richieste, ordini e ODL
+(→ [cap. 21](#21-ordini-a-fornitore-oda)).
 La voce **Gestione** — e con essa il backup — è visibile ai soli amministratori.
 
 **Deve restare almeno un amministratore attivo.** L'app impedisce di declassare, sospendere o
@@ -2502,8 +2680,16 @@ Hanno i pulsanti **Esporta Excel** ed **Esporta PDF**: Magazzino · Acquisti · 
 Carico centri · Commesse · Richieste · Ordini · Ordini di lavoro · elenco Piani ·
 Materiale presso terzi · **Cruscotto** · **Confronto distinte**.
 
-**Si esporta quello che si vede**: i filtri attivi sono applicati e le colonne sono le stesse.
-La paginazione a schermo (i 200 articoli per volta) **non taglia niente**.
+**Si esporta quello che si vede**: i filtri attivi sono applicati, e la paginazione a schermo (i
+200 articoli per volta) **non taglia niente**.
+
+**Le colonne.** Negli elenchi che hanno il pulsante **Colonne** — Articoli d'acquisto, Articoli
+di progetto e Magazzino — il file porta **le colonne accese**, nello stesso ordine dello schermo
+(dalla 0.105.6): quelle accese apposta, come il fornitore, la scorta minima o le note, ci sono;
+quelle spente restano fuori. **Codice** e **Descrizione** ci sono sempre, perché a schermo non si
+spengono; gli **Indicatori** (★ preferito, ⛔ obsoleto), che a schermo sono icone, no. Prima questi
+elenchi esportavano un insieme fisso di colonne, qualunque cosa si stesse guardando. Gli altri
+elenchi, che la scelta delle colonne non ce l'hanno, esportano le loro colonne di sempre.
 
 **I filtri finiscono scritti nel file** — un foglio **Estrazione** nell'Excel (Estrazione, Azienda,
 Data, filtri attivi), una riga sotto il titolo nel PDF — così a distanza di tempo si sa ancora cosa
@@ -2513,6 +2699,12 @@ contiene quel file.
 |---|---|
 | **PDF** | Testata azienda e numero di pagina su ogni pagina |
 | **Excel** | **Autofiltro** sull'intestazione, i numeri come numeri e **le date come date** — quindi si ordinano e si filtrano per periodo dentro Excel, non come testo |
+
+**Un testo che sembra una formula resta testo** (dalla 0.105.6). Nomi, descrizioni e note li scrive
+chi vuole, e una cella che comincia con `=`, `+` o `@` alcuni fogli di calcolo la prendono per una
+formula, a volte appena il file si apre: un `=HYPERLINK(…)` nascosto nel nome di un fornitore
+partirebbe dal PC di chi riceve il file. Nell'Excel quei testi escono con un apice davanti, che li
+lascia testo. Un trattino da solo e un numero negativo restano come sono.
 
 Nome del file: `bomtrack_<sezione>_<data>.xlsx` o `.pdf`. Il nome si pulisce da solo dei
 caratteri che Windows non accetta (`/ \ : * ? " < > |`) e gli spazi diventano trattini: un
@@ -2572,6 +2764,17 @@ documento, non l'elenco**.
 | **Esporta JSON** | Scarica l'intero archivio in un file |
 | **Importa JSON** | Carica un file **sovrascrivendo i dati attuali** |
 | **↺ Ripristina dati esempio** | Rimette la macchina dimostrativa |
+
+**Una copia prima di sostituire l'archivio** (dalla 0.105.6). **Importa JSON**, **Ripristina dati
+esempio** e **AZZERA TUTTO** buttano via l'archivio di adesso. Prima di farlo l'app ne salva da
+sola una **copia di sicurezza**, con un nome che non si sovrascrive:
+`bomtrack_prima_di_import_…`, `bomtrack_prima_di_ripristino_…`, `bomtrack_prima_di_azzera_…`,
+seguiti da data e ora. Se il backup automatico è attivo la copia va nella sua cartella; altrimenti
+si scarica come file. Se la cartella non si raggiunge (il permesso non c'è, il disco di rete non
+risponde) l'app lo dice e chiede: **Scarica e prosegui**, oppure fermarsi lì. La copia è un backup
+normale: si ripristina con **Importa JSON**. Non si fa quando l'archivio all'avvio era illeggibile
+(→ *Dati non caricati*, [cap. 35](#35-domande-frequenti)): in memoria c'è solo il database di
+esempio, e importare un backup è proprio il modo di uscirne.
 
 > ⚠️ **Fai backup regolari.** I dati stanno in questo browser: non esiste una copia da nessun'altra
 > parte. Un backup a fine giornata costa dieci secondi. Dopo 7 giorni senza, il Riepilogo lo
@@ -2654,6 +2857,16 @@ commesse), anagrafiche, utenti e impostazioni.
 Un controllo dati che elenca i codici assegnati a più di un articolo — di solito il residuo di un
 import fatto male. Lo stesso controllo alimenta un segnale del Riepilogo.
 
+**Numeri dei documenti** (dalla 0.105.6). Accanto, lo stesso controllo per le **serie dei
+documenti** — RFQ, ODA, ODL, ODP, piani (FAB), commesse (COM), modifiche tecniche (MT) — di
+quest'anno e dell'anno scorso. Per ogni serie dice i **numeri doppi**, con un pulsante per aprire
+ciascuno dei documenti che lo portano, e i **buchi**: i numeri che mancano sotto il più alto. Un
+numero doppio nasce da un ripristino o da due PC che numeravano ciascuno per conto suo; un buco da
+una prenotazione dell'archivio condiviso mai usata. Se è tutto in ordine lo dice. Come per i codici,
+l'app **non rinumera niente da sola**: quel numero può essere già su un ordine spedito o su una
+fattura. Si aprono i documenti, si decide quale tiene il numero e, se serve, si annota il buco per
+chi controlla.
+
 ### Registro errori
 
 Gli errori imprevisti incontrati **in questa sessione** (si azzera ricaricando la pagina), con
@@ -2661,9 +2874,14 @@ Gli errori imprevisti incontrati **in questa sessione** (si azzera ricaricando l
 
 ### AZZERA TUTTO
 
-Svuota completamente l'archivio, dati di esempio compresi.
+Svuota completamente l'archivio, dati di esempio compresi. Chi azzera resta dentro come
+amministratore. La finestra dice quanto si sta per cancellare e, per confermare, chiede di
+**scrivere AZZERA**: un clic distratto non basta.
 
-> ⚠️ **Irreversibile.** Non passa dal cestino. Esporta un backup prima, sempre.
+> ⚠️ **Non passa dal cestino.** Dalla 0.105.6, però, prima di azzerare l'app salva da sola una
+> copia di tutto (vedi *Una copia prima di sostituire l'archivio*, qui sopra), e il messaggio
+> finale dice dove: è da lì che si torna indietro, con **Importa JSON**. Il pulsante **Esporta
+> backup ora** nella finestra resta, per chi vuole una copia anche altrove.
 
 ---
 
@@ -2776,6 +2994,15 @@ La **nuvola** nell'intestazione dice a che punto è; cliccandola si apre lo stat
 | **Errore di sincronizzazione** | Il server ha rifiutato l'invio: il motivo è nello stato |
 | **Accesso scaduto** | Va rifatto l'accesso; i dati del PC restano |
 
+**Esci chiude solo questo PC** (dalla 0.105.6). Uscire dall'app chiude la sessione di questo PC e
+basta: chi ha Bomtrack aperta anche sul telefono o su un altro PC resta dentro lì. E un errore
+passeggero del servizio di accesso di Supabase non fa più uscire nessuno: la sessione si chiude
+solo quando il server la rifiuta davvero.
+
+**Ordini di lavoro in modifica** (dalla 0.105.6). Come per richieste e ordini, un ordine di lavoro
+aperto con modifiche in corso ferma la ricezione: le modifiche dei colleghi aspettano il giro dopo,
+invece di arrivare sotto le mani.
+
 ### Senza collegamento si consulta
 
 Con l'archivio condiviso **si lavora solo collegati**. Quando il server non risponde (manca la
@@ -2840,21 +3067,40 @@ appena preso da un collega finisce fra gli errori dell'import.
 
 ### Quello che il server non lascia fare
 
-I ruoli sono quelli del [cap. 26](#26-utenti-e-ruoli), ma ora li applica il server. Se un invio
-contiene qualcosa che il tuo ruolo non scrive, **il server lo rifiuta intero** e la nuvola
-diventa rossa con il motivo. Le modifiche restano su questo PC. Se non c'è altro modo di uscirne,
-dallo stato: **Scarta e riscarica** butta le modifiche non inviate e riscarica l'archivio.
+I ruoli sono quelli del [cap. 26](#26-utenti-e-ruoli), ma ora li applica il server.
 
-Due casi particolari:
+**Un rifiuto per permesso non ferma più la coda** (dalla 0.105.6). Se un invio contiene modifiche
+a una tabella che il tuo ruolo non scrive — di solito perché un amministratore ti ha appena
+cambiato ruolo — si scartano **solo quelle**: tornano come sono sul server, e tutto il resto parte.
+Il PC continua a ricevere le modifiche dei colleghi. Prima il server rifiutava l'invio intero, e
+tutta la coda restava ferma dietro di lui.
+
+**Scarta solo i rifiutati** (dalla 0.105.6). Quando il server rifiuta un invio per un altro motivo,
+la nuvola diventa rossa e il messaggio indica la via d'uscita. Nello stato della nuvola (*Archivio
+condiviso*), finché ci sono modifiche in attesa, il pulsante **Scarta solo i rifiutati** manda il
+lotto **a pezzi**, nell'ordine in cui le cose si citano (prima i fornitori, poi gli ordini che li
+nominano): i record che il server rifiuta tornano come sono sul server e vengono elencati, tutti
+gli altri partono. Prima l'unica uscita era **Scarta e riscarica**, che c'è ancora ma butta
+**tutte** le modifiche non inviate e riscarica l'archivio: va tenuto per ultimo, e l'app stessa,
+chiedendo conferma, suggerisce di provare prima l'altro.
+
+Alcuni casi particolari:
 
 - **Le impostazioni** (*Gestione → Impostazioni*, unità di misura, condizioni d'offerta…) le
   cambia solo l'amministratore. Una modifica fatta da un altro ruolo resta sul suo PC, e glielo
   si dice.
+- **Due amministratori sulle impostazioni** (dalla 0.105.6). Le impostazioni partono intere, e
+  prima un amministratore con la copia indietro riportava indietro, senza dirlo, quello che un
+  collega aveva appena cambiato. Ora, prima di inviarle, l'app guarda quelle sul server: le voci
+  cambiate da un collega **restano**, e si scrivono solo quelle cambiate su questo PC. Sulla stessa
+  voce vince chi invia per ultimo.
 - **Importare un backup JSON, rimettere i dati d'esempio e azzerare** sono bloccati: su un
   archivio condiviso toccherebbero tutti. Per farlo si scollega prima il PC.
 - **L'officina sui documenti** (dalla 0.105.4): su ordini, ODL e ODP il server le lascia cambiare
   solo lo stato, e creare solo l'ODL che nasce da una fase esterna di un ODP. Una sua modifica che
-  toccasse altro (fornitore, righe, prezzi) torna respinta, con la versione del server.
+  toccasse altro (fornitore, righe, prezzi) torna respinta, con la versione del server. Dalla
+  0.105.6 l'app non le fa nemmeno generare l'ODL da un ODP: è un documento con prezzo e
+  fornitore, e lo emette chi scrive gli ordini (→ [cap. 22](#22-ordini-di-produzione-odp)).
 - **Il cestino**: una voce la scrive solo chi può scrivere il record che contiene; svuotarlo resta
   di tutti.
 - **L'ultimo amministratore attivo** non si declassa, non si sospende e non si elimina, nemmeno
@@ -2907,12 +3153,12 @@ scelta (almeno 4 caratteri), che diventa la sua password su questo PC. Gli altri
 
 | Tasti | Effetto |
 |---|---|
-| **Ctrl+K** (⌘K) | **Ricerca globale** — articoli, richieste, ordini, ordini di lavoro, piani. Si scrive un codice o un numero e si salta dove serve, senza passare dalla vista giusta e dai suoi filtri |
+| **Ctrl+K** (⌘K) | **Ricerca globale** — articoli, richieste, ordini, ordini di lavoro, piani e, dalla 0.105.6, **commesse**. Si scrive un codice o un numero e si salta dove serve, senza passare dalla vista giusta e dai suoi filtri. Dalla 0.105.6 un documento si trova anche dal **nome del fornitore o del cliente** — chi telefona dice «sono della SKF», non il numero dell'ordine —; quei risultati vengono dopo quelli che corrispondono per numero |
 | **Ctrl+I** (⌘I) | Apre e chiude il **pannello laterale** |
 | **Ctrl+P** | **Stampa** della vista aperta |
 | **Esc** | Chiude la finestra in cima; nell'elenco con pannello aperto, deseleziona |
 | **↑ ↓** | Scorre le righe dell'elenco, o i risultati della ricerca globale |
-| **Invio** | Apre la scheda completa dell'articolo scelto, o il risultato della ricerca |
+| **Invio** | Apre la scheda completa dell'articolo scelto, o il risultato della ricerca. Nella ricerca globale, dalla 0.105.6, Invio premuto subito dopo l'ultimo tasto — o mandato da un lettore di codici — apre il risultato di **quello che è scritto**, non di quello che si era scritto un attimo prima |
 | **Ctrl+click** | Aggiunge una riga alla selezione |
 | **Maiusc+click** | Seleziona l'intervallo fra la riga corrente e quella cliccata |
 | **Maiusc+↑ ↓** | Estende la selezione |
@@ -3071,8 +3317,21 @@ Il modo per non trovarsi lì è lavorare in una scheda sola.
 Il browser non ha lasciato leggere l'archivio. Se il testo dice che **l'archivio sta in
 IndexedDB e il browser non l'ha aperto**, i dati non sono persi: chiudi le altre schede o finestre
 con Bomtrack e ricarica. Finché l'avviso resta, l'app non salva niente. Se invece dice che i dati
-salvati **non si riescono più a leggere**, una copia è stata messa da parte: reimporta l'ultimo
-backup JSON.
+salvati **non si riescono più a leggere**, i dati non sono stati cancellati, e l'avviso dice dove
+sono (dalla 0.105.6 distingue tre casi):
+
+- **messi da parte**: una copia di soccorso è stata salvata nel browser, così com'era, e resta
+  recuperabile a mano;
+- **una copia c'era già** da una volta precedente, e non è stata toccata;
+- **non è stato possibile metterne da parte una copia**, perché lo spazio del browser non basta.
+  Allora i dati esistono **solo al loro posto**: l'avviso lo dice in rosso, e il pulsante **Scarica
+  i dati illeggibili** li salva come file. **Finché non lo fai l'app non salva nessuna modifica**,
+  per non scriverci sopra. Prima l'avviso diceva che una copia esisteva, e il primo salvataggio
+  cancellava l'originale.
+
+In tutti e tre i casi quello che vedi è il database di esempio, non ancora salvato: scarica i dati
+illeggibili (il pulsante c'è anche negli altri due casi, e il file è la copia più facile da portare a chi deve
+recuperarla), poi reimporta l'ultimo backup JSON.
 
 **Lo spazio del browser è quasi pieno.**
 Dalla 0.87.0 l'archivio sta in IndexedDB e lo spazio è di solito di gigabyte: l'avviso compare
@@ -3139,7 +3398,7 @@ Senza IndexedDB le prime due stanno in `localStorage`, come `bomtrack_v1` e
 | `bomtrack_session` | La sessione aperta |
 | `bomtrack_columns` | Le colonne nascoste, per vista |
 | `bomtrack_densita` | La vista compatta, se accesa |
-| `bomtrack_inventario` | L'inventario in corso, finché non si registra o si annulla |
+| `bomtrack_inventario:<archivio>:<utente>` | L'inventario in corso, finché non si registra o si annulla: uno per archivio e per utente (dalla 0.105.6; prima la chiave era `bomtrack_inventario` e basta) |
 | `bomtrack_archivio_nome` | Il nome della cartella d'archivio scelta su questo PC |
 | `bomtrack_backup_cartella_nome` | Il nome della cartella del backup automatico scelta su questo PC |
 | *(chiave email)* | L'email ricordata da «Ricordami su questo PC» |
