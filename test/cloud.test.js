@@ -634,8 +634,9 @@ describe('Archivio condiviso — due colleghi sulla stessa cosa', () => {
     await giro(A);
     // Bruno non ha ancora ricevuto, e ci lega un ordine nuovo.
     B.eval(`Store.insert('orders', { id: '${ORD3}', number: 'ODA-2026-090', status: 'bozza', date: '2026-10-16', supplierId: null, planId: '${PL}', lines: [], active: true })`);
-    // Una riga che da sola non ripartirebbe più: la soglia di cloudPayload è
-    // oltre la sua data.
+    // Una riga che da sola non ripartirebbe più: è uguale alla fotografia
+    // dell'ultimo invio. (La soglia di tempo che fino alla 0.105.5 sceglieva
+    // le righe, rimasta nella configurazione, non conta più.)
     B.eval(`cloudAggiornaConfig({ soglia: new Date(Date.now() + 3600000).toISOString() })`);
     avvisi(B);
     await giro(B);

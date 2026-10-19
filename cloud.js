@@ -41,7 +41,7 @@
 // e a proteggere i dati sono le policy — ma non stanno nel codice: il codice è
 // lo stesso per tutti, il progetto no. La chiave di servizio non passa mai di qui.
 
-const CLOUD_KEY = 'bomtrack_cloud';                 // { url, chiave, allineato, since, soglia }
+const CLOUD_KEY = 'bomtrack_cloud';                 // { url, chiave, allineato, since }
 const CLOUD_SESS_KEY = 'bomtrack_cloud_sessione';   // la sessione di Supabase Auth
 const CLOUD_BASE_KEY = 'bomtrack_cloud_base';       // la fotografia dell'ultimo invio riuscito
 const CLOUD_SCOLLEGATO_KEY = 'bomtrack_scollegato_da';   // { id } dell'amministratore che ha scollegato
@@ -56,9 +56,6 @@ const CLOUD_LIMITE_MS = 90000;   // una richiesta senza risposta dopo questo val
 // del limite di Supabase per una richiesta (8 secondi). Fino alla 0.105.4 era
 // 5 secondi: le righe scritte all'inizio di un invio più lungo sfuggivano.
 const CLOUD_MARGINE_MS = 15000;
-// Le righe figlie già note si mandano solo se cambiate dall'ultimo invio. Il
-// margine copre gli orologi dei PC che non vanno d'accordo al secondo.
-const CLOUD_MARGINE_FIGLI_MS = 120000;
 
 function cloudLeggi(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
 function cloudScrivi(k, v) {
@@ -254,14 +251,19 @@ async function cloudEsci() {
 //  - le radici portano `pos`, la loro posizione nella collezione **intera**
 //    (dbVersoCloud la calcolerebbe sul solo lotto);
 //  - le righe figlie «per riga» di un padre già noto al server viaggiano solo
-//    se cambiate dall'ultimo invio (`soglia`): mandarle tutte farebbe
-//    risultare respinte, come un conflitto, righe che un collega ha cambiato
-//    e che qui nessuno ha toccato. Un padre nuovo le manda tutte;
+//    se cambiate dall'ultimo invio: mandarle tutte farebbe risultare
+//    respinte, come un conflitto, righe che un collega ha cambiato e che qui
+//    nessuno ha toccato. Un padre nuovo le manda tutte. «Cambiate» vuol dire
+//    diverse dalla fotografia dell'ultimo invio (dalla 0.105.6), e partono con
+//    la loro versione di partenza, come le radici. Prima si guardava la data
+//    contro l'ora dell'ultimo invio, meno un margine: una riga cambiata con
+//    l'orologio del PC rimesso indietro aveva una data prima di quell'ora e
+//    non partiva più. Il secondo argomento (la vecchia soglia) non si usa più;
 //  - le figlie «sostituite» (distinta, ciclo, lavorazioni) viaggiano intere:
 //    è la regola del server;
 //  - le impostazioni le scrive solo chi ha la gestione: altrimenti il server
 //    rifiuterebbe l'intero lotto. Restano su questo PC, e lo si dice.
-function cloudPayload(changes, soglia, puoImpostazioni) {
+function cloudPayload(changes, _soglia, puoImpostazioni) {
   const upsert = {}, remove = {}, base = {};
   let impostazioniTenute = false;
   const aggiungi = (dove, t, righe) => { if (righe.length) dove[t] = (dove[t] || []).concat(righe); };
@@ -291,10 +293,20 @@ function cloudPayload(changes, soglia, puoImpostazioni) {
           const k = Object.keys(figli).find(a => figli[a].table === t);
           if (k && figli[k].merge === 'row') {
             const colPadre = (CLOUD_TABLES[t] && CLOUD_TABLES[t].parent) || 'parent_id';
-            // Un padre ripristinato sopra la sua lapide (senzaBase) sul server
-            // non ha più righe: la cancellazione le ha portate via. Partono tutte.
-            r = r.filter(x => !Store.inBase(c, x[colPadre]) || _cloud.senzaBase.has(x[colPadre])
-              || !x.updated_at || !soglia || x.updated_at >= soglia);
+            const prima = new Map();   // padre → le sue righe nella fotografia
+            r = r.filter(x => {
+              const padre = x[colPadre];
+              // Un padre ripristinato sopra la sua lapide (senzaBase) sul server
+              // non ha più righe: la cancellazione le ha portate via. Partono tutte.
+              if (_cloud.senzaBase.has(padre) || !x.updated_at) return true;
+              if (!prima.has(padre)) prima.set(padre, Store.baseFigli(c, padre));
+              const righe = prima.get(padre);
+              if (!righe) return true;   // padre nuovo
+              const era = righe.get(String(x.id));
+              if (era === x.updated_at) return false;
+              if (era) (base[t] = base[t] || {})[x.id] = era;
+              return true;
+            });
           }
         }
         aggiungi(upsert, t, r);
@@ -595,6 +607,7 @@ async function cloudInvia() {
     try { return await cloudInviaLotto(); }
     catch (e) {
       if (riparazioni < 5 && e && e.codice === '23503' && await cloudRiparaRiferimento(e)) continue;
+      if (riparazioni < 5 && e && e.codice === '23505' && await cloudRiparaNumeri(e)) continue;
       if (riparazioni < 5 && e && e.cloud === 'permesso' && cloudScartaNonPermessi(e)) continue;
       throw e;
     }
@@ -713,8 +726,6 @@ async function cloudScartaRifiutati() {
     let preso = Store.takeChanges();
     if (!preso.changes) { Store.ripristinaBase({}); preso = Store.takeChanges(); }
     const { changes, mark } = preso;
-    const c = cloudConfig();
-    const sogliaNuova = new Date(Date.now() - CLOUD_MARGINE_FIGLI_MS).toISOString();
     const ordine = t => { const i = CLOUD_ORDINE_CARICAMENTO.indexOf(t); return i < 0 ? CLOUD_ORDINE_CARICAMENTO.length : i; };
     const unita = cloudUnita(changes);
     const gruppi = new Map();
@@ -726,7 +737,7 @@ async function cloudScartaRifiutati() {
     const chiavi = Array.from(gruppi.keys()).sort((a, b) =>
       ordine(a === 'settings' ? 'zzz' : SCHEMA[a].table) - ordine(b === 'settings' ? 'zzz' : SCHEMA[b].table));
     const manda = async pezzo => {
-      const { payload } = cloudPayload(cloudChangesDi(pezzo), c.soglia || null, canWriteRuolo('manage'));
+      const { payload } = cloudPayload(cloudChangesDi(pezzo), null, canWriteRuolo('manage'));
       const ripristina = cloudRipristiniDi(payload);
       if (Object.keys(ripristina).length) payload.ripristina = ripristina;
       if (!cloudPayloadVuoto(payload)) {
@@ -761,7 +772,6 @@ async function cloudScartaRifiutati() {
       const nomi = cloudScartaUnita(scartati);
       showToast(`Il server non ha accettato ${nomi.length === 1 ? '«' + nomi[0] + '»' : nomi.length + ' elementi (' + nomi.slice(0, 5).join(', ') + (nomi.length > 5 ? '…' : '') + ')'}: ${nomi.length === 1 ? 'è tornato' : 'sono tornati'} come sul server. Il resto è partito`, 'error');
     }
-    cloudAggiornaConfig({ soglia: sogliaNuova });
     cloudSalvaBase();
   } catch (e) {
     cloudGestisciErrore(e);
@@ -808,9 +818,7 @@ async function cloudInviaLotto() {
   }
   const { changes, mark } = preso;
   if (!Object.keys(changes || {}).length) return;
-  const c = cloudConfig();
-  const { payload, impostazioniTenute } = cloudPayload(changes, c.soglia || null, canWriteRuolo('manage'));
-  const sogliaNuova = new Date(Date.now() - CLOUD_MARGINE_FIGLI_MS).toISOString();
+  const { payload, impostazioniTenute } = cloudPayload(changes, null, canWriteRuolo('manage'));
   if (impostazioniTenute && !_cloud.impostazioniAvvisate) {
     _cloud.impostazioniAvvisate = true;
     showToast("Le impostazioni condivise le cambia solo l'amministratore: questa modifica resta su questo PC", 'error');
@@ -826,7 +834,6 @@ async function cloudInviaLotto() {
   cloudTogliRipristini(ripristina);
   Store.markSynced(mark);
   _cloud.senzaBase.clear();
-  cloudAggiornaConfig({ soglia: sogliaNuova });
   cloudSalvaBase();
 }
 // Dove sta in locale una riga di una tabella del server: la collezione, e
@@ -972,21 +979,20 @@ async function cloudRicevi() {
   return n;
 }
 // ── Numeri doppi ──
-// I progressivi (ODA-2026-145) li calcola ogni PC sul suo archivio: due
-// colleghi che creano un ordine nello stesso giro di sincronizzazione prendono
-// lo stesso numero. Quando i due documenti si incontrano, il più recente si
-// rinumera — lo fa il PC di chi l'ha creato, così non lo fanno in due — se è
-// ancora una bozza nata da poco: un ordine già spedito al fornitore non cambia
-// numero di nascosto, e quello lo si dice e basta.
-const CLOUD_NUMERATI = { rfqs: 'nextRfqNumber', orders: 'nextOrderNumber', workOrders: 'nextOdlNumber',
-  prodOrders: 'nextOdpNumber', plans: 'nextPlanNumber', jobs: 'nextJobNumber' };
+// Due documenti con lo stesso numero arrivati comunque qui (un archivio che li
+// aveva già prima dell'indice unico del server, dalla 0.105.6): il più recente
+// si rinumera — lo fa il PC di chi l'ha creato, così non lo fanno in due — se
+// è ancora una bozza nata da poco: un ordine già spedito al fornitore non
+// cambia numero di nascosto, e quello lo si dice e basta. Il numero nuovo lo
+// riserva il server (cloudRinumera): fino alla 0.105.5 era il massimo di
+// questo PC più uno, mai riservato, che poteva essere quello appena dato a un
+// collega per l'ordine che stava creando.
+const CLOUD_NUMERATI = ['rfqs', 'orders', 'workOrders', 'prodOrders', 'plans', 'jobs'];
 const CLOUD_NUOVO_MS = 24 * 3600 * 1000;
 function cloudNumeriDoppi(d) {
   if (typeof currentUser === 'undefined' || !currentUser) return [];
-  const cambiati = [], avvisi = [];
-  const g = typeof globalThis !== 'undefined' ? globalThis : window;
-  Object.keys(CLOUD_NUMERATI).forEach(c => {
-    const prossimo = g[CLOUD_NUMERATI[c]];
+  const daRinumerare = [], avvisi = [];
+  CLOUD_NUMERATI.forEach(c => {
     const perNumero = new Map();
     (d[c] || []).forEach(x => { if (x && x.number) { if (!perNumero.has(x.number)) perNumero.set(x.number, []); perNumero.get(x.number).push(x); } });
     perNumero.forEach((docs, num) => {
@@ -996,22 +1002,89 @@ function cloudNumeriDoppi(d) {
         if (x.createdBy !== currentUser.id) return;
         const giovane = Date.now() - Date.parse(x.createdAt || 0) < CLOUD_NUOVO_MS;
         const bozza = !x.status || x.status === 'bozza' || (c === 'jobs' && x.status === 'aperta');
-        if (giovane && bozza && typeof prossimo === 'function') {
-          x.number = prossimo(); touch(x);
-          cambiati.push(num + ' → ' + x.number);
-        } else if (!_cloud.doppiAvvisati.has(x.id)) {
+        if (giovane && bozza) daRinumerare.push({ coll: c, rec: x, campo: 'number' });
+        else if (!_cloud.doppiAvvisati.has(x.id)) {
           _cloud.doppiAvvisati.add(x.id);
           avvisi.push(num);
         }
       });
     });
   });
-  if (cambiati.length) {
-    saveDB();
-    showToast((cambiati.length === 1 ? 'Un collega aveva preso lo stesso numero: il tuo documento ora è ' : 'Numeri presi anche da un collega, rinumerati: ') + cambiati.join(', '), 'error');
+  if (daRinumerare.length) {
+    cloudRinumera(daRinumerare).then(cloudAvvisaRinumerati)
+      .catch(e => { if (!(e && e.cloud === 'rete')) console.error('Archivio condiviso: rinumerazione non riuscita', e); });
   }
   if (avvisi.length) showToast('Lo stesso numero è su due documenti, uno tuo e uno di un collega: ' + avvisi.join(', ') + '. Controlla quale tenere', 'error');
-  return cambiati;
+  return daRinumerare.map(x => x.rec.number);
+}
+function cloudAvvisaRinumerati(cambiati) {
+  if (!cambiati || !cambiati.length) return;
+  showToast((cambiati.length === 1 ? 'Un collega aveva preso lo stesso numero: il tuo documento ora è ' : 'Numeri presi anche da un collega, rinumerati: ') + cambiati.join(', '), 'error');
+}
+// Dà ai documenti di `docs` ([{ coll, rec, campo }]) numeri nuovi riservati
+// sul server, nella serie del numero che hanno. Una richiesta alla volta,
+// in fila con quelle di conNumeri. Restituisce [«vecchio → nuovo»]. I numeri
+// riservati restano impegnati finché il documento non arriva al server.
+function cloudRinumera(docs) {
+  const giro = _cloud.numeri.then(async () => {
+    const perSerie = new Map();
+    (docs || []).forEach(x => {
+      const m = /^([A-Z]{2,3}-\d{4}-)\d+$/.exec(String((x && x.rec && x.rec[x.campo]) || ''));
+      if (!m) return;
+      if (!perSerie.has(m[1])) perSerie.set(m[1], []);
+      perSerie.get(m[1]).push(x);
+    });
+    const cambiati = [];
+    for (const [prefisso, lista] of perSerie) {
+      // Come conNumeri: il server conosce i documenti arrivati, qui contano
+      // quelli ancora in coda — tranne quelli da rinumerare.
+      const sigla = prefisso.split('-')[0];
+      const coll = SERIE_COLLEZIONE[sigla];
+      const via = new Set(lista.map(x => x.rec.id));
+      const minimo = SERIE_DOCUMENTI[sigla]
+        ? serieMassimo(prefisso, SERIE_DOCUMENTI[sigla]().filter(d => !via.has(d.id) && !Store.baseUpdatedAt(coll, d.id))) : 0;
+      const numeri = await cloudRpc('riserva_numeri', { prefisso, quanti: lista.length, minimo });
+      if (!Array.isArray(numeri) || numeri.length !== lista.length) throw cloudErrore('server', 'risposta inattesa');
+      lista.forEach((x, i) => {
+        const prima = x.rec[x.campo];
+        x.rec[x.campo] = prefisso + String(numeri[i]).padStart(3, '0');
+        touch(x.rec);
+        cambiati.push(prima + ' → ' + x.rec[x.campo]);
+      });
+    }
+    if (cambiati.length) saveDB();
+    return cambiati;
+  });
+  _cloud.numeri = giro.catch(() => {});
+  return giro;
+}
+// ── Un numero già usato sul server (dalla 0.105.6) ──
+// push_changes rifiuta un lotto che porta un documento con un numero già di
+// un altro (23505, «…_numero_unico»), e nel DETAIL dice quali righe. Un
+// doppione non nasce più qui per via dei numeri riservati, ma ci arriva: un
+// documento ripristinato dal cestino il cui numero intanto è stato ridato, un
+// invio fatto contemporaneamente a quello di un collega. Il documento di
+// questo PC prende un numero riservato sul server, lo si dice, e il lotto
+// riparte. Senza il DETAIL (l'indice unico preso in contropiede da due invii
+// insieme) non si sa quale: si riprova al giro dopo, quando il controllo di
+// push_changes lo dice.
+const CLOUD_CAMPO_NUMERO = { item_revisions: 'ecoNumber' };
+async function cloudRiparaNumeri(e) {
+  if (!/_numero_unico"/.test(String(e.message || ''))) return false;
+  let righe = null;
+  try { righe = JSON.parse(e.dettagli || 'null'); } catch (x) { righe = null; }
+  if (!Array.isArray(righe)) return false;
+  const docs = [];
+  righe.forEach(x => {
+    const dove = x && cloudDove(x.tab);
+    const rec = dove && !dove.figlio ? Store.getById(dove.coll, x.id) : null;
+    if (rec) docs.push({ coll: dove.coll, rec, campo: CLOUD_CAMPO_NUMERO[x.tab] || 'number' });
+  });
+  if (!docs.length) return false;
+  const cambiati = await cloudRinumera(docs);
+  if (!cambiati.length) return false;
+  cloudAvvisaRinumerati(cambiati);
+  return true;
 }
 // Arrivato qualcosa: l'utente di sessione può essere cambiato (ruolo,
 // sospensione) e la vista va ridisegnata.
@@ -1070,6 +1143,7 @@ function cloudGestisciErrore(e) {
   // Dalla 0.105.6 l'uscita indicata scarta solo quello che il server rifiuta,
   // non tutto il lavoro in attesa.
   if (e && e.codice === '23503') { cloudSegna('errore', 'Una modifica cita un elemento che non c\'è più sul server. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
+  if (e && e.codice === '23505' && /_numero_unico"/.test(e.message || '')) { cloudSegna('errore', 'Un documento ha un numero che sul server è già di un altro: si riprova al prossimo giro'); return; }
   const msg = (e && e.message) || String(e);
   cloudSegna('errore', Store.hasPendingChanges() ? msg + '. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)' : msg);
 }
@@ -1464,7 +1538,7 @@ async function cloudCaricaArchivio(stato) {
   for (const p of cloudLottiCaricamento(payload, CLOUD_LOTTO_RIGHE)) await cloudRpc('push_changes', { payload: p });
   Store.markSynced(mark);
   const dopo = await cloudRpc('archivio_stato', {});
-  cloudAggiornaConfig({ allineato: true, caricamento: false, since: dopo.ora, soglia: new Date(Date.now() - CLOUD_MARGINE_FIGLI_MS).toISOString() });
+  cloudAggiornaConfig({ allineato: true, caricamento: false, since: dopo.ora });
   cloudSalvaBase();
   return { fuori };
 }
@@ -1528,7 +1602,7 @@ async function cloudScaricaArchivio() {
   const settings = (r.settings && r.settings.data) || {};
   const nuovo = dbDaCloud(r.tables || {}, { settings, schemaVersion: SCHEMA_VERSION });
   if (!cloudSalvatoDavvero(Store.sostituisciDaRemoto(nuovo))) throw cloudErrore('server', 'L\'archivio scaricato non si è salvato su questo PC: libera spazio e riprova');
-  cloudAggiornaConfig({ allineato: true, since: r.now, soglia: new Date(Date.now() - CLOUD_MARGINE_FIGLI_MS).toISOString() });
+  cloudAggiornaConfig({ allineato: true, since: r.now });
   cloudSalvaBase();
 }
 
@@ -1547,7 +1621,7 @@ function cloudCollega(url, chiave) {
   const u = cloudNormalizzaUrl(url);
   if (!u) throw cloudErrore('config', 'Indirizzo del progetto non valido');
   if (!String(chiave || '').trim()) throw cloudErrore('config', 'Manca la chiave pubblica');
-  cloudScrivi(CLOUD_KEY, { url: u, chiave: String(chiave).trim(), allineato: false, since: null, soglia: null });
+  cloudScrivi(CLOUD_KEY, { url: u, chiave: String(chiave).trim(), allineato: false, since: null });
   cloudScrivi(CLOUD_SCOLLEGATO_KEY, null);
   cloudScrivi(CLOUD_SESS_KEY, null);
   cloudScrivi(CLOUD_BASE_KEY, null);

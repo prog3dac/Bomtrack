@@ -2238,6 +2238,21 @@ const Store = {
     const firma = m && m.get(id);
     return firma ? String(firma).split('|')[0] || null : null;
   },
+  // Le righe figlie del record com'erano nella fotografia (dalla 0.105.6):
+  // id della riga → il suo updatedAt ('' se non l'aveva). La firma le porta
+  // dopo la data del padre, «|id:data» (recSignature). `null` se il record
+  // nella fotografia non c'è. Gli id delle righe non hanno «:».
+  baseFigli(coll, id) {
+    const m = _baseIds && _baseIds.get(coll);
+    const firma = m && m.get(id);
+    if (firma == null) return null;
+    const out = new Map();
+    String(firma).split('|').slice(1).forEach(p => {
+      const i = p.indexOf(':');
+      if (i > 0) out.set(p.slice(0, i), p.slice(i + 1));
+    });
+    return out;
+  },
   // Toglie dalla fotografia un record o una riga figlia: la sua cancellazione
   // non risulta più da mandare. Serve quando il server la rifiuta (un collega
   // lo usa ancora) e il record deve tornare dal server.

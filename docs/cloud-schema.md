@@ -653,13 +653,26 @@ cosa lo decide l'app:
   "base": { "items": { "<uuid>": "2026-10-16T07:00:00.000Z" } } }
 ```
 
-- radici e figlie per riga: last-write-wins su `updated_at`; chi perde torna in
-  `rejected` e l'app lo deve dire;
-- `base` (facoltativo, dalla 0.103.2): `{ tabella: { id: updated_at } }`, la
-  versione da cui il client è partito per le radici che già conosceva. Se sul
-  server la riga è intanto cambiata, la modifica è fatta su una copia vecchia
-  e viene respinta come una più vecchia: senza, vincerebbe intera e
-  cancellerebbe in silenzio quella del collega. Confronto al millesimo;
+- `base` (facoltativo, dalla 0.103.2 per le radici, dalla 0.105.6 anche per
+  le figlie per riga): `{ tabella: { id: updated_at } }`, la versione da cui il
+  client è partito per le righe che già conosceva. Con `base` decide solo la
+  versione (dalla 0.105.6): se sul server la riga è ancora quella la modifica
+  passa, qualunque data porti — l'orologio del PC non conta più; se è intanto
+  cambiata, la modifica è fatta su una copia vecchia e viene respinta, per
+  quanto recente sia la sua data. Confronto al millesimo;
+- senza `base` (righe nuove, ripristini, client di prima della 0.103.2):
+  last-write-wins su `updated_at`; chi perde torna in `rejected` e l'app lo
+  deve dire;
+- le figlie per riga partono se diverse dalla fotografia dell'ultimo invio
+  (dalla 0.105.6; prima: se datate dopo l'ultimo invio, meno un margine);
+- `created_by`, `updated_by`, `trash.deleted_by` e `settings.updated_by` li
+  scrive il server con l'utente che invia (dalla 0.105.6); le righe vecchie che
+  arrivano nuove (primo caricamento, ripristino) tengono i loro autori;
+- numeri dei documenti unici (indice parziale `<tabella>_numero_unico` sui
+  numeri `SIGLA-ANNO-N`, dalla 0.105.6): un numero nuovo già di un altro
+  documento ferma l'invio con `23505` e il DETAIL elenca le righe in JSON
+  (`[{tab, id, numero}]`); l'app le rinumera con `riserva_numeri` e rimanda
+  (`cloudRiparaNumeri`);
 - un riferimento che non regge (`23503`) l'app lo ripara e rimanda il lotto:
   vince chi usa — un record eliminato ma ancora citato torna, una
   cancellazione di un record citato si ritira (`cloudRiparaRiferimento`);
