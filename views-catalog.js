@@ -999,7 +999,7 @@ function itemModalBody(it, scope) {
         <span class="empty-text" style="padding:0">Descrizione: <strong id="part-name-preview"></strong></span></div>
     </div>
     <div class="modal-grid">
-      <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()">${uomOptions(it ? (it.uom || defaultUom()) : defaultUom())}</select></div>
+      <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()" ${dis(lock.structLocked)} title="${lock.structLocked ? 'Articolo già usato: cambiare l\'unità reinterpreterebbe giacenza, distinte e costi' : ''}">${uomOptions(it ? (it.uom || defaultUom()) : defaultUom())}</select></div>
       <div class="modal-field" id="fld-sourcing"><label>Approvvigionamento</label>
         <select id="it-sourcing">${partSourcingOptions(it ? partSourcing(it) : defaultPartSourcing())}</select></div>
       <div class="modal-field" id="fld-assembly-note" style="grid-column:1/-1"><label>Composizione</label><span class="empty-text" style="padding:0">La distinta (componenti e lavorazioni) si gestisce in <strong>Distinta base → Gestione DB</strong>.</span></div>
@@ -1406,7 +1406,7 @@ function cycleBomTable(bomRows) {
   if (!bomRows.length) return '<div class="empty-text" style="padding:8px 0">Nessun articolo. Usa "+ Articolo" per aggiungere commerciali e materie prime.</div>';
   const head = `<div class="cycle-row cycle-head">
     <span>Voce</span><span>Fornitore</span><span>U.M.</span><span class="num">Q.tà</span>
-    <span class="num" title="Costo di una unità: vuoto = quello calcolato dall'anagrafica">Costo (${esc(cur())}/U.M.)</span>
+    <span class="num" title="Costo dell'intera riga (quantità compresa) al posto di quello calcolato: vuoto = calcolato dall'anagrafica">Costo riga forzato (${esc(cur())})</span>
     <span class="num">Costo riga (${esc(cur())})</span><span></span></div>`;
   return head + bomRows.map(({ r, i }) => {
     const ci = getItem(r.itemId);
@@ -1417,7 +1417,7 @@ function cycleBomTable(bomRows) {
       <input class="num" type="number" min="0" step="0.001" value="${Number(r.qty) || 0}"
         onchange="updateCycleRow(${i})" id="cyc-qty-${i}">
       <input class="num" type="number" min="0" step="0.01" value="${r.costOverride != null ? r.costOverride : ''}"
-        placeholder="${cycleRowComputed(r).toFixed(2)}" title="Lascia vuoto per usare il costo calcolato"
+        placeholder="${cycleRowComputed(r).toFixed(2)}" title="Costo della riga intera, non di un'unità. Lascia vuoto per usare quello calcolato"
         onchange="updateCycleRow(${i})" id="cyc-ovr-${i}">
       <span class="num cost" id="cyc-cost-${i}">${fmtN(cycleRowCost(r))}</span>
       <button class="mini-btn danger" title="Elimina" onclick="delCycleRow(${i})">${ico('trash', 'tinted', 'Elimina')}</button>
@@ -1521,7 +1521,8 @@ function cycleExportSpec() {
           const ci = getItem(r.itemId);
           return [ci ? (ci.code || '') : '(articolo mancante)', ci ? (ci.name || '') : '',
             supplierName(ci && ci.supplierId) || '', ci ? (ci.uom || '') : '',
-            Number(r.qty) || 0, +cycleRowComputed(r).toFixed(4), +cycleRowCost(r).toFixed(2)];
+            // Il costo di un'unità, come dice la colonna: prima c'era quello della riga.
+            Number(r.qty) || 0, +(ci ? costOf(ci.id).total : 0).toFixed(4), +cycleRowCost(r).toFixed(2)];
         }),
         totali: bom.length ? ['Totale distinta parte', '', '', '', '', '', tot(bom)] : null,
       },
@@ -1878,8 +1879,15 @@ function readItemForm(it) {
       it.name = val('it-name');
     }
   }
-  it.uom = val('it-uom') || defaultUom();
+  // L'unità di un articolo già usato non cambia (dalla 0.105.5): giacenza,
+  // quantità di distinta, scorta, lotto e costo sono numeri in quell'unità, e
+  // cambiarla li reinterpreterebbe tutti senza toccarli.
+  if (!lock.structLocked) it.uom = val('it-uom') || defaultUom();
   it.notes = val('it-notes');
+  // L'approvvigionamento prima del listino: la quotazione in uso si applica
+  // solo a una parte comprata, e passando da «fabbrica» a «compra» il costo
+  // restava quello vecchio (dalla 0.105.5).
+  if (it.type === 'parte') { const s = val('it-sourcing'); if (PART_SOURCING[s]) it.sourcing = s; }
   // Parametri di scorta: solo su ciò che si tiene a magazzino. Vuoto resta
   // vuoto — zero e "non impostato" qui vogliono dire la stessa cosa, ma un
   // campo lasciato in bianco non deve comparire come 0 alla riapertura.
@@ -1915,7 +1923,7 @@ function readItemForm(it) {
   // da qui: li scrive solo applyPriceRow() quando si sceglie una quotazione.
   // Solo un valore valido sovrascrive: in creazione il campo può non esserci
   // ancora, e lì vale il default delle impostazioni scritto da saveNewItem.
-  if (it.type === 'parte') { const s = val('it-sourcing'); if (PART_SOURCING[s]) it.sourcing = s; }
+  // (L'approvvigionamento si legge più su, prima del listino.)
   if (usesFamily(it.type) && !lock.structLocked) { it.familyId = val('it-family'); it.subFamilyId = val('it-subfamily'); }
   // Codifica gerarchica: schema sulla macchina, appartenenza sugli altri tipi
   if (!lock.structLocked) {

@@ -245,17 +245,32 @@ function revRowsOf(snapshot) {
     const w = getWorkCenter(o.workCenterId);
     somma('o:' + o.workCenterId, '🔧 ' + (w ? w.name : '(centro eliminato)'), o.hours, { tipo: 'Lavorazione', uom: 'h' });
   });
+  // Le fasi si riconoscono per posizione e centro (dalla 0.105.5): due fasi
+  // sullo stesso centro senza nota erano una riga sola. E portano quello che
+  // ne fa il costo e il tempo, perché anche quello è una modifica.
+  let fase = 0;
   (snapshot.cycle || []).forEach(r => {
     if (r.kind === 'op') {
       const w = getWorkCenter(r.workCenterId);
-      somma('c:' + r.workCenterId + ':' + (r.note || ''), '🔧 ' + (w ? w.name : '(centro eliminato)') + (r.note ? ' · ' + r.note : ''),
-        1, { tipo: 'Fase ciclo', cost: cycleRowCost(r) });
+      const k = fase++;
+      somma('f:' + k + ':' + r.workCenterId, '🔧 ' + cyclePhaseNumber(k) + ' ' + (w ? w.name : '(centro eliminato)') + (r.note ? ' · ' + r.note : ''),
+        1, { tipo: 'Fase ciclo', cost: cycleRowCost(r), dati: {
+          costo: +(cycleRowCost(r) || 0).toFixed(4), ore: Number(r.hours) || 0, giorni: Number(r.days) || 0,
+          terzista: r.supplierId ? (supplierName(r.supplierId) || r.supplierId) : 'interna', modo: r.costMode || 'fisso' } });
     } else {
       const ci = getItem(r.itemId);
-      somma('c:' + r.itemId, ci ? ci.code + ' — ' + ci.name : '(articolo eliminato)', r.qty, { tipo: 'Distinta parte', uom: itemUom(ci) });
+      somma('c:' + r.itemId, ci ? ci.code + ' — ' + ci.name : '(articolo eliminato)', r.qty,
+        { tipo: 'Distinta parte', uom: itemUom(ci), dati: { forzato: r.costOverride != null && r.costOverride !== '' ? Number(r.costOverride) : null } });
     }
   });
   return m;
+}
+const REV_DATI = { costo: 'costo', ore: 'ore', giorni: 'giorni', terzista: 'terzista', modo: 'modo di costo', forzato: 'costo forzato' };
+// Che cosa è cambiato, oltre alla quantità: «costo 3 → 4; terzista interna → Beta».
+function revCambiDati(a, b) {
+  const x = a || {}, y = b || {};
+  return Object.keys(REV_DATI).filter(k => (k in x || k in y) && String(x[k] == null ? '—' : x[k]) !== String(y[k] == null ? '—' : y[k]))
+    .map(k => `${REV_DATI[k]} ${x[k] == null ? '—' : x[k]} → ${y[k] == null ? '—' : y[k]}`);
 }
 // { aggiunte, rimosse, cambiate, invariate } — righe pronte da mostrare.
 function revDiff(snapPrima, snapDopo) {
@@ -264,11 +279,19 @@ function revDiff(snapPrima, snapDopo) {
   b.forEach((riga, k) => {
     const vecchia = a.get(k);
     if (!vecchia) { out.aggiunte.push(riga); return; }
-    if (Math.abs(vecchia.qty - riga.qty) > 1e-9 || (vecchia.scrapPct || 0) !== (riga.scrapPct || 0)) {
-      out.cambiate.push(Object.assign({}, riga, { qtyPrima: vecchia.qty, scrapPrima: vecchia.scrapPct || 0 }));
+    const altro = revCambiDati(vecchia.dati, riga.dati);
+    if (Math.abs(vecchia.qty - riga.qty) > 1e-9 || (vecchia.scrapPct || 0) !== (riga.scrapPct || 0) || altro.length) {
+      out.cambiate.push(Object.assign({}, riga, { qtyPrima: vecchia.qty, scrapPrima: vecchia.scrapPct || 0, altro }));
     } else out.invariate++;
   });
   a.forEach((riga, k) => { if (!b.has(k)) out.rimosse.push(riga); });
+  // Comprata o fabbricata: per una parte è la modifica più grande di tutte.
+  const sa = (snapPrima || {}).sourcing || null, sb = (snapDopo || {}).sourcing || null;
+  if (sa !== sb && (sa || sb)) {
+    const nome = s => (typeof PART_SOURCING !== 'undefined' && PART_SOURCING[s]) || s || '—';
+    out.cambiate.push({ chiave: 's', etichetta: 'Approvvigionamento', tipo: 'Parte', qty: 0, qtyPrima: 0, scrapPrima: 0,
+      altro: [`${nome(sa)} → ${nome(sb)}`] });
+  }
   return out;
 }
 function revDiffVuoto(d) { return !d.aggiunte.length && !d.rimosse.length && !d.cambiate.length; }
@@ -411,8 +434,9 @@ function revCompareModal(revId, controId) {
     ${revDiffVuoto(d) ? '<div class="empty-text">Nessuna differenza nella distinta. Se il costo è cambiato, è cambiato un prezzo, non la distinta.</div>' : ''}
     ${sezione('Aggiunte', d.aggiunte.map(x => riga(x, '+', 'var(--green)', fmtUom(x.qty, x.uom))))}
     ${sezione('Rimosse', d.rimosse.map(x => riga(x, '−', 'var(--red)', fmtUom(x.qty, x.uom))))}
-    ${sezione('Quantità cambiate', d.cambiate.map(x => riga(x, '≠', 'var(--orange, #d90)',
-      `${fmtQty(x.qtyPrima)} → ${fmtUom(x.qty, x.uom)}`)))}
+    ${sezione('Cambiate', d.cambiate.map(x => riga(x, '≠', 'var(--orange, #d90)',
+      [Math.abs(x.qtyPrima - x.qty) > 1e-9 ? `${fmtQty(x.qtyPrima)} → ${fmtUom(x.qty, x.uom)}` : '']
+        .concat(x.altro || []).filter(Boolean).map(esc).join('; '))))}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'confronto');
 }
 

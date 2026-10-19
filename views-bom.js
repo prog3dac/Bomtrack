@@ -705,13 +705,18 @@ function wcSupplierOptions(wc, selectedId) {
 }
 // Solo il nome del centro: la tariffa oraria del centro non si applica da sé
 // alle righe di ciclo, ci sono anche quelle a costo fisso (vedi cycleOpsTable).
+// Il centro già scelto resta in elenco anche se sospeso, come fa uomOptions:
+// senza, il menu mostrava il primo centro attivo e salvare la lavorazione la
+// spostava lì senza dirlo (dalla 0.105.5).
+function wcScelti(selectedId) { return db.workCenters.filter(w => w.active !== false || w.id === selectedId); }
+const wcSospeso = w => w.active === false ? ' (sospeso)' : '';
 function wcOptionsNoRate(selectedId) {
-  return db.workCenters.filter(w => w.active !== false)
-    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)}</option>`).join('');
+  return wcScelti(selectedId)
+    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)}${wcSospeso(w)}</option>`).join('');
 }
 function wcOptions(selectedId) {
-  return db.workCenters.filter(w => w.active !== false)
-    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)} (${fmtN(w.hourlyRate)}/h)</option>`).join('');
+  return wcScelti(selectedId)
+    .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)} (${fmtN(w.hourlyRate)}/h)${wcSospeso(w)}</option>`).join('');
 }
 function addOperationModal() {
   if (!roleGuard('bom')) return;

@@ -641,3 +641,39 @@ describe('L\'import articoli non tocca le distinte', () => {
     assert.equal(d.items.find(i => i.id === 'prt').cycle.length, 1);
   });
 });
+
+// 0.105.5: una riga con un errore restava applicata a metà, e l'import
+// scavalcava il blocco degli articoli già usati.
+describe('Import su articoli che ci sono già', () => {
+  const foglioDi = (wb, code) => Object.keys(wb).find(n => (wb[n] || []).some(r => Object.values(r).includes(code)));
+  it('una riga con un errore non cambia niente dell\'articolo', () => {
+    const a = app(dbAcquisti());
+    const wb = workbook(a, 'buy');
+    const nome = foglioDi(wb, 'CMM-MEC-CUS-001');
+    const r = wb[nome].find(x => Object.values(x).includes('CMM-MEC-CUS-001'));
+    r['Descrizione *'] = 'Nome nuovo'; r['Macrofamiglia'] = 'Famiglia nuova'; r['Scorta minima'] = 'tante';
+    const rep = importa(a, { [nome]: [r] }, 'buy');
+    assert.ok(rep.errors.some(e => /Scorta minima/.test(e)), JSON.stringify(rep.errors));
+    const c1 = JSON.parse(a.eval('JSON.stringify(getItem("c1"))'));
+    assert.equal(c1.name, 'Cuscinetto SKF 6204');
+    assert.equal(c1.familyId, 'f1');
+    assert.equal(a.eval('db.families.length'), 2, 'nessuna famiglia creata per una riga scartata');
+  });
+
+  it('un articolo già usato tiene codice, famiglia e unità, e lo si dice', () => {
+    const a = app(dbAcquisti());
+    a.eval("addMovement('c1', 'carico', 5, '')");
+    const wb = workbook(a, 'buy');
+    const nome = foglioDi(wb, 'CMM-MEC-CUS-001');
+    const r = wb[nome].find(x => Object.values(x).includes('CMM-MEC-CUS-001'));
+    r['Codice'] = 'cmm-mec-cus-001'; r['Macrofamiglia'] = 'Meccanica vecchia'; r['UM *'] = 'kg'; r['Note'] = 'nota nuova';
+    const rep = importa(a, { [nome]: [r] }, 'buy');
+    const c1 = JSON.parse(a.eval('JSON.stringify(getItem("c1"))'));
+    assert.equal(c1.code, 'CMM-MEC-CUS-001');
+    assert.equal(c1.familyId, 'f1');
+    assert.equal(c1.uom, 'pz');
+    assert.equal(c1.notes, 'nota nuova', 'il resto si aggiorna');
+    assert.equal(a.eval('db.families.length'), 2);
+    assert.ok(rep.warnings.some(w => /già usato: .*famiglia.*unità di misura/.test(w)), JSON.stringify(rep.warnings));
+  });
+});

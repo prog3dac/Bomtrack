@@ -584,6 +584,14 @@ function catApplyItemRow(row, def, ctx, ln, st) {
     if (type === 'parte') { it.cycle = []; it.sourcing = defaultPartSourcing(); }
     if (hasPriceList(it)) { it.priceList = []; it.priceListSeeded = true; }
   }
+  // Un articolo che c'è già si modifica su una copia, e la copia entra solo se
+  // la riga arriva in fondo senza errori (dalla 0.105.5): prima una riga
+  // segnalata come errore restava applicata a metà. E un articolo già usato
+  // tiene codice, famiglia, codifica, unità e — per chi non amministra — il
+  // nome, come nella sua scheda: l'import li scavalcava.
+  const orig = isNew ? null : it;
+  if (!isNew) it = JSON.parse(JSON.stringify(orig));
+  const lock = isNew ? { structLocked: false, nameLocked: false } : itemLockState(orig);
 
   // ── Descrizione ──
   if (type === 'parte') {
@@ -636,23 +644,9 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   }
   // Cambiata la conversione, il costo della quotazione in uso va ricalcolato
   // anche se la riga non porta un prezzo (dalla 0.105.3): restava al valore
-  // vecchio, sbagliato del rapporto fra il fattore vecchio e il nuovo.
-  if (!isNew && activePriceRow(it) && conversionePrima !== [it.uom || '', altUomOf(it) || '', altFactorOf(it)].join('|')) {
-    const s = catStage(ctx, it);
-    if (!s.inline && !s.forced) s.inline = activePriceRow(it);
-  }
-
-  // ── Famiglia ──
-  if (usesFamily(type)) {
-    const fam = catCell(row, 'Macrofamiglia');
-    const sub = catCell(row, 'Sottofamiglia');
-    if (fam !== null || sub !== null) {
-      if (fam) {
-        const f = findOrCreateFamily(fam, sub || '', type, rep);
-        it.familyId = f.familyId; it.subFamilyId = f.subFamilyId;
-      } else if (fam === '') { it.familyId = ''; it.subFamilyId = ''; }
-    }
-  }
+  // vecchio, sbagliato del rapporto fra il fattore vecchio e il nuovo. Si
+  // segna qui e si fa quando la riga entra.
+  const conversioneDopo = () => [it.uom || '', altUomOf(it) || '', altFactorOf(it)].join('|');
 
   // ── Codifica gerarchica ──
   if (type === 'macchina') {
@@ -739,8 +733,24 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   const note = catCell(row, 'Note');
   if (note !== null) it.notes = note;
 
+  // ── Famiglia ── (dopo i controlli: una riga sbagliata non crea famiglie)
+  if (usesFamily(type)) {
+    const fam = catCell(row, 'Macrofamiglia');
+    const sub = catCell(row, 'Sottofamiglia');
+    if ((fam !== null || sub !== null) && !lock.structLocked) {
+      if (fam) {
+        const f = findOrCreateFamily(fam, sub || '', type, rep);
+        it.familyId = f.familyId; it.subFamilyId = f.subFamilyId;
+      } else if (fam === '') { it.familyId = ''; it.subFamilyId = ''; }
+    } else if (fam && lock.structLocked) {
+      const attuale = (db.families || []).find(f => f.id === it.familyId);
+      if (!attuale || String(attuale.name || '').toLowerCase() !== String(fam).trim().toLowerCase()) it.__famigliaDiversa = true;
+    }
+  }
+
   // ── Codice ──
-  if (code) it.code = code;
+  // Lo stesso codice scritto in un altro modo (minuscole) non lo rinomina.
+  if (code && !(orig && itemCodeKey(code) === itemCodeKey(orig.code))) it.code = code;
   else if (isNew) {
     const auto = genItemCode(it);
     if (!auto) {
@@ -755,6 +765,33 @@ function catApplyItemRow(row, def, ctx, ln, st) {
     it.code = auto;
     ctx.seen.set(itemCodeKey(auto), ln);
   }
+
+  if (!isNew) {
+    const bloccati = [];
+    const tieni = (campi, etichetta) => {
+      if (campi.some(k => JSON.stringify(it[k] == null ? '' : it[k]) !== JSON.stringify(orig[k] == null ? '' : orig[k]))) bloccati.push(etichetta);
+      campi.forEach(k => { if (k in orig) it[k] = orig[k]; else delete it[k]; });
+    };
+    if (lock.structLocked) {
+      tieni(['code'], 'codice');
+      if (it.__famigliaDiversa) bloccati.push('famiglia');
+      tieni(['familyId', 'subFamilyId'], 'famiglia');
+      tieni(['machineItemId', 'groupItemId', 'sigla'], 'codifica');
+      tieni(['uom'], 'unità di misura');
+    }
+    if (lock.nameLocked) tieni(['name', 'conceptId', 'nameFree'], 'descrizione');
+    delete it.__famigliaDiversa;
+    if (bloccati.length) avviso(`${esc(orig.code || '')} è già usato: ${Array.from(new Set(bloccati)).join(', ')} restano com'erano`);
+    const cambiaConversione = activePriceRow(orig) && conversionePrima !== conversioneDopo();
+    Object.keys(orig).forEach(k => { if (!(k in it)) delete orig[k]; });
+    Object.assign(orig, it);
+    it = orig;
+    if (cambiaConversione) {
+      const s = catStage(ctx, it);
+      if (!s.inline && !s.forced) s.inline = activePriceRow(it);
+    }
+  }
+  delete it.__famigliaDiversa;
 
   if (isNew) {
     stampNew(it);
