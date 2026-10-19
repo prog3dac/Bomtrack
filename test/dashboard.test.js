@@ -116,3 +116,27 @@ describe('La vista', () => {
     assert.deepEqual(JSON.parse(a.eval('JSON.stringify(NAV[0].views.map(v => v.id))')), ['home', 'dash']);
   });
 });
+
+describe('Tessera del magazzino e cruscotto dicono lo stesso valore (dalla 0.105.6)', () => {
+  it('una giacenza negativa non abbassa il valore, né sulla tessera né sul cruscotto', () => {
+    // M1 +100 a 10 €, M2 −20 a 10 € (consumato prima di registrare l'arrivo).
+    const a = app({
+      items: [mat('m1', 10), mat('m2', 10)], orders: [],
+      movements: [
+        { id: 'a', itemId: 'm1', kind: 'carico', qty: 100, date: '2026-10-01T08:00:00.000Z', note: '' },
+        { id: 'b', itemId: 'm2', kind: 'scarico', qty: -20, date: '2026-10-01T08:00:00.000Z', note: '' }],
+    });
+    approx(modello(a).totale, 1000);
+    approx(a.eval('(db.items.filter(hasStock).reduce((s, i) => s + valoreGiacenza(i), 0))'), 1000);
+  });
+  it('un articolo disattivato non conta in nessuna delle due', () => {
+    const a = app({
+      items: [mat('m1', 10), Object.assign(mat('m2', 10), { active: false })], orders: [],
+      movements: [
+        { id: 'a', itemId: 'm1', kind: 'carico', qty: 1, date: '2026-10-01T08:00:00.000Z', note: '' },
+        { id: 'b', itemId: 'm2', kind: 'carico', qty: 1, date: '2026-10-01T08:00:00.000Z', note: '' }],
+    });
+    approx(modello(a).totale, 10);
+    approx(a.eval('(db.items.filter(hasStock).reduce((s, i) => s + valoreGiacenza(i), 0))'), 10);
+  });
+});
