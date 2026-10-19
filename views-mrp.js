@@ -735,7 +735,36 @@ function mrpBuyRow(entry, netMode, planId) {
     // costificato: il documento seguirà il listino.
     listinoDiverso: docInGestione != null && Math.abs(docInGestione - price) > 0.00005,
     docInGestione,
+    // Le bozze d'ordine di **altri** (riordino, un altro piano, scritte a mano)
+    // con questo articolo: non sono in arrivo, e il netto non le vede.
+    bozze: bozzeAltrui(it.id, planId),
   };
+}
+// ─── Le bozze d'ordine degli altri (dalla 0.105.6) ───
+// Una bozza non è merce in arrivo — non è partita — e il netto giustamente non
+// la conta. Ma il piano non la vedeva nemmeno: una bozza del riordino sotto
+// scorta e gli ordini del piano partivano entrambi, e la stessa merce si
+// comprava due volte. Si dicono accanto alla riga, e nella scheda di
+// generazione degli ordini la riga nasce non spuntata, come fa il riordino.
+// `piani` è un id, un Set o niente, come per mrpBuyRow.
+let _bozzeIdx = null;
+function bozzeAltrui(itemId, piani) {
+  if (!_bozzeIdx) {
+    _bozzeIdx = new Map();
+    (db.orders || []).forEach(o => {
+      if (o.status !== 'bozza' || o.active === false) return;
+      (o.lines || []).forEach(l => {
+        if (!l.itemId) return;
+        const it = getItem(l.itemId);
+        const lista = _bozzeIdx.get(l.itemId) || [];
+        lista.push({ id: o.id, number: o.number || '', planId: o.planId || null,
+          qty: it ? fromAltUom(it, l.qty, l.uom) : (Number(l.qty) || 0) });
+        _bozzeIdx.set(l.itemId, lista);
+      });
+    });
+  }
+  const miei = piani instanceof Set ? piani : new Set(piani ? [piani] : []);
+  return (_bozzeIdx.get(itemId) || []).filter(b => !b.planId || !miei.has(b.planId));
 }
 // ─── Carico dei centri di lavoro ───
 // Le ore che i piani chiedono a ciascun centro, settimana per settimana, contro
@@ -1775,6 +1804,7 @@ function planDocsBody(gruppi, planId, kind) {
       } else {
         const a = altri(r);
         if (a.length) seg.push(`<span class="price-best" title="Esiste già ${esc(a.map(docRefLabel).join(', '))}, di tipo diverso: questa riga resta selezionabile">${ico('file', 'tinted', '')} ${esc(a.map(x => x.number).join(', '))}</span>`);
+        if ((r.bozze || []).length) seg.push(mrpBozzeBadge(r));
         if (r.underMin) seg.push(`<span class="mrp-warn" title="Quantità minima del fornitore: ${fmtUom(r.minQty, r.uom)}">${ico('warning', 'tinted', '')} sotto il minimo di ${fmtUom(r.minQty, r.uom)}</span>`);
         // Due assenze diverse, e la seconda è quella che manda fuori un ordine
         // sbagliato: l'articolo un prezzo ce l'ha, ma non da questo fornitore.
@@ -1801,7 +1831,7 @@ function planDocsBody(gruppi, planId, kind) {
           : `<span style="font-family:var(--mono)">${codeLink(r.item.id, r.item.code)}</span> ${esc(r.item.name)}`;
       return `<label class="plandoc-row${bloccata.length ? ' plandoc-used' : ''}">
         <input type="checkbox" class="plandoc-line" data-sup="${esc(key)}" value="${esc(planRowKey(r))}"
-          ${bloccata.length ? 'disabled' : 'checked'} onchange="planDocsCount()">
+          ${bloccata.length ? 'disabled' : (kind === 'order' && (r.bozze || []).length ? '' : 'checked')} onchange="planDocsCount()">
         ${etichetta}
         <span class="plandoc-qty">${fmtUom(r.qtyOrder, r.uom)}${!r.isPhase && mrpNet && r.qtyOrder !== r.qty ? ` <span style="opacity:.6">(lordo ${fmtUom(r.qty, r.uom)})</span>` : ''} · ${fmtN(importoDoc(r))}</span> ${seg.join(' ')}</label>`;
     }).join('');
@@ -2634,6 +2664,7 @@ function mrpBuyLineHtml(r) {
   // è la domanda «l'ho già ordinato?», e va risposta dove si guarda per primo.
   (r.docRefs || []).forEach(x => seg.push(
     `<span class="price-best" title="Questo articolo è già in ${esc(docRefLabel(x))} (${fmtQty(x.qty)} ${esc(x.uom)}) generato da questo fabbisogno">📄 ${esc(x.number)}</span>`));
+  if ((r.bozze || []).length) seg.push(mrpBozzeBadge(r));
   const celleStock = mrpNet ? `
     <td style="font-family:var(--mono);text-align:right;color:var(--text-dim)">${fmtQty(r.qty)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtQty(r.onHand)}${r.safety > 0 ? `<span class="empty-text" style="padding:0"> (min ${fmtQty(r.safety)})</span>` : ''}</td>
@@ -2656,6 +2687,10 @@ function mrpBuyLineHtml(r) {
     <td style="font-family:var(--mono);text-align:right"><strong>${fmtQty(r.qtyOrder)}</strong></td>
     <td style="font-family:var(--mono);text-align:right">${fmtN(r.price)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtN(r.amount)}</td></tr>`;
+}
+function mrpBozzeBadge(r) {
+  const b = r.bozze || [];
+  return `<span class="mrp-warn" title="C'è già una bozza d'ordine con questo articolo, fuori da questo piano: ${esc(b.map(x => `${x.number} (${fmtQty(x.qty)} ${r.uom})`).join(', '))}. Non è ancora in arrivo: prima di ordinarlo di nuovo, guarda se basta quella.">${ico('file', 'tinted', '')} in bozza ${esc(b.map(x => x.number).join(', '))}</span>`;
 }
 function mrpBuyTable(rows) {
   if (!rows.length) return '<div class="empty-text">Niente da comprare: il piano è vuoto o i suoi articoli non hanno distinta.</div>';

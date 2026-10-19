@@ -119,7 +119,7 @@ function opFreezeMaterials(part, qty) {
 // ciclo di vita degli altri indici: azzerato da invalidateCaches().
 let _opDeclIdx = null;
 let _opOdlIdx = null;
-function invalidateProd() { _opDeclIdx = null; _opOdlIdx = null; _opMovIdx = null; _wipRows = null; _wipPer = null; _scortaParti = null; }
+function invalidateProd() { _opDeclIdx = null; _opOdlIdx = null; _opMovIdx = null; _wipRows = null; _wipPer = null; _scortaParti = null; _bozzeIdx = null; }
 function opDeclIndex() {
   if (_opDeclIdx) return _opDeclIdx;
   const map = new Map();

@@ -393,3 +393,23 @@ describe('Le schede del piano', () => {
     assert.match(dentro('cl'), /Genera ordini di lavoro/);
   });
 });
+
+describe('Le bozze d ordine degli altri (0.105.6)', () => {
+  const bozza = (planId) => ({ orders: [{ id: 'b1', number: 'ODA-2026-009', status: 'bozza', supplierId: 's1', planId: planId || null, active: true,
+    lines: [{ id: 'bl1', itemId: 'vite', code: 'VITE', uom: 'pz', qty: 8, price: 2, received: 0 }] }] });
+  const modale = app => app.eval(`(invalidateCaches(), planDocsBody(planDocGroups(planDocRows(getPlan('pl1'), 'order').filter(r => r.qtyOrder > 0), 'order'), 'pl1', 'order'))`);
+  it('una bozza del riordino si vede sulla riga, e nella scheda la riga nasce non spuntata', () => {
+    const app = conPiano(bozza());
+    const r = JSON.parse(app.eval(`JSON.stringify(mrpBuyRows(getPlan('pl1'), true).find(r => r.item.id === 'vite').bozze)`));
+    assert.deepEqual(r.map(b => b.number), ['ODA-2026-009']);
+    const html = modale(app);
+    assert.match(html, /in bozza ODA-2026-009/);
+    assert.match(app.eval(`mrpBuyLineHtml(mrpBuyRows(getPlan('pl1'), true).find(r => r.item.id === 'vite'))`), /in bozza ODA-2026-009/, 'e nella tabella del piano');
+    assert.match(html, /value="vite"\s+onchange/, 'la vite non è spuntata');
+    assert.match(html, /value="tondo"\s+checked/, 'le altre sì');
+  });
+  it('una bozza di questo stesso piano non è «di un altro»', () => {
+    const app = conPiano(bozza('pl1'));
+    assert.equal(app.eval(`mrpBuyRows(getPlan('pl1'), true).find(r => r.item.id === 'vite').bozze.length`), 0);
+  });
+});
