@@ -411,12 +411,17 @@ function schedDisponibilita(planId, lines) {
   const oggi = schedOggi();
   const lordo = new Map();
   mrpExplode(lines, mrpOpzPiano(planId)).buy.forEach(e => lordo.set(e.item.id, e.qty));
+  // Gli arrivi vengono dall'indice del magazzino (dalla 0.105.6), lo stesso del
+  // netto: quantità già nell'unità di gestione — una riga d'ordine in metri su
+  // un articolo a kg contava i metri come kg — e anche le righe senza data, che
+  // valgono come arrivate in tempo, come in incomingEntro. Prima si perdevano, e
+  // merce già ordinata risultava ancora da comprare col tempo del fornitore.
   const arrivi = new Map();
-  (typeof righeDaRicevere === 'function' ? righeDaRicevere() : []).forEach(({ l, data, residuo }) => {
-    if (!l.itemId) return;
-    if (!arrivi.has(l.itemId)) arrivi.set(l.itemId, []);
-    arrivi.get(l.itemId).push({ data: String(data).slice(0, 10), qty: residuo });
-  });
+  const arriviDi = id => {
+    if (!arrivi.has(id)) arrivi.set(id, (stockOf(id).arrivi || [])
+      .map(a => ({ data: a.eta ? String(a.eta).slice(0, 10) : oggi, qty: Number(a.qty) || 0 })));
+    return arrivi.get(id);
+  };
   const memo = new Map();
   return it => {
     if (memo.has(it.id)) return memo.get(it.id);
@@ -428,7 +433,7 @@ function schedDisponibilita(planId, lines) {
     let libero = s.onHand - impegnato;
     let pronto = oggi;
     if (libero < serve) {
-      const righe = (arrivi.get(it.id) || []).slice().sort((a, b) => a.data.localeCompare(b.data));
+      const righe = arriviDi(it.id).slice().sort((a, b) => a.data.localeCompare(b.data));
       let coperto = false;
       for (const r of righe) {
         libero += r.qty;
@@ -730,7 +735,36 @@ function mrpBuyRow(entry, netMode, planId) {
     // costificato: il documento seguirà il listino.
     listinoDiverso: docInGestione != null && Math.abs(docInGestione - price) > 0.00005,
     docInGestione,
+    // Le bozze d'ordine di **altri** (riordino, un altro piano, scritte a mano)
+    // con questo articolo: non sono in arrivo, e il netto non le vede.
+    bozze: bozzeAltrui(it.id, planId),
   };
+}
+// ─── Le bozze d'ordine degli altri (dalla 0.105.6) ───
+// Una bozza non è merce in arrivo — non è partita — e il netto giustamente non
+// la conta. Ma il piano non la vedeva nemmeno: una bozza del riordino sotto
+// scorta e gli ordini del piano partivano entrambi, e la stessa merce si
+// comprava due volte. Si dicono accanto alla riga, e nella scheda di
+// generazione degli ordini la riga nasce non spuntata, come fa il riordino.
+// `piani` è un id, un Set o niente, come per mrpBuyRow.
+let _bozzeIdx = null;
+function bozzeAltrui(itemId, piani) {
+  if (!_bozzeIdx) {
+    _bozzeIdx = new Map();
+    (db.orders || []).forEach(o => {
+      if (o.status !== 'bozza' || o.active === false) return;
+      (o.lines || []).forEach(l => {
+        if (!l.itemId) return;
+        const it = getItem(l.itemId);
+        const lista = _bozzeIdx.get(l.itemId) || [];
+        lista.push({ id: o.id, number: o.number || '', planId: o.planId || null,
+          qty: it ? fromAltUom(it, l.qty, l.uom) : (Number(l.qty) || 0) });
+        _bozzeIdx.set(l.itemId, lista);
+      });
+    });
+  }
+  const miei = piani instanceof Set ? piani : new Set(piani ? [piani] : []);
+  return (_bozzeIdx.get(itemId) || []).filter(b => !b.planId || !miei.has(b.planId));
 }
 // ─── Carico dei centri di lavoro ───
 // Le ore che i piani chiedono a ciascun centro, settimana per settimana, contro
@@ -1318,15 +1352,25 @@ function mrpMakeRow(entry, planId) {
   // fatto. Il lordo resta in `qty`, accanto, come sulle righe d'acquisto.
   // Dalla 0.105.5 anche al netto di quello che gli ODP aperti stanno facendo.
   const resta = (planId && typeof daLanciare === 'function') ? daLanciare(planId, it.id, entry.qty) : entry.qty;
+  // Scorta minima e lotto, come sugli acquisti (dalla 0.105.6): il piano più
+  // urgente che fabbrica la parte lancia anche i pezzi che riportano lo
+  // scaffale alla scorta (scortaPartiIndex), e la quantità si arrotonda al
+  // lotto di riordino della parte — a multipli, o con la soglia minima. È la
+  // stessa netRequirement delle righe d'acquisto, con l'esistente già tolto.
+  const scorta = (planId && typeof scortaDaLanciare === 'function') ? scortaDaLanciare(planId, it.id) : 0;
+  const daLanciareQui = quantitaDaOrdinare(resta + scorta, itemUom(it));
+  const qtyOrder = quantitaDaOrdinare(netRequirement(daLanciareQui, 0, 0, 0, lotSizeOf(it), 0, lotModeOf(it)), itemUom(it));
   return {
     item: it, isMake: true, makeKey: 'make#' + it.id,
-    qty: entry.qty, qtyOrder: quantitaDaOrdinare(resta, itemUom(it)), uom: itemUom(it),
+    qty: entry.qty, qtyOrder, uom: itemUom(it),
+    scorta, lotSize: lotSizeOf(it), lotMode: lotModeOf(it), arrotondato: qtyOrder > daLanciareQui + 0.000001,
     // Entro quando lanciarla: l'inizio della prima fase del ciclo, che la
     // programmazione a ritroso ha calcolato. Senza ciclo coincide con la data
     // in cui serve, come prima.
     due: entry.due || '', start: entry.start || entry.due || '',
     orderBy: entry.start || entry.due || '', urgenza: urgenzaOrdine(entry.start || entry.due || ''),
-    supplierId: '', price: costOf(it.id).total, amount: costOf(it.id).total * entry.qty,
+    // L'importo è quello dei pezzi che si lanciano, non del lordo (dalla 0.105.6).
+    supplierId: '', price: costOf(it.id).total, amount: costOf(it.id).total * qtyOrder,
     nFasi, nEsterne: tratte.filter(t => t.esterna).length,
     senzaCiclo: !nFasi,
     noPrice: !(costOf(it.id).total > 0),
@@ -1725,7 +1769,9 @@ function planDocsBody(gruppi, planId, kind) {
   // cifra disponibile per decidere se conviene generare.
   // Una fase non ha un listino da consultare: il suo prezzo è la tariffa scritta
   // nel ciclo, e quello è già l'importo del documento.
-  const importoDoc = r => (r.isPhase || r.noDocPrice ? r.amount : r.amountDoc);
+  // Una parte da fabbricare non ha listino né fornitore: vale il suo costo
+  // (dalla 0.105.6; prima la scheda degli ODP mostrava zero su ogni riga).
+  const importoDoc = r => (r.isPhase || r.isMake || r.noDocPrice ? r.amount : r.amountDoc);
 
   const corpo = gruppi.map(g => {
     // La spunta porta la chiave del **gruppo**, non del fornitore: per gli
@@ -1746,6 +1792,9 @@ function planDocsBody(gruppi, planId, kind) {
         // Una parte senza fasi non ha una successione da seguire: l'ordine che
         // ne uscirebbe è una scheda vuota, e va detto prima di generarlo.
         if (r.senzaCiclo) seg.push(`<span class="mrp-warn" title="Il ciclo di questa parte non ha lavorazioni: l'ordine di produzione nascerebbe senza fasi">${ico('warning', 'tinted', '')} senza ciclo</span>`);
+        // Da dove vengono i pezzi in più: va detto, o un 50 al posto di 8 sembra un errore.
+        if (r.scorta > 0) seg.push(`<span class="price-best" title="Lo scaffale è sotto la scorta minima della parte: questo è il piano più urgente che la fabbrica, e la riporta alla scorta">+${fmtUom(r.scorta, r.uom)} per la scorta minima</span>`);
+        if (r.arrotondato) seg.push(`<span class="price-best" title="Arrotondato al lotto di riordino della parte, come sugli acquisti">${r.lotMode === 'min' ? 'lotto minimo' : 'lotto'} di ${fmtUom(r.lotSize, r.uom)}</span>`);
       } else if (r.isPhase) {
         // Una fase non ha magazzino: gli unici avvisi che la riguardano sono il
         // documento gemello già esistente e il prezzo a zero.
@@ -1755,6 +1804,7 @@ function planDocsBody(gruppi, planId, kind) {
       } else {
         const a = altri(r);
         if (a.length) seg.push(`<span class="price-best" title="Esiste già ${esc(a.map(docRefLabel).join(', '))}, di tipo diverso: questa riga resta selezionabile">${ico('file', 'tinted', '')} ${esc(a.map(x => x.number).join(', '))}</span>`);
+        if ((r.bozze || []).length) seg.push(mrpBozzeBadge(r));
         if (r.underMin) seg.push(`<span class="mrp-warn" title="Quantità minima del fornitore: ${fmtUom(r.minQty, r.uom)}">${ico('warning', 'tinted', '')} sotto il minimo di ${fmtUom(r.minQty, r.uom)}</span>`);
         // Due assenze diverse, e la seconda è quella che manda fuori un ordine
         // sbagliato: l'articolo un prezzo ce l'ha, ma non da questo fornitore.
@@ -1781,7 +1831,7 @@ function planDocsBody(gruppi, planId, kind) {
           : `<span style="font-family:var(--mono)">${codeLink(r.item.id, r.item.code)}</span> ${esc(r.item.name)}`;
       return `<label class="plandoc-row${bloccata.length ? ' plandoc-used' : ''}">
         <input type="checkbox" class="plandoc-line" data-sup="${esc(key)}" value="${esc(planRowKey(r))}"
-          ${bloccata.length ? 'disabled' : 'checked'} onchange="planDocsCount()">
+          ${bloccata.length ? 'disabled' : (kind === 'order' && (r.bozze || []).length ? '' : 'checked')} onchange="planDocsCount()">
         ${etichetta}
         <span class="plandoc-qty">${fmtUom(r.qtyOrder, r.uom)}${!r.isPhase && mrpNet && r.qtyOrder !== r.qty ? ` <span style="opacity:.6">(lordo ${fmtUom(r.qty, r.uom)})</span>` : ''} · ${fmtN(importoDoc(r))}</span> ${seg.join(' ')}</label>`;
     }).join('');
@@ -2614,6 +2664,7 @@ function mrpBuyLineHtml(r) {
   // è la domanda «l'ho già ordinato?», e va risposta dove si guarda per primo.
   (r.docRefs || []).forEach(x => seg.push(
     `<span class="price-best" title="Questo articolo è già in ${esc(docRefLabel(x))} (${fmtQty(x.qty)} ${esc(x.uom)}) generato da questo fabbisogno">📄 ${esc(x.number)}</span>`));
+  if ((r.bozze || []).length) seg.push(mrpBozzeBadge(r));
   const celleStock = mrpNet ? `
     <td style="font-family:var(--mono);text-align:right;color:var(--text-dim)">${fmtQty(r.qty)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtQty(r.onHand)}${r.safety > 0 ? `<span class="empty-text" style="padding:0"> (min ${fmtQty(r.safety)})</span>` : ''}</td>
@@ -2636,6 +2687,10 @@ function mrpBuyLineHtml(r) {
     <td style="font-family:var(--mono);text-align:right"><strong>${fmtQty(r.qtyOrder)}</strong></td>
     <td style="font-family:var(--mono);text-align:right">${fmtN(r.price)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtN(r.amount)}</td></tr>`;
+}
+function mrpBozzeBadge(r) {
+  const b = r.bozze || [];
+  return `<span class="mrp-warn" title="C'è già una bozza d'ordine con questo articolo, fuori da questo piano: ${esc(b.map(x => `${x.number} (${fmtQty(x.qty)} ${r.uom})`).join(', '))}. Non è ancora in arrivo: prima di ordinarlo di nuovo, guarda se basta quella.">${ico('file', 'tinted', '')} in bozza ${esc(b.map(x => x.number).join(', '))}</span>`;
 }
 function mrpBuyTable(rows) {
   if (!rows.length) return '<div class="empty-text">Niente da comprare: il piano è vuoto o i suoi articoli non hanno distinta.</div>';
@@ -2728,7 +2783,7 @@ function planAvanzamentoKpi(planId, make) {
 // domanda — «a che punto è» — e vivevano in tre posti.
 function mrpMakeTable(make, planId) {
   if (!make.length) return '<div class="empty-text">Nessuna parte da fabbricare in questo piano.</div>';
-  const puoScrivere = canWrite('docs');
+  const puoScrivere = canWriteShop('docs');   // l'officina dichiara anche le parti (dalla 0.105.6), come il montaggio
   const gia = planId ? planDocumentedKeys(planId) : new Map();
   const rows = make.map(e => {
     const c = costOf(e.item.id).total;

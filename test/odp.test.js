@@ -704,3 +704,168 @@ describe('Ordine di lavoro da un ODP (0.105.5)', () => {
     assert.ok(secondo && secondo !== primo);
   });
 });
+
+describe('ODP: annullare, chiudere da sole, chi commissiona (0.105.6)', () => {
+  const statoOdp = app => app.eval(`getOdp('odp-interna').status`);
+  const decl = (app, kind, i) => app.eval(`(function(){ const o = getOdp('odp-interna');
+    const d = db.prodDecls.filter(x => x.odpId === o.id && x.phaseId === o.phases[${i}].id && x.kind === '${kind}')[0];
+    return d ? d.id : null; })()`);
+  const annulla = (app, id) => app.eval(`opAnnullaDichiarazione(${JSON.stringify(id)})`);
+  const conTondo = () => { const app = conDb(); app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`); return app; };
+
+  it('un avanzamento della 10 non si annulla se la 20 è già partita', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 10 });
+    avvia(app, 'odp-interna', 1);
+    dichiara(app, 'odp-interna', 1, { qty: 10 });
+    assert.equal(statoOdp(app), 'completato');
+    assert.equal(annulla(app, decl(app, 'avanzamento', 0)), false);
+    assert.equal(statoOdp(app), 'completato', "l'ordine resta coerente coi pezzi a magazzino");
+    assert.equal(onHand(app, 'interna'), 10);
+    // Annullate prima le dichiarazioni della 20 (avanzamento e avvio), la 10 si annulla.
+    assert.equal(annulla(app, decl(app, 'avanzamento', 1)), true);
+    assert.equal(annulla(app, decl(app, 'avvio', 1)), true);
+    assert.equal(annulla(app, decl(app, 'avanzamento', 0)), true);
+  });
+
+  it('un avvio sbagliato si annulla e rimette a scaffale il materiale', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    assert.equal(onHand(app, 'tondo'), 80);
+    const avvio = decl(app, 'avvio', 0);
+    assert.ok(app.eval(`db.movements.filter(m => m.orderId === 'odp-interna').every(m => m.declId === ${JSON.stringify(avvio)})`),
+      "i prelievi portano l'avvio che li ha fatti");
+    assert.ok(app.eval(`odpDeclBlock(getOdp('odp-interna')).includes('opAnnullaDichiarazioneAsk')`), "e l'avvio ha il suo comando");
+    assert.equal(annulla(app, avvio), true);
+    assert.equal(onHand(app, 'tondo'), 100);
+    assert.equal(stato(app, 'odp-interna', 0), 'avviabile');
+    assert.equal(statoOdp(app), 'lanciato');
+    // Riavviata, il materiale esce di nuovo, una volta.
+    assert.equal(avvia(app, 'odp-interna', 0), true);
+    assert.equal(onHand(app, 'tondo'), 80);
+  });
+
+  it('un avvio con già delle dichiarazioni non si annulla', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 4 });
+    assert.equal(annulla(app, decl(app, 'avvio', 0)), false);
+    assert.equal(onHand(app, 'tondo'), 80);
+    assert.ok(!app.eval(`odpDeclBlock(getOdp('odp-interna')).includes("opAnnullaDichiarazioneAsk('${decl(app, 'avvio', 0)}')")`));
+  });
+
+  it('le fasi che non ricevono pezzi buoni si chiudono da sole', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 3);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 0, scrap: 3 });
+    assert.equal(stato(app, 'odp-interna', 1), 'chiusa');
+    assert.equal(statoOdp(app), 'completato');
+    assert.equal(app.eval(`(invalidateCaches(), prodWipInCasa('tondo'))`), 0, 'il materiale non resta nel lavoro in corso');
+  });
+
+  it('una fase vuota resta aperta finché la precedente non è chiusa', () => {
+    const app = conTondo();
+    lancia(app, 'interna', 3);
+    avvia(app, 'odp-interna', 0);
+    dichiara(app, 'odp-interna', 0, { qty: 0, scrap: 1 });
+    assert.equal(stato(app, 'odp-interna', 1), 'attesa');
+  });
+
+  it("l'officina non commissiona fasi a un terzista, e non vede il comando", () => {
+    const app = conDb();
+    lancia(app, 'esterna', 10);
+    app.asRole('officina');
+    assert.equal(app.eval(`(function(){ const o = getOdp('odp-esterna'); return !!opGeneraOdl(o.id, o.phases[0].id); })()`), false);
+    assert.equal(app.eval('db.workOrders.length'), 0);
+    assert.ok(!app.eval(`odpPhaseRows(getOdp('odp-esterna')).includes('opGeneraOdlAsk')`));
+    app.asRole('acquisti');
+    assert.ok(app.eval(`odpPhaseRows(getOdp('odp-esterna')).includes('opGeneraOdlAsk')`));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  Lotto, scorta minima e importo delle parti da lanciare (0.105.6)
+// ═══════════════════════════════════════════════════════════
+// Le quantità dei piani con parti a lotto o a scorta cambiano di proposito: la
+// regola è quella degli acquisti (netRequirement), e i test la fissano qui.
+describe('ODP dal piano: lotto, scorta minima, importo', () => {
+  const ordina = (app, planId) => Number(app.eval(`(invalidateCaches(),
+    mrpMakeRows(getPlan(${JSON.stringify(planId || 'pl1')})).find(x => x.item.id === 'interna').qtyOrder)`));
+  const conParte = campi => {
+    const app = conDb();
+    app.eval(`Object.assign(getItem('interna'), ${JSON.stringify(campi || {})}); invalidateCaches();`);
+    return app;
+  };
+  const lanciaDalPiano = (app, planId) => app.eval(`(function(){ const p = getPlan(${JSON.stringify(planId || 'pl1')});
+    const o = planNewOdp(p, planRowIndex(p).get('make#interna')); saveDB(); invalidateCaches(); return o.qty; })()`);
+
+  it('la scheda di generazione mostra il costo dei pezzi da lanciare, non zero', () => {
+    const app = conDb();
+    const costo = Number(app.eval(`costOf('interna').total`));
+    assert.ok(costo > 0);
+    const html = () => app.eval(`(invalidateCaches(), planDocsBody(planDocGroups(planDocRows(getPlan('pl1'), 'odp')
+      .filter(r => r.qtyOrder > 0), 'odp'), 'pl1', 'odp'))`);
+    assert.ok(html().includes(app.eval(`fmtN(${costo * 6})`)), 'sei pezzi al loro costo');
+    // Dichiarati due pezzi fatti, l'importo è quello dei quattro che restano.
+    app.eval(`produzioneDichiara('pl1', 'interna', 2, '')`);
+    assert.equal(Number(app.eval(`(invalidateCaches(), mrpMakeRows(getPlan('pl1'))[0].amount)`)), costo * 4);
+    assert.ok(html().includes(app.eval(`fmtN(${costo * 4})`)));
+  });
+
+  it('senza lotto e senza scorta la quantità resta quella del piano', () => {
+    assert.equal(ordina(conParte()), 6);
+  });
+
+  it('la quantità si arrotonda al lotto di riordino della parte', () => {
+    assert.equal(ordina(conParte({ lotSize: 50 })), 50, 'a multipli');
+    assert.equal(ordina(conParte({ lotSize: 4 })), 8, 'sei pezzi sono due lotti da quattro');
+    assert.equal(ordina(conParte({ lotSize: 10, lotMode: 'min' })), 10, 'sotto la soglia si lancia la soglia');
+    assert.equal(ordina(conParte({ lotSize: 4, lotMode: 'min' })), 6, 'sopra la soglia si lancia quello che manca');
+  });
+
+  it('il piano più urgente riporta lo scaffale alla scorta minima, una volta sola', () => {
+    const app = conParte({ safetyStock: 20 });
+    app.eval(`db.plans.push({ id: 'pl2', number: 'FAB-2026-002', date: '2026-07-02', active: true,
+      lines: [{ id: 'l2', itemId: 'grp', qty: 1, dueDate: '2026-12-30' }] }); invalidateCaches();`);
+    assert.equal(ordina(app, 'pl1'), 26, 'sei per il piano, venti per la scorta');
+    assert.equal(ordina(app, 'pl2'), 3, 'il secondo della fila non se la ricarica');
+    assert.equal(lanciaDalPiano(app, 'pl1'), 26);
+    assert.equal(ordina(app, 'pl1'), 0, "lanciato l'ODP, i suoi pezzi attesi chiudono il buco");
+    assert.equal(ordina(app, 'pl2'), 3);
+  });
+
+  it('con la scorta e il lotto insieme si lancia il lotto che le copre', () => {
+    const app = conParte({ safetyStock: 20, lotSize: 50 });
+    assert.equal(ordina(app), 50);
+    lanciaDalPiano(app);
+    assert.equal(ordina(app), 0);
+    // Finito l'ODP e versati i 50, il piano non ne propone altri: i 44 in più
+    // sono a scaffale, sopra la scorta.
+    app.eval(`(function(){ addMovement('tondo', 'carico', 200, '');
+      const o = db.prodOrders[0]; opLancia(o.id);
+      o.phases.forEach(f => { opAvvia(o.id, f.id, {}); opDichiara(o.id, f.id, { qty: 50 }); }); })()`);
+    assert.equal(app.eval(`db.prodOrders[0].status`), 'completato');
+    assert.equal(onHand(app, 'interna'), 50);
+    assert.equal(ordina(app), 0);
+  });
+
+  it('uno scaffale già sopra la scorta non fa lanciare niente in più', () => {
+    const app = conParte({ safetyStock: 20 });
+    app.eval(`(addMovement('interna', 'carico', 22, ''), invalidateCaches())`);
+    // 22 a scaffale, 20 di scorta: il piano ne prende 2 e ne fabbrica 4.
+    assert.equal(ordina(app), 4);
+  });
+
+  it('la scheda dice da dove vengono i pezzi in più', () => {
+    const app = conParte({ safetyStock: 20, lotSize: 50 });
+    const html = app.eval(`(invalidateCaches(), planDocsBody(planDocGroups(planDocRows(getPlan('pl1'), 'odp')
+      .filter(r => r.qtyOrder > 0), 'odp'), 'pl1', 'odp'))`);
+    assert.match(html, /per la scorta minima/);
+    assert.match(html, /lotto di 50/);
+  });
+});

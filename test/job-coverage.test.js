@@ -99,6 +99,29 @@ describe('Cosa conta come mancante', () => {
     assert.equal(c.stato, 'manca');
     assert.deepEqual(c.daOrdinare.map(r => r.code), ['C1']);
   });
+
+  // Dalla 0.105.6: un ordine già inviato per una parte non è «un documento che
+  // aspetta l'invio» per il resto. Quello che manca va ancora ordinato.
+  it('ordinato in parte e già inviato: il resto è da ordinare', () => {
+    const c = cov(app({ orders: ordine({ ordine: { planId: 'pl1' }, riga: { qty: 4 } }) }));
+    assert.equal(c.stato, 'manca');
+    assert.deepEqual(c.daOrdinare.map(r => r.code), ['C1']);
+    assert.equal(c.daOrdinare[0].qtyOrder, 6);
+    assert.deepEqual(c.documentate, []);
+  });
+
+  it('una bozza che copre solo una parte non basta', () => {
+    const c = cov(app({ orders: ordine({ ordine: { status: 'bozza', planId: 'pl1' }, riga: { qty: 4 } }) }));
+    assert.equal(c.stato, 'manca');
+    assert.deepEqual(c.daOrdinare.map(r => r.code), ['C1']);
+  });
+
+  it('una richiesta d\'offerta aperta conta come documento, una chiusa no', () => {
+    const rfq = status => [{ id: 'r1', number: 'RDO-2025-001', status, planId: 'pl1', active: true,
+      lines: [{ id: 'y', itemId: 'c1', code: 'C1', uom: 'pz', qty: 10 }] }];
+    assert.deepEqual(cov(app({ rfqs: rfq('inviata') })).documentate.map(r => r.code), ['C1']);
+    assert.deepEqual(cov(app({ rfqs: rfq('chiusa') })).daOrdinare.map(r => r.code), ['C1']);
+  });
 });
 
 describe('La commessa è una domanda sola, non N piani', () => {
