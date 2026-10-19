@@ -93,6 +93,18 @@ function totaleRighe(lines) { return (lines || []).reduce((s, l) => s + importoR
 // primo onclick="fn('${esc(it.name)}')" si romperebbe su un articolo chiamato
 // «L'albero», e su uno chiamato peggio farebbe altro.
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// ─── Un dato dentro un onclick ───
+// esc() rende innocuo un testo **per l'HTML**, non per il JavaScript che
+// l'attributo contiene: il browser prima decodifica l'attributo, poi esegue, e
+// un apice decodificato chiude la stringa. Ogni dato scritto da qualcuno — un
+// codice, un nome, un percorso, un'ubicazione — che finisce come argomento di
+// un comando passa da qui (dalla 0.105.6): JSON.stringify ne fa un letterale
+// JavaScript corretto (apici, barre, a capo), esc() lo rende innocuo per
+// l'attributo, fra virgolette o fra apici. Il risultato porta già le sue
+// virgolette: onclick="fn(${jsAttr(x)})", senza apici intorno.
+// Prima c'erano tre ricette a mano (jsAttrStr, esc(JSON.stringify(…)), e
+// niente): una sola si controlla, tre si copiano sbagliate.
+function jsAttr(v) { return esc(JSON.stringify(String(v == null ? '' : v))); }
 
 // ─── L'unità di misura accanto al numero ───
 // Un numero senza unità è un numero da indovinare. «15» in una riga di

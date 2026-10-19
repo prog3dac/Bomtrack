@@ -568,10 +568,9 @@ function allegatoCollegaBody() {
     const usi = v.doc ? allegatoDocUsi(v.doc.id) : 0;
     const nota = v.mancante ? 'file non trovato in archivio'
       : (v.doc ? `${usi} ${usi === 1 ? 'codice' : 'codici'} · ${esc(v.path)}` : (v.size != null ? esc(pesoFile(v.size)) : ''));
-    // Il percorso finisce dentro un attributo `onclick`, quindi va escapato due
-    // volte: JSON.stringify per il JavaScript, esc() per l'HTML. Un nome di file
-    // può contenere apici, virgolette e `&` — è testo che scrive chi vuole.
-    return `<div class="picker-row" onclick="allegatoCollegaScegli(${esc(JSON.stringify(v.path))})">
+    // Il percorso finisce dentro un attributo `onclick`: passa da jsAttr(). Un
+    // nome di file può contenere apici, virgolette e `&` — è testo che scrive chi vuole.
+    return `<div class="picker-row" onclick="allegatoCollegaScegli(${jsAttr(v.path)})">
       <span>${ico('file', 'tinted', '')} ${esc(v.etichetta)}</span>
       <span class="mgmt-item-meta">${nota}</span></div>`;
   }).join('');

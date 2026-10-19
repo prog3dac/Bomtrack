@@ -116,13 +116,8 @@ function articoliInUbicazione(codice) {
   return (db.items || []).filter(i => hasStock(i) && ubicazioneOf(i) === k)
     .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
 }
-// Un testo libero dentro un onclick="…": letterale JS fra apici singoli, con
-// le virgolette e gli altri caratteri dell'HTML resi innocui. Un'ubicazione
-// è scritta dall'utente e può contenere qualunque cosa.
-function jsAttrStr(v) {
-  return "'" + String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + "'";
-}
+// Un testo libero dentro un onclick="…" (un'ubicazione è scritta dall'utente e
+// può contenere qualunque cosa) passa da jsAttr() di core.js.
 // La forma che il QR e le etichette si aspettano: { id, code, items }.
 function ubicazioneRec(codice) {
   const k = ubicazioneNorm(codice);
