@@ -75,6 +75,65 @@ function daLanciare(planId, itemId, richiesti) {
   return Math.max(0, daFare(planId, itemId, richiesti) - attesiDi(planId, itemId));
 }
 
+// ─── La scorta minima delle parti fabbricate (dalla 0.105.6) ───
+// La scheda di una parte chiede scorta minima e lotto, ma il fabbisogno li
+// ignorava: l'ordine di produzione nasceva per i pezzi del piano e basta, e il
+// riordino salta le parti fatte in casa. La scorta serviva solo a togliere
+// pezzi allo scaffale comune, e nessuno proponeva di rifarla.
+//
+// La regola è quella degli acquisti (netRequirement): il buco della scorta lo
+// copre **il primo della fila**, cioè il piano aperto più urgente che fabbrica
+// la parte. Il buco si misura a lavoro finito, come farebbe il netto: esistente,
+// più quello che gli ODP aperti stanno ancora facendo, più quello che i piani
+// devono ancora lanciare, meno quello che i piani devono ancora consumare.
+// Gli altri piani non se lo ricaricano, e una volta lanciato l'ODP che lo copre
+// i suoi pezzi attesi chiudono il buco: non si propone due volte.
+//
+// → articolo → { planId: il piano che lo copre, gap: i pezzi che mancano alla scorta }
+let _scortaParti = null;
+function scortaPartiIndex() {
+  if (_scortaParti) return _scortaParti;
+  const idx = new Map();
+  _scortaParti = idx;
+  if (typeof mrpExplodePlan !== 'function' || typeof pianiInOrdine !== 'function') return idx;
+  // Nessuna parte con una scorta: niente da esplodere (è il caso più comune).
+  if (!(db.items || []).some(it => it.type === 'parte' && safetyStockOf(it) > 0)) return idx;
+  const per = new Map();
+  const voce = id => { let e = per.get(id); if (!e) { e = { primo: null, lancio: 0, consumo: 0 }; per.set(id, e); } return e; };
+  pianiInOrdine().piani.forEach(p => {
+    const exp = mrpExplodePlan(p);
+    const serve = new Map();
+    const conta = (it, q) => { if (safetyStockOf(it) > 0) serve.set(it.id, (serve.get(it.id) || 0) + (Number(q) || 0)); };
+    exp.make.forEach(e => {
+      conta(e.item, e.qty);
+      if (!(safetyStockOf(e.item) > 0)) return;
+      const v = voce(e.item.id);
+      if (!v.primo) v.primo = p.id;
+      v.lancio += daLanciare(p.id, e.item.id, e.qty);
+    });
+    exp.stock.forEach(e => conta(e.item, e.qty));
+    serve.forEach((q, id) => { voce(id).consumo += Math.max(0, q - prelevatoPer(id, p.id)); });
+  });
+  if (!per.size) return idx;
+  const attesi = new Map();
+  (db.prodOrders || []).forEach(o => {
+    if (o.status === 'annullato' || !per.has(o.itemId)) return;
+    attesi.set(o.itemId, (attesi.get(o.itemId) || 0) + odpAttesi(o));
+  });
+  per.forEach((v, id) => {
+    if (!v.primo) return;
+    const fine = onHandOf(id) + (attesi.get(id) || 0) + v.lancio - v.consumo;
+    const gap = safetyStockOf(getItem(id)) - fine;
+    if (gap > 0.000001) idx.set(id, { planId: v.primo, gap });
+  });
+  return idx;
+}
+// I pezzi in più che **questo** piano lancia per riportare la parte alla scorta.
+function scortaDaLanciare(planId, itemId) {
+  const s = planId ? scortaPartiIndex().get(itemId) : null;
+  return s && s.planId === planId ? s.gap : 0;
+}
+
 // ─── Dichiarare ───
 function produzioneDichiara(planId, itemId, qty, note) {
   if (!roleGuardShop('docs')) return null;

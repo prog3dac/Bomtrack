@@ -1318,15 +1318,25 @@ function mrpMakeRow(entry, planId) {
   // fatto. Il lordo resta in `qty`, accanto, come sulle righe d'acquisto.
   // Dalla 0.105.5 anche al netto di quello che gli ODP aperti stanno facendo.
   const resta = (planId && typeof daLanciare === 'function') ? daLanciare(planId, it.id, entry.qty) : entry.qty;
+  // Scorta minima e lotto, come sugli acquisti (dalla 0.105.6): il piano più
+  // urgente che fabbrica la parte lancia anche i pezzi che riportano lo
+  // scaffale alla scorta (scortaPartiIndex), e la quantità si arrotonda al
+  // lotto di riordino della parte — a multipli, o con la soglia minima. È la
+  // stessa netRequirement delle righe d'acquisto, con l'esistente già tolto.
+  const scorta = (planId && typeof scortaDaLanciare === 'function') ? scortaDaLanciare(planId, it.id) : 0;
+  const daLanciareQui = quantitaDaOrdinare(resta + scorta, itemUom(it));
+  const qtyOrder = quantitaDaOrdinare(netRequirement(daLanciareQui, 0, 0, 0, lotSizeOf(it), 0, lotModeOf(it)), itemUom(it));
   return {
     item: it, isMake: true, makeKey: 'make#' + it.id,
-    qty: entry.qty, qtyOrder: quantitaDaOrdinare(resta, itemUom(it)), uom: itemUom(it),
+    qty: entry.qty, qtyOrder, uom: itemUom(it),
+    scorta, lotSize: lotSizeOf(it), lotMode: lotModeOf(it), arrotondato: qtyOrder > daLanciareQui + 0.000001,
     // Entro quando lanciarla: l'inizio della prima fase del ciclo, che la
     // programmazione a ritroso ha calcolato. Senza ciclo coincide con la data
     // in cui serve, come prima.
     due: entry.due || '', start: entry.start || entry.due || '',
     orderBy: entry.start || entry.due || '', urgenza: urgenzaOrdine(entry.start || entry.due || ''),
-    supplierId: '', price: costOf(it.id).total, amount: costOf(it.id).total * entry.qty,
+    // L'importo è quello dei pezzi che si lanciano, non del lordo (dalla 0.105.6).
+    supplierId: '', price: costOf(it.id).total, amount: costOf(it.id).total * qtyOrder,
     nFasi, nEsterne: tratte.filter(t => t.esterna).length,
     senzaCiclo: !nFasi,
     noPrice: !(costOf(it.id).total > 0),
@@ -1725,7 +1735,9 @@ function planDocsBody(gruppi, planId, kind) {
   // cifra disponibile per decidere se conviene generare.
   // Una fase non ha un listino da consultare: il suo prezzo è la tariffa scritta
   // nel ciclo, e quello è già l'importo del documento.
-  const importoDoc = r => (r.isPhase || r.noDocPrice ? r.amount : r.amountDoc);
+  // Una parte da fabbricare non ha listino né fornitore: vale il suo costo
+  // (dalla 0.105.6; prima la scheda degli ODP mostrava zero su ogni riga).
+  const importoDoc = r => (r.isPhase || r.isMake || r.noDocPrice ? r.amount : r.amountDoc);
 
   const corpo = gruppi.map(g => {
     // La spunta porta la chiave del **gruppo**, non del fornitore: per gli
@@ -1746,6 +1758,9 @@ function planDocsBody(gruppi, planId, kind) {
         // Una parte senza fasi non ha una successione da seguire: l'ordine che
         // ne uscirebbe è una scheda vuota, e va detto prima di generarlo.
         if (r.senzaCiclo) seg.push(`<span class="mrp-warn" title="Il ciclo di questa parte non ha lavorazioni: l'ordine di produzione nascerebbe senza fasi">${ico('warning', 'tinted', '')} senza ciclo</span>`);
+        // Da dove vengono i pezzi in più: va detto, o un 50 al posto di 8 sembra un errore.
+        if (r.scorta > 0) seg.push(`<span class="price-best" title="Lo scaffale è sotto la scorta minima della parte: questo è il piano più urgente che la fabbrica, e la riporta alla scorta">+${fmtUom(r.scorta, r.uom)} per la scorta minima</span>`);
+        if (r.arrotondato) seg.push(`<span class="price-best" title="Arrotondato al lotto di riordino della parte, come sugli acquisti">${r.lotMode === 'min' ? 'lotto minimo' : 'lotto'} di ${fmtUom(r.lotSize, r.uom)}</span>`);
       } else if (r.isPhase) {
         // Una fase non ha magazzino: gli unici avvisi che la riguardano sono il
         // documento gemello già esistente e il prezzo a zero.
