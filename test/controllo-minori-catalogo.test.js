@@ -132,6 +132,90 @@ describe('Il codice automatico e i codici scritti in minuscolo o con gli spazi',
   });
 });
 
+describe('Archivio illeggibile e copia di soccorso che non ci sta', () => {
+  // Un archivio grande e troncato: lo spazio basta per lui, non per una seconda copia.
+  const troncato = '{"items":[' + '{"id":"x","code":"AAA","name":"' + 'x'.repeat(200000) + '"';
+  const carica = () => {
+    const a = loadApp({ silent: true, quotaBytes: 300000 });
+    a.seedStorage(troncato);
+    a.eval('globalThis.__modali = []; openModal = h => { __modali.push(h); };');
+    a.ref('Store').load();
+    a.asRole('admin');
+    return a;
+  };
+
+  it('l\'esito dice che la copia non è riuscita, e l\'avviso non parla di una copia precedente', () => {
+    const a = carica();
+    assert.equal(a.storage.getItem('bomtrack_v1_illeggibile'), null, 'la copia non c\'è davvero');
+    assert.equal(a.eval('dbLoadError.rescueFailed'), true);
+    a.eval('showLoadErrorModal(dbLoadError)');
+    const h = a.eval('__modali.join("")');
+    assert.doesNotMatch(h, /era già stata messa da parte/);
+    assert.match(h, /Non è stato possibile metterne da parte una copia/);
+    assert.match(h, /scaricaIlleggibile\(\)/);
+  });
+
+  it('il primo salvataggio non scrive i dati d\'esempio sopra l\'originale', () => {
+    const a = carica();
+    assert.equal(a.eval('Store.commit()'), false);
+    assert.equal(a.storage.getItem('bomtrack_v1'), troncato);
+    assert.equal(a.eval('Store.isUnsaved()'), true);
+  });
+
+  it('scaricato il file, i salvataggi ripartono', () => {
+    const a = carica();
+    a.eval('scaricaIlleggibile()');
+    assert.equal(a.scaricati().slice(-1)[0].contenuto, troncato);
+    assert.equal(a.eval('Store.commit()'), true);
+  });
+
+  it('con la copia riuscita resta tutto come prima', () => {
+    const a = loadApp({ silent: true });
+    a.seedStorage('{"items":[');
+    a.ref('Store').load();
+    assert.equal(a.eval('dbLoadError.rescued'), true);
+    assert.equal(a.eval('dbLoadError.rescueFailed'), false);
+    assert.equal(a.eval('Store.commit()'), true);
+  });
+});
+
+describe('Allegati caricati nel database con l\'archivio condiviso', () => {
+  const conAllegato = () => {
+    const a = app(makeDb({ items: [mat('m1', 1)],
+      users: [{ id: 'u-off', name: 'Officina', email: 'o@x.it', role: 'admin', active: true }],
+      attachments: [{ id: 'al1', itemId: 'm1', name: 'foto.jpg', size: 10, createdBy: 'u-off', createdAt: '2026-10-01T08:00:00Z' }] }));
+    a.eval('cloudAttivo = () => true;');
+    return a;
+  };
+
+  it('il pulsante dice che il file resta su questo PC', () => {
+    const h = conAllegato().eval('allegatiBody("m1")');
+    assert.match(h, /Carica file solo su questo PC/);
+    assert.match(h, /i colleghi vedranno l'allegato nell'elenco ma non potranno aprirlo/);
+  });
+
+  it('senza archivio condiviso resta com\'era', () => {
+    const a = app(makeDb({ items: [mat('m1', 1)] }));
+    assert.match(a.eval('allegatiBody("m1")'), /Carica file nel database/);
+  });
+
+  it('il collega che lo apre sa che sta su un altro PC, e di chi', async () => {
+    const a = conAllegato();
+    a.eval('allegatoScarica("al1")');
+    for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r));
+    const m = avvisi(a).join(' | ');
+    assert.match(m, /caricato su un altro PC \(da Officina\)/);
+    assert.doesNotMatch(m, /backup JSON/);
+  });
+});
+
+describe('L\'app installata sul telefono', () => {
+  it('non è bloccata in orizzontale: le etichette QR si inquadrano col telefono in piedi', () => {
+    const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8'));
+    assert.ok(m.orientation === undefined || m.orientation === 'any', 'orientation: ' + m.orientation);
+  });
+});
+
 describe('Controllo dati: i numeri dei documenti', () => {
   const anno = new Date().getFullYear();
   const oda = (id, n) => ({ id, number: `ODA-${anno}-${String(n).padStart(3, '0')}`, status: 'bozza', date: `${anno}-03-01`, supplierId: null, active: true, lines: [] });

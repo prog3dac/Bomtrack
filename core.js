@@ -1138,6 +1138,10 @@ function showPersistErrorModal(kind, info) {
     ? `<p>Lo spazio che il browser riserva a questa app è esaurito${mb}.</p>
        <p><strong>Le modifiche fatte da ora in poi non vengono salvate.</strong> I dati che vedi sono ancora tutti in memoria, ma chiudendo questa scheda andrebbero persi.</p>
        <p>Esporta subito un backup JSON, poi libera spazio: elimina richieste e ordini vecchi, oppure azzera il database e reimporta solo ciò che serve.</p>`
+    : kind === 'rescue'
+      ? `<p>L'archivio di questo computer non si è potuto leggere, e non è stato possibile metterne da parte una copia.</p>
+         <p><strong>Per non scriverci sopra, l'app non salva niente</strong> finché non lo scarichi come file. Poi potrai lavorare, o reimportare l'ultimo backup.</p>
+         ${Store.grezzoIlleggibile() ? `<p><button class="add-btn-sm" onclick="closeModal(); scaricaIlleggibile()">${ico('download', 'tinted', '')} Scarica i dati illeggibili</button></p>` : ''}`
     : kind === 'storage'
       ? `<p>Questo browser non consente il salvataggio locale: succede in navigazione privata o quando i dati dei siti sono bloccati.</p>
          <p><strong>L'app funziona, ma alla chiusura non resterà nulla.</strong> Esporta un backup JSON prima di uscire.</p>`
@@ -1206,11 +1210,19 @@ function onLoadError(info) {
 }
 function showLoadErrorModal(info) {
   const kb = info && info.bytes ? ` (erano circa ${Math.round(info.bytes / 1024)} KB)` : '';
-  const dove = info && info.rescued
+  // Tre casi (dalla 0.105.6): copia fatta, copia che c'era già, copia non
+  // riuscita. Nel terzo l'originale esiste solo al suo posto, e l'app non
+  // salva niente finché non lo si scarica: va detto, non rassicurato.
+  const dove = info && info.rescueFailed
+    ? `<strong style="color:var(--red)">Non è stato possibile metterne da parte una copia</strong> (lo spazio del browser non basta). Esistono solo al loro posto: <strong>scaricali adesso come file</strong>. Finché non lo fai, l'app non salva nessuna modifica, per non scriverci sopra.`
+    : info && info.rescued
     ? (Store.archivio === 'indexeddb'
       ? `Sono stati messi da parte così com'erano, alla voce <span style="font-family:var(--mono)">illeggibile</span> del database <span style="font-family:var(--mono)">${esc(IDB_NOME)}</span> del browser, e restano recuperabili a mano.`
       : `Sono stati messi da parte così com'erano, sotto la voce <span style="font-family:var(--mono)">${esc(DB_KEY_RESCUE)}</span> dell'archivio locale del browser, e restano recuperabili a mano.`)
     : 'Una copia di scorta era già stata messa da parte in precedenza, e non è stata toccata.';
+  // Il file si offre sempre: è la copia più facile da portare a chi deve recuperarla.
+  const btnScarica = info && info.kind === 'parse' && Store.grezzoIlleggibile()
+    ? `<button class="${info.rescueFailed ? 'add-btn-sm' : 'btn-outline'}" onclick="scaricaIlleggibile()">${ico('download', 'tinted', '')} Scarica i dati illeggibili</button>` : '';
   const testo = info && info.kind === 'parse'
     ? `<p>I dati salvati su questo computer non si riescono più a leggere${kb}: il contenuto risulta interrotto o alterato.</p>
        <p><strong>Non sono stati cancellati.</strong> ${dove}</p>
@@ -1223,7 +1235,21 @@ function showLoadErrorModal(info) {
   // Chiave propria, come per l'avviso di salvataggio: si affianca a ciò che è
   // aperto invece di buttar via un form a metà.
   openModal(`<h3>${ico('warning', 'tinted pill', '')} Dati non caricati</h3>${testo}
-    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Ho capito</button></div>`, false, 'avviso');
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Ho capito</button>${btnScarica}</div>`, false, 'avviso');
+}
+// L'archivio illeggibile, così com'era, in un file (dalla 0.105.6). È anche ciò
+// che sblocca i salvataggi quando la copia di soccorso non è riuscita: da qui
+// in poi una copia esiste, nella cartella dei download.
+function scaricaIlleggibile() {
+  const grezzo = Store.grezzoIlleggibile();
+  if (!grezzo) { showToast('Non c\'è nessun archivio illeggibile da scaricare', 'error'); return; }
+  const url = URL.createObjectURL(new Blob([grezzo], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `bomtrack_illeggibile_${oggiISO()}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  const eraBloccato = Store.senzaCopia();
+  Store.scaricatoIlleggibile();
+  showToast(eraBloccato ? 'File scaricato: da ora le modifiche si salvano' : 'File scaricato');
 }
 // ─── C'è del lavoro che una chiusura porterebbe via? ───
 // Due sorgenti distinte, e basta una delle due:

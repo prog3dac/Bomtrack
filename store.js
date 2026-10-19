@@ -585,8 +585,13 @@ function isAssembly(t) { return t === 'macchina' || t === 'gruppo' || t === 'sot
 // bene. La segnalazione sta in core.js dietro l'hook onLoadError, come per i
 // salvataggi falliti: store.js resta senza codice di interfaccia.
 let dbLoadError = null;
+// L'archivio illeggibile così com'era, per poterlo scaricare come file, e se
+// la copia di soccorso non è riuscita (dalla 0.105.6): in quel caso commit()
+// si rifiuta di scrivere, perché scriverebbe sopra l'unica copia.
+let _grezzoIlleggibile = null, _senzaCopia = false;
 function loadDB() {
   dbLoadError = null;
+  _grezzoIlleggibile = null; _senzaCopia = false;
   _childFp = null;   // un database nuovo: il prossimo passaggio fa da riferimento
   let grezzo = null;
   try { grezzo = adapter.read(); }
@@ -598,10 +603,20 @@ function loadDB() {
     try { db = JSON.parse(grezzo); migrateDB(); markSynced(); storicoFotografa(); return; }
     catch (e) {
       console.error('Dati salvati illeggibili:', e);
-      let salvato = false;
+      // Tre esiti, non due (dalla 0.105.6): copia fatta adesso, copia già
+      // presente da un caricamento precedente, copia **non riuscita**. Prima
+      // gli ultimi due erano lo stesso `false`, e quando la copia non ci stava
+      // — succede proprio con gli archivi grandi, contro i 5 MB di
+      // localStorage — l'avviso diceva che ne esisteva già una. Non era vero,
+      // e il primo salvataggio scriveva i dati d'esempio sopra l'unico originale.
+      let salvato = false, fallito = false;
       try { salvato = !!(adapter.rescue && adapter.rescue(grezzo)); }
-      catch (e2) { /* nemmeno lo spazio per la copia: l'originale è ancora al suo posto */ }
-      dbLoadError = { kind: 'parse', err: e, bytes: grezzo.length, rescued: salvato };
+      catch (e2) { fallito = true; console.error('Copia di soccorso non riuscita:', e2); }
+      _grezzoIlleggibile = grezzo;
+      // Senza copia l'originale sta solo al suo posto: niente salvataggi finché
+      // chi usa l'app non se l'è scaricato (Store.scaricatoIlleggibile).
+      _senzaCopia = fallito;
+      dbLoadError = { kind: 'parse', err: e, bytes: grezzo.length, rescued: salvato, rescueFailed: fallito };
     }
   }
   db = JSON.parse(JSON.stringify(defaultDB));
@@ -1552,6 +1567,8 @@ const LocalAdapter = {
   // Mette da parte un blob illeggibile perché resti recuperabile a mano. Una
   // copia sola: se il caricamento fallisce una seconda volta, la prima copia è
   // quella buona — la seconda sarebbe già il database demo salvato sopra.
+  // Restituisce false se una copia c'era già; se la scrittura non riesce
+  // l'eccezione passa, e loadDB() la distingue da «c'era già».
   rescue(payload) {
     if (localStorage.getItem(DB_KEY_RESCUE) != null) return false;
     localStorage.setItem(DB_KEY_RESCUE, payload);
@@ -1590,7 +1607,7 @@ const IDB_STORE = 'archivio';
 // oltre qualche decina di migliaia di record non ci stava più (dalla 0.105.5).
 const IDB_EXTRA = ['cloudBase'];
 function creaIdbAdapter(fabbrica) {
-  let conn = null, copia = null, copiaRescue = null, inVolo = 0, segnato = false;
+  let conn = null, copia = null, copiaRescue = null, inVolo = 0, segnato = false, attesaRescue = null;
   const extra = {};   // altre chiavi accanto all'archivio (la fotografia del cloud), lette all'avvio
   const attesa = req => new Promise((ok, ko) => { req.onsuccess = () => ok(req.result); req.onerror = () => ko(req.error); });
   const completa = tx => new Promise((ok, ko) => {
@@ -1642,22 +1659,38 @@ function creaIdbAdapter(fabbrica) {
       inVolo++;
       // La revisione che commit() sta per scrivere, presa nello stesso istante.
       const rev = lsRev() + 1;
-      scriviTutto([['db', payload], ['rev', rev]])
+      // Dopo la copia di soccorso, se ce n'è una in corso: se quella non
+      // arriva su disco, nemmeno questa deve arrivarci (dalla 0.105.6).
+      const scrivi = () => scriviTutto([['db', payload], ['rev', rev]]);
+      (attesaRescue ? attesaRescue.then(scrivi) : scrivi())
         .then(() => {
           inVolo--;
           if (!segnato) { try { localStorage.setItem(DB_KEY_IN_IDB, '1'); segnato = true; } catch (e) { /* si riprova alla prossima */ } }
           scritturaRiuscita();
         },
-              e => { inVolo--; commitFailed(isQuotaError(e) ? 'quota' : 'storage', e, payload.length); });
+              e => { inVolo--; commitFailed(e && e.copiaSoccorso ? 'rescue' : isQuotaError(e) ? 'quota' : 'storage', e, payload.length); });
     },
     size() { return copia ? copia.length : 0; },
+    // La copia qui si scrive dopo: rescue() risponde subito, ma ogni write()
+    // successiva aspetta che la copia sia su disco, e se la copia fallisce
+    // fallisce anche lei — l'originale resta al suo posto, e l'avviso del
+    // salvataggio dice perché. Prima l'errore finiva solo in console, e il
+    // primo salvataggio scriveva i dati d'esempio sopra l'unico originale.
     rescue(payload) {
       if (copiaRescue != null) return false;
       copiaRescue = payload;
-      scriviTutto([['illeggibile', payload]]).catch(e => console.error('Copia di soccorso non salvata:', e));
+      attesaRescue = scriviTutto([['illeggibile', payload]]).catch(e => {
+        console.error('Copia di soccorso non salvata:', e);
+        copiaRescue = null;
+        throw Object.assign(new Error('copia di soccorso non salvata'), { copiaSoccorso: true, causa: e });
+      });
+      // Nessuno la aspetta se non arriva una scrittura: il rifiuto non va perso.
+      attesaRescue.catch(() => {});
       return true;
     },
     rescued() { return copiaRescue; },
+    // L'originale è stato scaricato come file: le scritture non aspettano più la copia.
+    liberaRescue() { attesaRescue = null; },
     // Dalla 0.105.5. Restituisce false se la chiave non è fra quelle previste.
     scriviExtra(k, v) {
       if (!IDB_EXTRA.includes(k)) return false;
@@ -1918,6 +1951,9 @@ const Store = {
     let payload;
     try { payload = JSON.stringify(db); }
     catch (e) { return commitFailed('serialize', e, 0); }
+    // Archivio illeggibile e nessuna copia messa da parte: scrivere adesso
+    // cancellerebbe l'unico originale (dalla 0.105.6). Si sblocca scaricandolo.
+    if (_senzaCopia) return commitFailed('rescue', new Error('archivio illeggibile senza copia di soccorso'), payload.length);
     // Ha scritto qualcun altro da quando questa scheda ha letto? Se sì ci si
     // ferma: scrivere adesso cancellerebbe il suo lavoro, ed è esattamente il
     // guasto che questa guardia esiste per impedire. Si controlla **prima** di
@@ -1952,6 +1988,11 @@ const Store = {
   // Vero finché una modifica è rimasta solo in memoria. Chiudere la scheda in
   // questo stato perde tutto il lavoro fatto dal primo errore in poi.
   isUnsaved() { return dbUnsaved; },
+  // L'archivio illeggibile dell'ultimo caricamento, così com'era (o null).
+  grezzoIlleggibile() { return _grezzoIlleggibile; },
+  // Chi lo ha scaricato come file ne ha una copia: i salvataggi ripartono.
+  scaricatoIlleggibile() { _senzaCopia = false; if (adapter.liberaRescue) adapter.liberaRescue(); },
+  senzaCopia() { return _senzaCopia; },
   // Un'altra scheda ha scritto l'archivio dopo che questa l'ha letto.
   superata() {
     try { return !!(adapter && adapter.leggiRev) && adapter.leggiRev() !== revVista; }
