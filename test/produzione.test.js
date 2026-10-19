@@ -94,6 +94,22 @@ describe('Il conto dei pezzi fatti', () => {
     assert.equal(dichiara(a, 5), null);
     assert.equal(a.snapshot().productions.length, 0);
   });
+
+  // L'officina esiste per dichiarare l'avanzamento: il mutatore la accettava già,
+  // ma il comando e il modulo erano nascosti (dalla 0.105.6 li vede).
+  it("l'officina vede il comando e il modulo per dichiarare le parti", () => {
+    const a = app();
+    a.asRole('officina');
+    const make = "mrpExplode(getPlan('pl1').lines).make";
+    assert.ok(a.eval(`mrpMakeTable(${make}, 'pl1').includes('produzioneModal(')`), 'il pulsante Avanzamento c\'è');
+    a.eval(`window.__prodPlanId = 'pl1'; window.__prodItemId = 'P1'; window.__prodRichiesti = 10;`);
+    assert.ok(a.eval('produzioneBody().includes("produzioneSalva()")'), 'e il modulo pure');
+    assert.ok(dichiara(a, 3));
+    assert.ok(a.eval('produzioneBody().includes("produzioneElimina(")'), 'e può togliere quello che ha dichiarato');
+    a.asRole('lettore');
+    assert.ok(!a.eval(`mrpMakeTable(${make}, 'pl1').includes('produzioneModal(')`));
+    assert.ok(!a.eval('produzioneBody().includes("produzioneSalva()")'));
+  });
 });
 
 // ═══════════════════════════════════════════════════════════

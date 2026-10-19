@@ -285,7 +285,7 @@ function produzioneBody() {
   const fatti = prodottiDi(planId, itemId);
   const resta = daFare(planId, itemId, richiesti);
   const u = itemUom(it);
-  const puoScrivere = canWrite('docs');
+  const puoScrivere = canWriteShop('docs');   // l'officina dichiara anche le parti (dalla 0.105.6), come il montaggio
   const storico = (db.productions || [])
     .filter(p => p.planId === planId && p.itemId === itemId)
     .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))

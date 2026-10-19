@@ -2728,7 +2728,7 @@ function planAvanzamentoKpi(planId, make) {
 // domanda — «a che punto è» — e vivevano in tre posti.
 function mrpMakeTable(make, planId) {
   if (!make.length) return '<div class="empty-text">Nessuna parte da fabbricare in questo piano.</div>';
-  const puoScrivere = canWrite('docs');
+  const puoScrivere = canWriteShop('docs');   // l'officina dichiara anche le parti (dalla 0.105.6), come il montaggio
   const gia = planId ? planDocumentedKeys(planId) : new Map();
   const rows = make.map(e => {
     const c = costOf(e.item.id).total;
