@@ -411,12 +411,17 @@ function schedDisponibilita(planId, lines) {
   const oggi = schedOggi();
   const lordo = new Map();
   mrpExplode(lines, mrpOpzPiano(planId)).buy.forEach(e => lordo.set(e.item.id, e.qty));
+  // Gli arrivi vengono dall'indice del magazzino (dalla 0.105.6), lo stesso del
+  // netto: quantità già nell'unità di gestione — una riga d'ordine in metri su
+  // un articolo a kg contava i metri come kg — e anche le righe senza data, che
+  // valgono come arrivate in tempo, come in incomingEntro. Prima si perdevano, e
+  // merce già ordinata risultava ancora da comprare col tempo del fornitore.
   const arrivi = new Map();
-  (typeof righeDaRicevere === 'function' ? righeDaRicevere() : []).forEach(({ l, data, residuo }) => {
-    if (!l.itemId) return;
-    if (!arrivi.has(l.itemId)) arrivi.set(l.itemId, []);
-    arrivi.get(l.itemId).push({ data: String(data).slice(0, 10), qty: residuo });
-  });
+  const arriviDi = id => {
+    if (!arrivi.has(id)) arrivi.set(id, (stockOf(id).arrivi || [])
+      .map(a => ({ data: a.eta ? String(a.eta).slice(0, 10) : oggi, qty: Number(a.qty) || 0 })));
+    return arrivi.get(id);
+  };
   const memo = new Map();
   return it => {
     if (memo.has(it.id)) return memo.get(it.id);
@@ -428,7 +433,7 @@ function schedDisponibilita(planId, lines) {
     let libero = s.onHand - impegnato;
     let pronto = oggi;
     if (libero < serve) {
-      const righe = (arrivi.get(it.id) || []).slice().sort((a, b) => a.data.localeCompare(b.data));
+      const righe = arriviDi(it.id).slice().sort((a, b) => a.data.localeCompare(b.data));
       let coperto = false;
       for (const r of righe) {
         libero += r.qty;

@@ -311,6 +311,25 @@ describe('Programma: la data fattibile', () => {
     assert.equal(fattibile(app).fattibile, '2026-10-09');
   });
 
+  // Dalla 0.105.6 gli arrivi sono quelli del netto: nell'unità di gestione, e
+  // anche senza data.
+  it("una riga d'ordine nell'altra unità si converte prima di coprire", () => {
+    const app = oggi(conDb(), '2026-09-21');
+    app.eval(`Object.assign(getItem('tondo'), { altUom: 'm', altFactor: 2.5 });
+      db.orders.push({ id: 'o1', number: 'ODA-2026-001', status: 'inviato', supplierId: 'beta', active: true,
+      lines: [{ id: 'ol1', itemId: 'tondo', qty: 16, uom: 'm', received: 0, confirmedDate: '2026-09-28' }] });
+      invalidateCaches();`);
+    // 16 m sono 6,4 kg su 16: il resto va comprato col tempo del fornitore.
+    assert.equal(fattibile(app).fattibile, '2026-10-14');
+  });
+
+  it('il materiale ordinato senza data non si ricompra: vale come in tempo', () => {
+    const app = oggi(conDb(), '2026-09-21');
+    app.eval(`db.orders.push({ id: 'o1', number: 'ODA-2026-001', status: 'inviato', supplierId: 'beta', active: true,
+      lines: [{ id: 'ol1', itemId: 'tondo', qty: 16, received: 0 }] }); invalidateCaches();`);
+    assert.equal(fattibile(app).fattibile, '2026-10-02');
+  });
+
   it('la tabella del piano mostra fattibile e margine, e il percorso critico si apre', () => {
     const app = oggi(conDb(), '2026-10-01');
     app.eval("currentPlanId = 'pl1';");
