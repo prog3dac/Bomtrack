@@ -298,6 +298,20 @@ function isItemUsedAnywhere(id) {
       if (recs.some(rec => (rec[figlio] || []).some(r => chiavi.some(k => r[k] === id)))) return true;
     }
   }
+  // Le revisioni congelate (dalla 0.105.6). REFS conosce solo il proprietario
+  // della revisione (`itemId`), non quello che la fotografia contiene: le righe
+  // di distinta e di ciclo stanno dentro `snapshot`, che è un oggetto libero e
+  // non una collezione figlia. Un articolo tolto dalla Rev B ma presente nella
+  // Rev A restava così eliminabile, e da quel momento la Rev A — e il registro
+  // delle modifiche — diceva «(articolo eliminato)» al posto di quello che
+  // c'era davvero. Le lavorazioni (`kind: 'op'`) non puntano a un articolo.
+  const inFotografia = (db.revisions || []).some(r => {
+    const s = r && r.snapshot;
+    if (!s) return false;
+    return (s.components || []).some(c => c && c.itemId === id)
+      || (s.cycle || []).some(c => c && c.kind !== 'op' && c.itemId === id);
+  });
+  if (inFotografia) return true;
   // Le righe ODL non hanno un campo itemId proprio: lo portano dentro
   // `phaseKey` (`itemId#indice#workCenterId`), la stessa eccezione che REFS
   // documenta per la migrazione — va controllata a parte.
@@ -719,17 +733,23 @@ function prefixIndex() {
   const m = new Map();
   arr.forEach(it => {
     // La coda di cifre e ciò che le sta davanti: «MAT-ACC-001» → «MAT-ACC-» + 1.
-    const t = String(it.code || '').match(/^(.*?)(\d+)$/);
+    // La chiave è quella dei doppioni, itemCodeKey(): senza spazi ai bordi e in
+    // minuscolo (dalla 0.105.6). Era il testo grezzo, e un «mat-acc-002»
+    // importato da Excel non contava per MAT-ACC-: la generazione proponeva
+    // MAT-ACC-002, e il controllo dei doppioni — che le maiuscole le ignora —
+    // lo rifiutava come già usato. Ogni volta, per tutta la famiglia.
+    const t = String(it.code || '').trim().match(/^(.*?)(\d+)$/);
     if (!t) return;
     const n = parseInt(t[2], 10);
-    const era = m.get(t[1]);
-    if (era === undefined || n > era) m.set(t[1], n);
+    const k = itemCodeKey(t[1]);
+    const era = m.get(k);
+    if (era === undefined || n > era) m.set(k, n);
   });
   _prefixIdx = m; _prefixIdxArr = arr; _prefixIdxLen = arr.length;
   return m;
 }
 function nextCodeForPrefix(prefix) {
-  let n = (prefixIndex().get(prefix) || 0) + 1;
+  let n = (prefixIndex().get(itemCodeKey(prefix)) || 0) + 1;
   while (codicePresoAltrove(prefix + String(n).padStart(codeDigits(), '0'))) n++;
   return prefix + String(n).padStart(codeDigits(), '0');
 }
@@ -764,6 +784,40 @@ function serieMassimo(prefisso, lista) {
     const n = (d.number || '').startsWith(prefisso) ? (parseInt(d.number.slice(prefisso.length), 10) || 0) : 0;
     return n > m ? n : m;
   }, 0);
+}
+// ─── Doppioni e buchi nelle serie (dalla 0.105.6) ───
+// Per i codici articolo c'è il Controllo dati; per i numeri dei documenti non
+// c'era niente, e un ODA-2026-008 doppio (un ripristino, due PC che numeravano
+// da soli prima dell'archivio condiviso) o un COM-2026-002 mancante (una
+// prenotazione scaduta) li scopriva il fornitore o il revisore dei conti.
+// Per ogni serie e per ciascuno degli anni chiesti: i numeri usati più volte,
+// con i loro documenti, e quelli che mancano sotto il più alto.
+function controlloSerieDocumenti(anni) {
+  const out = [];
+  Object.keys(SERIE_DOCUMENTI).forEach(sigla => {
+    const docs = SERIE_DOCUMENTI[sigla]();
+    (anni || []).forEach(anno => {
+      const prefisso = `${sigla}-${anno}-`;
+      const perNumero = new Map();
+      docs.forEach(d => {
+        const num = String((d && d.number) || '').trim();
+        if (!num.startsWith(prefisso)) return;
+        const coda = num.slice(prefisso.length);
+        if (!/^\d+$/.test(coda)) return;
+        const n = parseInt(coda, 10);
+        if (!perNumero.has(n)) perNumero.set(n, []);
+        perNumero.get(n).push(d);
+      });
+      if (!perNumero.size) return;
+      const massimo = Math.max(...perNumero.keys());
+      const doppi = [], buchi = [];
+      perNumero.forEach((ds, n) => { if (ds.length > 1) doppi.push({ n, numero: prefisso + String(n).padStart(3, '0'), docs: ds }); });
+      for (let n = 1; n < massimo; n++) if (!perNumero.has(n)) buchi.push(n);
+      doppi.sort((a, b) => a.n - b.n);
+      if (doppi.length || buchi.length) out.push({ sigla, prefisso, doppi, buchi, massimo });
+    });
+  });
+  return out;
 }
 function numeroProgressivo(sigla) {
   const prefisso = seriePrefisso(sigla);
@@ -976,6 +1030,40 @@ function codingLabel(it) {
   if (!ms) return '';
   const gs = it.type === 'gruppo' ? it.sigla : itemSigla(it.groupItemId);
   return gs ? ms + ' › ' + gs : ms;
+}
+
+// ─── Avvisi che restano (dalla 0.105.6) ───
+// Il toast dura due secondi e mezzo: va bene per «salvato», non per una cosa
+// che resta vera finché qualcuno non la sistema — una distinta ad anello
+// arrivata da un collega, una versione nuova dell'app che aspetta di essere
+// caricata. Questi stanno in basso, in una striscia che non copre il lavoro,
+// finché la causa non sparisce o chi legge non li chiude.
+// `chiave` identifica l'avviso (uno per chiave: ridarlo lo aggiorna); `html` è
+// già pronto, e chi chiama ne fa l'escape. La chiave finisce in un onclick:
+// va scelta fra le costanti del codice, mai da un dato.
+const _avvisiFissi = new Map();
+function avvisoFisso(chiave, html) {
+  _avvisiFissi.set(chiave, html);
+  disegnaAvvisiFissi();
+}
+function avvisoFissoTogli(chiave) {
+  if (!_avvisiFissi.delete(chiave)) return;
+  disegnaAvvisiFissi();
+}
+function disegnaAvvisiFissi() {
+  if (typeof document === 'undefined') return;
+  let el = document.getElementById('avvisi-fissi');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'avvisi-fissi';
+    if (document.body) document.body.appendChild(el);
+  }
+  // `polite`: sono notizie, non errori che interrompono quello che si sta facendo.
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.innerHTML = Array.from(_avvisiFissi, ([k, h]) => `<div class="avviso-fisso" data-avviso="${esc(k)}">
+    <span class="avviso-fisso-testo">${h}</span>
+    <button class="avviso-fisso-chiudi" onclick="avvisoFissoTogli('${esc(k)}')" title="Chiudi l'avviso" aria-label="Chiudi l'avviso">×</button></div>`).join('');
 }
 
 // `azione` opzionale: { label, fn }. È l'annulla subito dopo un'eliminazione —

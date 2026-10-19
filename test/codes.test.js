@@ -456,9 +456,12 @@ describe('Progressivi per prefisso', () => {
     assert.equal(next(a, 'CMM-MEC-'), 'CMM-MEC-010');
   });
 
-  it('le maiuscole contano, come nel confronto di prima', () => {
+  // Fino alla 0.105.5 le maiuscole contavano, e la prova lo fissava: ma il
+  // controllo dei doppioni le ignora, e il codice proposto veniva poi rifiutato
+  // come già usato. Ora il conto le ignora come i doppioni.
+  it('le maiuscole non contano, come nel controllo dei doppioni', () => {
     const a = conCodici(['PRT-X-0001', 'prt-x-0002']);
-    assert.equal(next(a, 'PRT-X-'), 'PRT-X-002');
+    assert.equal(next(a, 'PRT-X-'), 'PRT-X-003');
   });
 
   it('senza nessun codice si parte da uno', () => {

@@ -1307,6 +1307,7 @@ function renderBackup() {
   ${renderTrash()}
   ${renderStorico()}
   ${renderDuplicateCodes()}
+  ${renderSerieDocumenti()}
   <div class="cloud-section" style="margin-top:16px">
     <div style="flex:1">
       <strong>${ico('warning', 'tinted', '')} Registro errori</strong>
@@ -1412,6 +1413,52 @@ function renderDuplicateCodes() {
       <p><strong>${quanti} articoli condividono ${gruppi.length} codici.</strong> L'import massivo cerca gli articoli per codice e risolve sempre sul primo trovato: reimportando un foglio, le righe di questi codici finiscono tutte sullo stesso articolo e le altre restano indietro, senza segnalazione.</p>
       <p>Vanno sciolti a mano: apri ciascun articolo e dagli un codice suo. L'app non li rinomina da sola — quel codice sta su disegni e ordini già emessi, e sceglierne uno al posto tuo sarebbe peggio del problema.</p>
       <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">${righe}</div>
+    </div></div>`;
+}
+
+// Lo stesso controllo per i numeri dei documenti (dalla 0.105.6): doppioni e
+// buchi delle serie di quest'anno e dell'anno scorso — vedi
+// controlloSerieDocumenti() in core.js. Come per i codici, l'app non rinumera
+// niente da sola: un numero sta già su un ordine spedito o su una fattura.
+const SERIE_APRI = {
+  RFQ: id => { setView('rfq'); openRfqEdit(id); },
+  ODA: id => { setView('orders'); openOrderEdit(id); },
+  ODL: id => { setView('odl'); openOdlEdit(id); },
+  ODP: id => { setView('odp'); openOdpEdit(id); },
+  FAB: id => { setView('mrp'); openPlanEdit(id); },
+  COM: id => { setView('jobs'); openJobEdit(id); },
+  // Una modifica tecnica sta dentro la sua revisione: si apre l'articolo.
+  MT: id => { const r = getRevision(id); if (r) apriAnelloDistinta(r.itemId); },
+};
+function apriDocumentoDiSerie(sigla, id) { if (SERIE_APRI[sigla]) SERIE_APRI[sigla](id); }
+function renderSerieDocumenti() {
+  const anno = new Date().getFullYear();
+  const serie = controlloSerieDocumenti([anno, anno - 1]);
+  if (!serie.length) {
+    return `<div class="cloud-section" style="margin-top:16px"><div style="flex:1">
+      <strong>${ico('search', 'tinted', '')} Numeri dei documenti</strong>
+      <p>Nessun numero doppio e nessun buco nelle serie del ${anno} e del ${anno - 1}.</p>
+    </div></div>`;
+  }
+  const MAX_BUCHI = 30;
+  const blocchi = serie.map(s => {
+    const doppi = s.doppi.map(d => `<div style="margin-top:4px">
+        <span style="font-family:var(--mono);font-weight:700;color:var(--red)">${esc(d.numero)}</span> — ${d.docs.length} documenti:
+        ${d.docs.map((doc, i) => `<button class="btn-ghost" onclick="apriDocumentoDiSerie('${s.sigla}', ${esc(JSON.stringify(String(doc.id)))})">${ico('edit', 'tinted', '')} ${i + 1}°${doc.date ? ' del ' + esc(String(doc.date).slice(0, 10)) : ''}</button>`).join(' ')}
+      </div>`).join('');
+    const buchi = s.buchi.length
+      ? `<div style="margin-top:4px">${s.buchi.length === 1 ? 'Manca 1 numero' : `Mancano ${s.buchi.length} numeri`} sotto il ${String(s.massimo).padStart(3, '0')}:
+          <span style="font-family:var(--mono)">${s.buchi.slice(0, MAX_BUCHI).map(n => String(n).padStart(3, '0')).join(', ')}${s.buchi.length > MAX_BUCHI ? ` e altri ${s.buchi.length - MAX_BUCHI}` : ''}</span></div>`
+      : '';
+    return `<div class="mgmt-item" style="display:block">
+      <div style="font-family:var(--mono);font-weight:700">${esc(s.prefisso)}…</div>${doppi}${buchi}</div>`;
+  }).join('');
+  const conDoppi = serie.some(s => s.doppi.length);
+  return `<div class="cloud-section" style="border-color:${conDoppi ? 'var(--red)' : 'var(--orange)'};margin-top:16px">
+    <div style="flex:1">
+      <strong style="color:${conDoppi ? 'var(--red)' : 'var(--orange)'}">${ico('search', 'tinted', '')} Numeri dei documenti — ${serie.length} serie da guardare</strong>
+      <p>Un numero doppio nasce da un ripristino o da due PC che numeravano ciascuno per conto suo; un buco da una prenotazione dell'archivio condiviso mai usata. L'app non rinumera niente da sola: quel numero può essere già su un ordine spedito. Apri i documenti, decidi quale tiene il numero e, se serve, annota il buco per chi controlla.</p>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">${blocchi}</div>
     </div></div>`;
 }
 
@@ -1548,6 +1595,9 @@ async function init() {
   await Store.preparaArchivio();
   if (Store.archivio === 'indexeddb') aggiornaStimaSpazio();
   Store.load();
+  // Un anello ricevuto nella sessione precedente è ancora lì: l'avviso deve
+  // tornare anche dopo aver ricaricato la pagina (dalla 0.105.6).
+  controllaAnelliDopoArrivo();
   cloudAvvio();
   const ver = 'v' + APP_VERSION;
   ['app-version', 'app-version-login'].forEach(id => {

@@ -1464,6 +1464,14 @@ function takeChanges() {
     mark: { ids: snapshotSignatures(), children: snapshotChildIds(), settings: safeStringify(db.settings) },
   };
 }
+// Dopo ogni arrivo dal server si cercano gli anelli di distinta (dalla 0.105.6):
+// è l'unico punto in cui ne può nascere uno che createsCycle() non ha visto —
+// vedi anelliDistinta() in views-bom.js, caricato dopo, da cui il riferimento
+// differito. Un errore qui non deve mai far fallire una ricezione già salvata.
+function controllaAnelliDopoArrivo() {
+  if (typeof controllaAnelliDistinta !== 'function') return;
+  try { controllaAnelliDistinta(); } catch (e) { console.warn('Controllo anelli di distinta non riuscito:', e); }
+}
 // Senza argomento rifotografa l'adesso: è il caso del caricamento, dove la
 // fotografia *è* lo stato appena letto. Con l'argomento vale la fotografia
 // presa da takeChanges() prima dell'invio.
@@ -2157,6 +2165,7 @@ const Store = {
     let ok;
     try { ok = this.commit(); } finally { _storicoDaRemoto = false; }
     markSynced();
+    controllaAnelliDopoArrivo();
     return ok;
   },
   // Un archivio intero che arriva dal server sostituisce quello locale (il
@@ -2171,6 +2180,7 @@ const Store = {
     _storicoBase = null;   // il registro riparte da qui: non è «tutto nuovo, a nome mio»
     const ok = this.commit();
     markSynced();
+    controllaAnelliDopoArrivo();
     return ok;
   },
   // Chi vuole sapere che un salvataggio è andato a buon fine: l'archivio
