@@ -46,6 +46,25 @@ describe('Archivio condiviso — il lotto da inviare', () => {
     assert.deepEqual(p.upsert.item_prices.map(r => r.id), [ID.pr2], 'la quotazione non toccata resta a casa');
   });
 
+  // 0.105.6: le righe da mandare si scelgono confrontandole con la fotografia
+  // dell'ultimo invio, non con una soglia di tempo. Una riga cambiata su un PC
+  // con l'orologio indietro aveva una data prima della soglia e non partiva
+  // più: la modifica restava solo lì. Viaggia con la sua versione di partenza.
+  it('una riga figlia cambiata parte anche con l\'orologio del PC indietro, con la sua versione', () => {
+    const a = appCondivisa(dbCloudCompleto());
+    const prima = ev(a, `Store.getById('items', '${ID.item}').priceList.find(p => p.id === '${ID.pr2}').updatedAt`);
+    // L'ultimo invio è partito con l'orologio giusto; ora il PC è indietro.
+    const ultimoInvio = new Date(Date.now() - 60000).toISOString();
+    a.eval(`globalThis.__adesso = Date.now; Date.now = () => Date.parse('2020-01-01T00:00:00.000Z');`);
+    try {
+      a.eval(`{ const it = Store.getById('items', '${ID.item}'); it.priceList.find(p => p.id === '${ID.pr2}').price = 5.1; saveDB(); }`);
+    } finally { a.eval('Date.now = __adesso'); }
+    const p = ev(a, `cloudPayload(Store.pendingChanges(), '${ultimoInvio}', true).payload`);
+    assert.deepEqual((p.upsert.item_prices || []).map(r => r.id), [ID.pr2], 'la riga cambiata parte, quella non toccata no');
+    assert.ok(p.upsert.item_prices[0].updated_at < ultimoInvio, 'la sua data è prima dell\'ultimo invio');
+    assert.deepEqual(p.base.item_prices, { [ID.pr2]: prima }, 'con la versione da cui è partita la modifica');
+  });
+
   it('un padre nuovo manda tutte le sue righe', () => {
     const a = appCondivisa(dbCloudCompleto());
     a.eval(`{ const o = JSON.parse(JSON.stringify(Store.getById('orders', '${ID.ord}')));
@@ -516,6 +535,49 @@ describe('Archivio condiviso — due colleghi sulla stessa cosa', () => {
     assert.equal(srv.db.sql(`select count(distinct number) from orders where id in ('${U(600)}', '${ORD2}')`), '2');
     await giro(A);
     assert.equal(A.eval(`Store.getById('orders', '${U(600)}').number`), n, 'quello di Anna resta com\'era');
+  });
+
+  // 0.105.6: il numero nuovo lo dà il server. Prima il PC rinumerava con il
+  // suo massimo più uno, un numero mai riservato: se un collega l'aveva appena
+  // riservato per l'ordine che stava creando, il suo impegno si chiudeva e i
+  // due ordini finivano con lo stesso numero.
+  passo('un numero già preso si rinumera con un numero riservato sul server, mai con uno di un collega', async () => {
+    await giro(A); await giro(B);
+    const n = A.eval('nextOrderNumber()');
+    A.eval(`Store.insert('orders', { id: '${U(602)}', number: nextOrderNumber(), status: 'bozza', date: '2026-10-16', supplierId: null, lines: [], active: true })`);
+    await giro(A);
+    B.eval(`Store.insert('orders', { id: '${U(603)}', number: '${n}', status: 'bozza', date: '2026-10-16', supplierId: null, lines: [], active: true })`);
+    // Anna intanto sta creando un altro ordine: il server le ha riservato il prossimo.
+    const riservato = (await A.eval(`cloudRpc('riserva_numeri', { prefisso: '${n.slice(0, 9)}', quanti: 1, minimo: 0 })`))[0];
+    avvisi(B);
+    assert.equal(await giro(B), true, 'l\'invio di Bruno va');
+    const numB = B.eval(`Store.getById('orders', '${U(603)}').number`);
+    assert.notEqual(numB, n);
+    assert.notEqual(Number(numB.slice(9)), Number(riservato), 'il numero riservato da Anna resta suo');
+    assert.match(avvisi(B).join(), /stesso numero/);
+    assert.equal(srv.db.sql(`select number from orders where id = '${U(603)}'`), numB);
+    assert.equal(B.eval('Store.hasPendingChanges()'), false);
+    await A.eval(`cloudRpc('libera_numeri', { prefisso: '${n.slice(0, 9)}', numeri: [${riservato}] })`);
+    await giro(A);
+  });
+
+  // 0.105.6: le righe figlie da mandare si scelgono con la fotografia, non con
+  // l'ora dell'ultimo invio. Il PC di Bruno ha avuto l'orologio avanti (l'ultimo
+  // invio è «fra un'ora»), poi qualcuno l'ha rimesso giusto: la riga che cambia
+  // adesso ha una data prima di quell'invio, e restava sul suo PC per sempre.
+  passo('dopo un orologio rimesso indietro le righe cambiate partono ancora', async () => {
+    await giro(A); await giro(B);
+    A.eval(`{ const o = Store.getById('orders', '${ID.ord}'); o.notes = 'di Anna'; o.lines[0].note = 'riga di Anna'; touch(o); saveDB(); }`);
+    await giro(A); await giro(B);
+    B.eval(`cloudAggiornaConfig({ soglia: new Date(Date.now() + 3600000).toISOString() })`);
+    B.eval(`{ const o = Store.getById('orders', '${ID.ord}'); o.notes = 'di Bruno'; o.lines[0].note = 'riga di Bruno'; touch(o); saveDB(); }`);
+    avvisi(B);
+    await giro(B);
+    assert.doesNotMatch(avvisi(B).join(), /non è entrata|non sono entrate/);
+    assert.equal(srv.db.sql(`select notes from orders where id = '${ID.ord}'`), 'di Bruno');
+    assert.equal(srv.db.sql(`select note from order_lines where id = '${ID.ol1}'`), 'riga di Bruno');
+    await giro(A);
+    assert.equal(A.eval(`Store.getById('orders', '${ID.ord}').lines[0].note`), 'riga di Bruno');
   });
 
   // 0.105.2: le due quotazioni nascevano con id diversi, il server rifiutava la
