@@ -186,6 +186,14 @@ function menuEsporta(xls, pdf, opts) {
 function menuAltro(voci) {
   return tendina(ico('more', 'tinted', ''), voci, { icona: true, title: 'Altri comandi', cls: 'dd-more' });
 }
+// Appena aperto, il menu si misura: se ancorato a destra uscirebbe dal bordo
+// sinistro della finestra, si ancora a sinistra (dalla 0.105.6).
+function tendinaPosiziona(d) {
+  const m = d && d.querySelector && d.querySelector('.dd-menu');
+  if (!m || !m.classList || typeof m.getBoundingClientRect !== 'function') return;
+  m.classList.remove('dd-sx');
+  if (m.getBoundingClientRect().left < 8) m.classList.add('dd-sx');
+}
 function tendineChiudi(tranne) {
   if (typeof document === 'undefined') return;
   document.querySelectorAll('details.dd[open]').forEach(d => { if (d !== tranne) d.removeAttribute('open'); });
@@ -199,6 +207,11 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined' && document
     tendineChiudi(dd);
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') tendineChiudi(null); });
+  // `toggle` non risale: si ascolta in cattura.
+  document.addEventListener('toggle', e => {
+    const d = e.target;
+    if (d && d.matches && d.matches('details.dd') && d.open) tendinaPosiziona(d);
+  }, true);
 }
 
 // ═══════════════════════════════════════════════════════════
