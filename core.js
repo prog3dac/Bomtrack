@@ -1148,6 +1148,12 @@ function showLoadErrorModal(info) {
 function lavoroInSospeso() {
   if (typeof Store !== 'undefined' && Store.isUnsaved && Store.isUnsaved()) return true;
   if (typeof Store !== 'undefined' && Store.scrittureInVolo && Store.scrittureInVolo() > 0) return true;
+  return documentoInModifica();
+}
+// I tre flag in un posto solo (dalla 0.105.6): li legge anche l'archivio
+// condiviso, che non ridisegna sopra un documento a metà. Lì i flag erano due,
+// e l'ordine di lavoro in modifica veniva sostituito dalla versione del collega.
+function documentoInModifica() {
   return !!(typeof rfqDirty !== 'undefined' && rfqDirty)
     || !!(typeof orderDirty !== 'undefined' && orderDirty)
     || !!(typeof odlDirty !== 'undefined' && odlDirty);

@@ -2201,6 +2201,96 @@ const Store = {
       righe.forEach((padre, r) => { if (padre === id) righe.delete(r); });
     });
   },
+  // ── Una coda d'invio che il server rifiuta (dalla 0.105.6) ──
+  // Le impostazioni come erano all'ultimo invio o all'ultima ricezione: la
+  // base per fondere quelle di due amministratori. `null` se non si sa.
+  baseImpostazioni() {
+    if (!_baseSettings) return null;
+    try { const o = JSON.parse(_baseSettings); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+  },
+  // Il padre di una riga figlia nella fotografia: le righe tolte non ci sono
+  // più in `db`, e solo lì si sa di chi erano.
+  padreInBase(coll, figlio, id) {
+    const m = _baseChildren && _baseChildren.get(coll + '|' + figlio);
+    return m ? m.get(id) : undefined;
+  },
+  // Dalla fotografia `mark` di takeChanges() prende solo i record scelti
+  // ({ coll: [id] }, e `settings: true`): un invio a pezzi segna come partito
+  // solo il pezzo che il server ha preso. Gli altri restano da mandare.
+  assorbi(mark, scelti) {
+    if (!mark || !mark.ids || !_baseIds) return;
+    Object.keys(scelti || {}).forEach(c => {
+      if (c === 'settings') { if (scelti.settings) _baseSettings = mark.settings; return; }
+      const ids = new Set(scelti[c] || []);
+      if (!ids.size) return;
+      const da = mark.ids.get(c) || new Map();
+      if (!_baseIds.has(c)) _baseIds.set(c, new Map());
+      const a = _baseIds.get(c);
+      ids.forEach(id => { if (da.has(id)) a.set(id, da.get(id)); else a.delete(id); });
+      if (!_baseChildren || !mark.children) return;
+      mark.children.forEach((righe, k) => {
+        if (k.split('|')[0] !== c) return;
+        if (!_baseChildren.has(k)) _baseChildren.set(k, new Map());
+        const b = _baseChildren.get(k);
+        b.forEach((padre, r) => { if (ids.has(padre)) b.delete(r); });
+        righe.forEach((padre, r) => { if (ids.has(padre)) b.set(r, padre); });
+      });
+    });
+  },
+  // Rimette i record scelti allo stato del server, per quanto questo PC ne sa:
+  //  - un record nuovo, che il server non ha mai preso, se ne va;
+  //  - uno modificato smette di risultare da mandare e perde le righe figlie
+  //    aggiunte qui; il resto lo riporta la ricezione da capo che segue;
+  //  - uno eliminato qui esce dalla fotografia, così la ricezione lo rimette,
+  //    e lascia il cestino, dove sarebbe doppio.
+  // Senza cestino e senza registro di nomi: non è un'eliminazione di chi
+  // lavora, è una modifica che non è mai entrata.
+  scartaModifiche(coll, ids) {
+    if (!db || !_baseIds || !Array.isArray(db[coll])) return 0;
+    stampChildRows();
+    const base = _baseIds.get(coll) || new Map();
+    const figli = childrenOf(coll);
+    let n = 0;
+    new Set(ids || []).forEach(id => {
+      const i = db[coll].findIndex(r => r && r.id === id);
+      if (i >= 0 && !base.has(id)) { db[coll].splice(i, 1); n++; return; }
+      if (i >= 0) {
+        const rec = db[coll][i];
+        Object.keys(figli).forEach(k => {
+          const rowId = figli[k].rowId;
+          if (!rowId || !_baseChildren) return;
+          const m = _baseChildren.get(coll + '|' + k) || new Map();
+          if (Array.isArray(rec[k])) rec[k] = rec[k].filter(x => !x || x[rowId] == null || m.get(x[rowId]) === id);
+          const ora = new Set((rec[k] || []).map(x => x && x[rowId]));
+          m.forEach((padre, r) => { if (padre === id && !ora.has(r)) m.delete(r); });
+        });
+        base.set(id, recSignature(coll, rec));
+        n++;
+        return;
+      }
+      if (base.has(id)) {
+        Store.dimenticaInBase(coll, id);
+        if (Array.isArray(db.trash)) db.trash = db.trash.filter(t => !(t && t.coll === coll && t.record && t.record.id === id));
+        n++;
+      }
+    });
+    _baseIds.set(coll, base);
+    // Le impronte delle righe e il registro ripartono da qui: niente date nuove
+    // sulle righe, niente «eliminato» a nome di chi lavora.
+    _childFp = null;
+    storicoFotografa();
+    this.commit();
+    return n;
+  },
+  // Le impostazioni tornano com'erano all'ultimo invio riuscito.
+  scartaImpostazioni() {
+    const b = this.baseImpostazioni();
+    if (!b || !db) return false;
+    db.settings = b;
+    storicoFotografa();
+    this.commit();
+    return true;
+  },
   importSnapshot(json) {
     const data = typeof json === 'string' ? JSON.parse(json) : json;
     const err = validateSnapshot(data);

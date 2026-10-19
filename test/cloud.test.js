@@ -342,14 +342,15 @@ describe('Archivio condiviso — più PC contro Supabase (finto, con Postgres ve
     assert.equal(B.eval(`db.trash.some(t => t.record && t.record.id === '${ID.rem}')`), true, 'ed è nel cestino di tutti');
   });
 
-  passo('quello che il ruolo non scrive il server lo rifiuta, e la coda resta', async () => {
+  // Fino alla 0.105.5 la coda restava ferma, e l'uscita era riscaricare tutto.
+  // Ora la modifica che il ruolo non scrive si scarta da sola (test/cloud-coda.test.js).
+  passo('quello che il ruolo non scrive il server lo rifiuta, e la modifica torna come sul server', async () => {
     B.eval(`Store.update('items', '${ID.item}', { name: 'Tentativo di Bruno' })`);
-    assert.equal(await giro(B), false);
-    assert.equal(B.eval('_cloud.stato'), 'errore');
-    assert.match(B.eval('_cloud.messaggio'), /non scrive/);
-    assert.equal(B.eval('Store.hasPendingChanges()'), true);
+    assert.equal(await giro(B), true);
+    assert.equal(B.eval('_cloud.stato'), 'ok');
+    assert.equal(B.eval('Store.hasPendingChanges()'), false);
     assert.equal(srv.db.sql(`select name from items where id = '${ID.item}'`), 'Barra tonda');
-    // L'uscita: riscaricare.
+    // Riscaricare resta possibile.
     await B.eval('cloudScaricaArchivio()');
     assert.equal(B.eval(`Store.getById('items', '${ID.item}').name`), 'Barra tonda');
     assert.equal(B.eval('Store.hasPendingChanges()'), false);
