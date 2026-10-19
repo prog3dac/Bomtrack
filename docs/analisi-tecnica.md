@@ -948,23 +948,22 @@ nell'adapter o nello schema SQL.
 
 *(D9 — la data dei documenti nuovi in UTC — chiusa nella 0.83.1, §48: valeva anche in locale.)*
 
-**D5 — `localStorage` non regge lo specchio locale.** Il piano lo retrocede a
-specchio e coda offline, ma la quota è ~5 MB e lo scenario A di
-`sostenibilita-free-tier.md` è decine di MB. Specchio e coda in IndexedDB, che
-l'app usa già per gli allegati.
+*(D5 — `localStorage` non reggeva lo specchio locale — chiusa: l'archivio sta in
+IndexedDB, vedi `CHANGELOG.md`.)*
 
 *(D6 — la matrice dei permessi nel database — chiusa nella 0.83.0, §45.)*
 
-**D7 — il cestino si pota sul client.** `migrateDB()` toglie le voci oltre
-`TRASH_DAYS`; in cloud ogni client cancellerebbe righe condivise. Va su
-`pg_cron`.
+*(D7 — il cestino si potava sul client — chiusa nella 0.106.0: con l'archivio
+condiviso `migrateDB()` non pota più, lo fa `pulizia_archivio()` sul server con
+la sua ora, lasciando le lapidi. Non con `pg_cron`, che andrebbe attivato a mano
+nel progetto: la chiede l'app dopo un giro riuscito, e il server la esegue al
+più ogni 20 ore. La stessa funzione toglie le lapidi oltre i 90 giorni, e
+`pull_changes()` fa riscaricare tutto a chi chiede da prima di quel taglio.)*
 
-**D8 — avvio e primo amministratore.** Oggi prima i dati e poi il login,
-perché gli utenti stanno nel blob; con RLS l'ordine si rovescia. Il setup del
-primo admin a database vuoto non deve esistere lato client. *(Dalla 0.83.0 lo
-schema lo rende obbligatorio: senza un profilo attivo non si legge niente.
-Il primo profilo si crea dall'editor SQL o con la chiave di servizio, che non
-ha RLS; resta da scrivere la procedura, e la edge function d'invito.)*
+*(D8 — avvio e primo amministratore — chiusa fra la 0.103.0 e la 0.105.3: il
+primo profilo creato su Supabase diventa amministratore (`profilo_crea`), gli
+altri nascono sospesi, gli inviti partono da `bomtrack-utenti`; la procedura è
+nel manuale, cap. 31.)*
 
 *(D10 — un ruolo per l'officina — chiusa nella 0.96.0, §54.)*
 

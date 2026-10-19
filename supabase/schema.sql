@@ -853,6 +853,22 @@ language sql stable security definer set search_path = public as $$
                  and a.datname = current_database() and a.backend_type = 'client backend'), 'infinity')))
 $$;
 
+-- ─── Pulizia del server (dalla 0.106.0) ─────────────────────
+-- Una riga sola: quando è stata fatta l'ultima pulizia e fin dove arrivano le
+-- lapidi rimaste. Nessuna policy: la toccano solo le funzioni qui sotto.
+create table if not exists public.sync_stato (
+  id int primary key default 1 check (id = 1),
+  lapidi_dal timestamptz,
+  pulito_il timestamptz
+);
+alter table public.sync_stato enable row level security;
+insert into public.sync_stato (id) values (1) on conflict (id) do nothing;
+
+create or replace function public.lapidi_dal() returns timestamptz
+language sql stable security definer set search_path = public as $$
+  select coalesce((select lapidi_dal from public.sync_stato where id = 1), '-infinity'::timestamptz)
+$$;
+
 create or replace function public.pull_changes(since timestamptz default null)
 returns jsonb language plpgsql security invoker set search_path = public as $$
 declare
@@ -863,6 +879,12 @@ declare
   inizio timestamptz := public.pull_istante();
   dal timestamptz := coalesce(since, '-infinity'::timestamptz);
 begin
+  -- Le lapidi più vecchie le toglie pulizia_archivio() (dalla 0.106.0): chi
+  -- chiede da prima di quel taglio non saprebbe più che cosa è stato
+  -- cancellato, e si sente dire di riscaricare tutto.
+  if since is not null and since < public.lapidi_dal() then
+    return jsonb_build_object('now', inizio, 'completo', true);
+  end if;
   for reg in select * from sync_tables loop
     if reg.merge = 'replace' then
       execute format(
@@ -1477,3 +1499,61 @@ grant execute on function public.libera_codici(jsonb) to authenticated;
 alter table public.items drop constraint if exists items_tipo_noto;
 alter table public.items add constraint items_tipo_noto
   check (type is null or type in ('macchina', 'gruppo', 'sottogruppo', 'parte', 'materiale', 'acquistato')) not valid;
+
+-- ═══════════════════════════════════════════════════════════
+--  Pulizia del cestino e delle lapidi (dalla 0.106.0)
+-- ═══════════════════════════════════════════════════════════
+-- Fino alla 0.105.9 il cestino lo potava ogni PC all'apertura, con il suo
+-- orologio: un PC con la data avanti svuotava il cestino di tutti prima del
+-- tempo, e un ruolo che non scrive il cestino si vedeva rifiutare l'invio a
+-- ogni apertura. Ora lo fa il server, con la sua ora: le voci oltre i 30
+-- giorni (TRASH_DAYS in store.js) se ne vanno lasciando una lapide, così
+-- spariscono anche dai PC.
+--
+-- Le lapidi oltre i 90 giorni si tolgono: senza, crescerebbero per sempre.
+-- Un PC rimasto fermo più a lungo non le ha ricevute, e pull_changes() gli
+-- dice di riscaricare l'archivio intero invece di tenersi i record cancellati.
+-- Conta anche synced_at, l'ora in cui la lapide è stata data ai PC: una
+-- lapide ripassata di recente non si toglie, e il taglio resta sempre vecchio
+-- di 90 giorni (un PC appena riscaricato non riscarica di nuovo).
+--
+-- La chiama l'app dopo un giro riuscito; il server la esegue al più una volta
+-- ogni 20 ore, chiunque la chiami. Niente pg_cron: andrebbe attivato a mano nel
+-- progetto, e un archivio che nessuno apre non ha niente che scada di urgente.
+create or replace function public.pulizia_archivio() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  stato record;
+  voci int := 0;
+  lapidi int := 0;
+  ultima timestamptz;
+  ora timestamptz := clock_timestamp();
+begin
+  if public.ruolo_attivo() is null and auth.uid() is not null then
+    raise exception 'pulizia_archivio: nessun profilo attivo';
+  end if;
+  select * into stato from public.sync_stato where id = 1 for update skip locked;
+  if not found or (stato.pulito_il is not null and stato.pulito_il > ora - interval '20 hours') then
+    return jsonb_build_object('fatta', false);
+  end if;
+  with via as (
+    delete from public.trash where deleted_at < ora - interval '30 days' returning id
+  )
+  insert into public.sync_tombstones (tab, id, deleted_by)
+    select 'trash', via.id::text, null from via
+    on conflict (tab, id) do update set deleted_at = clock_timestamp(), synced_at = clock_timestamp();
+  get diagnostics voci = row_count;
+  with via as (
+    delete from public.sync_tombstones
+     where deleted_at < ora - interval '90 days' and synced_at < ora - interval '90 days'
+     returning synced_at
+  )
+  select count(*), max(synced_at) into lapidi, ultima from via;
+  update public.sync_stato
+     set pulito_il = ora,
+         lapidi_dal = case when ultima is null then lapidi_dal else greatest(coalesce(lapidi_dal, ultima), ultima) end
+   where id = 1;
+  return jsonb_build_object('fatta', true, 'cestino', voci, 'lapidi', lapidi);
+end $$;
+revoke execute on function public.pulizia_archivio() from public, anon;
+grant execute on function public.pulizia_archivio() to authenticated;

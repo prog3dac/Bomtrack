@@ -11,7 +11,7 @@
 const assert = require('node:assert/strict');
 const { describe, it } = require('./tap.js');
 const { loadApp, makeStorage } = require('./harness.js');
-const { makeDb, dbCloudCompleto, U } = require('./fixtures.js');
+const { makeDb, dbCloudCompleto, U, T0 } = require('./fixtures.js');
 const pg = require('./pg.js');
 
 const ev = (a, code) => JSON.parse(a.eval(`JSON.stringify(${code})`));
@@ -1001,6 +1001,108 @@ describe('Archivio condiviso — i colleghi si creano dall\'app', () => {
     await assert.rejects(A.eval(`cloudUtenti({ azione: 'reimposta', id: '${nuovo}' })`), /non con il codice di Bomtrack/);
     srv.funzioneDiEsempio = false;
     assert.equal(A.eval('cloudSolaLettura()'), false);
+    await srv.chiudi();
+  });
+});
+
+// 0.106.0: cestino e lapidi li pulisce il server, con la sua ora. Fino alla
+// 0.105.9 ogni PC potava il cestino all'apertura con il proprio orologio e
+// mandava la cancellazione a tutti.
+describe('Archivio condiviso — il server pulisce cestino e lapidi', () => {
+  if (!pg.disponibile()) {
+    it('saltato: BOMTRACK_PG non impostata (vedi test/pg.js)', () => {});
+    return;
+  }
+  const { avviaSupabaseFinto } = require('./supabase-finto.js');
+  let fila = Promise.resolve();
+  const passo = (nome, fn) => it(nome, () => { const p = fila.then(fn); fila = p.catch(() => {}); return p; });
+  const giorni = n => new Date(Date.now() - n * 86400000).toISOString();
+  const VECCHIA = U(950), GIOVANE = U(951);
+  let srv, A, B, anna, bruno;
+
+  passo('due PC sullo stesso archivio, con un cestino che ha una voce scaduta', async () => {
+    srv = await avviaSupabaseFinto();
+    anna = srv.crea('a@x.it', 'pw-anna', 'Anna');
+    bruno = srv.crea('b@x.it', 'pw-bruno', 'Bruno');
+    const db = dbCloudCompleto();
+    db.users.push({ id: U(801), name: 'Bruno', email: 'b@x.it', role: 'acquisti', active: true, createdAt: T0, updatedAt: T0 });
+    db.trash = [
+      { id: VECCHIA, coll: 'suppliers', deletedAt: giorni(40), deletedBy: null, record: { id: U(952), name: 'Scaduto' } },
+      { id: GIOVANE, coll: 'suppliers', deletedAt: giorni(2), deletedBy: null, record: { id: U(953), name: 'Recente' } },
+    ];
+    const st = makeStorage();
+    st.setItem('bomtrack_cloud', JSON.stringify({ url: srv.url, chiave: srv.chiave, allineato: false }));
+    A = loadApp({ silent: true, storage: st });
+    A.ctx.fetch = fetch;
+    A.seedStorage(db);
+    A.eval('Store.load(); cloudAvvio();');
+    assert.equal(A.eval('db.trash.length'), 2, 'con l\'archivio condiviso il PC non pota da sé');
+    const esito = await A.eval(`cloudAccediConPassword('a@x.it', 'pw-anna').then(() => cloudDopoAccesso())`);
+    await A.eval(`cloudCaricaArchivio(${JSON.stringify(esito.stato)})`);
+    A.eval(`currentUser = getUser('${anna}'); Store.setActor(currentUser.id);`);
+    const sb = makeStorage();
+    sb.setItem('bomtrack_cloud', JSON.stringify({ url: srv.url, chiave: srv.chiave, allineato: false }));
+    B = loadApp({ silent: true, storage: sb });
+    B.ctx.fetch = fetch;
+    B.eval('Store.load(); cloudAvvio();');
+    await B.eval(`cloudAccediConPassword('b@x.it', 'pw-bruno').then(() => cloudDopoAccesso())`);
+    await B.eval('cloudScaricaArchivio()');
+    B.eval(`currentUser = getUser('${bruno}'); Store.setActor(currentUser.id);`);
+    assert.equal(B.eval('db.trash.length'), 2);
+    assert.equal(srv.db.sql('select count(*) from trash'), '2');
+  });
+
+  passo('riaprire il PC non manda cancellazioni del cestino', async () => {
+    B.eval(`{ const b = Store.baseSalvabile(); saveDB(); Store.load(); Store.ripristinaBase(b); }`);
+    assert.equal(B.eval('db.trash.length'), 2);
+    assert.equal(B.eval('Store.hasPendingChanges()'), false);
+  });
+
+  passo('un giro riuscito chiede la pulizia, e il server la fa una volta sola', async () => {
+    await A.eval('cloudGiro()');
+    assert.ok(srv.registro.some(x => /rpc\/pulizia_archivio$/.test(x.percorso)), 'il PC la chiede');
+    assert.equal(srv.db.sql('select count(*) from trash'), '1', 'la voce scaduta se ne va');
+    assert.equal(srv.db.sql(`select count(*) from trash where id = '${GIOVANE}'`), '1', 'quella recente resta');
+    assert.equal(srv.db.sql(`select count(*) from sync_tombstones where tab = 'trash' and id = '${VECCHIA}'`), '1', 'con la sua lapide');
+    const ancora = JSON.parse(JSON.stringify(await A.eval(`cloudRpc('pulizia_archivio', {})`)));
+    assert.equal(ancora.fatta, false, 'entro 20 ore non si ripete, chiunque la chieda');
+    const prima = srv.registro.length;
+    await A.eval('cloudGiro()');
+    assert.equal(srv.registro.slice(prima).filter(x => /pulizia_archivio/.test(x.percorso)).length, 0, 'e il PC non la richiede a ogni giro');
+  });
+
+  passo('la voce tolta dal server sparisce anche dagli altri PC', async () => {
+    await B.eval('cloudGiro()');
+    assert.deepEqual(JSON.parse(B.eval('JSON.stringify(db.trash.map(t => t.id))')), [GIOVANE]);
+    assert.equal(B.eval('Store.hasPendingChanges()'), false);
+  });
+
+  passo('le lapidi oltre i 90 giorni si tolgono', async () => {
+    srv.db.sql(`update sync_tombstones set deleted_at = now() - interval '100 days', synced_at = now() - interval '100 days'; update sync_stato set pulito_il = null;`);
+    const r = JSON.parse(srv.db.sql('select public.pulizia_archivio()'));
+    assert.equal(r.lapidi, 1);
+    assert.equal(srv.db.sql('select count(*) from sync_tombstones'), '0');
+    assert.notEqual(srv.db.sql('select coalesce(lapidi_dal::text, \'\') from sync_stato'), '');
+  });
+
+  passo('un PC fermo da prima del taglio riscarica l\'archivio intero', async () => {
+    // Un fornitore che i colleghi hanno eliminato quando questo PC era spento:
+    // la lapide non c'è più, e solo riscaricando tutto se ne va.
+    B.eval(`db.suppliers.push(stampNew({ id: '${U(960)}', name: 'Fantasma', active: true })); Store.markSynced();`);
+    const c = JSON.parse(B.storage.getItem('bomtrack_cloud'));
+    B.storage.setItem('bomtrack_cloud', JSON.stringify(Object.assign(c, { since: giorni(200) })));
+    assert.equal(JSON.parse(JSON.stringify(await B.eval(`cloudRpc('pull_changes', { since: '${giorni(200)}' })`))).completo, true);
+    await B.eval('cloudGiro()');
+    assert.equal(B.eval(`db.suppliers.some(s => s.id === '${U(960)}')`), false, 'il record cancellato altrove se ne va');
+    assert.equal(B.eval('db.items.length'), 5, 'il resto c\'è');
+    assert.ok(Date.parse(JSON.parse(B.storage.getItem('bomtrack_cloud')).since) > Date.now() - 600000, 'e si riparte da adesso');
+    assert.equal(B.eval('Store.hasPendingChanges()'), false);
+  });
+
+  passo('un PC aggiornato non riscarica niente', async () => {
+    const prima = srv.registro.length;
+    await B.eval('cloudGiro()');
+    assert.equal(srv.registro.slice(prima).filter(x => /pull_pagina/.test(x.percorso)).length, 0);
     await srv.chiudi();
   });
 });

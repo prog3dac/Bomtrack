@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.106.0 — 2026-10-19
+
+**Con l'archivio condiviso, cestino e lapidi li pulisce il server.** **Va rieseguito `supabase/schema.sql`** (manuale, cap. 31); finché non lo si fa l'app funziona come prima, ma il cestino sul server non si svuota. La funzione `bomtrack-utenti` non cambia.
+
+- **Il cestino non si pota più su ogni PC.** Fino alla 0.105.9 ogni PC, all'apertura, toglieva le voci oltre i 30 giorni contando con il proprio orologio, e mandava la cancellazione a tutti: un PC con la data avanti svuotava il cestino dei colleghi prima del tempo, e un ruolo che non scrive il cestino si vedeva rifiutare quell'invio a ogni apertura. Ora lo fa `pulizia_archivio()` sul server, con la sua ora, al più una volta ogni 20 ore: la chiede l'app dopo un giro riuscito, e le voci tolte spariscono da tutti i PC nello stesso giro. Senza archivio condiviso non cambia niente.
+- **Il registro delle cancellazioni non cresce per sempre.** Le lapidi oltre i 90 giorni si tolgono. Un PC rimasto spento più a lungo non le ha ricevute: alla riaccensione `pull_changes()` gli dice di riscaricare l'archivio intero, e l'app lo fa da sé (dopo aver mandato le modifiche in coda) con un avviso. Prima avrebbe tenuto per sempre i record eliminati dai colleghi.
+- `docs/analisi-tecnica.md`: chiuse D5, D7 e D8, che risultavano ancora aperte.
+
+**Verifica**
+- `test/cloud.test.js`: contro il Supabase finto con Postgres vero, il PC non pota da sé e riaprirlo non manda cancellazioni, un giro chiede la pulizia e il server la fa una volta sola, la voce tolta sparisce dagli altri PC, le lapidi vecchie si tolgono, un PC fermo da prima del taglio riscarica tutto, uno aggiornato no.
+- `test/schema-sql.test.js`: la finestra del server è `TRASH_DAYS`; la pulizia la chiede un lettore, non un profilo sospeso.
+
 ### 0.105.9 — 2026-10-19
 
 **Librerie PDF aggiornate.** jsPDF passa dalla 2.5.1 alla 4.2.1 e il suo modulo delle tabelle (autotable) dalla 3.8.2 alla 5.0.8. La 2.5.1 aveva dodici vulnerabilità pubblicate, fra cui blocchi del browser con espressioni o immagini costruite apposta e iniezione di oggetti dentro il PDF; la 4.2.1 non ne ha di note. I PDF escono uguali a prima: richieste d'offerta, ordini, fabbisogno, distinta, elenchi ed etichette QR, generati con le librerie vecchie e nuove e confrontati pagina per pagina, differiscono solo per l'ora di stampa. Le impronte dei file nuovi sono in `vendor/LEGGIMI.md`. Nessun cambio a `supabase/schema.sql`.

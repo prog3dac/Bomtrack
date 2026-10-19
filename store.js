@@ -729,8 +729,11 @@ function migrateDB() {
   // Cestino: le eliminazioni recenti, recuperabili. Si svuota da solo passata
   // la finestra di ripristino, altrimenti crescerebbe finché lo spazio del
   // browser non finisce — e a quel punto il rimedio sarebbe peggio del male.
+  // Con l'archivio condiviso lo svuota il server, con la sua ora (dalla
+  // 0.106.0): qui ogni PC potava con il proprio orologio e mandava la
+  // cancellazione a tutti.
   if (!Array.isArray(db.trash)) db.trash = [];
-  else {
+  else if (!modoCondiviso) {
     const limite = new Date(Date.now() - TRASH_DAYS * 86400000).toISOString();
     db.trash = db.trash.filter(t => t && t.deletedAt && t.deletedAt >= limite);
   }

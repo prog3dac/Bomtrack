@@ -101,7 +101,7 @@ immaginarle.
 | `plans` | `production_plans` | id uuid PK, number unique per anno, title, date, notes, active, created_at, updated_at |
 | `plans[].lines` | `production_plan_lines` | id uuid PK, plan_id uuid FK, item_id uuid FK, qty numeric |
 | `revisions` | `item_revisions` | id uuid PK, item_id uuid FK, rev, date, motivo, **snapshot jsonb**, created_by, created_at |
-| `trash` | `trash` | id uuid PK, coll, deleted_at, deleted_by uuid FK, **record jsonb** — le eliminazioni recuperabili, ripulite dopo `TRASH_DAYS` |
+| `trash` | `trash` | id uuid PK, coll, deleted_at, deleted_by uuid FK, **record jsonb** — le eliminazioni recuperabili, ripulite dopo `TRASH_DAYS` dal server (`pulizia_archivio()`, dalla 0.106.0) |
 | `jobs` | `jobs` | id uuid PK, number unique per anno, customer, title, customer_ref, status ('aperta'\|'produzione'\|'chiusa'\|'annullata'), date, due_date, notes, active, created_at, updated_at |
 | `reminders` | `reminders` | id uuid PK, date, title, notes, gravita ('alta'\|'media'\|'info'), done bool, job_id FK nullable, active, created_by, created_at, updated_at |
 | `movements` | `stock_movements` | id uuid PK, item_id uuid FK, kind ('rettifica'\|'carico'\|'scarico'\|'clOut'\|'clIn'\|'clStep'\|'versamento'), qty numeric **con segno** (positiva e senza effetto sulla giacenza su `clStep`), date, note, supplier_id uuid FK **nullable** (su `clStep`: **dove va**, nullo = torna da noi), from_supplier_id uuid FK **nullable** (solo `clStep`: **da dove viene**, nullo = parte da noi), order_id uuid FK **nullable** (un ordine d'acquisto, di lavoro **o di produzione**), line_id **nullable** (su un ordine di produzione è l'id della **fase**), decl_id **nullable** (la dichiarazione che l'ha generato), created_by, created_at |

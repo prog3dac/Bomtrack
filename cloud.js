@@ -56,6 +56,7 @@ const CLOUD_LIMITE_MS = 90000;   // una richiesta senza risposta dopo questo val
 // del limite di Supabase per una richiesta (8 secondi). Fino alla 0.105.4 era
 // 5 secondi: le righe scritte all'inizio di un invio più lungo sfuggivano.
 const CLOUD_MARGINE_MS = 15000;
+const CLOUD_PULIZIA_MS = 6 * 3600 * 1000;   // ogni quanto un PC ricorda al server di pulire
 
 function cloudLeggi(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
 function cloudScrivi(k, v) {
@@ -583,6 +584,7 @@ async function cloudGiro() {
   _cloud.inCorso = true;
   try {
     await cloudInvia();
+    await cloudPulizia();
     if (!Store.hasPendingChanges()) await cloudRicevi();
     _cloud.ultimo = new Date();
     // I codici visti presi da un collega valgono un giro: se intanto li ha
@@ -967,6 +969,7 @@ async function cloudRicevi() {
   // Fra la domanda e la risposta qualcuno può aver cominciato a scrivere: si
   // applica al giro dopo, ripartendo dallo stesso punto.
   if (Store.hasPendingChanges() || !cloudPuoApplicare()) return 0;
+  if (r && r.completo) { await cloudRiscaricaDaCapo(); return 1; }
   let n = 0;
   _cloud.applicando = true;
   let salvato;
@@ -978,6 +981,28 @@ async function cloudRicevi() {
   if (n) { cloudNumeriDoppi(db); cloudDopoArrivo(); }
   return n;
 }
+// ── Un PC rimasto fermo più delle lapidi (dalla 0.106.0) ──
+// Il server toglie le lapidi oltre i 90 giorni (pulizia_archivio): chi chiede
+// le novità da prima di quel taglio non saprebbe più che cosa è stato
+// cancellato, e terrebbe per sempre record che i colleghi hanno eliminato.
+// pull_changes() glielo dice, e l'archivio si riscarica intero. Si arriva qui
+// solo a coda vuota: l'invio parte sempre prima della ricezione.
+async function cloudRiscaricaDaCapo() {
+  await cloudScaricaArchivio();
+  cloudDopoArrivo();
+  showToast('Questo PC non si collegava da molto: l\'archivio è stato riscaricato dal server');
+}
+// Il server pulisce cestino e lapidi con la sua ora (dalla 0.106.0), al più
+// una volta ogni 20 ore: basta che un PC glielo ricordi ogni tanto. Si chiede
+// prima di ricevere, così quello che toglie arriva già in questo giro. Uno
+// schema non ancora rieseguito non ha la funzione, e non è un errore da mostrare.
+async function cloudPulizia() {
+  const ora = Date.now();
+  if (_cloud.pulizia && ora - _cloud.pulizia < CLOUD_PULIZIA_MS) return;
+  _cloud.pulizia = ora;
+  try { await cloudRpc('pulizia_archivio', {}); } catch (e) { /* vedi sopra */ }
+}
+
 // ── Numeri doppi ──
 // Due documenti con lo stesso numero arrivati comunque qui (un archivio che li
 // aveva già prima dell'indice unico del server, dalla 0.105.6): il più recente
@@ -1445,6 +1470,7 @@ async function cloudAllineaOra() {
     const c = cloudConfig();
     const since = c.since ? new Date(Date.parse(c.since) - CLOUD_MARGINE_MS).toISOString() : null;
     const r = await cloudPullDa(since);
+    if (r && r.completo) { await cloudRiscaricaDaCapo(); return true; }
     let n = 0, salvato;
     _cloud.applicando = true;
     try { salvato = Store.applicaRemoto(d => (n = cloudApplica(d, r))); }
@@ -1474,6 +1500,7 @@ async function cloudRiceviForzato() {
   const since = c.since ? new Date(Date.parse(c.since) - CLOUD_MARGINE_MS).toISOString() : null;
   const r = await cloudPullDa(since);
   if (Store.hasPendingChanges()) await cloudInvia();
+  if (r && r.completo) { await cloudRiscaricaDaCapo(); return; }
   if (!cloudSalvatoDavvero(Store.applicaRemoto(d => { cloudApplica(d, r); }))) return;
   cloudAggiornaConfig({ since: r.now });
   cloudSalvaBase();

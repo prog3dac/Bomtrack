@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.105.9**
+**Versione dell'app documentata: 0.106.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2834,7 +2834,8 @@ ospita i dati, che è l'unico backup che protegga davvero
 
 Le eliminazioni restano recuperabili **30 giorni**. Per ogni riga: **↶ Ripristina** e
 **Elimina definitivamente**; in fondo **Svuota il cestino**. Passata la finestra dei 30 giorni,
-le voci spariscono da sole al caricamento successivo.
+le voci spariscono da sole al caricamento successivo. Con l'archivio condiviso (dalla 0.106.0) le
+toglie il server, con la sua ora, al più una volta al giorno: spariscono da tutti i PC insieme.
 
 Cosa ci finisce: Articolo · Fornitore · Cliente · Centro di lavoro · Macrofamiglia · Richiesta ·
 Ordine · Ordine di lavoro · Piano · Utente · Commessa · Movimento · Revisione.
@@ -3130,6 +3131,15 @@ Alcuni casi particolari:
 
 Un **ripristino dal cestino** si dichiara al server (dalla 0.105.4), che toglie la cancellazione
 invece di confrontare le date: il record torna anche se l'orologio di questo PC è indietro.
+
+**La pulizia la fa il server** (dalla 0.106.0). Le voci del cestino oltre i 30 giorni le toglie il
+server con la sua ora, non più ogni PC con il proprio orologio: un PC con la data avanti svuotava
+il cestino di tutti prima del tempo. Il server tiene anche il registro delle cancellazioni, che
+serve a far sparire da ogni PC quello che un collega ha eliminato; oltre i **90 giorni** quel
+registro si accorcia. Un PC rimasto spento più a lungo, alla riaccensione, **riscarica l'archivio
+intero** e lo dice con un avviso: le sue modifiche in coda partono prima. Dopo l'aggiornamento
+va **rieseguito `supabase/schema.sql`** (cap. 31, passo 2); finché non lo si fa tutto funziona
+come prima, ma il cestino sul server non si svuota.
 
 ### Scollegare un PC
 

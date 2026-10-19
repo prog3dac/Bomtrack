@@ -96,6 +96,12 @@ describe('schema.sql dice le stesse cose del codice', () => {
     assert.deepEqual(reg, atteso);
   });
 
+  // 0.106.0: il cestino lo pulisce il server; la finestra è la stessa dell'app.
+  it('la pulizia del server tiene il cestino quanto TRASH_DAYS', () => {
+    const corpo = /function public\.pulizia_archivio[\s\S]*?\nend \$\$;/.exec(SQL)[0];
+    assert.match(corpo, new RegExp(`from public\\.trash where deleted_at < ora - interval '${a.eval('TRASH_DAYS')} days'`));
+  });
+
   it('ogni tabella del registro ha il suo create table', () => {
     Object.keys(reg).forEach(t => assert.ok(sql[t], `manca la tabella ${t}`));
   });
@@ -489,6 +495,14 @@ describe('Postgres: permessi per ruolo (D6)', () => {
     assert.deepEqual(d.come(PROG).push({ upsert: { trash: [voce(U(730), 'items')] } }).rejected, []);
     d.come(OFF).push({ remove: { trash: [U(730)] } });
     assert.equal(d.sql(`select count(*) from trash where id = '${U(730)}'`), '0', 'svuotare il cestino resta di tutti');
+  }));
+
+  // 0.106.0: la pulizia la chiede chiunque abbia un profilo attivo, anche un
+  // lettore; un profilo sospeso no.
+  it('la pulizia del server: un lettore la chiede, un sospeso no', conDb(d => {
+    assert.throws(() => d.come(SOSP).sql('select public.pulizia_archivio();'), /nessun profilo attivo/);
+    assert.equal(JSON.parse(d.come(LETT).sql('select public.pulizia_archivio();')).fatta, true);
+    assert.equal(d.come(LETT).sql('select count(*) from sync_stato;'), '0', 'lo stato non si legge direttamente');
   }));
 
   it('la tabella di ogni collezione è quella di SCHEMA', conDb(d => {
