@@ -268,7 +268,14 @@ function docMarkDirty(k) {
 function docSave(k, id) {
   const K = docKind(k);
   const doc = K.get(id); if (!doc) return;
-  touch(doc); saveDB(); K.dirty(false); K.render();
+  // Si tocca il documento solo se c'era davvero qualcosa in sospeso (dalla
+  // 0.105.6). Il «Salva» premuto a vuoto lo ritoccava comunque, anche da chi
+  // non scrive i documenti — un lettore, o l'officina su una richiesta — e
+  // nell'archivio condiviso quella riga «modificata» il server la respingeva,
+  // fermando con sé il lotto delle modifiche in attesa. Le modifiche vere
+  // passano già dalle loro guardie, e ciascuna tocca il documento da sé.
+  if (K.dirty()) touch(doc);
+  saveDB(); K.dirty(false); K.render();
   showToast(`${K.nome} salvat${K.suffisso}`);
 }
 function docSetField(k, id, field, value) {
