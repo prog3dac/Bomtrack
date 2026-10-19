@@ -2,6 +2,45 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.105.5 — 2026-10-19
+
+**Le correzioni di media gravità del controllo generale.** **Con l'archivio condiviso va rieseguito `supabase/schema.sql`** (manuale, cap. 31): la ricezione usa la nuova funzione `pull_istante()`. La funzione `bomtrack-utenti` non cambia.
+
+**Archivio condiviso**
+- **Le scritture ancora in corso sul server** non si perdono più: la ricezione successiva riparte dall'inizio della transazione più vecchia ancora aperta, invece che dall'ora esatta. Prima una riga salvata da un collega a cavallo di una ricezione poteva non arrivare mai.
+- **Rettifiche e inventario** si calcolano sulla giacenza aggiornata ai movimenti dei colleghi: prima si invia e si riceve, poi si fa il conto.
+- **Un giro di sincronizzazione che non porta niente di nuovo** non risalva l'archivio: le righe e le impostazioni uguali restano quelle locali.
+- **«L'ultimo della serie»** si ricontrolla dopo aver ricevuto, prima di eliminare: un collega può aver appena creato il successivo.
+- **Il foglio Utenti** dell'import non crea colleghi che Supabase non conosce: si invitano da *Gestione → Utenti*.
+
+**Produzione**
+- **I pezzi versati dagli ODP** contano fra i fatti del piano, e quelli ancora attesi da un ODP aperto non si rilanciano. Un ODP chiuso con meno pezzi lascia rilanciare i mancanti.
+- **Una parte dichiarata fatta sul piano entra a magazzino** con un versamento: il montaggio non la manda più sotto zero.
+- **Lo scaffale comune** copre solo la parte non coperta dagli ODP del piano.
+- **L'ordine di lavoro da un ODP** chiede alla fase i pezzi attesi, e uno annullato si può sostituire. Nell'Avanzamento una tappa finita con meno pezzi lo dice.
+
+**Fabbisogno e acquisti**
+- **Una parte o un assieme in più rami** si programma sul lotto intero, non ramo per ramo.
+- **Pezzi interi sugli ordini** nelle unità che si contano (pz, n, set, conf…); sei decimali sulle altre.
+- **Schermata, PDF e carico centri del piano** sono al netto dei pezzi già fatti; l'esplosione di un piano si calcola una volta fra un salvataggio e l'altro.
+- **«Genera»** ricontrolla le righe dopo aver ottenuto i numeri; **un secondo ordine dalla stessa richiesta** si chiede prima di crearlo; **lo stato scelto a mano** su un ordine non si riscrive per una nota o una data.
+
+**Catalogo e costi**
+- **Import del catalogo**: una riga con un errore non applica niente; su un articolo già usato codice, famiglia, codifica e unità restano com'erano, con un avviso. Reimportare dopo aver rinominato una famiglia non ne crea una doppia.
+- **L'unità di gestione** non cambia su un articolo già usato.
+- **Da «fabbrica» a «compra»** la parte prende il prezzo della quotazione in uso.
+- **Il costo forzato** di una riga di distinta parte si chiama *costo riga*; l'export dice il costo unitario vero.
+- **Il confronto fra revisioni** vede costo, tempi e terzista delle fasi, il costo forzato e l'approvvigionamento.
+- **Un centro di lavoro sospeso** resta scelto sulla lavorazione che lo usa.
+- **«Da dove viene il costo»**: quantità e importi giusti anche sotto un sottoassieme usato più volte.
+
+**Numerazione, magazzino, allegati, interfaccia**
+- **Codici**: due gruppi con la stessa sigla condividono la serie; un codice scritto a mano non conta come ultimo della serie automatica.
+- **Inventario**: tutte le rettifiche si scrivono con un solo salvataggio (prima uno per riga).
+- **Copia di un PDF nell'archivio**: il nome libero si verifica sulla cartella vera, e un file comparso nel frattempo non si sovrascrive.
+- **Filtri condivisi**: sottofamiglia e gruppo scelti in un'altra vista si applicano subito.
+- **Riepilogo**: il calendario si sfoglia senza ricalcolare tutta la pagina.
+
 ### 0.105.4 — 2026-10-18
 
 **Le correzioni prioritarie del controllo generale.** **Con l'archivio condiviso va rieseguito `supabase/schema.sql`** (manuale, cap. 31): metà di queste correzioni sta sul server. La funzione `bomtrack-utenti` non cambia.

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.105.4**
+**Versione dell'app documentata: 0.105.5**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1600,8 +1600,15 @@ caso più frequente), si può aggiungere una nota, e resta lo storico di chi ha 
 quando. Un numero **negativo** corregge un conteggio sbagliato, come una rettifica di magazzino:
 lo storico non si riscrive, si aggiunge.
 
-Dichiarare pezzi fatti **non muove il magazzino** e non annulla le righe d'acquisto del piano: il
-materiale per una parte si compra prima di farla.
+Dichiarare pezzi fatti **mette a magazzino** le parti che si tengono a scorta (dalla 0.105.5),
+con un versamento legato alla dichiarazione: il montaggio, scaricandole, non manda la giacenza sotto
+zero. Eliminare la dichiarazione toglie anche il versamento. Le righe d'acquisto del piano non si
+annullano: il materiale per una parte si compra prima di farla.
+
+Fra i **fatti** contano anche i pezzi buoni che gli **ordini di produzione** del piano hanno
+versato, e i pezzi ancora attesi da un ODP aperto non si rilanciano: la colonna *da ordinare* è
+quello che manca al netto di entrambi. Un ODP chiuso con meno pezzi lascia rilanciare i mancanti
+(dalla 0.105.5).
 
 **Carico dei centri** — la stessa tavola del [cap. 24](#24-carico-dei-centri-di-lavoro), ristretta
 a questo piano.
@@ -1743,7 +1750,9 @@ montaggio. Su ogni riga:
 corso* se il lavoro è cominciato (o l'ordine al fornitore è inviato); *da fare* se non è cominciato
 ed è ancora in tempo; *da magazzino* se non serve un documento perché esistente e in arrivo bastano;
 *previsto* quando non c'è niente che lo registri, come un montaggio non ancora dichiarato. Un
-ODP lanciato ma non avviato è *da fare*: il documento c'è, il lavoro no.
+ODP lanciato ma non avviato è *da fare*: il documento c'è, il lavoro no. *Finito con meno pezzi*
+(dalla 0.105.5) quando la tappa è chiusa ma ha dato meno pezzi di quelli richiesti: il piano li
+mostra da rilanciare.
 
 **In testa** la consegna richiesta, la data fattibile e il margine, i conteggi per stato e, se ci
 sono, le tappe in ritardo **sul percorso critico**: quelle che spostano la consegna. **Apri il
@@ -1757,7 +1766,8 @@ netto = lordo + scorta minima + impegnato − esistente − in arrivo
 ```
 
 poi arrotondato al **lotto di riordino** dell'articolo, secondo il suo modo (*multiplo esatto* o
-*quantità minima*).
+*quantità minima*). Nelle unità che si contano (pz, n, nr, set, conf, kit) la quantità da ordinare
+si arrotonda per eccesso al pezzo intero; nelle altre resta con sei decimali (dalla 0.105.5).
 
 Il termine **impegnato** è quello che fa la differenza: è la merce che **gli altri piani aperti
 più urgenti** hanno già promesso a sé. Senza quel termine, due piani si dichiarerebbero coperti con
@@ -2457,13 +2467,15 @@ Pulsanti: *Scarica template Distinte* · *Carica file Distinte*.
 Un foglio per scheda: `Azienda` · `Utenti` · `Fornitori` · `Clienti` · `Condizioni offerta` ·
 `Famiglie commerciali` · `Famiglie materie prime` · `Famiglie parti` · `Concetti` ·
 `Centri di lavoro` · `Unità di misura` · `Impostazioni`.
-**Le password non sono nel file.**
+**Le password non sono nel file.** Con l'archivio condiviso il foglio `Utenti` aggiorna solo i
+colleghi che esistono già: uno nuovo si invita da *Gestione → Utenti* (dalla 0.105.5).
 
 ### Le regole comuni
 
 | Regola | Dettaglio |
 |---|---|
 | **Il Codice è la chiave** | Esiste → **aggiorna**. Non esiste → **crea**. Vuoto → **genera** il codice automatico |
+| **Una riga con un errore non applica niente** | E su un articolo già usato codice, famiglia, codifica e U.M. restano com'erano, con un avviso (dalla 0.105.5) |
 | **L'import è additivo** | Non cancella mai niente. Quello che non è nel file resta com'è |
 | **Fornitori e famiglie mancanti si creano al volo** | I **concetti no**: quelli si aggiungono a mano, perché la nomenclatura non deve crescere per distrazione |
 | **Fornitore + prezzo** | Creano una **quotazione a listino**, che diventa il prezzo in uso |

@@ -1579,7 +1579,7 @@ const DB_KEY_IN_IDB = 'bomtrack_v1_in_indexeddb';
 const IDB_STORE = 'archivio';
 // Le chiavi che stanno in IndexedDB accanto all'archivio. `cloudBase`: la
 // fotografia dell'ultimo invio all'archivio condiviso, che in localStorage
-// oltre qualche decina di migliaia di record non ci stava più (dalla 0.105.4).
+// oltre qualche decina di migliaia di record non ci stava più (dalla 0.105.5).
 const IDB_EXTRA = ['cloudBase'];
 function creaIdbAdapter(fabbrica) {
   let conn = null, copia = null, copiaRescue = null, inVolo = 0, segnato = false;
@@ -1650,7 +1650,7 @@ function creaIdbAdapter(fabbrica) {
       return true;
     },
     rescued() { return copiaRescue; },
-    // Dalla 0.105.4. Restituisce false se la chiave non è fra quelle previste.
+    // Dalla 0.105.5. Restituisce false se la chiave non è fra quelle previste.
     scriviExtra(k, v) {
       if (!IDB_EXTRA.includes(k)) return false;
       extra[k] = v;
@@ -2117,7 +2117,7 @@ const Store = {
   // chiudere la finestra con una modifica non ancora partita la perderebbe —
   // al riavvio il caricamento rifotografa l'adesso e la modifica non risulta
   // più da mandare. `null` = nessuna fotografia.
-  // Altre chiavi accanto all'archivio, dove c'è IndexedDB (dalla 0.105.4):
+  // Altre chiavi accanto all'archivio, dove c'è IndexedDB (dalla 0.105.5):
   // `salvaExtra` torna false se qui non c'è, e chi chiama resta dov'era.
   salvaExtra(k, v) { return !!(adapter && adapter.scriviExtra && adapter.scriviExtra(k, v)); },
   leggiExtra(k) { return adapter && adapter.leggiExtra ? adapter.leggiExtra(k) : undefined; },

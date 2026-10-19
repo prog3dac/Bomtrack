@@ -82,7 +82,7 @@ async function avvia(storage, idb, opts) {
   return a;
 }
 
-// 0.105.4: la fotografia dell'archivio condiviso in localStorage, oltre
+// 0.105.5: la fotografia dell'archivio condiviso in localStorage, oltre
 // qualche decina di migliaia di record, non ci stava più.
 describe('La fotografia del cloud accanto all\'archivio', () => {
   it('si salva in IndexedDB, fuori da localStorage, e torna al riavvio', async () => {

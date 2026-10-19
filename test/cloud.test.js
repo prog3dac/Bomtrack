@@ -582,7 +582,7 @@ describe('Archivio condiviso — due colleghi sulla stessa cosa', () => {
     assert.equal(A.eval(`(Store.getById('plans', '${PL}') || { lines: [] }).lines.length`), 1, 'anche per Anna');
   });
 
-  // 0.105.4: la rettifica scrive «contato − esistente», e l'esistente era
+  // 0.105.5: la rettifica scrive «contato − esistente», e l'esistente era
   // quello di questo PC: il carico di un collega non ancora ricevuto si
   // sommava poi alla rettifica, contato due volte.
   passo('una rettifica si calcola sulla giacenza aggiornata ai colleghi', async () => {

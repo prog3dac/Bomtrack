@@ -899,7 +899,7 @@ function saveStockAdjust(itemId) {
   const uscita = kind === 'scarico' || kind === 'clOut';
   const note = val('mv-note'), orderId = val('mv-ord');
   const registra = () => {
-    // La rettifica si calcola sull'esistente aggiornato ai movimenti dei colleghi (dalla 0.105.4).
+    // La rettifica si calcola sull'esistente aggiornato ai movimenti dei colleghi (dalla 0.105.5).
     const delta = kind === 'rettifica' ? (inserita - onHandOf(it.id)) : (uscita ? -inserita : inserita);
     if (!delta) { showToast('Nessuna differenza da registrare'); closeModal(); return; }
     registraMovimentoManuale(it, kind, delta, inserita, uscita, note, supplierId, orderId);

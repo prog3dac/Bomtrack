@@ -741,7 +741,7 @@ end $$;
 -- `now` va conservato e ripassato come `since` al giro dopo, meno un margine:
 -- una transazione lunga può scrivere un synced_at più vecchio di un pull già
 -- fatto. Applicare due volte la stessa riga non costa niente.
--- L'istante da cui il pull successivo riparte (dalla 0.105.4). Non l'ora
+-- L'istante da cui il pull successivo riparte (dalla 0.105.5). Non l'ora
 -- esatta: una transazione cominciata prima e non ancora conclusa scrive righe
 -- con un synced_at più vecchio, che il pull dopo non vedrebbe più. Allora
 -- l'inizio della transazione aperta più vecchia, se c'è — ma non più indietro

@@ -255,7 +255,7 @@ describe('Postgres: invio e lettura', () => {
     assert.equal(d.sql(`select count(*) from sync_tombstones where id = '${altro.id}'`), '1', 'una riga che non viaggia resta cancellata');
   }));
 
-  // 0.105.4: una riga scritta all'inizio di una transazione lunga ha un
+  // 0.105.5: una riga scritta all'inizio di una transazione lunga ha un
   // synced_at più vecchio del pull fatto mentre era aperta. Il `now` di quel
   // pull ora non va oltre l'inizio della transazione, e il pull dopo la vede.
   it('una riga scritta da un invio ancora aperto arriva al pull successivo', conDb(d => {

@@ -222,7 +222,7 @@ describe('Una richiesta al server che non torna più', () => {
   });
 });
 
-// 0.105.4: l'invio completo cercava ogni record per id scorrendo la sua
+// 0.105.5: l'invio completo cercava ogni record per id scorrendo la sua
 // collezione. Con 35.000 righe erano secondi a browser fermo (quadratico).
 describe('Un invio completo all\'archivio condiviso', () => {
   it('si prepara in tempo lineare', () => {

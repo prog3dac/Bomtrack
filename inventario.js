@@ -334,7 +334,7 @@ function invRegistraDaModal() {
   }).filter(Boolean);
   const nota = val('inv-nota');
   // Le differenze si calcolano sull'esistente aggiornato ai movimenti dei
-  // colleghi (dalla 0.105.4): con l'archivio condiviso, prima si riceve.
+  // colleghi (dalla 0.105.5): con l'archivio condiviso, prima si riceve.
   const registra = () => invRegistraEChiudi(scelti, nota);
   return typeof conArchivioAggiornato === 'function' ? conArchivioAggiornato(registra) : registra();
 }

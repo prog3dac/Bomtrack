@@ -258,7 +258,7 @@ function cloudPayload(changes, soglia, puoImpostazioni) {
     const ch = changes[c];
     const figli = def.children || {};
     // Per id con una mappa, non con una ricerca per ciascuno: su un invio
-    // completo erano decine di secondi a browser fermo (dalla 0.105.4).
+    // completo erano decine di secondi a browser fermo (dalla 0.105.5).
     const ids = ch.upsert || [];
     const perId = ids.length > 20 ? new Map((Store.getAll(c) || []).map(r => [r.id, r])) : null;
     const recs = ids.map(id => perId ? perId.get(id) : Store.getById(c, id)).filter(Boolean);
@@ -349,7 +349,7 @@ function cloudTogliRipristini(inviati) {
 function cloudPayloadVuoto(p) { return !p.upsert && !p.remove && !p.settings; }  // `base` da sola non è un invio
 
 // ── La fotografia salvata ──
-// In IndexedDB, accanto all'archivio, dove c'è (dalla 0.105.4): in
+// In IndexedDB, accanto all'archivio, dove c'è (dalla 0.105.5): in
 // localStorage oltre qualche decina di migliaia di record non ci stava, e a
 // ogni riavvio si rimandava tutto.
 function cloudSalvaBase() {
@@ -1120,7 +1120,7 @@ async function cloudPullTutto() {
 // Il pull: da un istante, o tutto a pagine.
 function cloudPullDa(since) { return since ? cloudRpc('pull_changes', { since }) : cloudPullTutto(); }
 
-// ── Prima di un conto fatto sull'archivio locale (dalla 0.105.4) ──
+// ── Prima di un conto fatto sull'archivio locale (dalla 0.105.5) ──
 // Una rettifica scrive «contato − esistente», e l'esistente è quello di questo
 // PC: senza i movimenti dei colleghi non ancora ricevuti, che poi arrivano e
 // si sommano alla rettifica, contati due volte. Qui si manda e si riceve
