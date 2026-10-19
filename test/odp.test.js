@@ -572,3 +572,73 @@ describe('ODP: il fabbisogno', () => {
     assert.equal(mano.plan, null, "scritto a mano non è legato a nessun piano, e nel piano la parte resta da fabbricare");
   });
 });
+
+// 0.105.4: la tendina dello stato passa dai comandi, e il materiale non
+// prelevato all'avvio ha un comando suo.
+describe('ODP: lo stato dai comandi, e il resto del materiale', () => {
+  const st = (app, id) => app.eval(`getOdp(${JSON.stringify(id)}).status`);
+
+  it('«Annullato» dalla tendina chiede del materiale da rendere, come il comando', () => {
+    const app = conDb();
+    app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`);
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    app.eval('globalThis.__m = ""; { const vero = openModal; openModal = (h, ...r) => { __m = h; return vero(h, ...r); }; }');
+    app.eval(`odpCambiaStato('odp-interna', 'annullato')`);
+    assert.equal(st(app, 'odp-interna'), 'corso', 'non cambia finché non si conferma');
+    assert.match(app.ctx.__m, /Quanto ne torna/);
+  });
+
+  it('«Bozza» e «Lanciato» non tornano indietro sopra le dichiarazioni', () => {
+    const app = conDb();
+    app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`);
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    app.eval(`odpCambiaStato('odp-interna', 'bozza')`);
+    assert.equal(st(app, 'odp-interna'), 'corso');
+    app.eval(`odpCambiaStato('odp-interna', 'lanciato')`);
+    assert.equal(st(app, 'odp-interna'), 'corso', 'lo stato lo dà l\'avanzamento');
+  });
+
+  it('dalla bozza si passa solo lanciando, con i controlli del lancio', () => {
+    const app = conDb();
+    lancia(app, 'interna', 10);
+    app.eval(`odpCambiaStato('odp-interna', 'bozza')`);
+    assert.equal(st(app, 'odp-interna'), 'bozza', 'senza dichiarazioni torna in bozza');
+    app.eval(`getOdp('odp-interna').qty = 0`);
+    app.eval(`odpCambiaStato('odp-interna', 'lanciato')`);
+    assert.equal(st(app, 'odp-interna'), 'bozza', 'a zero pezzi non si lancia');
+    app.eval(`getOdp('odp-interna').qty = 10; odpCambiaStato('odp-interna', 'corso')`);
+    assert.equal(st(app, 'odp-interna'), 'bozza');
+    app.eval(`odpCambiaStato('odp-interna', 'lanciato')`);
+    assert.equal(st(app, 'odp-interna'), 'lanciato');
+  });
+
+  it('«Chiuso» conferma, e si riapre allo stato che dicono le fasi', () => {
+    const app = conDb();
+    app.eval('askConfirm = (m, si) => si();');
+    lancia(app, 'interna', 10);
+    avvia(app, 'odp-interna', 0);
+    app.eval(`odpCambiaStato('odp-interna', 'chiuso')`);
+    assert.equal(st(app, 'odp-interna'), 'chiuso');
+    app.eval(`odpUnlockedId = 'odp-interna'; odpCambiaStato('odp-interna', 'completato')`);
+    assert.equal(st(app, 'odp-interna'), 'corso');
+  });
+
+  it('«Preleva il resto» fa uscire quello che all\'avvio non era uscito', () => {
+    const app = conDb();
+    app.eval(`(addMovement('tondo', 'carico', 100, ''), invalidateCaches())`);
+    lancia(app, 'esterna', 10);
+    assert.equal(app.eval(`opPrelevaResto('odp-esterna')`), false, 'prima dell\'avvio no');
+    avvia(app, 'odp-esterna', 0, { materiali: [{ itemId: 'tondo', qty: 12 }] });
+    assert.equal(onHand(app, 'tondo'), 88);
+    assert.equal(app.eval(`opPuoPrelevareResto(getOdp('odp-esterna'))`), true);
+    assert.match(app.eval(`odpMaterialBlock(getOdp('odp-esterna'))`), /Preleva il resto/);
+    assert.equal(app.eval(`opPrelevaResto('odp-esterna')`), 1);
+    assert.equal(onHand(app, 'tondo'), 80, 'esce il residuo, otto chili');
+    assert.deepEqual(movimenti(app).filter(m => m.kind === 'clOut').map(m => m.qty), [-12, -8], 'verso lo stesso terzista');
+    assert.equal(movimenti(app).filter(m => m.kind === 'clOut').every(m => m.sup === 'beta'), true);
+    assert.equal(app.eval(`opPuoPrelevareResto(getOdp('odp-esterna'))`), false, 'non resta niente');
+    assert.equal(app.eval(`opPrelevaResto('odp-esterna')`), false);
+  });
+});

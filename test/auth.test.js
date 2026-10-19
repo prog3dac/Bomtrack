@@ -226,6 +226,18 @@ describe('Un PC scollegato dall\'archivio condiviso', () => {
     assert.equal(a.eval('currentUser'), null);
   });
 
+  // 0.105.4: chi ha scollegato è scritto, e la strada è solo sua.
+  it('la prima password è solo dell\'amministratore che ha scollegato', () => {
+    const a = app(makeDb({ users: [
+      { id: 'u1', name: 'Anna', email: 'anna@ditta.it', role: 'admin', active: true, passwordHash: '', passwordSalt: '' },
+      { id: 'u3', name: 'Carlo', email: 'carlo@ditta.it', role: 'admin', active: true, passwordHash: '', passwordSalt: '' }] }));
+    a.storage.setItem('bomtrack_scollegato_da', JSON.stringify({ id: 'u3' }));
+    accedi(a, 'anna@ditta.it', 'nuova-pw');
+    assert.equal(a.eval('currentUser'), null, 'un altro amministratore no');
+    accedi(a, 'carlo@ditta.it', 'nuova-pw');
+    assert.equal(a.eval('currentUser && currentUser.id'), 'u3');
+  });
+
   it('se qualcuno ha già una password, la strada è chiusa', () => {
     const a = app(); conUtente(a, { id: 'u9', email: 'zeta@ditta.it' });
     a.eval(`db.users.push(stampNew({ id: 'u1', name: 'Anna', email: 'anna@ditta.it', role: 'admin', active: true, passwordHash: '', passwordSalt: '' }))`);

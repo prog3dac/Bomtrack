@@ -2078,6 +2078,10 @@ const Store = {
     // più vecchio del tombstone — il pull successivo lo ricancellerebbe. Il
     // ripristino è un fatto nuovo e va datato come tale.
     if (!db[t.coll].some(r => r.id === t.record.id)) db[t.coll].push(touch(t.record));
+    // E non basta, se l'orologio di questo PC è indietro: la data nuova può
+    // essere ancora prima della lapide. L'archivio condiviso allora dice al
+    // server che è un ripristino (cloud.js, dalla 0.105.4).
+    if (typeof onRipristino === 'function') onRipristino(t.coll, t.record.id);
     db.trash.splice(i, 1);
     this.commit();
     return t;

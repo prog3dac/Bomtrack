@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.105.3**
+**Versione dell'app documentata: 0.105.4**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1962,6 +1962,12 @@ Nasce in **bozza**: quantità, date e commessa si cambiano ancora. **Lancia** ap
 da lì **fasi e materiale si congelano**: il ciclo può cambiare domani, l'ordine resta quello che
 è stato promesso.
 
+**Lo stato si cambia con i comandi** (dalla 0.105.4), anche dalla tendina *Stato*: scegliere
+*Annullato* è come **Annulla** (chiede del materiale da rendere), *Chiuso* come **Chiudi**,
+*Lanciato* da una bozza come **Lancia**, con i suoi controlli. *In corso* e *Completato* li dà
+l'avanzamento delle fasi; un ordine con delle dichiarazioni non torna in *Bozza*, e riaperto da
+chiuso o annullato prende lo stato che dicono le sue fasi.
+
 > Ogni fase congelata ha un **id proprio**, non una posizione. Riordinare le fasi del ciclo dopo
 > il lancio **non sposta niente** su un ordine già aperto — che è il motivo per cui si congela.
 
@@ -2033,6 +2039,11 @@ ordini di lavoro, e quella degli ordini di produzione.
 Il **materiale esce una volta sola**, all'avvio della prima fase, ed è quello scritto nel ciclo —
 le stesse righe che il fabbisogno ha già fatto comprare. La scheda propone il **residuo**, e a
 residuo zero lo dice.
+
+**Preleva il resto** (dalla 0.105.4): se all'avvio è uscito meno del previsto — lo scaffale non
+bastava, il resto arriva dopo — nel riquadro *Materiale del ciclo* compare **Preleva il resto**.
+Propone il residuo, si corregge riga per riga, ed esce come all'avvio: consumo di produzione, o
+uscita a conto lavoro verso il terzista della prima fase.
 
 ### Le lavorazioni esterne
 
@@ -2321,6 +2332,9 @@ nell'import da Excel vengono registrate automaticamente.
 | Campo | Di serie |
 |---|---|
 | Durata della sessione salvata (giorni) | 30 — **0 = non scade mai** |
+
+La durata si conta dall'**ultimo uso**, e dalla 0.105.4 vale anche con l'archivio condiviso: chi
+non apre l'app per più giorni di così rientra con la password.
 
 **Calendario di fabbrica**
 
@@ -2826,17 +2840,28 @@ Due casi particolari:
   si dice.
 - **Importare un backup JSON, rimettere i dati d'esempio e azzerare** sono bloccati: su un
   archivio condiviso toccherebbero tutti. Per farlo si scollega prima il PC.
+- **L'officina sui documenti** (dalla 0.105.4): su ordini, ODL e ODP il server le lascia cambiare
+  solo lo stato, e creare solo l'ODL che nasce da una fase esterna di un ODP. Una sua modifica che
+  toccasse altro (fornitore, righe, prezzi) torna respinta, con la versione del server.
+- **Il cestino**: una voce la scrive solo chi può scrivere il record che contiene; svuotarlo resta
+  di tutti.
+- **L'ultimo amministratore attivo** non si declassa, non si sospende e non si elimina, nemmeno
+  eliminando il suo utente dal pannello di Supabase.
+
+Un **ripristino dal cestino** si dichiara al server (dalla 0.105.4), che toglie la cancellazione
+invece di confrontare le date: il record torna anche se l'orologio di questo PC è indietro.
 
 ### Scollegare un PC
 
-Dallo stato della nuvola, **Scollega questo PC** (da dentro l'app solo un amministratore; dalla
-schermata d'accesso resta per un PC che non arriva più al server). I dati restano nel browser, ma da quel momento
+Dallo stato della nuvola, **Scollega questo PC**. Da dentro l'app lo fa solo un amministratore;
+dalla schermata d'accesso (dalla 0.105.4) chiede **email e password di un amministratore**
+dell'archivio condiviso, e quindi il collegamento al server. I dati restano nel browser, ma da quel momento
 sono una copia locale: le modifiche non arrivano più ai colleghi, e quelle dei colleghi non
 arrivano più qui.
 
 Gli utenti restano, ma **senza password**: quelle le teneva Supabase. Al primo accesso dopo lo
-scollegamento un **amministratore** entra con la sua email e una password a scelta (almeno 4
-caratteri), che diventa la sua password su questo PC. Gli altri utenti la ricevono poi da lui, in
+scollegamento **l'amministratore che ha scollegato** entra con la sua email e una password a
+scelta (almeno 4 caratteri), che diventa la sua password su questo PC. Gli altri utenti la ricevono poi da lui, in
 *Gestione → Utenti*. Questa strada si chiude appena qualcuno ha una password locale.
 
 ### Il backup resta
@@ -2855,6 +2880,7 @@ caratteri), che diventa la sua password su questo PC. Gli altri utenti la ricevo
 | **Spazio utile** | ~430 MB dei 500 dichiarati (il resto lo occupa il servizio) |
 | **Officina piccola, 3 anni** | ~25% dello spazio: sta larga |
 | **Il primo limite che si incontra** | Non è lo spazio, è la **banda**. Per questo a ogni giro si scarica solo quello che è cambiato |
+| **Scaricare o caricare tutto** | A pezzi (dalla 0.105.4): una tabella alla volta, mille righe per richiesta in arrivo e cinquecento in partenza, così nessuna richiesta supera i limiti di Supabase |
 | **Cosa cresce davvero** | I **movimenti di magazzino** e le **revisioni** rilasciate. Il catalogo, per quanto grande, pesa poco |
 
 > ✅ **Gli allegati non pesano su questo conto.** Dalla 0.78.0 i PDF stanno in una cartella fuori

@@ -172,6 +172,8 @@ describe('Archivio condiviso — più PC contro Supabase (finto, con Postgres ve
     A.seedStorage(db);
     A.eval('Store.load(); cloudAvvio();');
     assert.equal(A.eval('Store.modoCondiviso'), true);
+    // Pezzi piccoli: il caricamento e lo scaricamento a pezzi passano di qui (0.105.4).
+    A.eval('CLOUD_LOTTO_RIGHE = 2; CLOUD_PAGINA = 2;');
     const esito = await A.eval(`cloudAccediConPassword('a@x.it', 'pw-anna').then(() => cloudDopoAccesso())`);
     assert.equal(esito.primo, true);
     assert.equal(esito.stato.vuoto, true);
@@ -188,7 +190,7 @@ describe('Archivio condiviso — più PC contro Supabase (finto, con Postgres ve
 
   passo('un collega scarica l\'archivio condiviso al primo accesso', async () => {
     B = pc();
-    B.eval('Store.load(); cloudAvvio();');
+    B.eval('Store.load(); cloudAvvio(); CLOUD_PAGINA = 2;');
     const esito = await B.eval(`cloudAccediConPassword('b@x.it', 'pw-bruno').then(() => cloudDopoAccesso())`);
     assert.equal(esito.primo, true);
     assert.equal(esito.stato.vuoto, false);
@@ -198,6 +200,55 @@ describe('Archivio condiviso — più PC contro Supabase (finto, con Postgres ve
     assert.equal(B.eval(`Store.getById('orders', '${ID.ord}').lines[0].received`), 40, 'il ricevuto torna dagli eventi');
     assert.equal(B.eval('Store.hasPendingChanges()'), false, 'scaricare non crea niente da rimandare');
     assert.equal(B.eval(`currentUser.role`), 'acquisti');
+  });
+
+  // 0.105.4: uno schema di prima non ha pull_pagina, e lo scaricamento torna al pull intero.
+  passo('con uno schema senza la lettura a pagine si scarica lo stesso', async () => {
+    const testo = require('fs').readFileSync(require('path').join(__dirname, '..', 'supabase', 'schema.sql'), 'utf8');
+    const funzione = /create or replace function public\.pull_pagina[\s\S]*?\nend \$\$;/.exec(testo)[0];
+    srv.db.sql('drop function public.pull_pagina(text, text, int);');
+    try {
+      const r = await B.eval('cloudPullTutto()');
+      assert.equal(r.tables.items.length, 5);
+    } finally {
+      srv.db.sql(funzione + '\ngrant execute on function public.pull_pagina(text, text, int) to authenticated;');
+    }
+    assert.equal((await B.eval('cloudPullTutto()')).tables.items.length, 5);
+  });
+
+  // 0.105.4: dalla schermata d'accesso chiunque scollegava il PC, e poi
+  // entrava da amministratore scegliendo la prima password.
+  passo('dalla schermata d\'accesso scollega solo un amministratore, e il PC resta suo', async () => {
+    const D = pc();
+    D.ctx.location = { reload() { D.ctx.__ricaricato = true; } };
+    D.eval('Store.load(); cloudAvvio(); cloudPannelloScollega();');
+    D.el('cl-sc-email').value = 'b@x.it'; D.el('cl-sc-pw').value = 'pw-bruno';
+    assert.equal(await D.eval('cloudScollegaDaFuori()'), false);
+    assert.match(D.el('cl-sc-esito').textContent, /Solo un amministratore/);
+    assert.ok(D.eval('cloudAttivo()'), 'resta collegato');
+    D.el('cl-sc-email').value = 'a@x.it'; D.el('cl-sc-pw').value = 'pw-anna';
+    assert.equal(await D.eval('cloudScollegaDaFuori()'), true);
+    assert.equal(D.eval('cloudAttivo()'), false);
+    assert.deepEqual(JSON.parse(D.storage.getItem('bomtrack_scollegato_da')), { id: anna });
+    assert.equal(D.eval(`cloudPrimaPasswordPer({ id: '${anna}' }) && !cloudPrimaPasswordPer({ id: '${bruno}' })`), true);
+  });
+
+  // 0.105.4: la sessione di Supabase si rinnova da sola, e la durata scelta in
+  // Gestione → Accesso valeva solo in locale.
+  passo('la durata della sessione vale anche con l\'archivio condiviso', async () => {
+    const D = pc();
+    D.eval('Store.load(); cloudAvvio();');
+    await D.eval(`cloudAccediConPassword('a@x.it', 'pw-anna')`);
+    D.eval('cloudAggiornaConfig({ allineato: true }); db.settings.sessionDays = 30;');
+    const sess = () => JSON.parse(D.storage.getItem('bomtrack_cloud_sessione'));
+    assert.ok(Date.now() - Date.parse(sess().ts) < 60000, 'la sessione porta la data dell\'ultimo uso');
+    D.eval(`cloudScrivi(CLOUD_SESS_KEY, Object.assign(cloudSessione(), { ts: new Date(Date.now() - 31 * 86400000).toISOString() }))`);
+    assert.equal(D.eval('cloudRipristinaSessione()'), false);
+    assert.equal(sess(), null, 'scaduta: si rientra con la password');
+    await D.eval(`cloudAccediConPassword('a@x.it', 'pw-anna')`);
+    D.eval(`cloudScrivi(CLOUD_SESS_KEY, Object.assign(cloudSessione(), { ts: new Date(Date.now() - 29 * 86400000).toISOString() }))`);
+    D.eval('cloudRipristinaSessione()');
+    assert.ok(sess(), 'dentro la durata resta');
   });
 
   passo('una modifica parte da sola e arriva all\'altro PC al giro', async () => {
@@ -496,6 +547,29 @@ describe('Archivio condiviso — due colleghi sulla stessa cosa', () => {
     assert.equal(srv.db.sql(`select count(*) from production_plan_lines where plan_id = '${PL}'`), '1', 'e con la sua riga');
     await giro(A);
     assert.equal(A.eval(`(Store.getById('plans', '${PL}') || { lines: [] }).lines.length`), 1, 'anche per Anna');
+  });
+
+  // 0.105.4: con l'orologio del PC indietro il record ripristinato era più
+  // vecchio della lapide, e il server lo respingeva: al giro dopo il pull lo
+  // ricancellava, e dal cestino era già uscito. Ora il ripristino si dichiara.
+  passo('un ripristino dal cestino regge anche con l\'orologio del PC indietro', async () => {
+    const SUP = U(640);
+    A.eval(`Store.insert('suppliers', { id: '${SUP}', name: 'Fornitore ripreso', active: true })`);
+    await giro(A); await giro(B);
+    A.eval(`Store.remove('suppliers', '${SUP}')`);
+    await giro(A);
+    assert.equal(srv.db.sql(`select count(*) from sync_tombstones where id = '${SUP}'`), '1');
+    A.eval(`Store.restore(Store.lastRemoved())`);
+    // L'orologio indietro: la data del ripristino è prima della lapide.
+    A.eval(`{ const r = Store.getById('suppliers', '${SUP}'); r.updatedAt = '2020-01-01T00:00:00.000Z'; saveDB(); }`);
+    avvisi(A);
+    await giro(A); await giro(A);
+    assert.equal(srv.db.sql(`select count(*) from suppliers where id = '${SUP}'`), '1', 'il server lo riprende');
+    assert.equal(srv.db.sql(`select count(*) from sync_tombstones where id = '${SUP}'`), '0', 'e la lapide se ne va');
+    assert.ok(A.eval(`!!Store.getById('suppliers', '${SUP}')`), 'qui resta');
+    assert.equal(A.eval('cloudConfig().ripristinati || null'), null, 'il ripristino partito non si rimanda');
+    await giro(B);
+    assert.ok(B.eval(`!!Store.getById('suppliers', '${SUP}')`), 'e torna anche al collega');
   });
 
   // 0.105.3: questo PC elimina una richiesta che un ordine cita ancora, e il

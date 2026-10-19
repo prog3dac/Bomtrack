@@ -600,6 +600,21 @@ begin
       using errcode = '42501';
   end if;
 
+  -- Ripristini espliciti (dalla 0.105.4): chi rimette un record dal cestino lo
+  -- dice, e la lapide si toglie invece di gareggiare con la sua data. Con
+  -- l'orologio del PC indietro il record ripristinato era «più vecchio» della
+  -- cancellazione e il server lo respingeva. Vale solo per i record che lo
+  -- stesso invio rimanda, e la policy delle lapidi lo limita a chi scrive la tabella.
+  if jsonb_typeof(payload->'ripristina') = 'object' then
+    for reg in select s.* from sync_tables s where payload->'ripristina' ? s.tab and payload->'upsert' ? s.tab loop
+      if jsonb_typeof(payload->'ripristina'->reg.tab) <> 'array' then continue; end if;
+      delete from sync_tombstones t
+       where t.tab = reg.tab
+         and t.id in (select jsonb_array_elements_text(payload->'ripristina'->reg.tab))
+         and t.id in (select e->>'id' from jsonb_array_elements(payload->'upsert'->reg.tab) e);
+    end loop;
+  end if;
+
   -- Upsert: prima le radici, poi le figlie per riga, poi le sostituzioni.
   for reg in
     select s.* from sync_tables s
@@ -758,6 +773,41 @@ begin
     'settings', (select to_jsonb(s) - 'synced_at' - 'id' from settings s where s.synced_at > dal));
 end $$;
 
+-- ─── Lettura a pagine (dalla 0.105.4) ───────────────────────
+-- Lo scaricamento completo (since nullo) in una risposta sola poteva superare
+-- i limiti di tempo e di dimensione di Supabase su un archivio di qualche anno.
+-- Qui una tabella alla volta, a pagine ordinate per chiave: `dopo` è l'ultima
+-- chiave della pagina precedente (per le lapidi «tabella<TAB>id»). Si legge con
+-- le stesse policy di pull_changes(). `settings` torna intera.
+create or replace function public.pull_pagina(tab text, dopo text default null, quanti int default 1000)
+returns jsonb language plpgsql stable security invoker set search_path = public as $$
+declare
+  righe jsonb;
+  tipo text;
+  n int := least(greatest(coalesce(quanti, 1000), 1), 5000);
+begin
+  if tab = 'settings' then
+    return jsonb_build_object('rows', coalesce((select jsonb_agg(to_jsonb(s) - 'synced_at' - 'id') from settings s), '[]'));
+  end if;
+  if tab = 'sync_tombstones' then
+    select coalesce(jsonb_agg(jsonb_build_object('tab', x.tab, 'id', x.id) order by x.tab, x.id), '[]') into righe
+      from (select t.tab, t.id from sync_tombstones t
+             where dopo is null or (t.tab, t.id) > (split_part(dopo, E'\t', 1), split_part(dopo, E'\t', 2))
+             order by t.tab, t.id limit n) x;
+    return jsonb_build_object('rows', righe);
+  end if;
+  if not exists (select 1 from sync_tables s where s.tab = pull_pagina.tab) then
+    raise exception 'pull_pagina: tabella sconosciuta: %', tab;
+  end if;
+  select format_type(a.atttypid, a.atttypmod) into tipo from pg_attribute a
+   where a.attrelid = ('public.' || tab)::regclass and a.attname = 'id';
+  execute format(
+    'select coalesce(jsonb_agg(to_jsonb(t) - ''synced_at'' order by t.id), ''[]'')
+       from (select * from public.%I where $1 is null or id > cast($1 as %s) order by id limit $2) t', tab, tipo)
+    into righe using dopo, n;
+  return jsonb_build_object('rows', righe);
+end $$;
+
 -- ─── Accesso: chi legge e chi scrive ────────────────────────
 -- La stessa matrice dell'app (ROLE_WRITE e roleGuard in core.js), scritta dove
 -- non si può aggirare: in locale chi apre i DevTools si assegna il ruolo che
@@ -838,6 +888,22 @@ language sql stable security definer set search_path = public as $$
                  where ta.tab = t and ra.role = public.ruolo_attivo())
 $$;
 
+-- La tabella di una collezione dell'app (SCHEMA in store.js): serve al
+-- cestino, che conserva i record con il nome della collezione da cui vengono.
+-- test/schema-sql.test.js la confronta con SCHEMA.
+create or replace function public.tabella_di_coll(c text) returns text
+language sql immutable set search_path = public as $$
+  select t from (values
+    ('items', 'items'), ('revisions', 'item_revisions'), ('movements', 'stock_movements'),
+    ('receipts', 'order_receipts'), ('attachments', 'attachments'), ('attachmentDocs', 'attachment_docs'),
+    ('productions', 'productions'), ('suppliers', 'suppliers'), ('customers', 'customers'),
+    ('workCenters', 'work_centers'), ('families', 'families'), ('rfqs', 'rfqs'), ('orders', 'orders'),
+    ('workOrders', 'work_orders'), ('plans', 'production_plans'), ('prodOrders', 'production_orders'),
+    ('prodDecls', 'production_declarations'), ('jobs', 'jobs'), ('reminders', 'reminders'),
+    ('trash', 'trash'), ('users', 'profiles')
+  ) v(k, t) where k = c
+$$;
+
 -- Il proprio profilo si può aggiornare (nome, colore), ma non il proprio ruolo
 -- né il proprio stato: quello resta della gestione utenti.
 --
@@ -865,6 +931,77 @@ begin
 end $$;
 drop trigger if exists profiles_guardia on public.profiles;
 create trigger profiles_guardia before update on public.profiles for each row execute function public.profiles_guardia();
+-- E non si elimina (dalla 0.105.4), da nessuna parte: né dall'API né
+-- eliminando il suo utente nel pannello di Supabase, che porta via il profilo
+-- con sé. Senza amministratori l'archivio non ha più chi gestisce gli utenti.
+create or replace function public.profiles_ultimo_admin() returns trigger language plpgsql as $$
+begin
+  if old.role = 'admin' and old.active is not false
+     and not exists (select 1 from public.profiles p
+                      where p.id <> old.id and p.role = 'admin' and p.active is not false) then
+    raise exception 'deve restare almeno un amministratore attivo';
+  end if;
+  return old;
+end $$;
+drop trigger if exists profiles_ultimo_admin on public.profiles;
+create trigger profiles_ultimo_admin before delete on public.profiles for each row execute function public.profiles_ultimo_admin();
+
+-- L'officina sui documenti (dalla 0.105.4). Le policy dicono quali tabelle un
+-- ruolo scrive, non quali colonne: l'officina scrive gli ordini perché un
+-- ricevimento ne cambia lo stato, e passando dall'API poteva cambiarne anche
+-- fornitore, righe e prezzi, o eliminarli. Qui, per chi ha `shop` ma non
+-- `docs`:
+--  - una modifica tocca solo le colonne del primo argomento (lo stato), più
+--    quelle di servizio; se ne cambia altre la riga si **respinge** (`null`):
+--    push_changes la conta fra le respinte e il mittente riceve la versione
+--    del server, invece di bloccare l'intero lotto con un errore;
+--  - una riga nuova passa solo se viene da un ordine di produzione (`odp_id`,
+--    secondo argomento): è l'ODL che l'officina genera dalla fase esterna;
+--  - un'eliminazione si ferma con un errore: saltarla lascerebbe la lapide, e
+--    gli altri PC cancellerebbero una riga che il server ha ancora.
+-- Dal SQL Editor (auth.uid() nullo, current_user postgres) non vale.
+create or replace function public.officina_guardia() returns trigger language plpgsql as $$
+declare
+  liberi text[] := array['updated_at', 'updated_by', 'synced_at', 'pos'] || string_to_array(coalesce(tg_argv[0], ''), ',');
+  c text;
+  esiste boolean;
+begin
+  if current_user not in ('authenticated', 'anon')
+     or exists (select 1 from public.role_areas where role = public.ruolo_attivo() and area = 'docs') then
+    return coalesce(new, old);
+  end if;
+  if tg_op = 'DELETE' then
+    raise exception 'il ruolo % non elimina %', coalesce(public.ruolo_attivo(), '(nessun profilo attivo)'), tg_table_name
+      using errcode = '42501';
+  end if;
+  if tg_op = 'INSERT' then
+    -- Con ON CONFLICT il trigger d'inserimento scatta anche per una riga che
+    -- c'è già: quella la giudica il trigger di modifica.
+    execute format('select exists (select 1 from public.%I where id = $1)', tg_table_name) into esiste using new.id;
+    if esiste then return new; end if;
+    if tg_argv[1] = 'odp' and (to_jsonb(new)->>'odp_id') is not null then return new; end if;
+    return null;
+  end if;
+  for c in select k from jsonb_object_keys(to_jsonb(new)) k loop
+    if not (c = any(liberi)) and (to_jsonb(new)->c) is distinct from (to_jsonb(old)->c) then
+      return null;
+    end if;
+  end loop;
+  return new;
+end $$;
+do $$
+declare r record;
+begin
+  for r in select * from (values
+    ('orders', 'status', ''), ('order_lines', '', ''),
+    ('work_orders', 'status', 'odp'), ('work_order_lines', '', 'odp'),
+    ('production_orders', 'status', ''), ('production_order_phases', '', ''), ('production_order_materials', '', '')
+  ) v(tab, campi, nuovi) loop
+    execute format('drop trigger if exists officina_guardia on public.%I', r.tab);
+    execute format('create trigger officina_guardia before insert or update or delete on public.%I
+                    for each row execute function public.officina_guardia(%L, %L)', r.tab, r.campi, r.nuovi);
+  end loop;
+end $$;
 
 -- RLS attiva ovunque: in Supabase una tabella senza RLS è leggibile da chiunque
 -- abbia la chiave pubblica. Le funzioni sono `security invoker`: push_changes()
@@ -890,6 +1027,24 @@ begin
   create policy scrittura on public.sync_tombstones for all to authenticated
     using (public.puo_scrivere_tabella(tab))
     with check (public.puo_scrivere_tabella(tab) and deleted_at <= clock_timestamp() + interval '5 minutes');
+  -- Il cestino, riga per riga (dalla 0.105.4): una voce la scrive solo chi può
+  -- scrivere la tabella del record che contiene. Con la regola generale
+  -- chiunque poteva, dall'API, mettere nel cestino un articolo inventato, e
+  -- l'amministratore che lo ripristinava lo pubblicava a nome suo. Togliere
+  -- una voce (svuotare il cestino) resta di chi scrive il cestino: si perde un
+  -- annulla, non un dato. Una collezione sconosciuta segue la regola generale,
+  -- per non fermare l'invio di un'app più nuova dello schema.
+  drop policy if exists scrittura on public.trash;
+  drop policy if exists inserimento on public.trash;
+  drop policy if exists modifica on public.trash;
+  drop policy if exists eliminazione on public.trash;
+  create policy inserimento on public.trash for insert to authenticated
+    with check (public.puo_scrivere_tabella(coalesce(public.tabella_di_coll(coll), 'trash')));
+  create policy modifica on public.trash for update to authenticated
+    using (public.puo_scrivere_tabella(coalesce(public.tabella_di_coll(coll), 'trash')))
+    with check (public.puo_scrivere_tabella(coalesce(public.tabella_di_coll(coll), 'trash')));
+  create policy eliminazione on public.trash for delete to authenticated
+    using ((select public.puo_scrivere_tabella('trash')));
   -- Il proprio profilo si legge sempre, anche sospeso (dalla 0.105.3): è così
   -- che la sospensione arriva al PC che la subisce, con il pull, e l'app esce.
   -- Prima un sospeso non leggeva più niente, nemmeno quella, e restava dentro.
@@ -909,6 +1064,7 @@ begin
 end $$;
 grant execute on function public.push_changes(jsonb) to authenticated;
 grant execute on function public.pull_changes(timestamptz) to authenticated;
+grant execute on function public.pull_pagina(text, text, int) to authenticated;
 
 -- ─── Profili: nascono da Supabase Auth (dalla 0.103.0) ──────
 -- Un collega entra in Bomtrack perché l'amministratore lo **invita** dal
@@ -918,14 +1074,16 @@ grant execute on function public.pull_changes(timestamptz) to authenticated;
 -- Gestione → Utenti non legge niente. Così anche una registrazione lasciata
 -- aperta per sbaglio nel pannello di Supabase non apre l'archivio a nessuno.
 --
--- L'unica eccezione è il primo: se non c'è ancora un amministratore attivo,
--- chi arriva lo diventa. È l'utente che si crea a mano nel pannello prima di
--- tutti gli altri, ed è lui a caricare l'archivio.
+-- L'unica eccezione è il primo: chi arriva quando non c'è ancora **nessun**
+-- profilo diventa amministratore. È l'utente che si crea a mano nel pannello
+-- prima di tutti gli altri, ed è lui a caricare l'archivio. Fino alla 0.105.3
+-- bastava che mancasse un amministratore attivo: un archivio rimasto senza
+-- (eliminato dal pannello) faceva amministratore il primo che si registrava.
 create or replace function public.profilo_crea(uid uuid, mail text, nome text)
 returns void language plpgsql security definer set search_path = public as $$
 declare primo boolean;
 begin
-  primo := not exists (select 1 from public.profiles where role = 'admin' and active is not false);
+  primo := not exists (select 1 from public.profiles);
   insert into public.profiles (id, email, name, role, active, created_at, updated_at)
     values (uid, mail, coalesce(nullif(nome, ''), split_part(coalesce(mail, ''), '@', 1)),
             case when primo then 'admin' else 'lettore' end, primo, now(), now())

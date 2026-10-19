@@ -2,6 +2,29 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.105.4 — 2026-10-18
+
+**Le correzioni prioritarie del controllo generale.** **Con l'archivio condiviso va rieseguito `supabase/schema.sql`** (manuale, cap. 31): metà di queste correzioni sta sul server. La funzione `bomtrack-utenti` non cambia.
+
+**Archivio condiviso**
+- **Ripristino dal cestino con l'orologio del PC indietro.** Il record ripristinato risultava più vecchio della cancellazione: il server lo respingeva, e al giro dopo spariva di nuovo, fuori anche dal cestino. Ora il ripristino si dichiara al server, che toglie la cancellazione invece di confrontare le date. Vale anche per i record che tornano perché qui sono ancora usati.
+- **Archivi grandi.** Lo scaricamento completo (un PC nuovo, un collegamento da capo) arriva una tabella alla volta, a pagine di mille righe, e il primo caricamento parte a pezzi di cinquecento: prima un archivio di qualche anno poteva superare i limiti di tempo e di dimensione di Supabase. Con uno schema non ancora aggiornato lo scaricamento torna al modo di prima.
+- **Colleghi invitati prima del primo caricamento** ma assenti dall'archivio del PC che carica: ora compaiono subito in *Gestione → Utenti*, sospesi finché non si dà loro un ruolo. Prima restavano invisibili a quel PC finché il loro profilo non cambiava.
+- **La durata della sessione** (Gestione → Accesso) vale anche con l'archivio condiviso, contata dall'ultimo uso come in locale. Prima la sessione di Supabase si rinnovava da sola, e una postazione lasciata aperta restava aperta per sempre.
+
+**Sicurezza**
+- **L'officina, anche passando dall'API**, sugli ordini, sugli ordini di lavoro e sugli ODP cambia solo lo stato, e crea solo gli ordini di lavoro che nascono dalle fasi esterne di un ODP. Prima poteva cambiarne fornitore, righe e prezzi, o eliminarli: le regole del server dicevano quali tabelle, non quali colonne.
+- **Il cestino condiviso**: una voce la scrive solo chi può scrivere il record che contiene. Prima chiunque poteva mettere nel cestino un articolo inventato, che l'amministratore ripristinando pubblicava a nome suo. Svuotare il cestino resta di tutti.
+- **Amministratori**: l'ultimo amministratore attivo non si elimina, nemmeno eliminando il suo utente dal pannello di Supabase; e chi si registra diventa amministratore solo su un archivio senza nessun profilo. Prima bastava che mancasse un amministratore attivo.
+- **«Scollega questo PC» dalla schermata d'accesso** chiede email e password di un amministratore dell'archivio condiviso, e dopo sul PC entra, con la prima password, solo l'amministratore che ha scollegato. Prima chiunque passasse dal PC poteva scollegarlo ed entrare da amministratore.
+
+**Ordini di produzione**
+- **La tendina dello stato passa dai comandi.** «Annullato» chiede del materiale da rendere come il comando *Annulla*, «Chiuso» chiede conferma, «Lanciato» dalla bozza fa i controlli del lancio. Su un ordine con delle dichiarazioni non si torna a «Bozza», e «Lanciato», «In corso» e «Completato» li dà l'avanzamento delle fasi: scritti a mano riaprivano fasi e materiale sotto movimenti già registrati.
+- **«Preleva il resto»**: quando all'avvio della prima fase è uscito meno materiale del previsto, il residuo ora ha il suo comando, nel riquadro *Materiale del ciclo*. Esce come all'avvio, verso lo stesso terzista se la fase è esterna. Prima restava solo un movimento a mano, scollegato dall'ordine.
+
+**Verifica**
+- `test/schema-sql.test.js`: il ripristino dichiarato, l'officina sulle colonne, il caricamento a pezzi di una riga, la lettura a pagine, il cestino per collezione, l'ultimo amministratore. `test/cloud.test.js`: il ripristino con l'orologio indietro, caricamento e scaricamento a pezzi piccoli, lo schema senza lettura a pagine, lo scollegamento dalla schermata d'accesso, la sessione scaduta. `test/auth.test.js`: la prima password di chi ha scollegato. `test/odp.test.js`: lo stato dai comandi, il resto del materiale.
+
 ### 0.105.3 — 2026-10-17
 
 **Controllo generale dell'app.** Una rilettura completa, area per area, con ogni difetto riprodotto prima di correggerlo. **Con l'archivio condiviso vanno rieseguiti `supabase/schema.sql` e ripubblicata la funzione `bomtrack-utenti`** (manuale, cap. 31): senza, le correzioni lato server non valgono.

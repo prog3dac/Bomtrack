@@ -44,6 +44,7 @@
 const CLOUD_KEY = 'bomtrack_cloud';                 // { url, chiave, allineato, since, soglia }
 const CLOUD_SESS_KEY = 'bomtrack_cloud_sessione';   // la sessione di Supabase Auth
 const CLOUD_BASE_KEY = 'bomtrack_cloud_base';       // la fotografia dell'ultimo invio riuscito
+const CLOUD_SCOLLEGATO_KEY = 'bomtrack_scollegato_da';   // { id } dell'amministratore che ha scollegato
 const CLOUD_GIRO_MS = 25000;
 const CLOUD_ATTESA_MS = 1500;
 const CLOUD_RIPROVA_MS = 5000;   // senza collegamento: ogni quanto si riprova
@@ -132,7 +133,7 @@ async function cloudHttp(percorso, opz) {
     // stato eseguito uno schema.sql più vecchio dell'app.
     // La funzione degli utenti non pubblicata (Supabase risponde 404).
     if (r.status === 404 && percorso.startsWith('/functions/')) throw cloudErrore('server', 'La funzione bomtrack-utenti non è pubblicata sul progetto Supabase: vedi il manuale, «Pubblicare la funzione degli utenti»', { stato: 404 });
-    if (dati && dati.code === 'PGRST202') throw cloudErrore('server', 'Lo schema del progetto Supabase non è aggiornato: riesegui supabase/schema.sql di questa versione nel SQL Editor', { stato: r.status });
+    if (dati && dati.code === 'PGRST202') throw cloudErrore('server', 'Lo schema del progetto Supabase non è aggiornato: riesegui supabase/schema.sql di questa versione nel SQL Editor', { stato: r.status, codice: 'PGRST202' });
     if (r.status === 401) throw cloudErrore('accesso', msg, { stato: r.status });
     if (r.status === 403 || (dati && dati.code === '42501')) throw cloudErrore('permesso', msg, { stato: r.status });
     throw cloudErrore('server', msg, { stato: r.status, codice: dati && dati.code, dettagli: dati && dati.details });
@@ -148,6 +149,9 @@ function cloudSalvaSessione(s) {
     access_token: s.access_token, refresh_token: s.refresh_token,
     expires_at: s.expires_at || (Math.floor(Date.now() / 1000) + (Number(s.expires_in) || 3600)),
     user: s.user ? { id: s.user.id, email: s.user.email } : null,
+    // L'ultimo uso, per la durata della sessione (Gestione → Accesso): un
+    // rinnovo avviene solo con l'app aperta, ed è uso anche quello.
+    ts: nowISO(),
   };
   cloudScrivi(CLOUD_SESS_KEY, x);
   return x;
@@ -288,6 +292,51 @@ function cloudPayload(changes, soglia, puoImpostazioni) {
     } else impostazioniTenute = true;
   }
   return { payload, impostazioniTenute };
+}
+// ── I ripristini dal cestino (dalla 0.105.4) ──
+// Un record ripristinato riparte datato adesso, più recente della lapide che
+// la sua cancellazione ha lasciato sul server. Ma «adesso» è l'orologio di
+// questo PC: se è indietro, la data resta prima della lapide e il server lo
+// respingeva — il record tornava nel cestino al giro dopo, senza dire niente.
+// Allora il ripristino si dichiara: `payload.ripristina` elenca, per tabella,
+// gli id che l'invio rimanda per ripristino, e il server ne toglie la lapide.
+// Si tengono nella configurazione finché un invio riuscito non li ha portati.
+function cloudSegnaRipristino(tab, id) {
+  if (!tab || id == null || !cloudAttivo()) return;
+  const r = Object.assign({}, cloudConfig().ripristinati || {});
+  r[tab] = Array.from(new Set((r[tab] || []).concat(String(id))));
+  cloudAggiornaConfig({ ripristinati: r });
+}
+// Il gancio di Store.restore.
+function onRipristino(coll, id) { if (SCHEMA[coll]) cloudSegnaRipristino(SCHEMA[coll].table, id); }
+// Quelli che questo invio rimanda davvero: un id senza la sua riga
+// nell'upsert non toglie niente.
+function cloudRipristiniDi(payload) {
+  const r = (cloudConfig() || {}).ripristinati || {}, fuori = {};
+  Object.keys(r).forEach(t => {
+    const inviati = new Set(((payload.upsert || {})[t] || []).map(x => String(x.id)));
+    const ids = (r[t] || []).filter(id => inviati.has(id));
+    if (ids.length) fuori[t] = ids;
+  });
+  return fuori;
+}
+// Dopo un invio riuscito: via quelli partiti, e quelli il cui record non c'è
+// più (eliminato di nuovo). Gli altri — ripristinati mentre l'invio era in
+// viaggio — aspettano il prossimo.
+function cloudTogliRipristini(inviati) {
+  const c = cloudConfig(); if (!c || !c.ripristinati) return;
+  const r = {};
+  Object.keys(c.ripristinati).forEach(t => {
+    const dove = cloudDove(t), via = new Set((inviati && inviati[t]) || []);
+    const ids = (c.ripristinati[t] || []).filter(id => {
+      if (via.has(id)) return false;
+      if (!dove) return false;
+      if (!dove.figlio) return !!Store.getById(dove.coll, id);
+      return (Store.getAll(dove.coll) || []).some(rec => (rec[dove.figlio] || []).some(x => x && String(x[dove.rowId]) === id));
+    });
+    if (ids.length) r[t] = ids;
+  });
+  cloudAggiornaConfig({ ripristinati: Object.keys(r).length ? r : null });
 }
 function cloudPayloadVuoto(p) { return !p.upsert && !p.remove && !p.settings; }  // `base` da sola non è un invio
 
@@ -482,11 +531,14 @@ async function cloudInviaLotto() {
     _cloud.impostazioniAvvisate = true;
     showToast("Le impostazioni condivise le cambia solo l'amministratore: questa modifica resta su questo PC", 'error');
   }
+  const ripristina = cloudRipristiniDi(payload);
+  if (Object.keys(ripristina).length) payload.ripristina = ripristina;
   if (!cloudPayloadVuoto(payload)) {
     cloudSegna('invio');
     const r = await cloudRpc('push_changes', { payload });
     if (r && Array.isArray(r.rejected) && r.rejected.length) cloudAvvisaRespinti(r.rejected);
   }
+  cloudTogliRipristini(ripristina);
   Store.markSynced(mark);
   _cloud.senzaBase.clear();
   cloudAggiornaConfig({ soglia: sogliaNuova });
@@ -529,7 +581,7 @@ async function cloudRiparaRiferimento(e) {
     if (!dove) return false;
     const c = cloudConfig();
     const since = c.since ? new Date(Date.parse(c.since) - CLOUD_MARGINE_MS).toISOString() : null;
-    const r = await cloudRpc('pull_changes', { since });
+    const r = await cloudPullDa(since);
     const eliminati = ((r && r.removed && r.removed[mancante[1]]) || []).map(String);
     // Solo quelli che il lotto cita davvero: il vincolo ha il nome di serie di
     // Postgres, «<tabella>_<colonna>_fkey», e dice quale colonna guardare.
@@ -545,12 +597,12 @@ async function cloudRiparaRiferimento(e) {
     (Store.getAll(dove.coll) || []).forEach(rec => {
       if (!dove.figlio) {
         if (!tolti.has(String(rec.id))) return;
-        touch(rec); _cloud.senzaBase.add(rec.id); nomi.push(cloudNomeDi(rec));
+        touch(rec); _cloud.senzaBase.add(rec.id); cloudSegnaRipristino(mancante[1], rec.id); nomi.push(cloudNomeDi(rec));
         return;
       }
       (rec[dove.figlio] || []).forEach(riga => {
         if (!riga || !tolti.has(String(riga[dove.rowId]))) return;
-        riga.updatedAt = nowISO(); touch(rec); _cloud.senzaBase.add(rec.id); nomi.push(cloudNomeDi(rec));
+        riga.updatedAt = nowISO(); touch(rec); _cloud.senzaBase.add(rec.id); cloudSegnaRipristino(mancante[1], riga[dove.rowId]); nomi.push(cloudNomeDi(rec));
       });
     });
     // Il citato manca anche qui: l'ha eliminato questo PC, e il pull che ne
@@ -619,7 +671,7 @@ function cloudSchedaSuperata() { return typeof Store.superata === 'function' && 
 async function cloudRicevi() {
   const c = cloudConfig();
   const since = c.since ? new Date(Date.parse(c.since) - CLOUD_MARGINE_MS).toISOString() : null;
-  const r = await cloudRpc('pull_changes', { since });
+  const r = await cloudPullDa(since);
   // Fra la domanda e la risposta qualcuno può aver cominciato a scrivere: si
   // applica al giro dopo, ripartendo dallo stesso punto.
   if (Store.hasPendingChanges() || !cloudPuoApplicare()) return 0;
@@ -970,11 +1022,56 @@ async function cloudDopoAccesso() {
   if (!getUser(p.id)) await cloudRiceviForzato();
   return { primo: false, stato: st };
 }
+// ── Lo scaricamento completo, a pagine (dalla 0.105.4) ──
+// pull_changes() senza `since` rimanda l'intero archivio in una risposta: su
+// un archivio di qualche anno supera i limiti di tempo e di dimensione di
+// Supabase, e il PC nuovo non entrava più. Qui una tabella alla volta, a
+// pagine (pull_pagina in schema.sql), con la stessa forma di risposta.
+// L'istante si prende **prima** di leggere: quello che cambia nel frattempo
+// ha un synced_at più recente e arriva di nuovo al giro dopo.
+// Uno schema di prima della 0.105.4 non ha pull_pagina: si torna al pull intero.
+let CLOUD_PAGINA = 1000;   // `let`: le prove lo abbassano
+function cloudTabelleTutte() {
+  const t = new Set();
+  Object.keys(SCHEMA).forEach(c => {
+    if (SCHEMA[c].table) t.add(SCHEMA[c].table);
+    Object.values(SCHEMA[c].children || {}).forEach(f => { if (f.table) t.add(f.table); });
+  });
+  return Array.from(t);
+}
+async function cloudPagine(tab, chiave) {
+  const tutte = [];
+  let dopo = null;
+  for (;;) {
+    const r = await cloudRpc('pull_pagina', { tab, dopo, quanti: CLOUD_PAGINA });
+    const pag = (r && r.rows) || [];
+    pag.forEach(x => tutte.push(x));
+    if (pag.length < CLOUD_PAGINA) return tutte;
+    dopo = chiave(pag[pag.length - 1]);
+  }
+}
+async function cloudPullTutto() {
+  const st = await cloudRpc('archivio_stato', {});
+  const tables = {}, removed = {};
+  let settings = null;
+  try {
+    for (const tab of cloudTabelleTutte()) tables[tab] = await cloudPagine(tab, x => String(x.id));
+    (await cloudPagine('sync_tombstones', x => x.tab + '\t' + x.id)).forEach(x => { (removed[x.tab] = removed[x.tab] || []).push(x.id); });
+    settings = (await cloudPagine('settings', () => null))[0] || null;
+  } catch (e) {
+    if (e && e.codice === 'PGRST202') return cloudRpc('pull_changes', { since: null });
+    throw e;
+  }
+  return { now: st.ora, tables, removed, settings };
+}
+// Il pull: da un istante, o tutto a pagine.
+function cloudPullDa(since) { return since ? cloudRpc('pull_changes', { since }) : cloudPullTutto(); }
+
 // Un pull applicato comunque (all'accesso nessuno sta scrivendo).
 async function cloudRiceviForzato() {
   const c = cloudConfig();
   const since = c.since ? new Date(Date.parse(c.since) - CLOUD_MARGINE_MS).toISOString() : null;
-  const r = await cloudRpc('pull_changes', { since });
+  const r = await cloudPullDa(since);
   if (Store.hasPendingChanges()) await cloudInvia();
   if (!cloudSalvatoDavvero(Store.applicaRemoto(d => { cloudApplica(d, r); }))) return;
   cloudAggiornaConfig({ since: r.now });
@@ -1006,7 +1103,7 @@ async function cloudCaricaArchivio(stato) {
   const ripresa = !!(cloudConfig() || {}).caricamento;
   if (!stato.vuoto && !ripresa) throw cloudErrore('server', 'L\'archivio condiviso contiene già dei dati: scaricalo invece di caricare');
   cloudAggiornaConfig({ caricamento: true });
-  const iniziale = await cloudRpc('pull_changes', { since: null });
+  const iniziale = await cloudPullDa(null);
   const profili = righeLocali({ profiles: (iniziale.tables && iniziale.tables.profiles) || [] }).profiles;
   const perEmail = new Map(profili.filter(p => p.email).map(p => [String(p.email).toLowerCase(), p]));
   const mappa = {}, fuori = [];
@@ -1025,37 +1122,82 @@ async function cloudCaricaArchivio(stato) {
     else { const me = d.users.find(u => u.id === io.id); me.role = 'admin'; me.active = true; }
     // Più recenti del profilo che il trigger ha creato all'invito.
     d.users.forEach(u => { delete u.passwordHash; delete u.passwordSalt; touch(u); });
+    // I colleghi già invitati che in questo archivio non ci sono: entrano così
+    // come il server li ha (sospesi, finché non si dà loro un ruolo). Prima
+    // restavano fuori anche dopo: il loro profilo è più vecchio del punto da
+    // cui si riceve, e in Gestione → Utenti non comparivano finché non cambiava.
+    const presi = new Set(d.users.map(u => u.id));
+    profili.forEach(p => { if (!presi.has(p.id)) d.users.push(p); });
   });
   Store.ripristinaBase({});
   const { changes, mark } = Store.takeChanges();
   const { payload } = cloudPayload(changes, null, true);
-  // A gruppi, nell'ordine delle dipendenze: un archivio di qualche anno può
-  // pesare megabyte, e un invio solo rischia il limite della richiesta. Ogni
-  // gruppo cita solo sé stesso e quelli prima.
-  const GRUPPI = [
-    ['profiles', 'suppliers', 'customers', 'families', 'sub_families', 'work_centers', 'work_center_suppliers', 'jobs'],
-    ['items', 'item_components', 'item_operations', 'item_cycle_rows', 'item_prices',
-      'rfqs', 'rfq_lines', 'production_plans', 'production_plan_lines'],   // i listini citano le richieste d'offerta
-  ];
-  const usati = new Set();
-  const invii = GRUPPI.map(g => g.filter(t => payload.upsert && payload.upsert[t]).map(t => (usati.add(t), t)))
-    .map(ts => ({ upsert: Object.fromEntries(ts.map(t => [t, payload.upsert[t]])) }));
-  const resto = Object.keys(payload.upsert || {}).filter(t => !usati.has(t));
-  invii.push({ upsert: Object.fromEntries(resto.map(t => [t, payload.upsert[t]])), settings: payload.settings });
-  for (const p of invii) {
-    if (!Object.keys(p.upsert).length && !p.settings) continue;
-    if (!p.settings) delete p.settings;
-    await cloudRpc('push_changes', { payload: p });
-  }
+  // A pezzi, nell'ordine delle dipendenze: un archivio di qualche anno pesa
+  // megabyte, e un invio solo supera i limiti della richiesta (cloudLottiCaricamento).
+  for (const p of cloudLottiCaricamento(payload, CLOUD_LOTTO_RIGHE)) await cloudRpc('push_changes', { payload: p });
   Store.markSynced(mark);
   const dopo = await cloudRpc('archivio_stato', {});
   cloudAggiornaConfig({ allineato: true, caricamento: false, since: dopo.ora, soglia: new Date(Date.now() - CLOUD_MARGINE_FIGLI_MS).toISOString() });
   cloudSalvaBase();
   return { fuori };
 }
+// I lotti del primo caricamento (a pezzi dalla 0.105.4: prima erano tre
+// gruppi di tabelle intere, e una tabella grande stava tutta in una richiesta).
+// Ogni lotto cita solo righe già arrivate — i vincoli si controllano alla fine
+// di ogni push_changes — quindi le tabelle vanno in ordine di dipendenza, e:
+//  - gli articoli si citano fra loro (macchina, gruppo) e citano il loro
+//    listino attivo, che arriva dopo di loro: passano una prima volta senza
+//    quei riferimenti, e una seconda, intera, alla fine;
+//  - le righe di distinta e di ciclo (`replace`) viaggiano con il loro
+//    articolo, perché il server le sostituisce solo per i padri dello stesso invio;
+//  - i listini citano le richieste d'offerta, che citano i piani.
+let CLOUD_LOTTO_RIGHE = 500;   // `let`: le prove lo abbassano
+const CLOUD_ORDINE_CARICAMENTO = ['profiles', 'suppliers', 'customers', 'families', 'sub_families', 'work_centers',
+  'work_center_suppliers', 'jobs', 'items*', 'production_plans', 'production_plan_lines', 'rfqs', 'rfq_lines',
+  'item_prices', 'items', 'orders', 'order_lines', 'production_orders', 'production_order_phases',
+  'production_order_materials', 'work_orders', 'work_order_lines', 'production_declarations', 'stock_movements',
+  'order_receipts', 'productions', 'item_revisions', 'attachment_docs', 'attachments', 'reminders', 'trash'];
+const CLOUD_AUTORIFERIMENTI = { items: ['machine_item_id', 'group_item_id', 'active_price_id'] };
+function cloudLottiCaricamento(payload, n) {
+  const up = payload.upsert || {}, lotti = [], fatti = new Set();
+  const figliSost = {};
+  Object.keys(SCHEMA).forEach(c => Object.values(SCHEMA[c].children || {}).forEach(f => {
+    if (f.merge === 'replace') (figliSost[SCHEMA[c].table] = figliSost[SCHEMA[c].table] || []).push(f.table);
+  }));
+  const sost = new Set([].concat(...Object.values(figliSost)));
+  const aPezzi = (righe, fn) => { for (let i = 0; i < righe.length; i += n) lotti.push({ upsert: fn(righe.slice(i, i + n)) }); };
+  CLOUD_ORDINE_CARICAMENTO.concat(Object.keys(up)).forEach(voce => {
+    const prima = voce.endsWith('*'), t = prima ? voce.slice(0, -1) : voce;
+    if (!up[t] || sost.has(t) || fatti.has(t)) return;
+    if (prima) {
+      const via = CLOUD_AUTORIFERIMENTI[t] || [];
+      aPezzi(up[t], r => ({ [t]: r.map(x => { const y = Object.assign({}, x); via.forEach(k => { if (k in y) y[k] = null; }); return y; }) }));
+      return;
+    }
+    fatti.add(t);
+    const figli = (figliSost[t] || []).filter(f => up[f]);
+    const perPadre = {};
+    figli.forEach(f => {
+      const col = (CLOUD_TABLES[f] && CLOUD_TABLES[f].parent) || 'parent_id';
+      const m = perPadre[f] = new Map();
+      up[f].forEach(x => { const k = String(x[col]); if (!m.has(k)) m.set(k, []); m.get(k).push(x); });
+    });
+    aPezzi(up[t], r => {
+      const p = { [t]: r };
+      figli.forEach(f => {
+        const rr = [];
+        r.forEach(x => (perPadre[f].get(String(x.id)) || []).forEach(y => rr.push(y)));
+        if (rr.length) p[f] = rr;
+      });
+      return p;
+    });
+  });
+  if (payload.settings) lotti.push({ settings: payload.settings });
+  return lotti;
+}
 // Sostituisce l'archivio di questo PC con quello condiviso.
 async function cloudScaricaArchivio() {
-  const r = await cloudRpc('pull_changes', { since: null });
+  const r = await cloudPullTutto();
   const settings = (r.settings && r.settings.data) || {};
   const nuovo = dbDaCloud(r.tables || {}, { settings, schemaVersion: SCHEMA_VERSION });
   if (!cloudSalvatoDavvero(Store.sostituisciDaRemoto(nuovo))) throw cloudErrore('server', 'L\'archivio scaricato non si è salvato su questo PC: libera spazio e riprova');
@@ -1079,6 +1221,7 @@ function cloudCollega(url, chiave) {
   if (!u) throw cloudErrore('config', 'Indirizzo del progetto non valido');
   if (!String(chiave || '').trim()) throw cloudErrore('config', 'Manca la chiave pubblica');
   cloudScrivi(CLOUD_KEY, { url: u, chiave: String(chiave).trim(), allineato: false, since: null, soglia: null });
+  cloudScrivi(CLOUD_SCOLLEGATO_KEY, null);
   cloudScrivi(CLOUD_SESS_KEY, null);
   cloudScrivi(CLOUD_BASE_KEY, null);
 }
@@ -1194,12 +1337,63 @@ function cloudPannelloRiscarica() {
 // Da dentro lo fa solo un amministratore (dalla 0.105.3): un collega qualsiasi
 // trasformava il PC in una copia locale, con le modifiche in coda orfane. Prima
 // dell'accesso resta la via d'uscita di un PC che non arriva più al server.
+// Scollegato, il PC torna locale con gli utenti di Supabase ma senza password:
+// la prima password scritta diventa quella di un amministratore (submitLogin).
+// Dalla 0.105.4 la strada è solo per l'amministratore che ha scollegato. Dalla
+// schermata d'accesso, dove nessuno è dentro, si scollegava senza dire chi si
+// era: chiunque passasse dal PC poteva scollegarlo ed entrare da amministratore.
+// Ora lì servono le credenziali di un amministratore dell'archivio condiviso.
 function cloudPannelloScollega() {
-  if (typeof currentUser !== 'undefined' && currentUser && !roleGuardRuolo('manage')) return;
-  askConfirm('Scollegare questo PC dall\'archivio condiviso? I dati restano qui, ma da adesso sono una copia locale: le modifiche non arrivano più ai colleghi e quelle dei colleghi non arrivano qui.', () => {
+  const dentro = typeof currentUser !== 'undefined' && !!currentUser;
+  if (dentro && !roleGuardRuolo('manage')) return;
+  const msg = 'Scollegare questo PC dall\'archivio condiviso? I dati restano qui, ma da adesso sono una copia locale: le modifiche non arrivano più ai colleghi e quelle dei colleghi non arrivano qui.';
+  if (dentro) {
+    askConfirm(msg, () => {
+      cloudScollega();
+      cloudScrivi(CLOUD_SCOLLEGATO_KEY, { id: currentUser.id });
+      location.reload();
+    });
+    return;
+  }
+  openModal(`<h3>${ico('cloud', 'tinted pill', '')} Scollega questo PC</h3>
+    <p>${esc(msg)}</p>
+    <p>Serve l'accesso di un <strong>amministratore</strong> dell'archivio condiviso: dopo, su questo PC entra solo lui, e la password che sceglie diventa quella del PC.</p>
+    <div class="modal-field"><label>Email</label><input type="email" id="cl-sc-email" autocomplete="username"></div>
+    <div class="modal-field"><label>Password</label><input type="password" id="cl-sc-pw" autocomplete="current-password"></div>
+    <p class="cl-esito" id="cl-sc-esito"></p>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" style="background:var(--red)" onclick="cloudScollegaDaFuori()">Scollega</button></div>`);
+}
+async function cloudScollegaDaFuori() {
+  const email = val('cl-sc-email'), pw = (document.getElementById('cl-sc-pw') || {}).value || '';
+  const esito = t => { const e = document.getElementById('cl-sc-esito'); if (e) e.textContent = t; };
+  if (!email || !pw) { esito('Scrivi email e password'); return false; }
+  esito('Verifica…');
+  try {
+    await cloudAccediConPassword(email, pw);
+    const st = await cloudRpc('archivio_stato', {});
+    const p = st && st.profilo;
+    if (!p || p.role !== 'admin' || p.active === false) {
+      await cloudEsci();
+      esito('Solo un amministratore attivo dell\'archivio condiviso scollega questo PC');
+      return false;
+    }
     cloudScollega();
+    cloudScrivi(CLOUD_SCOLLEGATO_KEY, { id: p.id });
     location.reload();
-  });
+    return true;
+  } catch (e) {
+    esito(e && e.cloud === 'rete'
+      ? 'Il server non risponde: per scollegare serve verificare chi sei. Riprova quando c\'è la rete.'
+      : cloudMsgErrore(e));
+    return false;
+  }
+}
+// La prima password del PC scollegato: di chi ha scollegato, se si sa. Un PC
+// scollegato prima della 0.105.4 non lo sa, e resta come allora.
+function cloudPrimaPasswordPer(u) {
+  const chi = cloudLeggi(CLOUD_SCOLLEGATO_KEY);
+  return !chi || !chi.id || (!!u && u.id === chi.id);
 }
 
 // ── Il primo collegamento, dopo l'accesso ──
@@ -1343,8 +1537,14 @@ function cloudRipristinaSessione() {
   const nuova = cloudLeggi('bomtrack_cloud_nuovapassword');
   if (nuova) { renderLogin(); setTimeout(() => cloudNuovaPassword(nuova), 60); return true; }
   if (!c.allineato || !s.user) { renderLogin(); setTimeout(() => cloudLoginCompleta().catch(e => _loginError(cloudMsgErrore(e))), 60); return true; }
+  // La durata della sessione vale anche qui (dalla 0.105.4): prima la
+  // postazione condivisa lasciata aperta restava aperta per sempre, perché la
+  // sessione di Supabase si rinnova da sola. Si conta dall'ultimo uso, come in
+  // locale; una sessione di prima della 0.105.4 non ha la data e parte da adesso.
+  if (s.ts && typeof sessionExpired === 'function' && sessionExpired(s)) { cloudEsci(); return false; }
   const u = getUser(s.user.id);
   if (!u || u.active === false) return false;
+  cloudScrivi(CLOUD_SESS_KEY, Object.assign({}, s, { ts: nowISO() }));
   doLogin(u, false);
   cloudParti();
   return true;

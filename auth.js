@@ -104,8 +104,10 @@ function submitLogin() {
   // senza password locali: quelle le aveva Supabase. Senza questa strada
   // nessuno potrebbe più entrare, nemmeno per ricollegarlo. Vale solo finché
   // **nessuno** ha una password qui, e solo per un amministratore attivo: la
-  // prima password scritta diventa la sua.
-  if (u && u.role === 'admin' && u.active !== false && !userList().some(x => x.passwordHash)) {
+  // prima password scritta diventa la sua. Dalla 0.105.4 è solo di chi ha
+  // scollegato (cloudPrimaPasswordPer).
+  if (u && u.role === 'admin' && u.active !== false && !userList().some(x => x.passwordHash)
+      && (typeof cloudPrimaPasswordPer !== 'function' || cloudPrimaPasswordPer(u))) {
     if (password.length < 4) return _loginError('Scegli una password di almeno 4 caratteri: diventa la tua password su questo PC');
     setUserPassword(u, password);
     Store.update('users', u.id, { passwordHash: u.passwordHash, passwordSalt: u.passwordSalt });

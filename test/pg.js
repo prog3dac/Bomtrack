@@ -65,7 +65,9 @@ function nuovoDatabase() {
     // nei test i profili li porta l'invio, come nella migrazione vera, dove
     // l'app li manda con una data più recente di quella del trigger.
     utenti: ids => ids.length && esegui(nome, `insert into auth.users (id) select unnest(array[${ids.map(i => `'${i}'::uuid`).join(',')}]) on conflict do nothing;
-      delete from public.profiles where id = any(array[${ids.map(i => `'${i}'::uuid`).join(',')}]);`),
+      set session_replication_role = replica;  -- senza trigger: il primo è l'ultimo amministratore, e non si eliminerebbe
+      delete from public.profiles where id = any(array[${ids.map(i => `'${i}'::uuid`).join(',')}]);
+      set session_replication_role = origin;`),
     // Un utente come lo crea un invito: la riga in auth.users, e il trigger fa il resto.
     invita: (id, email, chi) => esegui(nome, `insert into auth.users (id, email, raw_user_meta_data) values ('${id}', '${email}', ${chi ? `'${JSON.stringify({ name: chi })}'::jsonb` : 'null'});`),
     chiudi: () => { try { esegui('postgres', `drop database if exists ${nome};`); } catch (e) { /* resta: si vede */ } },

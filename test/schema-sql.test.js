@@ -151,6 +151,32 @@ describe('Postgres: invio e lettura', () => {
     Object.keys(righe).forEach(t => assert.equal(r.applied[t], righe[t].length, t));
   }));
 
+  // 0.105.4: il primo caricamento va a pezzi. Ogni pezzo cita solo righe
+  // già arrivate, articoli che si citano fra loro e righe di distinta compresi.
+  it('il primo caricamento entra anche a pezzi di una riga sola', conDb(d => {
+    d.utenti(utenti);
+    const lotti = ev(a, `cloudLottiCaricamento({ upsert: dbVersoCloud(db), settings: { data: { currency: '€' } } }, 1)`);
+    assert.ok(lotti.length > Object.keys(righe).length);
+    lotti.forEach(l => assert.deepEqual(d.push(l).rejected, []));
+    Object.keys(righe).forEach(t => assert.equal(d.sql(`select count(*) from ${t}`), String(righe[t].length), t));
+    const g = righe.items.find(x => x.machine_item_id);
+    assert.equal(d.sql(`select machine_item_id from items where id = '${g.id}'`), g.machine_item_id, 'il riferimento fra articoli torna');
+  }));
+
+  // 0.105.4: lo scaricamento completo a pagine porta le stesse righe del pull intero.
+  it('la lettura a pagine porta le stesse righe del pull intero', conDb(d => {
+    pieno(d);
+    d.push({ remove: { reminders: [righe.reminders[0].id] } });
+    const tutto = d.pull(null);
+    const pagina = (tab, dopo) => JSON.parse(d.sql(`select public.pull_pagina('${tab}', ${dopo == null ? 'null' : `'${dopo}'`}, 2)`)).rows;
+    const tutte = (tab, chiave) => { let r = [], p, dopo = null; do { p = pagina(tab, dopo); r = r.concat(p); if (p.length) dopo = chiave(p[p.length - 1]); } while (p.length === 2); return r; };
+    const perId = x => [...x].sort((u, v) => String(u.id).localeCompare(String(v.id)));
+    Object.keys(tutto.tables).forEach(t => assert.deepEqual(perId(tutte(t, x => x.id)), perId(tutto.tables[t]), t));
+    assert.deepEqual(tutte('sync_tombstones', x => x.tab + '\t' + x.id), [{ tab: 'reminders', id: righe.reminders[0].id }]);
+    assert.deepEqual(pagina('settings', null)[0].data, { currency: '€' });
+    assert.throws(() => d.sql(`select public.pull_pagina('pg_authid', null, 2)`), /tabella sconosciuta/);
+  }));
+
   it('e torna identico, passando da dbDaCloud', conDb(d => {
     pieno(d);
     const p = d.pull(null);
@@ -215,6 +241,18 @@ describe('Postgres: invio e lettura', () => {
     assert.equal(r.rejected.length, 1, 'la cancellazione vince');
     assert.equal(d.sql(`select count(*) from attachments where id = '${att.id}'`), '0');
     assert.deepEqual(d.push({ upsert: { attachments: [ritocco] } }).rejected, [], 'un ripristino, senza versione di partenza, passa');
+  }));
+
+  // 0.105.4: un ripristino dichiarato toglie la lapide anche con una data più
+  // vecchia (l'orologio del PC indietro). Solo per le righe che rimanda.
+  it('un ripristino dichiarato passa sopra la lapide anche con una data vecchia', conDb(d => {
+    pieno(d);
+    const att = righe.attachments[0], altro = righe.reminders[0];
+    d.push({ remove: { attachments: [att.id], reminders: [altro.id] } });
+    const r = d.push({ upsert: { attachments: [att] }, ripristina: { attachments: [att.id], reminders: [altro.id] } });
+    assert.deepEqual(r.rejected, []);
+    assert.equal(d.sql(`select count(*) from attachments where id = '${att.id}'`), '1');
+    assert.equal(d.sql(`select count(*) from sync_tombstones where id = '${altro.id}'`), '1', 'una riga che non viaggia resta cancellata');
   }));
 
   it('il pull da un istante porta solo ciò che è cambiato dopo', conDb(d => {
@@ -345,10 +383,63 @@ describe('Postgres: permessi per ruolo (D6)', () => {
     assert.throws(() => d.come(OFF).push({ upsert: { rfqs: [dopo(righe.rfqs[0], { title: 'x' })] } }), /il ruolo officina non scrive: rfqs/);
   }));
 
+  // 0.105.4: le policy dicono quali tabelle, non quali colonne. Dall'API
+  // l'officina cambiava fornitore e prezzi di un ordine, o lo eliminava.
+  it('l\'officina sui documenti cambia lo stato e basta, anche dall\'API', conDb(d => {
+    const o = righe.orders[0], ol = righe.order_lines[0], odp = righe.production_orders[0];
+    assert.deepEqual(d.come(OFF).push({ upsert: { orders: [dopo(o, { status: 'evaso' })] } }).rejected, []);
+    assert.equal(d.sql(`select status from orders where id = '${o.id}'`), 'evaso');
+    const r = d.come(OFF).push({ upsert: { orders: [Object.assign(dopo(o, { status: 'evaso', supplier_id: null }), { updated_at: '2026-06-01T00:00:00.000Z' })],
+      order_lines: [dopo(ol, { price: 0.01 })], production_orders: [dopo(odp, { qty: 999 })] } });
+    assert.deepEqual(r.rejected.map(x => x.tab).sort(), ['order_lines', 'orders', 'production_orders']);
+    assert.notEqual(d.sql(`select coalesce(supplier_id::text, '-') from orders where id = '${o.id}'`), '-');
+    assert.notEqual(d.sql(`select price from order_lines where id = '${ol.id}'`), '0.01');
+    assert.equal(d.come(OFF).push({ upsert: { orders: [dopo(o, { id: U(720), number: 'ODA-2026-720' })] } }).rejected.length, 1, 'un ordine nuovo no');
+    assert.throws(() => d.come(OFF).push({ remove: { orders: [o.id] } }), /il ruolo officina non elimina orders/);
+    assert.throws(() => d.come(OFF).push({ remove: { order_lines: [ol.id] } }), /non elimina order_lines/);
+    assert.equal(d.sql('select count(*) from sync_tombstones'), '0');
+    // L'ODL che nasce da una fase esterna dell'ordine di produzione sì.
+    const w = righe.work_orders[0], wl = righe.work_order_lines[0];
+    const odl = dopo(w, { id: U(721), number: 'ODL-2026-721' }), riga = dopo(wl, { id: U(722), work_order_id: U(721) });
+    assert.deepEqual(d.come(OFF).push({ upsert: { work_orders: [odl], work_order_lines: [riga] } }).rejected, []);
+    // Acquisti invece scrive tutto.
+    assert.deepEqual(d.come(ACQ).push({ upsert: { order_lines: [dopo(ol, { price: 0.01 })] } }).rejected, []);
+  }));
+
+  // 0.105.4: una voce del cestino la scrive solo chi scrive il record che contiene.
+  it('il cestino: una voce la scrive chi scrive il suo record, e la toglie chiunque elimini', conDb(d => {
+    const voce = (id, coll) => ({ id, coll, deleted_at: '2026-05-01T00:00:00.000Z', deleted_by: OFF, record: { id: U(731), name: 'finto' } });
+    assert.throws(() => d.come(OFF).push({ upsert: { trash: [voce(U(730), 'items')] } }), /row-level security/);
+    assert.deepEqual(d.come(OFF).push({ upsert: { trash: [voce(U(732), 'prodDecls')] } }).rejected, []);
+    assert.deepEqual(d.come(PROG).push({ upsert: { trash: [voce(U(730), 'items')] } }).rejected, []);
+    d.come(OFF).push({ remove: { trash: [U(730)] } });
+    assert.equal(d.sql(`select count(*) from trash where id = '${U(730)}'`), '0', 'svuotare il cestino resta di tutti');
+  }));
+
+  it('la tabella di ogni collezione è quella di SCHEMA', conDb(d => {
+    const attese = ev(a, 'Object.fromEntries(Object.keys(SCHEMA).map(c => [c, SCHEMA[c].table]))');
+    Object.keys(attese).forEach(c => assert.equal(d.sql(`select coalesce(public.tabella_di_coll('${c}'), '-')`), attese[c], c));
+    assert.equal(d.sql(`select coalesce(public.tabella_di_coll('nessuna'), '-')`), '-');
+  }));
+
   it('una cancellazione vietata si ferma, invece di lasciare una lapide senza cancellare', conDb(d => {
     assert.throws(() => d.come(ACQ).push({ remove: { attachments: [righe.attachments[0].id] } }), /non scrive: attachments/);
     assert.equal(d.sql('select count(*) from sync_tombstones'), '0');
     assert.equal(d.sql(`select count(*) from attachments`), '1');
+  }));
+
+  // 0.105.4: l'ultimo amministratore attivo non si elimina, nemmeno dal
+  // pannello; e un archivio con dei profili non regala più l'amministrazione.
+  it('l\'ultimo amministratore non si elimina, e il primo arrivato è amministratore solo su un archivio vuoto', conDb(d => {
+    assert.throws(() => d.push({ remove: { profiles: [ADMIN] } }), /deve restare almeno un amministratore attivo/);
+    assert.throws(() => d.sql(`delete from auth.users where id = '${ADMIN}'`), /deve restare almeno un amministratore attivo/);
+    d.sql(`update profiles set role = 'admin' where id = '${ACQ}'`);
+    d.push({ remove: { profiles: [ACQ] } });
+    assert.equal(d.sql(`select count(*) from profiles where id = '${ACQ}'`), '0', 'con un altro amministratore si elimina');
+    // Un archivio rimasto senza amministratori attivi (com'era possibile prima).
+    d.sql(`set session_replication_role = replica; update profiles set active = false where id = '${ADMIN}'; set session_replication_role = origin;`);
+    d.invita(U(740), 'nuovo@x.it', 'Nuovo');
+    assert.equal(d.sql(`select role || ' ' || active from profiles where id = '${U(740)}'`), 'lettore false');
   }));
 
   it('il lettore legge tutto e non scrive niente', conDb(d => {

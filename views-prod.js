@@ -426,6 +426,29 @@ function opPrelevaMateriale(o, righe, note, chiave) {
   return n;
 }
 
+// ─── Il resto del materiale (dalla 0.105.4) ───
+// All'avvio della prima fase si può prelevare meno del previsto (lo scaffale
+// non bastava, il resto arriva dopo). Il residuo restava lì senza un comando
+// per farlo uscire: solo un movimento a mano, scollegato dall'ordine.
+// `righe` [{ itemId, qty }]; senza, tutto il residuo.
+function opPrelevaResto(id, righe, note) {
+  if (!opGuard(id, 'reception')) return false;
+  const o = getOdp(id); if (!o) return false;
+  const prima = opPrima(o);
+  if (!prima || !opAvviata(o, prima)) { showToast('La prima fase non è avviata: il materiale esce con il suo avvio', 'error'); return false; }
+  const lista = (righe || opMaterialeResiduo(o).map(m => ({ itemId: m.itemId, qty: m.residuo })))
+    .filter(r => (Number(r.qty) || 0) > 0);
+  if (!lista.length) { showToast('Non c\'è materiale da prelevare', 'error'); return false; }
+  const n = opPrelevaMateriale(o, lista, note);
+  touch(o); saveDB();
+  return n;
+}
+function opPuoPrelevareResto(o) {
+  const prima = opPrima(o);
+  return !!prima && ['lanciato', 'corso', 'completato'].includes(o.status) && opAvviata(o, prima)
+    && opMaterialeResiduo(o).some(m => m.residuo > 0.000001);
+}
+
 // ─── Dichiarazione di avanzamento ───
 // Pezzi buoni e scarti. Sull'**ultima** fase i pezzi buoni entrano a magazzino
 // col codice della parte: è l'altro estremo del ciclo, ed è il solo momento in
@@ -644,6 +667,34 @@ function odpSetField(id, field, value) {
   }
   touch(o); saveDB(); renderOdp();
 }
+// La tendina dello stato non scrive il campo: passa dal comando (dalla
+// 0.105.4). «Annullato» scritto a mano non chiedeva del materiale da rendere,
+// «Lanciato» saltava i controlli del lancio, e «Bozza» su un ordine già
+// avviato riapriva fasi e materiale sotto movimenti già registrati.
+function odpCambiaStato(id, value) {
+  const o = getOdp(id); if (!o) return;
+  renderOdp();   // la tendina torna allo stato vero: lo cambia il comando, se passa
+  if (!value || value === o.status) return;
+  if (value === 'annullato') { odpAnnulla(id); return; }
+  if (value === 'chiuso') { odpChiudi(id); return; }
+  if (o.status === 'bozza') {
+    if (value === 'lanciato') odpLancia(id);
+    else showToast('Un ordine in bozza prima si lancia: «In corso» e «Completato» li dà l\'avanzamento delle fasi', 'error');
+    return;
+  }
+  if (!opGuard(id, 'ops')) return;
+  const dichiarato = opDeclsOf(o).length > 0;
+  if (value === 'bozza') {
+    if (dichiarato) { showToast('Su questo ordine ci sono già dichiarazioni: in bozza non torna. Si annulla, o si annullano prima le dichiarazioni', 'error'); return; }
+    o.status = 'bozza'; touch(o); saveDB(); renderOdp(); showToast('Stato: Bozza');
+    return;
+  }
+  // Lanciato, in corso, completato: li dà l'avanzamento. Da chiuso o annullato
+  // si riapre, e lo stato è quello che le fasi dicono.
+  o.status = 'lanciato'; odpAutoStatus(o); touch(o); saveDB(); renderOdp();
+  if (o.status === value) showToast('Stato: ' + ODP_STATUS[value]);
+  else showToast(`Stato: ${ODP_STATUS[o.status]}. Lo dà l'avanzamento delle fasi`, 'error');
+}
 function delOdp(id) {
   const o = getOdp(id); if (!o || !roleGuard('docs')) return;
   if (!guardiaDocumentoUltimo(o, db.prodOrders, 'Annullalo invece di eliminarlo.')) return;
@@ -721,7 +772,7 @@ function renderOdpEdit(id) {
       <div class="modal-field"><label>Commessa</label>
         <select class="lock-contract" onchange="odpSetField('${id}','jobId',this.value)">${jobOptions(o.jobId || '')}</select></div>
       <div class="modal-field"><label>Stato</label>
-        <select onchange="odpSetField('${id}','status',this.value)">
+        <select onchange="odpCambiaStato('${id}',this.value)">
           ${Object.entries(ODP_STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
         </select></div>
       <div class="modal-field" style="grid-column:1/-1"><label>Note</label>
@@ -825,8 +876,10 @@ function odpMaterialBlock(o) {
       <p class="empty-text" style="text-align:left">Il ciclo di questa parte non ha materiale a magazzino: lo mette chi la lavora. Non c'è niente da prelevare, e infatti non c'è niente da scaricare.</p></div>`;
   }
   const prima = opPrima(o);
+  const resto = opPuoPrelevareResto(o) && canWriteShop('docs')
+    ? `<button class="add-btn-sm" onclick="opPrelevaRestoModal('${esc(o.id)}')" title="Fa uscire il materiale non prelevato all'avvio">Preleva il resto</button>` : '';
   return `<div class="mrp-section">
-    <div class="cycle-section-head"><h3>${ico('package', 'tinted pill', '')} Materiale del ciclo</h3></div>
+    <div class="cycle-section-head"><h3>${ico('package', 'tinted pill', '')} Materiale del ciclo</h3>${resto}</div>
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Esce <strong>una volta sola</strong>, all'avvio della fase ${prima ? esc(String(prima.seq)) : ''}${prima && prima.supplierId ? ` — e va da ${esc(prima.supplierName || '')}` : ''}. Le quantità vengono dal ciclo moltiplicate per i pezzi dell'ordine.</p>
     <div class="table-wrap"><table>
       <thead><tr><th scope="col">Codice</th><th scope="col">Articolo</th><th scope="col" style="width:100px">Per pezzo</th>
@@ -1040,6 +1093,32 @@ function opAvviaSave(id, faseId) {
   closeModal(); renderOdp();
   if (sotto.length) showToast('Fase avviata, ma l\'esistente va sotto zero: ' + sotto.join('; '), 'error');
   else showToast('Fase avviata');
+}
+function opPrelevaRestoModal(id) {
+  const o = getOdp(id); if (!o || !roleGuardShop('docs')) return;
+  const prima = opPrima(o); if (!prima) return;
+  const righe = opMaterialeResiduo(o).filter(m => m.residuo > 0.000001);
+  window.__opRestoMat = righe.map(m => m.itemId);
+  openModal(`${opTestaModal(o, prima, 'Preleva il resto del materiale')}
+    <div style="display:flex;flex-direction:column;gap:6px">${righe.map((m, i) => `<div class="mgmt-item">
+      <span style="width:110px;font-family:var(--mono)">${esc(m.code)}</span>
+      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">già uscito ${fmtQty(m.gia)} ${esc(m.uom)} · a magazzino ${fmtQty(onHandOf(m.itemId))}</span></span>
+      <input class="num" type="number" id="op-pr-${i}" min="0" step="any" value="${esc(String(+m.residuo.toFixed(4)))}" style="width:110px" aria-label="Quantità di ${esc(m.code)} che esce">
+      <span class="empty-text" style="padding:0;width:40px">${esc(m.uom)}</span>
+    </div>`).join('')}</div>
+    <p class="empty-text" style="text-align:left;padding:8px 0">Esce come all'avvio: ${prima.supplierId ? `verso <strong>${esc(prima.supplierName || supplierName(prima.supplierId) || '')}</strong>, con un'uscita a conto lavoro` : 'come consumo di produzione'}.</p>
+    <div class="modal-field"><label>Nota</label><input id="op-pr-note" placeholder="es. lotto 13 / bolla 418" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="opPrelevaRestoSave('${esc(id)}')">Preleva</button>
+    </div>`, true, 'form');
+}
+function opPrelevaRestoSave(id) {
+  const righe = (window.__opRestoMat || []).map((itemId, i) => ({ itemId, qty: Math.max(0, rawNum('op-pr-' + i)) }));
+  const n = opPrelevaResto(id, righe, val('op-pr-note'));
+  if (n === false) return;
+  closeModal(); renderOdp();
+  showToast(n === 1 ? '1 materiale prelevato' : n + ' materiali prelevati');
 }
 function opDichiaraModal(id, faseId) {
   const x = opFaseDi(id, faseId); if (!x) return;
