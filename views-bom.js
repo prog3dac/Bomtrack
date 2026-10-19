@@ -735,7 +735,7 @@ function controllaAnelliDistinta() {
     + (anelli.length > 3 ? ` e altri ${anelli.length - 3}` : '');
   const primo = anelli[0].find(id => { const x = getItem(id); return x && isAssembly(x.type); }) || anelli[0][0];
   avvisoFisso('anelli', `<strong>Distinta ad anello</strong>: ${giri}. Un articolo contiene sé stesso, di solito per due modifiche fatte insieme da due PC: costi e fabbisogni di quel ramo sono incompleti finché non si toglie una delle righe.
-    <button class="avviso-fisso-azione" onclick="apriAnelloDistinta(${esc(JSON.stringify(primo))})">Apri distinta</button>`);
+    <button class="avviso-fisso-azione" onclick="apriAnelloDistinta(${jsAttr(primo)})">Apri distinta</button>`);
   return anelli;
 }
 function apriAnelloDistinta(id) {

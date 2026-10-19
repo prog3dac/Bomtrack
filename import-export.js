@@ -1507,7 +1507,7 @@ function renderSerieDocumenti() {
   const blocchi = serie.map(s => {
     const doppi = s.doppi.map(d => `<div style="margin-top:4px">
         <span style="font-family:var(--mono);font-weight:700;color:var(--red)">${esc(d.numero)}</span> — ${d.docs.length} documenti:
-        ${d.docs.map((doc, i) => `<button class="btn-ghost" onclick="apriDocumentoDiSerie('${s.sigla}', ${esc(JSON.stringify(String(doc.id)))})">${ico('edit', 'tinted', '')} ${i + 1}°${doc.date ? ' del ' + esc(String(doc.date).slice(0, 10)) : ''}</button>`).join(' ')}
+        ${d.docs.map((doc, i) => `<button class="btn-ghost" onclick="apriDocumentoDiSerie('${s.sigla}', ${jsAttr(doc.id)})">${ico('edit', 'tinted', '')} ${i + 1}°${doc.date ? ' del ' + esc(String(doc.date).slice(0, 10)) : ''}</button>`).join(' ')}
       </div>`).join('');
     const buchi = s.buchi.length
       ? `<div style="margin-top:4px">${s.buchi.length === 1 ? 'Manca 1 numero' : `Mancano ${s.buchi.length} numeri`} sotto il ${String(s.massimo).padStart(3, '0')}:
