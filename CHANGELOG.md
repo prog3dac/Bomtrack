@@ -2,6 +2,13 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.105.9 — 2026-10-19
+
+**Librerie PDF aggiornate.** jsPDF passa dalla 2.5.1 alla 4.2.1 e il suo modulo delle tabelle (autotable) dalla 3.8.2 alla 5.0.8. La 2.5.1 aveva dodici vulnerabilità pubblicate, fra cui blocchi del browser con espressioni o immagini costruite apposta e iniezione di oggetti dentro il PDF; la 4.2.1 non ne ha di note. I PDF escono uguali a prima: richieste d'offerta, ordini, fabbisogno, distinta, elenchi ed etichette QR, generati con le librerie vecchie e nuove e confrontati pagina per pagina, differiscono solo per l'ora di stampa. Le impronte dei file nuovi sono in `vendor/LEGGIMI.md`. Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- Suite completa verde; confronto rasterizzato dei PDF in Chromium con jsPDF 2.5.1 e 4.2.1.
+
 ### 0.105.8 — 2026-10-19
 
 **Ordini di lavoro doppi fra fabbisogno e ordine di produzione.** Un ordine di lavoro generato dal piano prima dell'ordine di produzione porta le fasi del piano, non il legame con la fase dell'ODP: l'ODP nato dopo non lo vedeva e offriva **genera ordine di lavoro** sulla stessa tratta, cioè un secondo ordine allo stesso terzista per gli stessi pezzi. Ora la tratta risulta già commissionata e la fase mostra il numero di quell'ordine. La regola: un ordine di lavoro del piano, non annullato, copre la tratta del **primo** ODP dello stesso piano che ha quella fase; un ODP rilanciato dopo per i pezzi mancanti resta libero di commissionare i suoi. Il senso opposto (ODL dall'ODP, poi dal piano) era già bloccato. Nessun cambio a `supabase/schema.sql`.
