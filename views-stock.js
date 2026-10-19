@@ -1523,11 +1523,10 @@ function stockExportSpec(soloIds) {
   const fam = getFamily(leggi('family'));
   const sub = (fam && (fam.subs || []).find(s => s.id === leggi('subfamily'))) || null;
   const mac = getItem(leggi('machine')), grp = getItem(leggi('group'));
-  const righe = stockFilteredRows(soloIds).map(it => {
-    const st = stockState(it);
-    return [it.code || '', it.name || '', typeLabel(it.type), codingLabel(it) || familyLabel(it),
-      itemUom(it), ubicazioneOf(it), st.onHand, st.incoming, st.committed, st.libero, st.safety, st.lotSize];
-  });
+  // Le colonne sono quelle accese a schermo (dalla 0.105.6, vedi export-lists.js).
+  // Lo stato si calcola una volta per riga, non una per colonna.
+  const vis = listColonneVisibili('stock', STOCK_EXPORT_COLS);
+  const righe = stockFilteredRows(soloIds).map(it => vis.riga({ it, st: stockState(it) }));
   return {
     titolo: 'Magazzino',
     slug: 'magazzino',
@@ -1544,16 +1543,33 @@ function stockExportSpec(soloIds) {
     ],
     sezioni: [{
       nome: 'Magazzino',
-      colonne: [
-        { h: 'Codice', w: 18 }, { h: 'Descrizione', w: 34 }, { h: 'Tipo', w: 16 }, { h: 'Famiglia', w: 24 },
-        { h: 'U.M.', w: 8 }, { h: 'Ubicazione', w: 14 }, { h: 'Esistente', w: 12, num: true }, { h: 'In arrivo', w: 12, num: true },
-        { h: 'Impegnato', w: 12, num: true }, { h: 'Libero', w: 12, num: true },
-        { h: 'Scorta minima', w: 14, num: true }, { h: 'Lotto', w: 10, num: true },
-      ],
+      colonne: vis.colonne,
       righe,
     }],
   };
 }
+// Le colonne del magazzino nel file, per chiave del registro (COLUMNS.stock).
+// Ogni valore riceve { it, st }: l'articolo e il suo stato di giacenza.
+const STOCK_EXPORT_COLS = {
+  code: { h: 'Codice', w: 18, v: x => x.it.code || '' },
+  name: { h: 'Descrizione', w: 34, v: x => x.it.name || '' },
+  type: { h: 'Tipo', w: 16, v: x => typeLabel(x.it.type) },
+  family: { h: 'Famiglia', w: 24, v: x => codingLabel(x.it) || familyLabel(x.it) },
+  uom: { h: 'U.M.', w: 8, v: x => itemUom(x.it) },
+  location: { h: 'Ubicazione', w: 14, v: x => ubicazioneOf(x.it) },
+  onhand: { h: 'Esistente', w: 12, num: true, v: x => x.st.onHand },
+  incoming: { h: 'In arrivo', w: 12, num: true, v: x => x.st.incoming },
+  committed: { h: 'Impegnato', w: 12, num: true, v: x => x.st.committed },
+  free: { h: 'Libero', w: 12, num: true, v: x => x.st.libero },
+  safety: { h: 'Scorta minima', w: 14, num: true, v: x => x.st.safety },
+  lot: { h: 'Lotto', w: 10, num: true, v: x => x.st.lotSize },
+  subfamily: { h: 'Sottofamiglia', w: 20, v: x => (usesFamily(x.it.type) && x.it.familyId ? subFamilyName(x.it.familyId, x.it.subFamilyId) || '' : '') },
+  lotmode: { h: 'Modalità lotto', w: 14, v: x => (x.it.lotSize ? LOT_MODE_LABELS[lotModeOf(x.it)] || '' : '') },
+  atsupplier: { h: 'Presso terzi', w: 12, num: true, v: x => Number(x.st.atSupplier) || 0 },
+  inwork: { h: 'In lavorazione', w: 12, num: true, v: x => Number(x.st.inWork) || 0 },
+  notes: { h: 'Note', w: 30, v: x => x.it.notes || '' },
+  autore: { h: 'Creato/aggiornato da', w: 24, v: x => recordAuthorShort(x.it) },
+};
 
 // ═══════════════════════════════════════════════════════════
 //  Riordino sotto scorta
