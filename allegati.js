@@ -298,6 +298,14 @@ function allegatoScarica(id) {
       // Il record c'è e il file no: succede se il deposito del browser è stato
       // svuotato (pulizia dei dati dei siti) o se il database è stato importato
       // da un altro PC — il backup JSON i file non li porta, e lo dice.
+      // Con l'archivio condiviso il motivo è un altro, e più comune (dalla
+      // 0.105.6): l'elenco degli allegati viaggia fra i PC, i byte no. Dare
+      // la colpa al backup JSON mandava a cercare un problema che non c'era.
+      if (typeof cloudAttivo === 'function' && cloudAttivo()) {
+        const chi = rec.createdBy ? actorName(rec.createdBy) : '';
+        showToast(`Il file è stato caricato su un altro PC${chi ? ' (da ' + chi + ')' : ''}: l'archivio condiviso porta l'elenco degli allegati, non i file. Chiedilo a chi l'ha caricato, o mettilo nella cartella d'archivio`, 'error');
+        return;
+      }
       showToast('Il file non è su questo computer: il backup JSON non trasporta gli allegati', 'error');
       return;
     }
@@ -408,11 +416,19 @@ function allegatiBody(id) {
   // allegare a chi non può usare il nuovo significherebbe lasciarlo senza.
   // L'input sta nascosto e lo apre il pulsante: un <input type=file> nudo non
   // somiglia a nessun altro controllo dell'app.
+  //
+  // Con l'archivio condiviso il pulsante resta, ma dice la verità (dalla
+  // 0.105.6): il file finisce nel browser di questo PC, mentre l'allegato
+  // compare a tutti i colleghi — che cliccandolo non trovano niente. Chi
+  // carica credeva di aver condiviso il disegno.
+  const condiviso = typeof cloudAttivo === 'function' && cloudAttivo();
   const ripiego = (puoScrivere && archivioStato() === 'non-supportato')
     ? `<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <input type="file" id="allegato-file" style="display:none" accept="${ALLEGATI_ACCETTATI}" onchange="allegatoScelto(event)">
-        <button class="add-btn-sm" onclick="document.getElementById('allegato-file').click()">+ Carica file nel database</button>
-        <span class="empty-text" style="padding:0">Fino a ${ALLEGATO_MAX_MB} MB l'uno, e fuori dal backup JSON.</span>
+        <button class="${condiviso ? 'btn-outline' : 'add-btn-sm'}" onclick="document.getElementById('allegato-file').click()">+ Carica file ${condiviso ? 'solo su questo PC' : 'nel database'}</button>
+        ${condiviso
+          ? `<span class="empty-text" style="padding:0;color:var(--orange)"><strong>Il file resta solo su questo PC:</strong> i colleghi vedranno l'allegato nell'elenco ma non potranno aprirlo. Per condividerlo usa la cartella d'archivio comune, da Chrome o Edge.</span>`
+          : `<span class="empty-text" style="padding:0">Fino a ${ALLEGATO_MAX_MB} MB l'uno, e fuori dal backup JSON.</span>`}
       </div>`
     : '';
 

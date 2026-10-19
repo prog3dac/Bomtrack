@@ -251,6 +251,35 @@ describe('Spazio ed errori', () => {
   });
 });
 
+// 0.105.6: la copia di soccorso di un archivio illeggibile si scriveva dopo, e
+// se falliva lo diceva solo la console; il primo salvataggio scriveva i dati
+// d'esempio sopra l'originale.
+describe('Archivio illeggibile in IndexedDB, copia di soccorso fallita', () => {
+  it('il salvataggio successivo si ferma e l\'originale resta', async () => {
+    const storage = makeStorage();
+    const idb = fakeIdb();
+    const a = loadApp({ silent: true, storage });
+    a.ctx.__idb = idb;
+    await a.eval('Store.preparaArchivio(__idb)');
+    await asciuga();
+    idb.dbs.get('bomtrack_archivio').stores.get('archivio').set('db', '{"items":[');
+    await a.eval('Store.preparaArchivio(__idb)');
+    idb.quota = true;
+    a.eval('Store.load()');
+    a.asRole('admin');
+    a.eval('Store.commit()');
+    await asciuga();
+    idb.quota = false;
+    await asciuga();
+    assert.equal(idb.leggi('db'), '{"items":[', 'l\'originale è ancora al suo posto');
+    assert.equal(a.eval('Store.isUnsaved()'), true);
+    // Scaricato il file, si torna a salvare.
+    a.eval('Store.scaricatoIlleggibile(); Store.commit()');
+    await asciuga();
+    assert.notEqual(idb.leggi('db'), '{"items":[');
+  });
+});
+
 // ── Il browser vero ──
 let playwright = null;
 try { require.resolve('playwright'); playwright = true; } catch (e) { playwright = false; }
