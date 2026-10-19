@@ -1528,15 +1528,16 @@ function wipeAllConfirm() {
 // Nessun documento o articolo sopravvive a un reset: azzera anche ciò che le viste tengono aperto
 function resetViewState() {
   currentBomId = null; reportBomId = null;
-  currentRfqId = null; currentOrderId = null;
-  rfqView = 'list'; orderView = 'list';
-  rfqUnlockedId = null; orderUnlockedId = null;
-  rfqDirty = false; orderDirty = false;
+  currentRfqId = null; currentOrderId = null; currentOdlId = null;
+  rfqView = 'list'; orderView = 'list'; odlView = 'list';
+  rfqUnlockedId = null; orderUnlockedId = null; odlUnlockedId = null;
+  rfqDirty = false; orderDirty = false; odlDirty = false;
   rfqCompareSel = []; bomExpanded = new Set(); favOnly = false;
   // Dalla funzione che li disegna, non a mano: scritti qui, i due estremi del
   // filtro per periodo erano già rimasti fuori il giorno stesso in cui sono nati.
   docFilters.rfq = docFiltersVuoti();
   docFilters.order = docFiltersVuoti();
+  docFilters.odl = docFiltersVuoti();   // gli ordini di lavoro erano rimasti fuori (dalla 0.105.6)
 }
 
 // ═══════════════════════════════════════════════════════════
