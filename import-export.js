@@ -1264,6 +1264,69 @@ function backupAutoAvvia() {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') backupAutoEsegui(false); });
   }
 }
+// ─── Una copia prima di buttare via tutto (dalla 0.105.6) ───
+// Importa JSON, Ripristina dati esempio e Azzera tutto sostituiscono l'intero
+// archivio. La conferma c'era, ma chiedeva «hai esportato un backup?» e si
+// fidava della risposta. Adesso la copia la fa l'app, prima, con i due mezzi
+// che ha già:
+//   - con il backup automatico attivo, un file a parte nella sua cartella,
+//     `bomtrack_prima_di_<cosa>_AAAA-MM-GG_HHMM.json`. Non il file del giorno:
+//     quello si riscrive da solo nella mezz'ora successiva con i dati nuovi, e
+//     la copia sparirebbe proprio quando serve. Un nome diverso, quindi, che la
+//     potatura degli ultimi quattordici non tocca;
+//   - altrimenti, il download del JSON, come Esporta JSON.
+// Se la cartella non risponde lo si dice e si chiede se scaricare il file e
+// proseguire: senza una copia l'operazione non parte.
+//
+// Niente copia se in memoria c'è un archivio illeggibile (i dati d'esempio al
+// posto di quelli veri): salvarli non proteggerebbe niente, e importare un
+// backup è proprio il modo di uscirne. L'originale lo protegge già loadDB().
+//
+// `fn` riceve il nome della copia, o '' quando non se n'è fatta nessuna.
+function copiaPrimaDi(cosa, fn) {
+  if (typeof dbLoadError !== 'undefined' && dbLoadError) return Promise.resolve(fn(''));
+  let payload;
+  try { payload = Store.exportSnapshot(); }
+  catch (e) {
+    showToast('Copia di sicurezza non riuscita (' + (e && e.message || e) + '): operazione annullata', 'error');
+    return Promise.resolve(null);
+  }
+  const d = new Date();
+  const ora = String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+  const nome = `bomtrack_prima_di_${cosa}_${oggiISO()}_${ora}.json`;
+  const scarica = () => {
+    scaricaJson(nome, payload);
+    return fn(nome);
+  };
+  if (!backupAutoAttivo()) return Promise.resolve(scarica());
+  return backupAutoHandle()
+    .then(h => {
+      if (!h) throw new Error('cartella non disponibile');
+      return _permesso(h, true).then(ok => {
+        if (!ok) throw new Error('il browser non ha concesso di scriverci');
+        return h.getFileHandle(nome, { create: true })
+          .then(fh => fh.createWritable())
+          .then(w => Promise.resolve(w.write(payload)).then(() => w.close()));
+      });
+    })
+    .then(() => {
+      showToast('Copia di sicurezza salvata in ' + backupAutoNome() + ': ' + nome);
+      return fn(nome);
+    }, e => {
+      console.error('Copia di sicurezza non riuscita:', e);
+      return new Promise(fatto => {
+        askConfirm(`La copia di sicurezza nella cartella ${backupAutoNome()} non è riuscita (${String(e && e.message || e)}).\n\nPosso scaricarla come file e proseguire, oppure fermarmi qui.`,
+          () => fatto(scarica()), { title: 'Copia di sicurezza non riuscita', ok: 'Scarica e prosegui' });
+      });
+    });
+}
+// Lo stesso <a download> usa e getta di Esporta JSON.
+function scaricaJson(nome, testo) {
+  const url = URL.createObjectURL(new Blob([testo], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nome;
+  a.click(); URL.revokeObjectURL(url);
+}
 function backupAutoLine() {
   if (!archivioSupportato()) {
     return '<p style="margin-top:6px"><strong>Backup automatico:</strong> non disponibile in questo browser. Servono Chrome o Edge, con Bomtrack aperta da un indirizzo https o localhost.</p>';
@@ -1307,6 +1370,7 @@ function renderBackup() {
   ${renderTrash()}
   ${renderStorico()}
   ${renderDuplicateCodes()}
+  ${renderSerieDocumenti()}
   <div class="cloud-section" style="margin-top:16px">
     <div style="flex:1">
       <strong>${ico('warning', 'tinted', '')} Registro errori</strong>
@@ -1415,6 +1479,52 @@ function renderDuplicateCodes() {
     </div></div>`;
 }
 
+// Lo stesso controllo per i numeri dei documenti (dalla 0.105.6): doppioni e
+// buchi delle serie di quest'anno e dell'anno scorso — vedi
+// controlloSerieDocumenti() in core.js. Come per i codici, l'app non rinumera
+// niente da sola: un numero sta già su un ordine spedito o su una fattura.
+const SERIE_APRI = {
+  RFQ: id => { setView('rfq'); openRfqEdit(id); },
+  ODA: id => { setView('orders'); openOrderEdit(id); },
+  ODL: id => { setView('odl'); openOdlEdit(id); },
+  ODP: id => { setView('odp'); openOdpEdit(id); },
+  FAB: id => { setView('mrp'); openPlanEdit(id); },
+  COM: id => { setView('jobs'); openJobEdit(id); },
+  // Una modifica tecnica sta dentro la sua revisione: si apre l'articolo.
+  MT: id => { const r = getRevision(id); if (r) apriAnelloDistinta(r.itemId); },
+};
+function apriDocumentoDiSerie(sigla, id) { if (SERIE_APRI[sigla]) SERIE_APRI[sigla](id); }
+function renderSerieDocumenti() {
+  const anno = new Date().getFullYear();
+  const serie = controlloSerieDocumenti([anno, anno - 1]);
+  if (!serie.length) {
+    return `<div class="cloud-section" style="margin-top:16px"><div style="flex:1">
+      <strong>${ico('search', 'tinted', '')} Numeri dei documenti</strong>
+      <p>Nessun numero doppio e nessun buco nelle serie del ${anno} e del ${anno - 1}.</p>
+    </div></div>`;
+  }
+  const MAX_BUCHI = 30;
+  const blocchi = serie.map(s => {
+    const doppi = s.doppi.map(d => `<div style="margin-top:4px">
+        <span style="font-family:var(--mono);font-weight:700;color:var(--red)">${esc(d.numero)}</span> — ${d.docs.length} documenti:
+        ${d.docs.map((doc, i) => `<button class="btn-ghost" onclick="apriDocumentoDiSerie('${s.sigla}', ${esc(JSON.stringify(String(doc.id)))})">${ico('edit', 'tinted', '')} ${i + 1}°${doc.date ? ' del ' + esc(String(doc.date).slice(0, 10)) : ''}</button>`).join(' ')}
+      </div>`).join('');
+    const buchi = s.buchi.length
+      ? `<div style="margin-top:4px">${s.buchi.length === 1 ? 'Manca 1 numero' : `Mancano ${s.buchi.length} numeri`} sotto il ${String(s.massimo).padStart(3, '0')}:
+          <span style="font-family:var(--mono)">${s.buchi.slice(0, MAX_BUCHI).map(n => String(n).padStart(3, '0')).join(', ')}${s.buchi.length > MAX_BUCHI ? ` e altri ${s.buchi.length - MAX_BUCHI}` : ''}</span></div>`
+      : '';
+    return `<div class="mgmt-item" style="display:block">
+      <div style="font-family:var(--mono);font-weight:700">${esc(s.prefisso)}…</div>${doppi}${buchi}</div>`;
+  }).join('');
+  const conDoppi = serie.some(s => s.doppi.length);
+  return `<div class="cloud-section" style="border-color:${conDoppi ? 'var(--red)' : 'var(--orange)'};margin-top:16px">
+    <div style="flex:1">
+      <strong style="color:${conDoppi ? 'var(--red)' : 'var(--orange)'}">${ico('search', 'tinted', '')} Numeri dei documenti — ${serie.length} serie da guardare</strong>
+      <p>Un numero doppio nasce da un ripristino o da due PC che numeravano ciascuno per conto suo; un buco da una prenotazione dell'archivio condiviso mai usata. L'app non rinumera niente da sola: quel numero può essere già su un ordine spedito. Apri i documenti, decidi quale tiene il numero e, se serve, annota il buco per chi controlla.</p>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">${blocchi}</div>
+    </div></div>`;
+}
+
 // Il riquadro dell'archivio condiviso, in testa al Backup: dice dove stanno
 // i dati e porta alla scheda del collegamento (cloud.js).
 function renderArchivioCondiviso() {
@@ -1456,14 +1566,14 @@ function importBackup(ev) {
     const cosa = [`${n.items} articoli`, `${n.suppliers} fornitori`, `${n.rfqs} richieste`,
       `${n.orders} ordini`, `${n.plans} piani`, `${n.users} utenti`].join(', ');
     const attuale = `${db.items.length} articoli, ${db.suppliers.length} fornitori, ${db.rfqs.length} richieste, ${db.orders.length} ordini`;
-    askConfirm(`Il backup contiene: ${cosa}.\n\nSostituirà i dati attuali (${attuale}), che andranno persi.`, () => {
+    askConfirm(`Il backup contiene: ${cosa}.\n\nSostituirà i dati attuali (${attuale}). Prima ne salvo una copia.`, () => copiaPrimaDi('import', copia => {
       try {
         Store.importSnapshot(data);
       } catch (e) { showToast('Import non riuscito: ' + e.message, 'error'); return; }
       resetViewState();
       if (!reconcileSession()) return;   // il backup può contenere altri utenti
-      setView('bom'); showToast('Backup importato');
-    }, { title: '📥 Importa backup', ok: 'Importa e sovrascrivi' });
+      setView('bom'); showToast(copia ? 'Backup importato. I dati di prima sono in ' + copia : 'Backup importato');
+    }), { title: '📥 Importa backup', ok: 'Importa e sovrascrivi' });
   };
   reader.onerror = () => { console.error(reader.error); showToast('Impossibile leggere il file', 'error'); };
   reader.readAsText(file);
@@ -1472,12 +1582,12 @@ function importBackup(ev) {
 function resetDB() {
   if (cloudBlocca()) return;
   if (!roleGuard('manage')) return;
-  askConfirm('Ripristinare i dati di esempio? Tutti i dati attuali saranno persi.', () => {
+  askConfirm('Ripristinare i dati di esempio? I dati attuali saranno sostituiti: prima ne salvo una copia.', () => copiaPrimaDi('ripristino', copia => {
     Store.reset();
     resetViewState();
     if (!reconcileSession()) return;
-    setView('bom'); showToast('Dati ripristinati');
-  }, { title: '↩ Ripristina dati di esempio', ok: 'Ripristina' });
+    setView('bom'); showToast(copia ? 'Dati ripristinati. Quelli di prima sono in ' + copia : 'Dati ripristinati');
+  }), { title: '↩ Ripristina dati di esempio', ok: 'Ripristina' });
 }
 // Dopo un reset o un import il database sotto i piedi è cambiato: l'utente della
 // sessione può non esserci più. Se il nuovo database non ha utenti si ricrea
@@ -1505,7 +1615,7 @@ function wipeAll() {
     <p class="confirm-text">Il database verrà svuotato <strong>completamente</strong> e in modo <strong>irreversibile</strong>:
       ${db.items.length} articoli, ${db.rfqs.length} richieste, ${db.orders.length} ordini, ${(db.plans || []).length} piani
       (${size.mb.toFixed(2)} MB). Resti dentro come amministratore, tutto il resto sparisce.</p>
-    <p class="confirm-text">Hai esportato un backup JSON? Scrivi <strong>AZZERA</strong> qui sotto per confermare.</p>
+    <p class="confirm-text">Prima di azzerare ne salvo una copia: nella cartella del backup automatico, se è attivo, altrimenti come file scaricato. Scrivi <strong>AZZERA</strong> qui sotto per confermare.</p>
     <div class="modal-field"><input id="wipe-word" placeholder="AZZERA" autocomplete="off"
       style="text-transform:uppercase;font-family:var(--mono);font-weight:700"></div>
     <div class="modal-actions">
@@ -1518,25 +1628,28 @@ function wipeAllConfirm() {
   if (!roleGuard('manage')) return;
   if (val('wipe-word').toUpperCase() !== 'AZZERA') { showToast('Scrivi AZZERA per confermare', 'error'); return; }
   closeModal();
-  // L'utente che azzera sopravvive come amministratore: la sessione resta valida
-  Store.clearAll(currentUser ? JSON.parse(JSON.stringify(currentUser)) : null);
-  currentUser = currentUser ? getUser(currentUser.id) : null;
-  resetViewState();
-  renderUserPill();
-  setView('bom'); showToast('Database azzerato');
+  return copiaPrimaDi('azzera', copia => {
+    // L'utente che azzera sopravvive come amministratore: la sessione resta valida
+    Store.clearAll(currentUser ? JSON.parse(JSON.stringify(currentUser)) : null);
+    currentUser = currentUser ? getUser(currentUser.id) : null;
+    resetViewState();
+    renderUserPill();
+    setView('bom'); showToast(copia ? 'Database azzerato. I dati di prima sono in ' + copia : 'Database azzerato');
+  });
 }
 // Nessun documento o articolo sopravvive a un reset: azzera anche ciò che le viste tengono aperto
 function resetViewState() {
   currentBomId = null; reportBomId = null;
-  currentRfqId = null; currentOrderId = null;
-  rfqView = 'list'; orderView = 'list';
-  rfqUnlockedId = null; orderUnlockedId = null;
-  rfqDirty = false; orderDirty = false;
+  currentRfqId = null; currentOrderId = null; currentOdlId = null;
+  rfqView = 'list'; orderView = 'list'; odlView = 'list';
+  rfqUnlockedId = null; orderUnlockedId = null; odlUnlockedId = null;
+  rfqDirty = false; orderDirty = false; odlDirty = false;
   rfqCompareSel = []; bomExpanded = new Set(); favOnly = false;
   // Dalla funzione che li disegna, non a mano: scritti qui, i due estremi del
   // filtro per periodo erano già rimasti fuori il giorno stesso in cui sono nati.
   docFilters.rfq = docFiltersVuoti();
   docFilters.order = docFiltersVuoti();
+  docFilters.odl = docFiltersVuoti();   // gli ordini di lavoro erano rimasti fuori (dalla 0.105.6)
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1548,6 +1661,9 @@ async function init() {
   await Store.preparaArchivio();
   if (Store.archivio === 'indexeddb') aggiornaStimaSpazio();
   Store.load();
+  // Un anello ricevuto nella sessione precedente è ancora lì: l'avviso deve
+  // tornare anche dopo aver ricaricato la pagina (dalla 0.105.6).
+  controllaAnelliDopoArrivo();
   cloudAvvio();
   const ver = 'v' + APP_VERSION;
   ['app-version', 'app-version-login'].forEach(id => {

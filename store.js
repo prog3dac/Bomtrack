@@ -585,8 +585,13 @@ function isAssembly(t) { return t === 'macchina' || t === 'gruppo' || t === 'sot
 // bene. La segnalazione sta in core.js dietro l'hook onLoadError, come per i
 // salvataggi falliti: store.js resta senza codice di interfaccia.
 let dbLoadError = null;
+// L'archivio illeggibile così com'era, per poterlo scaricare come file, e se
+// la copia di soccorso non è riuscita (dalla 0.105.6): in quel caso commit()
+// si rifiuta di scrivere, perché scriverebbe sopra l'unica copia.
+let _grezzoIlleggibile = null, _senzaCopia = false;
 function loadDB() {
   dbLoadError = null;
+  _grezzoIlleggibile = null; _senzaCopia = false;
   _childFp = null;   // un database nuovo: il prossimo passaggio fa da riferimento
   let grezzo = null;
   try { grezzo = adapter.read(); }
@@ -598,10 +603,20 @@ function loadDB() {
     try { db = JSON.parse(grezzo); migrateDB(); markSynced(); storicoFotografa(); return; }
     catch (e) {
       console.error('Dati salvati illeggibili:', e);
-      let salvato = false;
+      // Tre esiti, non due (dalla 0.105.6): copia fatta adesso, copia già
+      // presente da un caricamento precedente, copia **non riuscita**. Prima
+      // gli ultimi due erano lo stesso `false`, e quando la copia non ci stava
+      // — succede proprio con gli archivi grandi, contro i 5 MB di
+      // localStorage — l'avviso diceva che ne esisteva già una. Non era vero,
+      // e il primo salvataggio scriveva i dati d'esempio sopra l'unico originale.
+      let salvato = false, fallito = false;
       try { salvato = !!(adapter.rescue && adapter.rescue(grezzo)); }
-      catch (e2) { /* nemmeno lo spazio per la copia: l'originale è ancora al suo posto */ }
-      dbLoadError = { kind: 'parse', err: e, bytes: grezzo.length, rescued: salvato };
+      catch (e2) { fallito = true; console.error('Copia di soccorso non riuscita:', e2); }
+      _grezzoIlleggibile = grezzo;
+      // Senza copia l'originale sta solo al suo posto: niente salvataggi finché
+      // chi usa l'app non se l'è scaricato (Store.scaricatoIlleggibile).
+      _senzaCopia = fallito;
+      dbLoadError = { kind: 'parse', err: e, bytes: grezzo.length, rescued: salvato, rescueFailed: fallito };
     }
   }
   db = JSON.parse(JSON.stringify(defaultDB));
@@ -1464,6 +1479,14 @@ function takeChanges() {
     mark: { ids: snapshotSignatures(), children: snapshotChildIds(), settings: safeStringify(db.settings) },
   };
 }
+// Dopo ogni arrivo dal server si cercano gli anelli di distinta (dalla 0.105.6):
+// è l'unico punto in cui ne può nascere uno che createsCycle() non ha visto —
+// vedi anelliDistinta() in views-bom.js, caricato dopo, da cui il riferimento
+// differito. Un errore qui non deve mai far fallire una ricezione già salvata.
+function controllaAnelliDopoArrivo() {
+  if (typeof controllaAnelliDistinta !== 'function') return;
+  try { controllaAnelliDistinta(); } catch (e) { console.warn('Controllo anelli di distinta non riuscito:', e); }
+}
 // Senza argomento rifotografa l'adesso: è il caso del caricamento, dove la
 // fotografia *è* lo stato appena letto. Con l'argomento vale la fotografia
 // presa da takeChanges() prima dell'invio.
@@ -1544,6 +1567,8 @@ const LocalAdapter = {
   // Mette da parte un blob illeggibile perché resti recuperabile a mano. Una
   // copia sola: se il caricamento fallisce una seconda volta, la prima copia è
   // quella buona — la seconda sarebbe già il database demo salvato sopra.
+  // Restituisce false se una copia c'era già; se la scrittura non riesce
+  // l'eccezione passa, e loadDB() la distingue da «c'era già».
   rescue(payload) {
     if (localStorage.getItem(DB_KEY_RESCUE) != null) return false;
     localStorage.setItem(DB_KEY_RESCUE, payload);
@@ -1582,7 +1607,7 @@ const IDB_STORE = 'archivio';
 // oltre qualche decina di migliaia di record non ci stava più (dalla 0.105.5).
 const IDB_EXTRA = ['cloudBase'];
 function creaIdbAdapter(fabbrica) {
-  let conn = null, copia = null, copiaRescue = null, inVolo = 0, segnato = false;
+  let conn = null, copia = null, copiaRescue = null, inVolo = 0, segnato = false, attesaRescue = null;
   const extra = {};   // altre chiavi accanto all'archivio (la fotografia del cloud), lette all'avvio
   const attesa = req => new Promise((ok, ko) => { req.onsuccess = () => ok(req.result); req.onerror = () => ko(req.error); });
   const completa = tx => new Promise((ok, ko) => {
@@ -1634,22 +1659,38 @@ function creaIdbAdapter(fabbrica) {
       inVolo++;
       // La revisione che commit() sta per scrivere, presa nello stesso istante.
       const rev = lsRev() + 1;
-      scriviTutto([['db', payload], ['rev', rev]])
+      // Dopo la copia di soccorso, se ce n'è una in corso: se quella non
+      // arriva su disco, nemmeno questa deve arrivarci (dalla 0.105.6).
+      const scrivi = () => scriviTutto([['db', payload], ['rev', rev]]);
+      (attesaRescue ? attesaRescue.then(scrivi) : scrivi())
         .then(() => {
           inVolo--;
           if (!segnato) { try { localStorage.setItem(DB_KEY_IN_IDB, '1'); segnato = true; } catch (e) { /* si riprova alla prossima */ } }
           scritturaRiuscita();
         },
-              e => { inVolo--; commitFailed(isQuotaError(e) ? 'quota' : 'storage', e, payload.length); });
+              e => { inVolo--; commitFailed(e && e.copiaSoccorso ? 'rescue' : isQuotaError(e) ? 'quota' : 'storage', e, payload.length); });
     },
     size() { return copia ? copia.length : 0; },
+    // La copia qui si scrive dopo: rescue() risponde subito, ma ogni write()
+    // successiva aspetta che la copia sia su disco, e se la copia fallisce
+    // fallisce anche lei — l'originale resta al suo posto, e l'avviso del
+    // salvataggio dice perché. Prima l'errore finiva solo in console, e il
+    // primo salvataggio scriveva i dati d'esempio sopra l'unico originale.
     rescue(payload) {
       if (copiaRescue != null) return false;
       copiaRescue = payload;
-      scriviTutto([['illeggibile', payload]]).catch(e => console.error('Copia di soccorso non salvata:', e));
+      attesaRescue = scriviTutto([['illeggibile', payload]]).catch(e => {
+        console.error('Copia di soccorso non salvata:', e);
+        copiaRescue = null;
+        throw Object.assign(new Error('copia di soccorso non salvata'), { copiaSoccorso: true, causa: e });
+      });
+      // Nessuno la aspetta se non arriva una scrittura: il rifiuto non va perso.
+      attesaRescue.catch(() => {});
       return true;
     },
     rescued() { return copiaRescue; },
+    // L'originale è stato scaricato come file: le scritture non aspettano più la copia.
+    liberaRescue() { attesaRescue = null; },
     // Dalla 0.105.5. Restituisce false se la chiave non è fra quelle previste.
     scriviExtra(k, v) {
       if (!IDB_EXTRA.includes(k)) return false;
@@ -1910,6 +1951,9 @@ const Store = {
     let payload;
     try { payload = JSON.stringify(db); }
     catch (e) { return commitFailed('serialize', e, 0); }
+    // Archivio illeggibile e nessuna copia messa da parte: scrivere adesso
+    // cancellerebbe l'unico originale (dalla 0.105.6). Si sblocca scaricandolo.
+    if (_senzaCopia) return commitFailed('rescue', new Error('archivio illeggibile senza copia di soccorso'), payload.length);
     // Ha scritto qualcun altro da quando questa scheda ha letto? Se sì ci si
     // ferma: scrivere adesso cancellerebbe il suo lavoro, ed è esattamente il
     // guasto che questa guardia esiste per impedire. Si controlla **prima** di
@@ -1944,6 +1988,11 @@ const Store = {
   // Vero finché una modifica è rimasta solo in memoria. Chiudere la scheda in
   // questo stato perde tutto il lavoro fatto dal primo errore in poi.
   isUnsaved() { return dbUnsaved; },
+  // L'archivio illeggibile dell'ultimo caricamento, così com'era (o null).
+  grezzoIlleggibile() { return _grezzoIlleggibile; },
+  // Chi lo ha scaricato come file ne ha una copia: i salvataggi ripartono.
+  scaricatoIlleggibile() { _senzaCopia = false; if (adapter.liberaRescue) adapter.liberaRescue(); },
+  senzaCopia() { return _senzaCopia; },
   // Un'altra scheda ha scritto l'archivio dopo che questa l'ha letto.
   superata() {
     try { return !!(adapter && adapter.leggiRev) && adapter.leggiRev() !== revVista; }
@@ -2157,6 +2206,7 @@ const Store = {
     let ok;
     try { ok = this.commit(); } finally { _storicoDaRemoto = false; }
     markSynced();
+    controllaAnelliDopoArrivo();
     return ok;
   },
   // Un archivio intero che arriva dal server sostituisce quello locale (il
@@ -2171,6 +2221,7 @@ const Store = {
     _storicoBase = null;   // il registro riparte da qui: non è «tutto nuovo, a nome mio»
     const ok = this.commit();
     markSynced();
+    controllaAnelliDopoArrivo();
     return ok;
   },
   // Chi vuole sapere che un salvataggio è andato a buon fine: l'archivio
@@ -2200,6 +2251,96 @@ const Store = {
       if (k.split('|')[0] !== coll) return;
       righe.forEach((padre, r) => { if (padre === id) righe.delete(r); });
     });
+  },
+  // ── Una coda d'invio che il server rifiuta (dalla 0.105.6) ──
+  // Le impostazioni come erano all'ultimo invio o all'ultima ricezione: la
+  // base per fondere quelle di due amministratori. `null` se non si sa.
+  baseImpostazioni() {
+    if (!_baseSettings) return null;
+    try { const o = JSON.parse(_baseSettings); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+  },
+  // Il padre di una riga figlia nella fotografia: le righe tolte non ci sono
+  // più in `db`, e solo lì si sa di chi erano.
+  padreInBase(coll, figlio, id) {
+    const m = _baseChildren && _baseChildren.get(coll + '|' + figlio);
+    return m ? m.get(id) : undefined;
+  },
+  // Dalla fotografia `mark` di takeChanges() prende solo i record scelti
+  // ({ coll: [id] }, e `settings: true`): un invio a pezzi segna come partito
+  // solo il pezzo che il server ha preso. Gli altri restano da mandare.
+  assorbi(mark, scelti) {
+    if (!mark || !mark.ids || !_baseIds) return;
+    Object.keys(scelti || {}).forEach(c => {
+      if (c === 'settings') { if (scelti.settings) _baseSettings = mark.settings; return; }
+      const ids = new Set(scelti[c] || []);
+      if (!ids.size) return;
+      const da = mark.ids.get(c) || new Map();
+      if (!_baseIds.has(c)) _baseIds.set(c, new Map());
+      const a = _baseIds.get(c);
+      ids.forEach(id => { if (da.has(id)) a.set(id, da.get(id)); else a.delete(id); });
+      if (!_baseChildren || !mark.children) return;
+      mark.children.forEach((righe, k) => {
+        if (k.split('|')[0] !== c) return;
+        if (!_baseChildren.has(k)) _baseChildren.set(k, new Map());
+        const b = _baseChildren.get(k);
+        b.forEach((padre, r) => { if (ids.has(padre)) b.delete(r); });
+        righe.forEach((padre, r) => { if (ids.has(padre)) b.set(r, padre); });
+      });
+    });
+  },
+  // Rimette i record scelti allo stato del server, per quanto questo PC ne sa:
+  //  - un record nuovo, che il server non ha mai preso, se ne va;
+  //  - uno modificato smette di risultare da mandare e perde le righe figlie
+  //    aggiunte qui; il resto lo riporta la ricezione da capo che segue;
+  //  - uno eliminato qui esce dalla fotografia, così la ricezione lo rimette,
+  //    e lascia il cestino, dove sarebbe doppio.
+  // Senza cestino e senza registro di nomi: non è un'eliminazione di chi
+  // lavora, è una modifica che non è mai entrata.
+  scartaModifiche(coll, ids) {
+    if (!db || !_baseIds || !Array.isArray(db[coll])) return 0;
+    stampChildRows();
+    const base = _baseIds.get(coll) || new Map();
+    const figli = childrenOf(coll);
+    let n = 0;
+    new Set(ids || []).forEach(id => {
+      const i = db[coll].findIndex(r => r && r.id === id);
+      if (i >= 0 && !base.has(id)) { db[coll].splice(i, 1); n++; return; }
+      if (i >= 0) {
+        const rec = db[coll][i];
+        Object.keys(figli).forEach(k => {
+          const rowId = figli[k].rowId;
+          if (!rowId || !_baseChildren) return;
+          const m = _baseChildren.get(coll + '|' + k) || new Map();
+          if (Array.isArray(rec[k])) rec[k] = rec[k].filter(x => !x || x[rowId] == null || m.get(x[rowId]) === id);
+          const ora = new Set((rec[k] || []).map(x => x && x[rowId]));
+          m.forEach((padre, r) => { if (padre === id && !ora.has(r)) m.delete(r); });
+        });
+        base.set(id, recSignature(coll, rec));
+        n++;
+        return;
+      }
+      if (base.has(id)) {
+        Store.dimenticaInBase(coll, id);
+        if (Array.isArray(db.trash)) db.trash = db.trash.filter(t => !(t && t.coll === coll && t.record && t.record.id === id));
+        n++;
+      }
+    });
+    _baseIds.set(coll, base);
+    // Le impronte delle righe e il registro ripartono da qui: niente date nuove
+    // sulle righe, niente «eliminato» a nome di chi lavora.
+    _childFp = null;
+    storicoFotografa();
+    this.commit();
+    return n;
+  },
+  // Le impostazioni tornano com'erano all'ultimo invio riuscito.
+  scartaImpostazioni() {
+    const b = this.baseImpostazioni();
+    if (!b || !db) return false;
+    db.settings = b;
+    storicoFotografa();
+    this.commit();
+    return true;
   },
   importSnapshot(json) {
     const data = typeof json === 'string' ? JSON.parse(json) : json;

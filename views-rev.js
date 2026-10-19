@@ -188,7 +188,7 @@ function ecoImpattoHtml(lista, vivo) {
     const esiste = { plan: getPlan, odp: getOdp, rfq: getRfq, order: getOrder, odl: getOdl }[d.k];
     const vivoDoc = typeof esiste === 'function' && esiste(d.id);
     const n = `${esc(ECO_DOC[d.k] || d.k)} ${esc(d.number)}`;
-    return `<li>${vivoDoc ? `<a href="#" onclick="ecoApri('${d.k}','${d.id}');return false">${n}</a>` : n} <span class="storico-prima">— ${esc(d.perche)}</span></li>`;
+    return `<li>${vivoDoc ? `<a href="#" onclick="ecoApri(${jsAttr(d.k)},${jsAttr(d.id)});return false">${n}</a>` : n} <span class="storico-prima">— ${esc(d.perche)}</span></li>`;
   }).join('')}</ul>`;
 }
 function ecoTipoLabel(k) { return ECO_TIPI[k] ? ECO_TIPI[k].split(' — ')[0] : ''; }

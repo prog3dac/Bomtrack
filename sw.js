@@ -104,7 +104,10 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   // Fuori i depositi delle versioni precedenti, e si prende il controllo delle
-  // schede già aperte senza aspettare che vengano chiuse.
+  // schede già aperte senza aspettare che vengano chiuse. Quelle schede però
+  // girano ancora col codice vecchio: il cambio di controllore che `claim()`
+  // provoca è il segnale con cui core.js (swAscoltaVersioni) mostra l'avviso
+  // «È disponibile una versione nuova — Ricarica» (dalla 0.105.6).
   e.waitUntil(
     caches.keys()
       .then(chiavi => Promise.all(chiavi.filter(k => k !== CACHE).map(k => caches.delete(k))))

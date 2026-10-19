@@ -895,10 +895,9 @@ function catalogExportSpec(scope, soloIds) {
   const fam = getFamily(leggi('family'));
   const sub = (fam && (fam.subs || []).find(s => s.id === leggi('subfamily'))) || null;
   const mac = getItem(leggi('machine')), grp = getItem(leggi('group'));
-  const righe = catalogFilteredRows(scope, soloIds).map(i => [
-    i.code || '', i.name || '', typeLabel(i.type), codingLabel(i) || familyLabel(i),
-    i.uom || '', +(itemUnitCost(i) || 0).toFixed(4), catalogMeta(i),
-  ]);
+  // Le colonne sono quelle accese a schermo (dalla 0.105.6, vedi export-lists.js).
+  const vis = listColonneVisibili(scope, CATALOG_EXPORT_COLS);
+  const righe = catalogFilteredRows(scope, soloIds).map(vis.riga);
   return {
     titolo: scope === 'buy' ? 'Anagrafica — Commerciali e materie prime' : 'Anagrafica — Macchine, gruppi e parti',
     slug: scope === 'buy' ? 'anagrafica_acquisti' : 'anagrafica_progetto',
@@ -914,17 +913,35 @@ function catalogExportSpec(scope, soloIds) {
     ],
     sezioni: [{
       nome: scope === 'buy' ? 'Acquisti' : 'Progetto',
-      colonne: [
-        { h: 'Codice', w: 18 }, { h: 'Descrizione', w: 34 }, { h: 'Tipo', w: 16 }, { h: 'Famiglia', w: 24 },
-        { h: 'U.M.', w: 8 },
-        // La valuta sta in intestazione: nella cella romperebbe ogni formula.
-        { h: `Costo unitario (${cur()}/U.M.)`, w: 18, num: true },
-        { h: 'Dettaglio', w: 28 },
-      ],
+      colonne: vis.colonne,
       righe,
     }],
   };
 }
+// Le colonne dell'anagrafica nel file, per chiave del registro (COLUMNS in
+// columns.js). Un trattino a schermo è una cella vuota nel file: «—» in un
+// foglio non si filtra e non si somma.
+const vuotoSeTrattino = t => (t === '—' ? '' : t || '');
+const CATALOG_EXPORT_COLS = {
+  code: { h: 'Codice', w: 18, v: i => i.code || '' },
+  name: { h: 'Descrizione', w: 34, v: i => i.name || '' },
+  type: { h: 'Tipo', w: 16, v: i => typeLabel(i.type) },
+  family: { h: 'Famiglia', w: 24, v: i => codingLabel(i) || familyLabel(i) },
+  uom: { h: 'U.M.', w: 8, v: i => i.uom || '' },
+  // La valuta sta in intestazione: nella cella romperebbe ogni formula.
+  cost: { h: () => `Costo unitario (${cur()}/U.M.)`, w: 18, num: true, v: i => +(itemUnitCost(i) || 0).toFixed(4) },
+  meta: { h: 'Dettaglio', w: 28, v: i => catalogMeta(i) },
+  subfamily: { h: 'Sottofamiglia', w: 20, v: i => (usesFamily(i.type) && i.familyId ? subFamilyName(i.familyId, i.subFamilyId) || '' : '') },
+  supplier: { h: 'Fornitore', w: 22, v: i => vuotoSeTrattino(catalogSupplierName(i)) },
+  altuom: { h: 'UM acquisto', w: 10, v: i => i.altUom || '' },
+  altfactor: { h: 'Fattore conversione', w: 12, num: true, v: i => Number(i.altFactor) || 0 },
+  safety: { h: 'Scorta minima', w: 12, num: true, v: i => Number(i.safetyStock) || 0 },
+  lot: { h: 'Lotto', w: 10, num: true, v: i => Number(i.lotSize) || 0 },
+  notes: { h: 'Note', w: 30, v: i => i.notes || '' },
+  autore: { h: 'Creato/aggiornato da', w: 24, v: i => recordAuthorShort(i) },
+  concept: { h: 'Concetto', w: 20, v: i => (i.type === 'parte' ? conceptName(i.conceptId) || '' : '') },
+  sourcing: { h: 'Approvvigionamento', w: 16, v: i => (i.type === 'parte' ? PART_SOURCING[partSourcing(i)] || '' : '') },
+};
 // Etichette del menu "Tipo" (l'elenco è ristretto ai tipi della vista di provenienza)
 const TYPE_OPTION_LABELS = {
   acquistato: 'Componente commerciale', materiale: 'Materia prima', parte: 'Parte (lavorato)',

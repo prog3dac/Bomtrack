@@ -14,7 +14,15 @@ let dashFermiMesi = 6;
 
 // Il valore di una giacenza: la stessa formula della tessera del magazzino,
 // scritta una volta sola perché le due cifre non possano divergere.
-function valoreGiacenza(it) { return stockOf(it.id).onHand * itemUnitCost(it); }
+// Contano solo le quantità positive degli articoli attivi (dalla 0.105.6): la
+// tessera sommava anche i saldi negativi — ammessi dalla 0.100.0 — e un
+// articolo consumato prima di registrarne l'arrivo abbassava il valore della
+// tessera ma non quello del cruscotto, che la tessera stessa apre.
+function valoreGiacenza(it) {
+  if (!it || it.active === false) return 0;
+  const q = stockOf(it.id).onHand;
+  return q > 0 ? q * itemUnitCost(it) : 0;
+}
 
 // Le righe d'ordine (ODA e ODL) ancora da ricevere, con la data attesa:
 // la confermata se c'è, altrimenti la richiesta. Le stesse del calendario del
@@ -69,7 +77,7 @@ function dashModello(oggi, mesi) {
   const fermi = [], sotto = [];
   articoli.forEach(it => {
     const st = stockState(it);
-    const v = st.onHand * itemUnitCost(it);
+    const v = valoreGiacenza(it);
     if (st.onHand > 0) {
       totale += v;
       somma(perTipo, it.type, typeLabel(it.type), v);

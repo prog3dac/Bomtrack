@@ -174,3 +174,192 @@ describe('I contributi di costo si contano per id, non per codice', () => {
     assert.deepEqual(c, [3, 7], 'per codice si fonderebbero in una voce da 10');
   });
 });
+
+// ── La spazzata dei ruoli su tutti i comandi dell'interfaccia (dalla 0.105.6) ──
+// Le guardie si aggiungono una funzione alla volta, e i buchi trovati finora
+// erano tutti comandi raggiungibili da un onclick che nessun test chiamava con
+// un ruolo ristretto. Qui non si elencano a mano: si leggono dai sorgenti tutte
+// le chiamate scritte negli attributi on* (onclick, onchange, oninput…), con la
+// forma dei loro argomenti — una costante resta quella, un '${…}' diventa a
+// turno ciascun id della base dati completa, `event` un evento finto — e si
+// chiama ognuna per ogni ruolo, confermando la domanda se il comando la fa.
+// Poi si guarda quali tabelle dell'archivio condiviso sono cambiate, e si
+// confrontano con quelle che il server lascia scrivere a quel ruolo
+// (role_areas e table_areas di supabase/schema.sql): un comando nuovo senza
+// guardia fallisce qui, prima che un lettore cambi un dato o che il server
+// respinga il lotto di un collega.
+//
+// Il limite è dichiarato: i moduli si salvano con i campi vuoti del DOM finto,
+// quindi un salvataggio che controlla i dati prima del ruolo qui non scrive
+// comunque. La guardia va messa prima della validazione, come nel resto dell'app.
+const fs = require('node:fs');
+const path = require('node:path');
+const { dbCloudCompleto } = require('./fixtures.js');
+
+const ROOT = path.join(__dirname, '..');
+const SORGENTI = fs.readFileSync(path.join(__dirname, 'harness.js'), 'utf8')
+  .match(/const SRC = \[([^\]]*)\]/)[1].match(/'[^']+'/g).map(s => s.slice(1, -1)).concat(['index.html']);
+
+// Gli argomenti di una chiamata, al primo livello di annidamento, a partire
+// dalla parentesi aperta. Le interpolazioni ${…} restano intere.
+function argomentiChiamata(t, i) {
+  const out = []; let prof = 0, cur = '', q = null;
+  for (; i < t.length; i++) {
+    const ch = t[i];
+    if (q) { cur += ch; if (ch === q && t[i - 1] !== '\\') q = null; continue; }
+    if (ch === "'" || ch === '`') { q = ch; cur += ch; continue; }
+    if (ch === '$' && t[i + 1] === '{') {
+      let d = 0;
+      for (; i < t.length; i++) { cur += t[i]; if (t[i] === '{') d++; else if (t[i] === '}' && --d === 0) break; }
+      continue;
+    }
+    if (ch === '(' || ch === '[' || ch === '{') prof++;
+    if (ch === ')' || ch === ']' || ch === '}') {
+      if (prof === 0) { if (cur.trim()) out.push(cur.trim()); return out; }
+      prof--;
+    }
+    if (ch === ',' && prof === 0) { out.push(cur.trim()); cur = ''; continue; }
+    cur += ch;
+  }
+  return null;
+}
+function formeDeiComandi() {
+  const forme = new Map();
+  const RE = /\bon(?:click|change|input|keydown|keyup|submit|blur)="((?:[^"$]|\$\{(?:[^{}]|\{[^{}]*\})*\})*)"/g;
+  SORGENTI.forEach(f => {
+    const t = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    let m;
+    while ((m = RE.exec(t))) {
+      const C = /([A-Za-z_$][\w$]*)\s*\(/g; let c;
+      while ((c = C.exec(m[1]))) {
+        const a = argomentiChiamata(m[1], c.index + c[0].length);
+        if (!a) continue;
+        const forma = a.map(x => (/^'[A-Za-z_]\w*'$/.test(x) || /^-?\d+(\.\d+)?$/.test(x) ? x
+          : /^'\$\{[^']*\}'$/.test(x) || /^\$\{/.test(x) ? 'ID'
+            : x === 'event' ? 'EV' : /^this\./.test(x) ? 'VAL' : '?'));
+        forme.set(c[1] + '(' + forma.join(',') + ')', { fn: c[1], forma });
+      }
+    }
+  });
+  return [...forme.values()];
+}
+// Le tabelle che il server lascia scrivere a un ruolo, lette dallo schema.
+function tabelleScrivibili(ruolo) {
+  const sql = fs.readFileSync(path.join(ROOT, 'supabase', 'schema.sql'), 'utf8');
+  const ra = sql.match(/insert into public\.role_areas \(role, area\) values([\s\S]*?);/)[1];
+  const aree = new Set([...ra.matchAll(/\('(\w+)', '(\w+)'\)/g)].filter(m => m[1] === ruolo).map(m => m[2]));
+  const ta = sql.match(/insert into public\.table_areas \(tab, area\)([\s\S]*?)\) v\(t, a\);/)[1];
+  return new Set([...ta.matchAll(/\('(\w+)', '(\w+)'\)/g)].filter(m => aree.has(m[2])).map(m => m[1]));
+}
+// Chiama ogni comando con ogni combinazione di argomenti e restituisce, per
+// comando, le tabelle che ha cambiato.
+function spazzata(ruolo) {
+  const base = dbCloudCompleto();
+  const a = app(base, ruolo);
+  const baseJson = a.eval('JSON.stringify(db)');
+  const tabelle = () => JSON.parse(a.eval('JSON.stringify(Object.assign(flattenDB(db), { settings: [db.settings] }))'));
+  const prima = tabelle();
+  const ids = [], coppie = [];
+  (function raccogli(o, padre) {
+    if (Array.isArray(o)) { o.forEach(x => raccogli(x, padre)); return; }
+    if (!o || typeof o !== 'object') return;
+    let p = padre;
+    if (typeof o.id === 'string') { ids.push(o.id); if (padre) coppie.push([padre, o.id]); p = o.id; }
+    Object.values(o).forEach(x => raccogli(x, p));
+  })(base);
+  const evento = () => a.eval(`({ key: 'Enter', target: { value: '1', checked: true, files: [] }, preventDefault() {}, stopPropagation() {} })`);
+  const combinazioni = forma => {
+    const n = forma.filter(x => x === 'ID').length;
+    const righe = n === 0 ? [[]] : n === 1 ? ids.map(i => [i]).concat([[0]])
+      : coppie.concat(ids.map(i => [i, i]), [[0, 0]]).map(p => Array.from({ length: n }, (_, j) => (p[j] !== undefined ? p[j] : p[0])));
+    return righe.map(r => {
+      let j = 0;
+      return forma.map(x => (x === 'ID' ? r[j++] : x === 'EV' ? evento() : x === 'VAL' ? '1' : x === '?' ? undefined
+        : /^'/.test(x) ? x.slice(1, -1) : Number(x)));
+    });
+  };
+  const cambiate = {};
+  formeDeiComandi().filter(x => typeof a.ctx[x.fn] === 'function').forEach(x => {
+    combinazioni(x.forma).forEach(args => {
+      try {
+        a.eval('_confirmFn = null');
+        const r = a.ctx[x.fn](...args);
+        if (r && typeof r.catch === 'function') r.catch(() => {});
+        a.eval('if (_confirmFn) confirmYes()');
+      } catch (e) { /* un comando chiamato fuori dal suo contesto può lanciare: conta solo cosa ha scritto */ }
+      if (a.eval('JSON.stringify(db)') === baseJson) return;
+      const dopo = tabelle();
+      Object.keys(dopo).filter(t => JSON.stringify(dopo[t]) !== JSON.stringify(prima[t]))
+        .forEach(t => { (cambiate[x.fn] = cambiate[x.fn] || new Set()).add(t); });
+      a.setDb(base); a.asRole(ruolo);
+    });
+  });
+  return cambiate;
+}
+
+describe('Spazzata dei ruoli: ogni comando dell\'interfaccia rispetta le aree del server', () => {
+  it('la spazzata morde: l\'amministratore cambia dati con decine di comandi', () => {
+    // Senza questa prova un estrattore rotto darebbe «nessuna violazione» a vuoto.
+    const c = spazzata('admin');
+    assert.ok(Object.keys(c).length >= 30, 'comandi che scrivono: ' + Object.keys(c).length);
+  });
+  it('il lettore non cambia niente, con nessun comando', () => {
+    const c = spazzata('lettore');
+    assert.deepEqual(Object.keys(c).map(k => k + ' → ' + [...c[k]].join(', ')), []);
+  });
+  ['officina', 'acquisti', 'progettazione'].forEach(ruolo => {
+    it(`${ruolo}: solo le tabelle che il server gli lascia scrivere`, () => {
+      const ok = tabelleScrivibili(ruolo);
+      const c = spazzata(ruolo);
+      const fuori = Object.keys(c).map(k => [k, [...c[k]].filter(t => !ok.has(t))]).filter(([, t]) => t.length)
+        .map(([k, t]) => k + ' → ' + t.join(', '));
+      assert.deepEqual(fuori, []);
+    });
+  });
+});
+
+// ── L'officina nelle sue viste di lavoro (dalla 0.105.6) ──
+// Magazzino, ordini, ODL e ODP sono le viste dove l'officina registra
+// ricevimenti, giacenze e avanzamento: il banner «il ruolo non modifica…» lì
+// diceva il contrario di quello che il ruolo fa davvero. E senza collegamento
+// la colpa va data al collegamento, non al ruolo.
+describe('Officina: niente banner di sola lettura dove lavora, e il messaggio giusto senza rete', () => {
+  const banner = (a, vista) => {
+    a.eval(`activeView = ${JSON.stringify(vista)}`);
+    const p = a.el('pannello-' + vista);
+    p.children = [];
+    a.eval(`showReadOnlyBanner(document.getElementById(${JSON.stringify('pannello-' + vista)}), VIEW_AREA[${JSON.stringify(vista)}])`);
+    return p.children.map(c => c.innerHTML).join('');
+  };
+  it('su magazzino, ordini, ODL e ODP l\'officina non vede il banner', () => {
+    const a = app(makeDb({}), 'officina');
+    ['stock', 'orders', 'odl', 'odp'].forEach(v => assert.equal(banner(a, v), '', v));
+  });
+  it('sulle viste non sue il banner resta, e nomina il ruolo', () => {
+    const a = app(makeDb({}), 'officina');
+    assert.match(banner(a, 'rfq'), /il ruolo/);
+    assert.match(banner(a, 'buy'), /il ruolo/);
+  });
+  it('senza collegamento il banner sulle sue viste parla del collegamento', () => {
+    const a = app(makeDb({}), 'officina');
+    a.eval('cloudSolaLettura = () => true');
+    const t = banner(a, 'stock');
+    assert.match(t, /senza collegamento/);
+    assert.doesNotMatch(t, /il ruolo/);
+  });
+  it('senza collegamento roleGuardShop dice che manca il server, non che il ruolo non può', () => {
+    const a = app(makeDb({}), 'officina');
+    a.eval('cloudSolaLettura = () => true');
+    assert.equal(a.eval(`roleGuardShop('catalog')`), false);
+    const msg = a.el('toast').innerHTML;
+    assert.match(msg, /collegamento/);
+    assert.doesNotMatch(msg, /ruolo/);
+  });
+  it('il lettore, con o senza rete, resta respinto per il ruolo', () => {
+    const a = app(makeDb({}), 'lettore');
+    a.eval('cloudSolaLettura = () => true');
+    assert.equal(a.eval(`roleGuardShop('catalog')`), false);
+    assert.match(a.el('toast').innerHTML, /ruolo/);
+    assert.match(banner(a, 'stock'), /il ruolo/);
+  });
+});

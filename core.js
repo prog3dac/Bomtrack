@@ -93,6 +93,18 @@ function totaleRighe(lines) { return (lines || []).reduce((s, l) => s + importoR
 // primo onclick="fn('${esc(it.name)}')" si romperebbe su un articolo chiamato
 // «L'albero», e su uno chiamato peggio farebbe altro.
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// ─── Un dato dentro un onclick ───
+// esc() rende innocuo un testo **per l'HTML**, non per il JavaScript che
+// l'attributo contiene: il browser prima decodifica l'attributo, poi esegue, e
+// un apice decodificato chiude la stringa. Ogni dato scritto da qualcuno — un
+// codice, un nome, un percorso, un'ubicazione — che finisce come argomento di
+// un comando passa da qui (dalla 0.105.6): JSON.stringify ne fa un letterale
+// JavaScript corretto (apici, barre, a capo), esc() lo rende innocuo per
+// l'attributo, fra virgolette o fra apici. Il risultato porta già le sue
+// virgolette: onclick="fn(${jsAttr(x)})", senza apici intorno.
+// Prima c'erano tre ricette a mano (jsAttrStr, esc(JSON.stringify(…)), e
+// niente): una sola si controlla, tre si copiano sbagliate.
+function jsAttr(v) { return esc(JSON.stringify(String(v == null ? '' : v))); }
 
 // ─── L'unità di misura accanto al numero ───
 // Un numero senza unità è un numero da indovinare. «15» in una riga di
@@ -298,6 +310,20 @@ function isItemUsedAnywhere(id) {
       if (recs.some(rec => (rec[figlio] || []).some(r => chiavi.some(k => r[k] === id)))) return true;
     }
   }
+  // Le revisioni congelate (dalla 0.105.6). REFS conosce solo il proprietario
+  // della revisione (`itemId`), non quello che la fotografia contiene: le righe
+  // di distinta e di ciclo stanno dentro `snapshot`, che è un oggetto libero e
+  // non una collezione figlia. Un articolo tolto dalla Rev B ma presente nella
+  // Rev A restava così eliminabile, e da quel momento la Rev A — e il registro
+  // delle modifiche — diceva «(articolo eliminato)» al posto di quello che
+  // c'era davvero. Le lavorazioni (`kind: 'op'`) non puntano a un articolo.
+  const inFotografia = (db.revisions || []).some(r => {
+    const s = r && r.snapshot;
+    if (!s) return false;
+    return (s.components || []).some(c => c && c.itemId === id)
+      || (s.cycle || []).some(c => c && c.kind !== 'op' && c.itemId === id);
+  });
+  if (inFotografia) return true;
   // Le righe ODL non hanno un campo itemId proprio: lo portano dentro
   // `phaseKey` (`itemId#indice#workCenterId`), la stessa eccezione che REFS
   // documenta per la migrazione — va controllata a parte.
@@ -446,7 +472,15 @@ const ROLE_WRITE = {
 // gesti accetta l'una o l'altra, invece di spostarli e togliere qualcosa a
 // qualcuno.
 function canWriteShop(oppure) { return canWrite('shop') || canWrite(oppure); }
-function roleGuardShop(oppure) { return canWriteShop(oppure) || roleGuard(oppure); }
+// Senza collegamento (dalla 0.105.6) chi i gesti di officina li fa davvero
+// legge che manca il server, non che il suo ruolo non può: roleGuard(oppure)
+// guardava solo l'area alternativa, e all'officina — che `catalog` o `docs` non
+// li ha — dava la colpa al ruolo proprio nel momento in cui era la rete.
+function roleGuardShop(oppure) {
+  if (canWriteShop(oppure)) return true;
+  if (canWriteRuolo('shop') || canWriteRuolo(oppure)) { showToast(CLOUD_SOLA_LETTURA_MSG, 'error'); return false; }
+  return roleGuard(oppure);
+}
 const AREA_LABELS = { catalog: 'anagrafiche articoli', bom: 'distinte base', docs: 'richieste e ordini', manage: 'gestione', agenda: 'promemoria', shop: 'avanzamento, ricevimenti e giacenze' };
 function roleLabel(r) { return ROLES[r] || r || '—'; }
 // Il ruolo dice che cosa si può scrivere; il collegamento, se si può adesso.
@@ -719,17 +753,23 @@ function prefixIndex() {
   const m = new Map();
   arr.forEach(it => {
     // La coda di cifre e ciò che le sta davanti: «MAT-ACC-001» → «MAT-ACC-» + 1.
-    const t = String(it.code || '').match(/^(.*?)(\d+)$/);
+    // La chiave è quella dei doppioni, itemCodeKey(): senza spazi ai bordi e in
+    // minuscolo (dalla 0.105.6). Era il testo grezzo, e un «mat-acc-002»
+    // importato da Excel non contava per MAT-ACC-: la generazione proponeva
+    // MAT-ACC-002, e il controllo dei doppioni — che le maiuscole le ignora —
+    // lo rifiutava come già usato. Ogni volta, per tutta la famiglia.
+    const t = String(it.code || '').trim().match(/^(.*?)(\d+)$/);
     if (!t) return;
     const n = parseInt(t[2], 10);
-    const era = m.get(t[1]);
-    if (era === undefined || n > era) m.set(t[1], n);
+    const k = itemCodeKey(t[1]);
+    const era = m.get(k);
+    if (era === undefined || n > era) m.set(k, n);
   });
   _prefixIdx = m; _prefixIdxArr = arr; _prefixIdxLen = arr.length;
   return m;
 }
 function nextCodeForPrefix(prefix) {
-  let n = (prefixIndex().get(prefix) || 0) + 1;
+  let n = (prefixIndex().get(itemCodeKey(prefix)) || 0) + 1;
   while (codicePresoAltrove(prefix + String(n).padStart(codeDigits(), '0'))) n++;
   return prefix + String(n).padStart(codeDigits(), '0');
 }
@@ -764,6 +804,40 @@ function serieMassimo(prefisso, lista) {
     const n = (d.number || '').startsWith(prefisso) ? (parseInt(d.number.slice(prefisso.length), 10) || 0) : 0;
     return n > m ? n : m;
   }, 0);
+}
+// ─── Doppioni e buchi nelle serie (dalla 0.105.6) ───
+// Per i codici articolo c'è il Controllo dati; per i numeri dei documenti non
+// c'era niente, e un ODA-2026-008 doppio (un ripristino, due PC che numeravano
+// da soli prima dell'archivio condiviso) o un COM-2026-002 mancante (una
+// prenotazione scaduta) li scopriva il fornitore o il revisore dei conti.
+// Per ogni serie e per ciascuno degli anni chiesti: i numeri usati più volte,
+// con i loro documenti, e quelli che mancano sotto il più alto.
+function controlloSerieDocumenti(anni) {
+  const out = [];
+  Object.keys(SERIE_DOCUMENTI).forEach(sigla => {
+    const docs = SERIE_DOCUMENTI[sigla]();
+    (anni || []).forEach(anno => {
+      const prefisso = `${sigla}-${anno}-`;
+      const perNumero = new Map();
+      docs.forEach(d => {
+        const num = String((d && d.number) || '').trim();
+        if (!num.startsWith(prefisso)) return;
+        const coda = num.slice(prefisso.length);
+        if (!/^\d+$/.test(coda)) return;
+        const n = parseInt(coda, 10);
+        if (!perNumero.has(n)) perNumero.set(n, []);
+        perNumero.get(n).push(d);
+      });
+      if (!perNumero.size) return;
+      const massimo = Math.max(...perNumero.keys());
+      const doppi = [], buchi = [];
+      perNumero.forEach((ds, n) => { if (ds.length > 1) doppi.push({ n, numero: prefisso + String(n).padStart(3, '0'), docs: ds }); });
+      for (let n = 1; n < massimo; n++) if (!perNumero.has(n)) buchi.push(n);
+      doppi.sort((a, b) => a.n - b.n);
+      if (doppi.length || buchi.length) out.push({ sigla, prefisso, doppi, buchi, massimo });
+    });
+  });
+  return out;
 }
 function numeroProgressivo(sigla) {
   const prefisso = seriePrefisso(sigla);
@@ -978,6 +1052,40 @@ function codingLabel(it) {
   return gs ? ms + ' › ' + gs : ms;
 }
 
+// ─── Avvisi che restano (dalla 0.105.6) ───
+// Il toast dura due secondi e mezzo: va bene per «salvato», non per una cosa
+// che resta vera finché qualcuno non la sistema — una distinta ad anello
+// arrivata da un collega, una versione nuova dell'app che aspetta di essere
+// caricata. Questi stanno in basso, in una striscia che non copre il lavoro,
+// finché la causa non sparisce o chi legge non li chiude.
+// `chiave` identifica l'avviso (uno per chiave: ridarlo lo aggiorna); `html` è
+// già pronto, e chi chiama ne fa l'escape. La chiave finisce in un onclick:
+// va scelta fra le costanti del codice, mai da un dato.
+const _avvisiFissi = new Map();
+function avvisoFisso(chiave, html) {
+  _avvisiFissi.set(chiave, html);
+  disegnaAvvisiFissi();
+}
+function avvisoFissoTogli(chiave) {
+  if (!_avvisiFissi.delete(chiave)) return;
+  disegnaAvvisiFissi();
+}
+function disegnaAvvisiFissi() {
+  if (typeof document === 'undefined') return;
+  let el = document.getElementById('avvisi-fissi');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'avvisi-fissi';
+    if (document.body) document.body.appendChild(el);
+  }
+  // `polite`: sono notizie, non errori che interrompono quello che si sta facendo.
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.innerHTML = Array.from(_avvisiFissi, ([k, h]) => `<div class="avviso-fisso" data-avviso="${esc(k)}">
+    <span class="avviso-fisso-testo">${h}</span>
+    <button class="avviso-fisso-chiudi" onclick="avvisoFissoTogli('${esc(k)}')" title="Chiudi l'avviso" aria-label="Chiudi l'avviso">×</button></div>`).join('');
+}
+
 // `azione` opzionale: { label, fn }. È l'annulla subito dopo un'eliminazione —
 // l'unico momento in cui serve davvero, perché è l'unico in cui l'utente sa
 // ancora cosa ha appena fatto. Andare a cercarlo nel cestino cinque minuti dopo
@@ -1050,6 +1158,10 @@ function showPersistErrorModal(kind, info) {
     ? `<p>Lo spazio che il browser riserva a questa app è esaurito${mb}.</p>
        <p><strong>Le modifiche fatte da ora in poi non vengono salvate.</strong> I dati che vedi sono ancora tutti in memoria, ma chiudendo questa scheda andrebbero persi.</p>
        <p>Esporta subito un backup JSON, poi libera spazio: elimina richieste e ordini vecchi, oppure azzera il database e reimporta solo ciò che serve.</p>`
+    : kind === 'rescue'
+      ? `<p>L'archivio di questo computer non si è potuto leggere, e non è stato possibile metterne da parte una copia.</p>
+         <p><strong>Per non scriverci sopra, l'app non salva niente</strong> finché non lo scarichi come file. Poi potrai lavorare, o reimportare l'ultimo backup.</p>
+         ${Store.grezzoIlleggibile() ? `<p><button class="add-btn-sm" onclick="closeModal(); scaricaIlleggibile()">${ico('download', 'tinted', '')} Scarica i dati illeggibili</button></p>` : ''}`
     : kind === 'storage'
       ? `<p>Questo browser non consente il salvataggio locale: succede in navigazione privata o quando i dati dei siti sono bloccati.</p>
          <p><strong>L'app funziona, ma alla chiusura non resterà nulla.</strong> Esporta un backup JSON prima di uscire.</p>`
@@ -1118,11 +1230,19 @@ function onLoadError(info) {
 }
 function showLoadErrorModal(info) {
   const kb = info && info.bytes ? ` (erano circa ${Math.round(info.bytes / 1024)} KB)` : '';
-  const dove = info && info.rescued
+  // Tre casi (dalla 0.105.6): copia fatta, copia che c'era già, copia non
+  // riuscita. Nel terzo l'originale esiste solo al suo posto, e l'app non
+  // salva niente finché non lo si scarica: va detto, non rassicurato.
+  const dove = info && info.rescueFailed
+    ? `<strong style="color:var(--red)">Non è stato possibile metterne da parte una copia</strong> (lo spazio del browser non basta). Esistono solo al loro posto: <strong>scaricali adesso come file</strong>. Finché non lo fai, l'app non salva nessuna modifica, per non scriverci sopra.`
+    : info && info.rescued
     ? (Store.archivio === 'indexeddb'
       ? `Sono stati messi da parte così com'erano, alla voce <span style="font-family:var(--mono)">illeggibile</span> del database <span style="font-family:var(--mono)">${esc(IDB_NOME)}</span> del browser, e restano recuperabili a mano.`
       : `Sono stati messi da parte così com'erano, sotto la voce <span style="font-family:var(--mono)">${esc(DB_KEY_RESCUE)}</span> dell'archivio locale del browser, e restano recuperabili a mano.`)
     : 'Una copia di scorta era già stata messa da parte in precedenza, e non è stata toccata.';
+  // Il file si offre sempre: è la copia più facile da portare a chi deve recuperarla.
+  const btnScarica = info && info.kind === 'parse' && Store.grezzoIlleggibile()
+    ? `<button class="${info.rescueFailed ? 'add-btn-sm' : 'btn-outline'}" onclick="scaricaIlleggibile()">${ico('download', 'tinted', '')} Scarica i dati illeggibili</button>` : '';
   const testo = info && info.kind === 'parse'
     ? `<p>I dati salvati su questo computer non si riescono più a leggere${kb}: il contenuto risulta interrotto o alterato.</p>
        <p><strong>Non sono stati cancellati.</strong> ${dove}</p>
@@ -1135,7 +1255,54 @@ function showLoadErrorModal(info) {
   // Chiave propria, come per l'avviso di salvataggio: si affianca a ciò che è
   // aperto invece di buttar via un form a metà.
   openModal(`<h3>${ico('warning', 'tinted pill', '')} Dati non caricati</h3>${testo}
-    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Ho capito</button></div>`, false, 'avviso');
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Ho capito</button>${btnScarica}</div>`, false, 'avviso');
+}
+// ─── Una versione nuova dell'app (dalla 0.105.6) ───
+// sw.js, alla versione nuova, si installa e prende il controllo delle schede
+// aperte (skipWaiting + clients.claim). Ma una scheda già aperta continua a
+// girare con il codice che ha caricato: in officina il PC resta acceso per
+// settimane, e la versione nuova arrivava solo al primo F5 di qualcuno. Il
+// cambio di controllore è il segnale: lo si dice con un avviso che resta, e il
+// ricaricamento lo sceglie chi lavora — a metà di un ordine non si ricarica
+// niente da soli.
+// Il primo controllore di una pagina appena installata non è una versione
+// nuova: per questo si guarda se ce n'era già uno all'apertura.
+function swAscoltaVersioni(sw) {
+  if (!sw || typeof sw.addEventListener !== 'function') return;
+  let precedente = !!sw.controller;
+  sw.addEventListener('controllerchange', () => {
+    if (!precedente) { precedente = true; return; }
+    avvisoFisso('versione', `<strong>È disponibile una versione nuova</strong> di Bomtrack.
+      <button class="avviso-fisso-azione" onclick="swRicarica()">Ricarica</button>`);
+  });
+}
+// Il browser cerca un sw.js nuovo solo a una navigazione, o al massimo una
+// volta al giorno: una scheda che resta aperta lo chiede ogni ora.
+const SW_CONTROLLO_MS = 60 * 60 * 1000;
+function swControllaOgni(reg) {
+  if (!reg || typeof reg.update !== 'function' || typeof setInterval !== 'function') return;
+  setInterval(() => { Promise.resolve().then(() => reg.update()).catch(() => { /* offline: si riprova al giro dopo */ }); }, SW_CONTROLLO_MS);
+}
+// Ricaricare con un documento a metà o un salvataggio in volo perderebbe
+// lavoro: lo si chiede prima, con la stessa domanda dell'uscita.
+function swRicarica() {
+  if (lavoroInSospeso() && !confirm('Ci sono modifiche non ancora salvate: ricaricando andrebbero perse. Ricaricare lo stesso?')) return;
+  location.reload();
+}
+
+// L'archivio illeggibile, così com'era, in un file (dalla 0.105.6). È anche ciò
+// che sblocca i salvataggi quando la copia di soccorso non è riuscita: da qui
+// in poi una copia esiste, nella cartella dei download.
+function scaricaIlleggibile() {
+  const grezzo = Store.grezzoIlleggibile();
+  if (!grezzo) { showToast('Non c\'è nessun archivio illeggibile da scaricare', 'error'); return; }
+  const url = URL.createObjectURL(new Blob([grezzo], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `bomtrack_illeggibile_${oggiISO()}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  const eraBloccato = Store.senzaCopia();
+  Store.scaricatoIlleggibile();
+  showToast(eraBloccato ? 'File scaricato: da ora le modifiche si salvano' : 'File scaricato');
 }
 // ─── C'è del lavoro che una chiusura porterebbe via? ───
 // Due sorgenti distinte, e basta una delle due:
@@ -1148,6 +1315,12 @@ function showLoadErrorModal(info) {
 function lavoroInSospeso() {
   if (typeof Store !== 'undefined' && Store.isUnsaved && Store.isUnsaved()) return true;
   if (typeof Store !== 'undefined' && Store.scrittureInVolo && Store.scrittureInVolo() > 0) return true;
+  return documentoInModifica();
+}
+// I tre flag in un posto solo (dalla 0.105.6): li legge anche l'archivio
+// condiviso, che non ridisegna sopra un documento a metà. Lì i flag erano due,
+// e l'ordine di lavoro in modifica veniva sostituito dalla versione del collega.
+function documentoInModifica() {
   return !!(typeof rfqDirty !== 'undefined' && rfqDirty)
     || !!(typeof orderDirty !== 'undefined' && orderDirty)
     || !!(typeof odlDirty !== 'undefined' && odlDirty);
@@ -1271,7 +1444,12 @@ function openModal(h, wide, key) {
   // una richiamata. Sostituirlo qui vorrebbe dire rendere asincrona l'apertura
   // di ogni scheda dell'app. Il prezzo è un riquadro di sistema fuori tema in un
   // caso che capita di rado; il resto dell'app askConfirm ce l'ha.
-  if (p && k === 'form' && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
+  //
+  // Dalla 0.105.6 si chiede solo se quel form è stato **davvero** cambiato:
+  // la domanda arrivava anche su una scheda appena aperta e mai toccata, e una
+  // domanda che non ha mai niente da proteggere si impara a confermare senza
+  // leggerla — proprio la volta che conta.
+  if (p && k === 'form' && panelModificato(p) && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
   const nuovo = !p;
   if (nuovo) {
     p = document.createElement('div');
@@ -1300,8 +1478,24 @@ function openModal(h, wide, key) {
   panelRaise(p);
   a11yFields(p);
   panelFocus(p);
+  // Lo stato di partenza dei campi, per sapere poi se il form è cambiato. Si
+  // fissa subito e di nuovo al giro di coda: molti chiamanti riempiono i campi
+  // dopo che openModal ha restituito il pannello (le tendine, i valori
+  // calcolati), e quei valori sono la partenza, non una modifica. Chi scrive
+  // non può farlo prima di quel giro: è lo stesso tratto sincrono.
+  panelFissaStato(p);
+  Promise.resolve().then(() => panelFissaStato(p));
   return p;
 }
+// I valori dei campi di una scheda, in una stringa sola da confrontare.
+function panelStato(p) {
+  if (!p || typeof p.querySelectorAll !== 'function') return '';
+  return Array.prototype.map.call(p.querySelectorAll('input, select, textarea'), c =>
+    (c.type === 'checkbox' || c.type === 'radio' ? (c.checked ? '1' : '0') : String(c.value == null ? '' : c.value))).join('\u0000');
+}
+function panelFissaStato(p) { if (p) p._statoIniziale = panelStato(p); }
+// Senza uno stato di partenza si risponde «cambiato»: nel dubbio si chiede.
+function panelModificato(p) { return !p || p._statoIniziale == null || panelStato(p) !== p._statoIniziale; }
 // ─── Etichette, pulsanti-icona e titolo della scheda ───
 // I template scrivono `<div class="modal-field"><label>Nome</label><input id="…">`:
 // l'associazione fra i due c'è per posizione ma non per il browser, quindi
@@ -1593,7 +1787,10 @@ if (typeof document !== 'undefined') {
   // niente che non va, e un avviso a ogni avvio sarebbe rumore. Le librerie di
   // export stanno in vendor/ proprio perché l'offline non dipenda da qui.
   if (typeof navigator !== 'undefined' && navigator.serviceWorker && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* niente cache: l'app funziona lo stesso */ });
+    swAscoltaVersioni(navigator.serviceWorker);
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => swControllaOgni(reg))
+      .catch(() => { /* niente cache: l'app funziona lo stesso */ });
   }
   window.addEventListener('hashchange', () => onHashChange());
   window.addEventListener('unhandledrejection', e => {

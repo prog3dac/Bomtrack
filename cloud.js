@@ -175,12 +175,21 @@ function cloudRinnova() {
     .then(n => cloudSalvaSessione(Object.assign({ user: s.user }, n)))
     .catch(e => {
       // Rifiutato dal server: la sessione è finita davvero. Senza rete invece
-      // resta, e si riprova al prossimo giro.
+      // resta, e si riprova al prossimo giro. Così anche quando Auth risponde
+      // ma sta male (dalla 0.105.6): un 5xx durante un guasto di Supabase, un
+      // 429 per troppe richieste. Prima valevano come rifiuto, e in un'ora ogni
+      // PC tornava alla schermata d'accesso, senza nemmeno la copia locale da
+      // consultare. Finita è solo una sessione che Auth rifiuta (400, 401, 403).
+      if (cloudRinnovoPasseggero(e)) throw cloudErrore('server', 'Il servizio di accesso di Supabase non risponde come dovrebbe (' + (e.stato ? 'HTTP ' + e.stato : e.message) + '): si riprova al prossimo giro', { stato: e.stato });
       if (e.cloud !== 'rete') { cloudScrivi(CLOUD_SESS_KEY, null); throw cloudErrore('accesso', 'Sessione scaduta: accedi di nuovo'); }
       throw e;
     })
     .finally(() => { _cloudRinnovo = null; });
   return _cloudRinnovo;
+}
+function cloudRinnovoPasseggero(e) {
+  const s = Number(e && e.stato);
+  return s >= 500 || s === 429 || s === 408;
 }
 async function cloudToken() {
   let s = cloudSessione();
@@ -227,10 +236,14 @@ async function cloudAggiornaPassword(password) {
 async function cloudRecuperaPassword(email) {
   return cloudHttp('/auth/v1/recover', { corpo: { email } });
 }
+// Solo la sessione di questo PC (dalla 0.105.6): senza `scope`
+// Supabase la intende «global» e revoca ogni sessione dello stesso utente.
+// Un «Esci» su un terminale dell'officina, entro un'ora, rimandava alla
+// schermata d'accesso l'altro terminale con lo stesso account.
 async function cloudEsci() {
   const s = cloudSessione();
   cloudScrivi(CLOUD_SESS_KEY, null);
-  if (s && s.access_token) { try { await cloudHttp('/auth/v1/logout', { token: s.access_token }); } catch (e) { /* la sessione locale è già andata */ } }
+  if (s && s.access_token) { try { await cloudHttp('/auth/v1/logout?scope=local', { token: s.access_token }); } catch (e) { /* la sessione locale è già andata */ } }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -381,7 +394,13 @@ function cloudSalvaBase() {
 function cloudApplica(d, risposta) {
   const loc = righeLocali((risposta && risposta.tables) || {});
   let n = 0;
-  const lineeRicevute = new Set((loc.order_receipts || []).map(r => r.lineId).filter(Boolean));
+  // Le righe di documento con un ricevimento nuovo o cambiato. Solo quelle
+  // (dalla 0.105.6): il margine di ricezione ripesca ogni volta gli ultimi
+  // eventi, uguali a quelli che ci sono, e il ricevuto si toglieva lo stesso.
+  // Con niente di cambiato non si ricalcolava né si salvava, la riga restava
+  // senza ricevuto, e al giro dopo risultava modificata qui: partiva datata
+  // adesso, sopra a un'eventuale modifica di un collega.
+  const lineeRicevute = new Set();
   Object.keys(SCHEMA).forEach(c => {
     const def = SCHEMA[c];
     const figli = def.children || {};
@@ -411,14 +430,27 @@ function cloudApplica(d, risposta) {
         return;
       }
       if (i != null) arr[i] = rec; else { indice.set(rec.id, arr.length); arr.push(rec); }
+      if (def.table === 'order_receipts' && rec.lineId) lineeRicevute.add(rec.lineId);
       n++;
     });
     Object.keys(figli).forEach(k => {
       const cdef = figli[k];
       // Un insieme «sostituito» si rifà da capo: è cambiato se non è lo stesso di prima.
+      // Di solito l'insieme arriva con il suo padre, che il giro qui sopra ha
+      // già svuotato. Non sempre (dalla 0.105.6): pull_changes legge una tabella
+      // alla volta, e un invio di un collega che si chiude fra la lettura degli
+      // articoli e quella delle distinte porta le righe senza l'articolo. Si
+      // aggiungevano a quelle che c'erano, e la distinta raddoppiava; salvata
+      // così, il doppio partiva come distinta vera. L'insieme che arriva è
+      // comunque intero: si rifà anche qui.
       const prima = new Map();
       if (cdef.merge === 'replace') (loc[cdef.table] || []).forEach(rr => {
-        if (indice.has(rr.parentId) && !prima.has(rr.parentId)) prima.set(rr.parentId, vecchi.get(rr.parentId));
+        if (!indice.has(rr.parentId) || prima.has(rr.parentId)) return;
+        if (vecchi.has(rr.parentId)) { prima.set(rr.parentId, vecchi.get(rr.parentId)); return; }
+        const padre = arr[indice.get(rr.parentId)];
+        if (!padre) return;
+        prima.set(rr.parentId, { [k]: padre[k] });
+        padre[k] = [];
       });
       ordinaPerPos(loc[cdef.table] || []).forEach(rr => {
         const i = indice.get(rr.parentId);
@@ -518,7 +550,7 @@ function cloudPronto() {
 function cloudPuoApplicare() {
   if (typeof document === 'undefined') return true;
   if (typeof panelTop === 'function' && panelTop()) return false;
-  if ((typeof rfqDirty !== 'undefined' && rfqDirty) || (typeof orderDirty !== 'undefined' && orderDirty)) return false;
+  if (typeof documentoInModifica === 'function' && documentoInModifica()) return false;
   const a = document.activeElement;
   if (a && a.closest && a.closest('#app-main') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
   return true;
@@ -563,9 +595,208 @@ async function cloudInvia() {
     try { return await cloudInviaLotto(); }
     catch (e) {
       if (riparazioni < 5 && e && e.codice === '23503' && await cloudRiparaRiferimento(e)) continue;
+      if (riparazioni < 5 && e && e.cloud === 'permesso' && cloudScartaNonPermessi(e)) continue;
       throw e;
     }
   }
+}
+// ── Un rifiuto per permesso (dalla 0.105.6) ──
+// push_changes dice quali tabelle il ruolo non scrive («il ruolo acquisti non
+// scrive: items»), e una policy quale tabella ha fermato la riga. Fino alla
+// 0.105.5 il lotto restava in testa alla coda per sempre: ogni modifica
+// legittima dopo restava ferma, e il PC smetteva anche di ricevere quelle dei
+// colleghi (si riceve solo a coda vuota). Ora le modifiche a quelle tabelle si
+// scartano — tornano come sul server, con una ricezione da capo — e il resto
+// parte. Succede quando il ruolo è cambiato mentre questo PC lavorava, o quando
+// una vista lascia passare un gesto che il ruolo non avrebbe.
+function cloudTabelleNegate(e) {
+  const msg = String((e && e.message) || '');
+  const elenco = /non scrive:\s*(.+)$/.exec(msg);
+  if (elenco) return elenco[1].split(',').map(s => s.trim()).filter(Boolean);
+  const policy = /policy for table "([a-z_]+)"/.exec(msg);
+  return policy ? [policy[1]] : [];
+}
+function cloudScartaNonPermessi(e) {
+  const tabelle = cloudTabelleNegate(e);
+  if (!tabelle.length) return false;
+  const changes = Store.takeChanges().changes || {};
+  const unita = cloudUnita(changes);
+  const colls = new Set();
+  let impostazioni = false;
+  tabelle.forEach(t => {
+    if (t === 'settings') { impostazioni = !!changes.settings; return; }
+    const dove = cloudDove(t);
+    if (dove) colls.add(dove.coll);
+  });
+  const via = unita.filter(u => colls.has(u.coll));
+  if (!via.length && !impostazioni) return false;
+  const nomi = cloudScartaUnita(via.concat(impostazioni ? [{ settings: true }] : []));
+  showToast(`Il tuo ruolo non può modificare ${nomi.length === 1 ? '«' + nomi[0] + '»' : nomi.length + ' elementi'}: ${nomi.length === 1 ? 'la modifica è stata scartata e torna' : 'le modifiche sono state scartate e tornano'} come sul server. Il resto parte`, 'error');
+  return true;
+}
+// ── Le unità di un lotto ──
+// Un record con tutto quello che gli si fa in questo lotto: le sue righe, la
+// sua eliminazione, le righe figlie tolte. È il pezzo più piccolo che si può
+// mandare o scartare da solo. Le impostazioni sono un'unità a sé.
+function cloudUnita(changes) {
+  const per = new Map(), out = [];
+  const prendi = (coll, id) => {
+    const k = coll + '\u0000' + id;
+    if (!per.has(k)) { const u = { coll, id, upsert: false, remove: false, figli: {} }; per.set(k, u); out.push(u); }
+    return per.get(k);
+  };
+  Object.keys(changes || {}).forEach(c => {
+    if (c === 'settings' || !SCHEMA[c]) return;
+    const ch = changes[c];
+    (ch.upsert || []).forEach(id => { prendi(c, id).upsert = true; });
+    (ch.remove || []).forEach(id => { prendi(c, id).remove = true; });
+    Object.keys(ch.removeChildren || {}).forEach(k => (ch.removeChildren[k] || []).forEach(r => {
+      const padre = Store.padreInBase(c, k, r);
+      if (padre == null) return;
+      const u = prendi(c, padre);
+      (u.figli[k] = u.figli[k] || []).push(r);
+    }));
+  });
+  if (changes && changes.settings) out.push({ settings: true });
+  return out;
+}
+// Le modifiche di alcune unità, nella forma di takeChanges().
+function cloudChangesDi(unita) {
+  const out = {};
+  unita.forEach(u => {
+    if (u.settings) { out.settings = true; return; }
+    const o = out[u.coll] = out[u.coll] || { upsert: [], remove: [] };
+    if (u.upsert) o.upsert.push(u.id);
+    if (u.remove) o.remove.push(u.id);
+    Object.keys(u.figli).forEach(k => {
+      o.removeChildren = o.removeChildren || {};
+      o.removeChildren[k] = (o.removeChildren[k] || []).concat(u.figli[k]);
+    });
+  });
+  return out;
+}
+function cloudNomeUnita(u) {
+  if (u.settings) return 'le impostazioni';
+  const rec = Store.getById(u.coll, u.id) || ((db.trash || []).find(t => t && t.coll === u.coll && t.record && t.record.id === u.id) || {}).record;
+  return cloudNomeDi(rec) || u.id;
+}
+// Scarta le unità (Store.scartaModifiche) e chiede una ricezione da capo, che
+// rimette i record come sono sul server. Restituisce i nomi, presi prima.
+function cloudScartaUnita(unita) {
+  const nomi = unita.map(cloudNomeUnita);
+  const perColl = {};
+  unita.forEach(u => { if (!u.settings) (perColl[u.coll] = perColl[u.coll] || []).push(u.id); });
+  Object.keys(perColl).forEach(c => Store.scartaModifiche(c, perColl[c]));
+  if (unita.some(u => u.settings)) Store.scartaImpostazioni();
+  if (Object.keys(perColl).length) cloudAggiornaConfig({ since: null });
+  return nomi;
+}
+
+// ── «Scarta solo i rifiutati» (dalla 0.105.6) ──
+// Quando il server rifiuta un lotto per un motivo che l'app non sa riparare,
+// la sola uscita era «Scarta e riscarica»: via tutto il lavoro in attesa per
+// un record solo. Qui il lotto parte a pezzi, nell'ordine delle dipendenze
+// (prima i fornitori, poi gli ordini che li citano): un pezzo rifiutato si
+// divide a metà finché non resta il record colpevole. Chi passa è inviato
+// davvero (Store.assorbi lo toglie dalla coda); i rifiutati, dopo un secondo
+// tentativo — un record può aver citato uno arrivato dopo di lui — si scartano
+// e tornano come sul server. È un gesto esplicito di chi lavora: a pezzi una
+// dichiarazione di produzione può partire senza i suoi movimenti, ma se uno
+// dei due è rifiutato lo è anche l'altro, che lo cita.
+async function cloudScartaRifiutati() {
+  if (!cloudPronto()) return null;
+  for (let i = 0; i < 40 && _cloud.inCorso; i++) await new Promise(r => setTimeout(r, 250));
+  if (_cloud.inCorso) return null;
+  _cloud.inCorso = true;
+  let scartati = [];
+  try {
+    let preso = Store.takeChanges();
+    if (!preso.changes) { Store.ripristinaBase({}); preso = Store.takeChanges(); }
+    const { changes, mark } = preso;
+    const c = cloudConfig();
+    const sogliaNuova = new Date(Date.now() - CLOUD_MARGINE_FIGLI_MS).toISOString();
+    const ordine = t => { const i = CLOUD_ORDINE_CARICAMENTO.indexOf(t); return i < 0 ? CLOUD_ORDINE_CARICAMENTO.length : i; };
+    const unita = cloudUnita(changes);
+    const gruppi = new Map();
+    unita.forEach(u => {
+      const k = u.settings ? 'settings' : u.coll;
+      if (!gruppi.has(k)) gruppi.set(k, []);
+      gruppi.get(k).push(u);
+    });
+    const chiavi = Array.from(gruppi.keys()).sort((a, b) =>
+      ordine(a === 'settings' ? 'zzz' : SCHEMA[a].table) - ordine(b === 'settings' ? 'zzz' : SCHEMA[b].table));
+    const manda = async pezzo => {
+      const { payload } = cloudPayload(cloudChangesDi(pezzo), c.soglia || null, canWriteRuolo('manage'));
+      const ripristina = cloudRipristiniDi(payload);
+      if (Object.keys(ripristina).length) payload.ripristina = ripristina;
+      if (!cloudPayloadVuoto(payload)) {
+        if (payload.settings) await cloudFondiImpostazioni(payload);
+        cloudSegna('invio');
+        const r = await cloudRpc('push_changes', { payload });
+        if (r && Array.isArray(r.rejected) && r.rejected.length) cloudAvvisaRespinti(r.rejected);
+      }
+      cloudTogliRipristini(ripristina);
+      const scelti = {};
+      pezzo.forEach(u => {
+        if (u.settings) scelti.settings = true;
+        else { (scelti[u.coll] = scelti[u.coll] || []).push(u.id); _cloud.senzaBase.delete(u.id); }
+      });
+      Store.assorbi(mark, scelti);
+    };
+    const prova = async (pezzo, fuori) => {
+      try { await manda(pezzo); }
+      catch (e) {
+        // Senza rete o senza sessione non si sa chi ha torto: ci si ferma.
+        if (e && (e.cloud === 'rete' || e.cloud === 'accesso' || e.cloud === 'config')) throw e;
+        if (pezzo.length === 1) { fuori.push(pezzo[0]); return; }
+        const m = pezzo.length >> 1;
+        await prova(pezzo.slice(0, m), fuori);
+        await prova(pezzo.slice(m), fuori);
+      }
+    };
+    const primi = [];
+    for (const k of chiavi) await prova(gruppi.get(k), primi);
+    for (const u of primi) await prova([u], scartati);
+    if (scartati.length) {
+      const nomi = cloudScartaUnita(scartati);
+      showToast(`Il server non ha accettato ${nomi.length === 1 ? '«' + nomi[0] + '»' : nomi.length + ' elementi (' + nomi.slice(0, 5).join(', ') + (nomi.length > 5 ? '…' : '') + ')'}: ${nomi.length === 1 ? 'è tornato' : 'sono tornati'} come sul server. Il resto è partito`, 'error');
+    }
+    cloudAggiornaConfig({ soglia: sogliaNuova });
+    cloudSalvaBase();
+  } catch (e) {
+    cloudGestisciErrore(e);
+    return null;
+  } finally { _cloud.inCorso = false; }
+  // Quello che lo scarto lascia da mandare (un cestino da svuotare), poi la
+  // ricezione che rimette gli scartati.
+  await cloudGiro();
+  return { scartati: scartati.length };
+}
+
+// ── Le impostazioni di due amministratori (dalla 0.105.6) ──
+// Le impostazioni partono intere, e il server le sovrascrive intere: un
+// amministratore con la copia indietro (un pannello aperto, un campo col
+// cursore dentro, e la ricezione aspetta) riportava indietro, senza dire
+// niente, quello che un collega aveva appena cambiato. Prima di mandarle si
+// guarda com'erano lassù: se un collega le ha cambiate dall'ultima volta, si
+// manda la sua versione con sopra solo le voci cambiate qui. Sulla stessa
+// voce vince chi manda per ultimo, come prima. Resta scoperto solo il tempo
+// fra la lettura e l'invio; la ricezione dopo porta qui le voci del collega.
+async function cloudFondiImpostazioni(payload) {
+  const base = Store.baseImpostazioni();
+  if (!base || !payload.settings) return;
+  let r;
+  try { r = await cloudRpc('pull_pagina', { tab: 'settings', dopo: null, quanti: 1 }); }
+  catch (e) { if (e && e.codice === 'PGRST202') return; throw e; }   // uno schema di prima: come prima
+  const lassu = r && Array.isArray(r.rows) && r.rows[0] && r.rows[0].data;
+  if (!lassu || typeof lassu !== 'object' || cloudUguali(lassu, base)) return;
+  const qui = payload.settings.data || {};
+  const fuse = Object.assign({}, lassu);
+  new Set(Object.keys(base).concat(Object.keys(qui))).forEach(k => {
+    if (cloudUguali(qui[k], base[k])) return;
+    if (qui[k] === undefined) delete fuse[k]; else fuse[k] = qui[k];
+  });
+  payload.settings = Object.assign({}, payload.settings, { data: fuse });
 }
 async function cloudInviaLotto() {
   let preso = Store.takeChanges();
@@ -587,6 +818,7 @@ async function cloudInviaLotto() {
   const ripristina = cloudRipristiniDi(payload);
   if (Object.keys(ripristina).length) payload.ripristina = ripristina;
   if (!cloudPayloadVuoto(payload)) {
+    if (payload.settings) await cloudFondiImpostazioni(payload);
     cloudSegna('invio');
     const r = await cloudRpc('push_changes', { payload });
     if (r && Array.isArray(r.rejected) && r.rejected.length) cloudAvvisaRespinti(r.rejected);
@@ -828,15 +1060,18 @@ function cloudGestisciErrore(e) {
   // senza, il lotto restava in testa alla coda e il PC lavorava per sempre su
   // una copia ferma, con ogni salvataggio respinto.
   if (e && e.cloud === 'permesso') {
-    cloudSegna('errore', ((e && e.message) || String(e)) + '. Se un amministratore ha cambiato il tuo ruolo, usa «Scarta e riscarica»');
+    cloudSegna('errore', ((e && e.message) || String(e)) + '. Se un amministratore ha cambiato il tuo ruolo, usa «Scarta solo i rifiutati» (Archivio condiviso)');
     cloudControllaProfilo();
     return;
   }
   console.error('Archivio condiviso:', e);
   // Un riferimento che l'app non è riuscita a riparare: il messaggio di
   // Postgres non dice niente a chi lo legge, la via d'uscita sì.
-  if (e && e.codice === '23503') { cloudSegna('errore', 'Una modifica cita un elemento che non c\'è più sul server. Se il problema resta, usa «Scarta e riscarica»'); return; }
-  cloudSegna('errore', (e && e.message) || String(e));
+  // Dalla 0.105.6 l'uscita indicata scarta solo quello che il server rifiuta,
+  // non tutto il lavoro in attesa.
+  if (e && e.codice === '23503') { cloudSegna('errore', 'Una modifica cita un elemento che non c\'è più sul server. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
+  const msg = (e && e.message) || String(e);
+  cloudSegna('errore', Store.hasPendingChanges() ? msg + '. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)' : msg);
 }
 
 async function cloudControllaProfilo() {
@@ -1383,6 +1618,7 @@ function cloudPannello() {
       <button class="btn-outline" onclick="cloudCopiaLink()">${ico('copy', 'tinted', '')} Copia</button></div></div>
       <p class="cl-nota">Mettilo anche in Supabase come <strong>Site URL</strong> (Authentication → URL Configuration): gli inviti e il recupero password riportano qui.</p>` : ''}
     <div class="modal-actions">
+      ${dentro && Store.hasPendingChanges() ? `<button class="btn-outline" onclick="cloudPannelloScartaRifiutati()" title="Manda le modifiche in attesa a pezzi: quelle che il server rifiuta tornano come sul server, le altre partono">Scarta solo i rifiutati</button>` : ''}
       ${dentro ? `<button class="btn-outline" onclick="cloudPannelloRiscarica()">Scarta e riscarica</button>` : ''}
       ${!dentro || admin ? `<button class="btn-outline" style="color:var(--red);border-color:var(--red)" onclick="cloudPannelloScollega()">Scollega questo PC</button>` : ''}
       ${dentro ? `<button class="add-btn-sm" onclick="cloudPannelloSincronizza()">${ico('refresh', 'tinted', '')} Sincronizza ora</button>` : `<button class="add-btn-sm" onclick="closeModal()">Chiudi</button>`}
@@ -1418,8 +1654,15 @@ async function cloudPannelloSincronizza() {
   if (ok) showToast(Store.hasPendingChanges() ? 'Restano modifiche da inviare' : 'Archivio sincronizzato');
   else if (_cloud.stato === 'errore') showToast(_cloud.messaggio || 'Errore di sincronizzazione', 'error');
 }
+function cloudPannelloScartaRifiutati() {
+  askConfirm('Mandare le modifiche in attesa a pezzi? Quelle che il server rifiuta vengono scartate e tornano come sono sul server; tutte le altre partono. Serve quando un invio resta bloccato.', async () => {
+    const esito = await cloudScartaRifiutati();
+    if (!esito) { if (_cloud.stato === 'errore' || _cloud.stato === 'offline') showToast(_cloud.messaggio || 'Errore di sincronizzazione', 'error'); return; }
+    if (!esito.scartati) showToast(Store.hasPendingChanges() ? 'Restano modifiche da inviare' : 'Tutto inviato: il server non ha rifiutato niente');
+  }, { title: 'Scarta solo i rifiutati', ok: 'Invia e scarta i rifiutati' });
+}
 function cloudPannelloRiscarica() {
-  askConfirm('Riscaricare l\'archivio condiviso? Le modifiche di questo PC non ancora inviate vanno perse. Serve quando il server rifiuta un invio e non c\'è altro modo di uscirne.', async () => {
+  askConfirm('Riscaricare l\'archivio condiviso? Le modifiche di questo PC non ancora inviate vanno perse. Se il server rifiuta un invio, prova prima «Scarta solo i rifiutati», che tiene il resto.', async () => {
     try {
       cloudFerma();
       await cloudScaricaArchivio();

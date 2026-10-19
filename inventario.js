@@ -13,6 +13,11 @@
 // si può chiudere, riprendere, ricontare. Il conteggio in corso resta in
 // questo browser (come una bozza), non nel database: è il lavoro di una
 // persona con un telefono in mano, e un altro dispositivo non ne sa niente.
+// Dalla 0.105.6 la bozza è anche **di chi l'ha cominciata, in quell'archivio**:
+// un tablet di magazzino condiviso fra due persone, o un PC che passa
+// dall'archivio locale a quello condiviso, offriva a chiunque il conteggio del
+// collega, e registrandolo le rettifiche finivano a nome di chi non aveva
+// contato niente.
 //
 // ── La differenza si calcola alla fine ──
 // La rettifica scrive *contato − esistente al momento della registrazione*.
@@ -21,15 +26,38 @@
 // dopo.
 
 const INV_KEY = 'bomtrack_inventario';
-let _inv = null;           // { titolo, ids, conteggi: { id: qty }, pos, mostra, creato }
+let _inv = null;           // { titolo, ids, conteggi: { id: qty }, pos, mostra, creato, chi }
 let _invUltimaLettura = { testo: '', t: 0 };
 
+// La chiave della bozza: l'archivio (quello condiviso si riconosce dal suo
+// indirizzo) e l'utente. Senza utente — la schermata di accesso — resta una
+// chiave sua, che nessuno dopo l'accesso legge.
+function invChiave() {
+  const archivio = typeof cloudAttivo === 'function' && cloudAttivo() ? cloudConfig().url : 'locale';
+  const utente = typeof currentUser !== 'undefined' && currentUser ? currentUser.id : '';
+  return INV_KEY + ':' + archivio + ':' + utente;
+}
 function invSalva() {
-  try { if (_inv) localStorage.setItem(INV_KEY, JSON.stringify(_inv)); } catch (e) { /* resta in memoria */ }
+  try { if (_inv) localStorage.setItem(invChiave(), JSON.stringify(_inv)); } catch (e) { /* resta in memoria */ }
+}
+// Fino alla 0.105.5 la bozza stava sotto INV_KEY e basta. Chi aggiorna a metà
+// di un inventario non deve perderlo: la prima persona che apre l'inventario la
+// ritrova, e da lì in poi è sua. È lo stesso comportamento di prima, una volta
+// sola.
+function invLeggiBozza() {
+  const k = invChiave();
+  let t = localStorage.getItem(k);
+  if (t == null) {
+    t = localStorage.getItem(INV_KEY);
+    if (t != null) {
+      try { localStorage.setItem(k, t); localStorage.removeItem(INV_KEY); } catch (e) { /* si riprova la prossima volta */ }
+    }
+  }
+  return t;
 }
 function invCarica() {
   try {
-    const v = JSON.parse(localStorage.getItem(INV_KEY) || 'null');
+    const v = JSON.parse(invLeggiBozza() || 'null');
     if (v && Array.isArray(v.ids)) {
       v.ids = v.ids.filter(id => hasStock(getItem(id)));
       v.conteggi = v.conteggi && typeof v.conteggi === 'object' ? v.conteggi : {};
@@ -42,7 +70,7 @@ function invCarica() {
 }
 function invCancella() {
   _inv = null;
-  try { localStorage.removeItem(INV_KEY); } catch (e) { /* niente da togliere */ }
+  try { localStorage.removeItem(invChiave()); } catch (e) { /* niente da togliere */ }
 }
 function invContati(s) { return Object.keys((s || _inv || {}).conteggi || {}).length; }
 
@@ -63,7 +91,7 @@ function inventarioModal() {
   const nElenco = invElenco('elenco').length;
   const ubi = ubicazioniElenco();
   const riprendi = bozza ? `<div class="rfq-warn" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span style="flex:1">C'è un inventario in corso: <strong>${esc(bozza.titolo)}</strong>, ${invContati(bozza)} contati su ${bozza.ids.length}.</span>
+      <span style="flex:1">C'è un inventario in corso: <strong>${esc(bozza.titolo)}</strong>${bozza.creato ? `, cominciato il ${esc(fmtDateIt(bozza.creato))}` : ''}${bozza.chi ? ` da ${esc(bozza.chi)}` : ''}, ${invContati(bozza)} contati su ${bozza.ids.length}.</span>
       <button class="add-btn-sm" onclick="inventarioRiprendi()">Riprendi</button>
     </div>` : '';
   openModal(`<h3>${ico('clipboard', 'tinted pill', '')} Inventario</h3>
@@ -93,7 +121,8 @@ function inventarioAvvia(opz) {
   const ids = invElenco(ambito, ubi);
   if (!ids.length) { showToast('Niente da contare con questa scelta', 'error'); return false; }
   const titolo = ambito === 'ubi' ? 'Ubicazione ' + ubi : ambito === 'tutto' ? 'Tutto il magazzino' : 'Articoli elencati';
-  _inv = { titolo, ids, conteggi: {}, pos: 0, mostra: !!o.mostra, creato: oggiISO() };
+  _inv = { titolo, ids, conteggi: {}, pos: 0, mostra: !!o.mostra, creato: oggiISO(),
+    chi: typeof currentUser !== 'undefined' && currentUser ? (currentUser.name || '') : '' };
   invSalva();
   invContaModal();
   return true;
@@ -271,7 +300,10 @@ function invDifferenze(s) {
   return sess.ids.filter(id => sess.conteggi[id] != null).map(id => {
     const it = getItem(id);
     const esistente = onHandOf(id), contato = Number(sess.conteggi[id]) || 0;
-    return { it, esistente, contato, diff: +(contato - esistente).toFixed(6), valore: (contato - esistente) * (Number(it && it.unitCost) || 0) };
+    // Il valore è quello della giacenza (itemUnitCost, come valoreGiacenza):
+    // il costo manuale `unitCost` di un commerciale è quasi sempre vuoto, e una
+    // perdita di dieci pezzi da 5 € valeva zero (dalla 0.105.6).
+    return { it, esistente, contato, diff: +(contato - esistente).toFixed(6), valore: (contato - esistente) * (it ? itemUnitCost(it) : 0) };
   }).filter(r => r.it);
 }
 function invRiepilogoModal() {

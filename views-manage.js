@@ -326,7 +326,7 @@ function activeBadge(r) {
 function activeBtn(coll, r, nome) {
   const susp = r.active === false;
   const testo = susp ? 'Riattiva' : 'Sospendi: resta negli archivi, sparisce dai menu';
-  return `<button class="mini-btn" onclick="toggleActive('${coll}','${r.id}',${esc(JSON.stringify(nome))})" title="${esc(testo)}">${susp ? ico('check', 'tinted', 'Riattiva') : ico('pause', 'tinted', 'Sospendi')}</button>`;
+  return `<button class="mini-btn" onclick="toggleActive('${coll}',${jsAttr(r.id)},${jsAttr(nome)})" title="${esc(testo)}">${susp ? ico('check', 'tinted', 'Riattiva') : ico('pause', 'tinted', 'Sospendi')}</button>`;
 }
 function renderSuppliers() {
   const list = db.suppliers.map(s => {
