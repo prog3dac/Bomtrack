@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.105.7</span>
+        <span class="chip">v0.105.8</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -843,6 +843,7 @@ prezzo vendita = costo totale × (1 + margine %)</code></pre>
 <p><strong>Preleva il resto</strong> (dalla 0.105.4): se all'avvio è uscito meno del previsto — lo scaffale non bastava, il resto arriva dopo — nel riquadro <em>Materiale del ciclo</em> compare <strong>Preleva il resto</strong>. Propone il residuo, si corregge riga per riga, ed esce come all'avvio: consumo di produzione, o uscita a conto lavoro verso il terzista della prima fase.</p>
 <h3 id="le-lavorazioni-esterne">Le lavorazioni esterne</h3>
 <p>Su una fase in conto lavoro compare <strong>genera ordine di lavoro</strong>: ne nasce un ODL per quel terzista, con la tariffa del ciclo e <strong>i pezzi che ci sono davvero</strong> (i buoni usciti dalla fase precedente, non quelli lanciati). La consegna chiesta sulla riga è il <strong>rientro pianificato della tratta</strong>, non la fine dell'ordine (sugli ordini creati prima della 0.90.0, senza date di fase, resta la fine dell'ordine). Le fasi <strong>consecutive</strong> dello stesso terzista fanno <strong>una riga sola</strong>: sono una lavorazione da commissionare, non due.</p>
+<p><strong>Una tratta già commissionata dal fabbisogno</strong> (dalla 0.105.8). Se l'ordine di lavoro di quella tratta è stato generato dal piano prima dell'ODP, l'ODP non offre più <strong>genera ordine di lavoro</strong>: al suo posto mostra il numero di quell'ordine, che si apre con un clic. Vale per il primo ODP del piano che ha quella fase; un ODP rilanciato dopo, per i pezzi mancanti, commissiona i suoi. Al contrario, una tratta commissionata dall'ODP esce già dalla generazione degli ordini di lavoro del piano. Su un ordine di lavoro nato dal piano i rientri si registrano sull'ordine di lavoro stesso.</p>
 <p><strong>Chi genera l'ordine di lavoro</strong> (dalla 0.105.6): chi scrive gli ordini, cioè l'<em>Ufficio acquisti</em> e l'amministratore. Un ordine di lavoro è un documento con un prezzo e un fornitore, e il ruolo <em>Officina e magazzino</em> non lo genera più da un ODP: avvia, dichiara e riceve, ma il documento per il terzista lo emette l'ufficio.</p>
 <blockquote><p>Su quella riga i comandi di conto lavoro dell'ODL diventano un <strong>rimando</strong> all'ordine di produzione. Il magazzino ha <strong>un padrone solo</strong>: due strade per lo stesso gesto sarebbero due registrazioni. Anche i <strong>pezzi rientrati</strong> dell'ODL li scrive la dichiarazione fatta qui.</p></blockquote>
 <h3 id="nel-fabbisogno">Nel fabbisogno</h3>

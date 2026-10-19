@@ -119,7 +119,7 @@ function opFreezeMaterials(part, qty) {
 // ciclo di vita degli altri indici: azzerato da invalidateCaches().
 let _opDeclIdx = null;
 let _opOdlIdx = null;
-function invalidateProd() { _opDeclIdx = null; _opOdlIdx = null; _opMovIdx = null; _wipRows = null; _wipPer = null; _scortaParti = null; _bozzeIdx = null; }
+function invalidateProd() { _opDeclIdx = null; _opOdlIdx = null; _opOdlPianoIdx = null; _opMovIdx = null; _wipRows = null; _wipPer = null; _scortaParti = null; _bozzeIdx = null; }
 function opDeclIndex() {
   if (_opDeclIdx) return _opDeclIdx;
   const map = new Map();
@@ -591,6 +591,44 @@ function opOdlIndex() {
   return map;
 }
 function opOdlDi(fase) { return fase ? (opOdlIndex().get(fase.id) || null) : null; }
+// ── L'ordine di lavoro generato dal fabbisogno (dalla 0.105.8) ──
+// Dal piano gli ordini di lavoro si generano anche **prima** dell'ordine di
+// produzione: la riga porta allora le `phaseKeys` della tratta e il `planId`
+// della testata, non `odpPhaseId`. L'ordine di produzione nato dopo dallo
+// stesso piano non la vedeva, e offriva «genera ordine di lavoro» sulla stessa
+// tratta: un secondo ordine allo stesso terzista per gli stessi pezzi.
+// Una riga così copre la tratta del **primo** ordine di produzione del piano
+// che ha quella fase (non annullato): un ODP rilanciato dopo, per i pezzi che
+// mancano, resta libero di commissionare i suoi. Il legame vale per dire «già
+// commissionata» e per aprire l'ordine, non per scriverne il ricevuto: quei
+// pezzi li registra l'ordine di lavoro stesso, che è nato senza padrone.
+let _opOdlPianoIdx = null;
+function opOdlPianoIndex() {
+  if (_opOdlPianoIdx && _opOdlPianoIdx.db === db) return _opOdlPianoIdx.map;
+  const map = new Map();
+  const odpPerChiave = new Map();
+  (db.prodOrders || []).filter(o => o.planId && o.status !== 'annullato')
+    .slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
+      || String(a.number || '').localeCompare(String(b.number || ''), 'it', { numeric: true }))
+    .forEach(o => (o.phases || []).forEach(f => {
+      const k = o.planId + '|' + f.phaseKey;
+      if (f.phaseKey && !odpPerChiave.has(k)) odpPerChiave.set(k, o.id);
+    }));
+  (db.workOrders || []).forEach(w => w.status !== 'annullato' && w.planId && (w.lines || []).forEach(l => {
+    if (l.odpPhaseId) return;
+    const chiavi = String(l.phaseKeys || l.phaseKey || '').split(',').filter(Boolean);
+    chiavi.forEach(c => {
+      const k = w.planId + '|' + c;
+      const odpId = odpPerChiave.get(k);
+      if (odpId && !map.has(odpId + '|' + c)) map.set(odpId + '|' + c, { odl: w, line: l, dalPiano: true });
+    });
+  }));
+  _opOdlPianoIdx = { db, map };
+  return map;
+}
+function opOdlDalPiano(odp, fase) {
+  return (odp && fase && fase.phaseKey) ? (opOdlPianoIndex().get(odp.id + '|' + fase.phaseKey) || null) : null;
+}
 // Tutte le fasi della **tratta** cui la fase appartiene: è la tratta che diventa
 // una riga di ordine di lavoro, non la singola fase. Fasi consecutive dello
 // stesso terzista sono una lavorazione da commissionare, non due.
@@ -603,7 +641,8 @@ function opApreTratta(odp, fase) {
 }
 // Una fase esterna che apre la sua tratta e non è ancora commissionata.
 function opGenerabile(odp, fase) {
-  return !!fase.supplierId && opApreTratta(odp, fase) && !opRunFasi(odp, fase).some(f => opOdlDi(f));
+  return !!fase.supplierId && opApreTratta(odp, fase)
+    && !opRunFasi(odp, fase).some(f => opOdlDi(f) || opOdlDalPiano(odp, f));
 }
 // `received` sulla riga di ordine di lavoro significa **pezzi tornati**, e da
 // quando esiste l'ordine di produzione quel fatto lo dichiara lui. Il campo
@@ -870,7 +909,7 @@ function odpPhaseRows(o) {
   const id = o.id;
   return (o.phases || []).map(f => {
     const st = opStatoFase(o, f);
-    const legame = opOdlDi(f);
+    const legame = opOdlDi(f) || opOdlDalPiano(o, f);
     const forzata = opForzata(o, f);
     return `<tr class="odp-fase odp-fase-${st}">
       <td><span class="cycle-phase">${esc(String(f.seq))}</span></td>
@@ -1493,7 +1532,11 @@ function opGeneraOdl(id, faseId) {
   const x = opFaseDi(id, faseId); if (!x) return null;
   const { o, f } = x;
   if (!f.supplierId) { showToast('Questa fase è interna: non c\'è nessun terzista a cui commissionarla', 'error'); return null; }
-  if (!opGenerabile(o, f)) { showToast('Questa tratta è già in un ordine di lavoro', 'error'); return null; }
+  if (!opGenerabile(o, f)) {
+    const gia = opRunFasi(o, f).map(x => opOdlDi(x) || opOdlDalPiano(o, x)).find(Boolean);
+    showToast(`Questa tratta è già in un ordine di lavoro${gia ? ' (' + gia.odl.number + ')' : ''}`, 'error');
+    return null;
+  }
   const r = opRunDocRow(o, f); if (!r) return null;
   const linea = Object.assign(planPhaseDocLine(r, true), { received: 0, odpId: o.id, odpPhaseId: f.id });
   const odl = stampNew(Object.assign({ id: gid(), number: nextOdlNumber() }, opDocHead(o, f.supplierId), { lines: [linea] }));

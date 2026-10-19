@@ -2,6 +2,13 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.105.8 — 2026-10-19
+
+**Ordini di lavoro doppi fra fabbisogno e ordine di produzione.** Un ordine di lavoro generato dal piano prima dell'ordine di produzione porta le fasi del piano, non il legame con la fase dell'ODP: l'ODP nato dopo non lo vedeva e offriva **genera ordine di lavoro** sulla stessa tratta, cioè un secondo ordine allo stesso terzista per gli stessi pezzi. Ora la tratta risulta già commissionata e la fase mostra il numero di quell'ordine. La regola: un ordine di lavoro del piano, non annullato, copre la tratta del **primo** ODP dello stesso piano che ha quella fase; un ODP rilanciato dopo per i pezzi mancanti resta libero di commissionare i suoi. Il senso opposto (ODL dall'ODP, poi dal piano) era già bloccato. Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/odp.test.js`: la tratta commissionata dal piano non si rigenera dall'ODP, l'ODP rilanciato commissiona i suoi, il senso opposto resta bloccato.
+
 ### 0.105.7 — 2026-10-19
 
 **Distinte: un articolo già presente non fa una seconda riga.** Aggiungendo a una distinta base, dal pannello *+ Aggiungi componenti*, un articolo che c'era già, nasceva una seconda riga dello stesso codice: due voci da tenere allineate a mano, e chi correggeva la quantità ne vedeva una sola. Ora la quantità inserita si somma a quella della riga esistente. Lo stesso nella distinta parte (*+ Articolo*), con un'eccezione: una riga con il costo forzato non si somma, perché quel costo vale per la riga intera e il pezzo in più resterebbe gratis. Nessun cambio a `supabase/schema.sql`.

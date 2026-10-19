@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.105.7**
+**Versione dell'app documentata: 0.105.8**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2227,6 +2227,13 @@ non quelli lanciati). La consegna chiesta sulla riga è il **rientro pianificato
 la fine dell'ordine (sugli ordini creati prima della 0.90.0, senza date di fase, resta la fine
 dell'ordine). Le fasi **consecutive** dello stesso terzista fanno **una riga sola**: sono
 una lavorazione da commissionare, non due.
+
+**Una tratta già commissionata dal fabbisogno** (dalla 0.105.8). Se l'ordine di lavoro di quella
+tratta è stato generato dal piano prima dell'ODP, l'ODP non offre più **genera ordine di lavoro**:
+al suo posto mostra il numero di quell'ordine, che si apre con un clic. Vale per il primo ODP del
+piano che ha quella fase; un ODP rilanciato dopo, per i pezzi mancanti, commissiona i suoi. Al
+contrario, una tratta commissionata dall'ODP esce già dalla generazione degli ordini di lavoro del
+piano. Su un ordine di lavoro nato dal piano i rientri si registrano sull'ordine di lavoro stesso.
 
 **Chi genera l'ordine di lavoro** (dalla 0.105.6): chi scrive gli ordini, cioè l'*Ufficio
 acquisti* e l'amministratore. Un ordine di lavoro è un documento con un prezzo e un fornitore, e

@@ -534,6 +534,57 @@ describe('ODP: il fabbisogno', () => {
       'la fase coperta esce dalla generazione diretta; le altre restano, ed è la convivenza');
   });
 
+  // Dalla 0.105.8. Gli ordini di lavoro generati dal piano prima dell'ODP
+  // portano le chiavi di fase, non il legame con la fase dell'ordine: l'ODP
+  // nato dopo li ignorava e offriva di commissionare di nuovo la stessa tratta.
+  it('una tratta già commissionata dal piano non si rigenera dall\'ODP', () => {
+    const app = conDb({
+      plans: [{ id: 'pl1', number: 'FAB-2026-001', title: 'Lotto', date: '2026-07-01', notes: '',
+        lines: [{ id: 'l1', itemId: 'mista', qty: 4, dueDate: '2026-09-30' }], active: true, jobId: null }],
+    });
+    const odl = app.eval(`(() => { const p = getPlan('pl1');
+      const g = planDocGroups(planDocRows(p, 'odl'), 'odl')[0];
+      const w = planNewOdl(p, g.supplierId, g.rows); saveDB(); return w.number; })()`);
+    const r = JSON.parse(app.eval(`(() => { const p = getPlan('pl1');
+      const o = planNewOdp(p, planRowIndex(p).get('make#mista')); o.status = 'lanciato'; saveDB(); invalidateCaches();
+      const f = o.phases.find(x => x.supplierId);
+      const prima = db.workOrders.length;
+      const gen = opGenerabile(o, f);
+      const x = opGeneraOdl(o.id, f.id);
+      return JSON.stringify({ gen, creato: !!x, n: db.workOrders.length - prima, link: (opOdlDalPiano(o, f) || {}).odl ? opOdlDalPiano(o, f).odl.number : null }); })()`));
+    assert.equal(r.gen, false, 'la tratta risulta già commissionata');
+    assert.equal(r.creato, false);
+    assert.equal(r.n, 0, 'nessun secondo ordine di lavoro');
+    assert.equal(r.link, odl, 'e la fase rimanda all\'ordine nato dal piano');
+  });
+
+  it('un ODP rilanciato per i pezzi mancanti commissiona i suoi', () => {
+    const app = conDb({
+      plans: [{ id: 'pl1', number: 'FAB-2026-001', title: 'Lotto', date: '2026-07-01', notes: '',
+        lines: [{ id: 'l1', itemId: 'mista', qty: 4, dueDate: '2026-09-30' }], active: true, jobId: null }],
+    });
+    const r = JSON.parse(app.eval(`(() => { const p = getPlan('pl1');
+      const g = planDocGroups(planDocRows(p, 'odl'), 'odl')[0];
+      planNewOdl(p, g.supplierId, g.rows);
+      const o1 = planNewOdp(p, planRowIndex(p).get('make#mista')); o1.createdAt = '2026-07-01T08:00:00.000Z';
+      const o2 = odpNew(getItem('mista'), 1, '2026-09-30', { planId: 'pl1' }); o2.createdAt = '2026-07-02T08:00:00.000Z';
+      db.prodOrders.push(o2); o1.status = o2.status = 'lanciato'; saveDB(); invalidateCaches();
+      const f1 = o1.phases.find(x => x.supplierId), f2 = o2.phases.find(x => x.supplierId);
+      return JSON.stringify({ primo: opGenerabile(o1, f1), secondo: opGenerabile(o2, f2) }); })()`));
+    assert.equal(r.primo, false);
+    assert.equal(r.secondo, true);
+  });
+
+  it('il contrario resta vero: una tratta commissionata dall\'ODP non si ordina dal piano', () => {
+    const app = conDb({
+      plans: [{ id: 'pl1', number: 'FAB-2026-001', title: 'Lotto', date: '2026-07-01', notes: '',
+        lines: [{ id: 'l1', itemId: 'mista', qty: 4, dueDate: '2026-09-30' }], active: true, jobId: null }],
+    });
+    app.eval(`(() => { const p = getPlan('pl1'); const o = planNewOdp(p, planRowIndex(p).get('make#mista'));
+      o.status = 'lanciato'; saveDB(); invalidateCaches(); opGeneraOdl(o.id, o.phases.find(x => x.supplierId).id); invalidateCaches(); })()`);
+    assert.equal(Number(app.eval(`planDocsAvailable(getPlan('pl1'), 'odl')`)), 0);
+  });
+
   it('un ordine annullato smette di coprire, e la parte torna lanciabile', () => {
     const app = app0();
     app.eval(`(function(){ const p = getPlan('pl1'); const o = planNewOdp(p, planRowIndex(p).get('make#interna'));
