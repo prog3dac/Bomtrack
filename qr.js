@@ -337,7 +337,7 @@ function qrSchedaHtml(tipo, rec) {
       corpo = '<p class="empty-text" style="text-align:left;padding:4px 0">Articolo senza giacenza (macchina o gruppo).</p>';
     }
     const ub = ubicazioneOf(it);
-    const dove = ub ? ` · <span class="code-link" ${clickAttrs(`qrApri({ tipo: 'ubi', codice: ${jsAttrStr(ub)} })`, 'Ubicazione ' + ub)}>${ico('pin', 'tinted', '')} ${esc(ub)}</span>` : '';
+    const dove = ub ? ` · <span class="code-link" ${clickAttrs(`qrApri({ tipo: 'ubi', codice: ${jsAttr(ub)} })`, 'Ubicazione ' + ub)}>${ico('pin', 'tinted', '')} ${esc(ub)}</span>` : '';
     return `<h3>${ico('package', 'tinted pill', '')} ${esc(it.code)}</h3>
       <p><strong>${esc(it.name || '')}</strong> · ${esc(typeLabel(it.type))}${dove}${it.obsolete ? ' · <span style="color:var(--red)">non più utilizzabile</span>' : ''}</p>
       ${corpo}<div class="qr-azioni">${bottoni.join('')}</div>`;
@@ -350,8 +350,8 @@ function qrSchedaHtml(tipo, rec) {
         <span class="num">${fmtUom(onHandOf(it.id), itemUom(it))}</span>
       </div>`).join('');
     const bottoni = [];
-    if (canWriteShop('catalog')) bottoni.push(qrBtn('Conta questa ubicazione', 'clipboard', `inventarioAvviaDaQr({ ambito: 'ubi', ubi: ${jsAttrStr(rec.code)} })`, true));
-    bottoni.push(qrBtn('Etichetta QR', 'qr', `qrEtichetteModal([${jsAttrStr(rec.code)}], 'ubi')`));
+    if (canWriteShop('catalog')) bottoni.push(qrBtn('Conta questa ubicazione', 'clipboard', `inventarioAvviaDaQr({ ambito: 'ubi', ubi: ${jsAttr(rec.code)} })`, true));
+    bottoni.push(qrBtn('Etichetta QR', 'qr', `qrEtichetteModal([${jsAttr(rec.code)}], 'ubi')`));
     return `<h3>${ico('pin', 'tinted pill', '')} ${esc(rec.code)}</h3>
       <p>${rec.items.length === 1 ? '1 articolo' : rec.items.length + ' articoli'} in questa ubicazione.</p>
       <div style="display:flex;flex-direction:column;gap:4px;margin:8px 0;max-height:45vh;overflow:auto">${righe}</div>

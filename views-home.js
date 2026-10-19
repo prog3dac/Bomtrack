@@ -100,12 +100,16 @@ function homeSegnali() {
   // arriva tardi — e separarli in due avvisi avrebbe costretto a leggerne due
   // per farsi la stessa idea. Il tipo si vede dal numero (ODA/ODL) e il click
   // porta ciascuno nel suo elenco.
-  const tardi = d => d.status !== 'annullato' && d.status !== 'evaso' && orderWorstDelay(d) != null;
+  // Il ritardo si guarda solo sulle righe ancora da ricevere (dalla 0.105.6):
+  // una riga confermata tardi ma già arrivata non arriva più tardi di niente,
+  // e un ordine parziale restava in elenco col ritardo di merce già a scaffale.
+  // Il calendario e il cruscotto saltavano già le righe chiuse.
+  const tardi = d => d.status !== 'annullato' && d.status !== 'evaso' && orderWorstOpenDelay(d) != null;
   const ordTardi = [].concat((db.orders || []).filter(tardi).map(o => ({ o, tipo: 'order' })),
     (db.workOrders || []).filter(tardi).map(o => ({ o, tipo: 'odl' })))
-    .sort((a, b) => orderWorstDelay(b.o) - orderWorstDelay(a.o));
+    .sort((a, b) => orderWorstOpenDelay(b.o) - orderWorstOpenDelay(a.o));
   agg(ordTardi.map(({ o, tipo }) => {
-    const g = orderWorstDelay(o);
+    const g = orderWorstOpenDelay(o);
     const chi = supplierName(o.supplierId) || (tipo === 'odl' ? 'senza terzista' : 'senza fornitore');
     return voce(o.number, `${chi} — confermato con ${g} ${g === 1 ? 'giorno' : 'giorni'} di ritardo`,
       `homeApri('${tipo}','${o.id}')`);
@@ -121,14 +125,16 @@ function homeSegnali() {
 
   // Articoli sotto la scorta minima. Portano al Magazzino, non all'anagrafica:
   // è la vista dove quel numero si vede e da dove si rettifica.
-  const sottoScorta = (db.items || []).filter(it => hasStock(it) && safetyStockOf(it) > 0 && onHandOf(it.id) < safetyStockOf(it));
+  // Gli obsoleti no (dalla 0.105.6), come nel Riordino: non li riordina
+  // nessuno, e una scorta minima rimasta scritta li teneva qui per sempre.
+  const sottoScorta = (db.items || []).filter(it => !it.obsolete && hasStock(it) && safetyStockOf(it) > 0 && onHandOf(it.id) < safetyStockOf(it));
   agg(sottoScorta.map(it => voce(it.code,
     `${it.name} — esistente ${fmtQty(onHandOf(it.id))} ${itemUom(it)}, scorta minima ${fmtQty(safetyStockOf(it))}`,
     `itemInfoModal('${it.id}')`)),
   'articolo sotto la scorta minima', 'articoli sotto la scorta minima', 'stock', 'media');
 
   // Articoli che si comprano e non hanno un prezzo: in un ordine varrebbero zero
-  const senzaPrezzo = (db.items || []).filter(it => hasPriceList(it) && costField(it) && !(Number(it[costField(it)]) > 0));
+  const senzaPrezzo = (db.items || []).filter(it => !it.obsolete && hasPriceList(it) && costField(it) && !(Number(it[costField(it)]) > 0));
   agg(senzaPrezzo.map(it => voce(it.code, `${it.name} — ${typeLabel(it.type)}`, `itemInfoModal('${it.id}')`)),
     'articolo d\'acquisto senza prezzo', 'articoli d\'acquisto senza prezzo', 'buy', 'media');
 
@@ -186,7 +192,17 @@ function homeSegnali() {
       voci: [voce(fmtMB(dbSpazio().usatoMB) + ' su ' + fmtMB(dbSpazio().limiteMB), 'Oltre il limite i salvataggi falliscono: esporta un backup e alleggerisci l\'archivio', '')] });
   }
 
-  return out;
+  // Prima i più gravi (dalla 0.105.6), come promette il manuale: l'allarme
+  // rosso del backup o dello spazio stava in fondo, sotto le informazioni.
+  // L'ordinamento è stabile: a parità di gravità resta l'ordine di sopra.
+  return out.sort((a, b) => CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
+}
+// Il ritardo peggiore fra le righe **ancora da ricevere** di un ordine o di un
+// ODL: quello che può ancora far slittare qualcosa.
+function orderWorstOpenDelay(o) {
+  return orderWorstDelay(Object.assign({}, o, {
+    lines: (o.lines || []).filter(l => (Number(l.qty) || 0) - (Number(l.received) || 0) > 0),
+  }));
 }
 // Aprire ciò che l'avviso nomina. Stessa strada della ricerca globale: prima la
 // vista, poi il documento — l'ordine inverso disegnerebbe la vista giusta e poi

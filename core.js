@@ -93,6 +93,18 @@ function totaleRighe(lines) { return (lines || []).reduce((s, l) => s + importoR
 // primo onclick="fn('${esc(it.name)}')" si romperebbe su un articolo chiamato
 // «L'albero», e su uno chiamato peggio farebbe altro.
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// ─── Un dato dentro un onclick ───
+// esc() rende innocuo un testo **per l'HTML**, non per il JavaScript che
+// l'attributo contiene: il browser prima decodifica l'attributo, poi esegue, e
+// un apice decodificato chiude la stringa. Ogni dato scritto da qualcuno — un
+// codice, un nome, un percorso, un'ubicazione — che finisce come argomento di
+// un comando passa da qui (dalla 0.105.6): JSON.stringify ne fa un letterale
+// JavaScript corretto (apici, barre, a capo), esc() lo rende innocuo per
+// l'attributo, fra virgolette o fra apici. Il risultato porta già le sue
+// virgolette: onclick="fn(${jsAttr(x)})", senza apici intorno.
+// Prima c'erano tre ricette a mano (jsAttrStr, esc(JSON.stringify(…)), e
+// niente): una sola si controlla, tre si copiano sbagliate.
+function jsAttr(v) { return esc(JSON.stringify(String(v == null ? '' : v))); }
 
 // ─── L'unità di misura accanto al numero ───
 // Un numero senza unità è un numero da indovinare. «15» in una riga di
@@ -460,7 +472,15 @@ const ROLE_WRITE = {
 // gesti accetta l'una o l'altra, invece di spostarli e togliere qualcosa a
 // qualcuno.
 function canWriteShop(oppure) { return canWrite('shop') || canWrite(oppure); }
-function roleGuardShop(oppure) { return canWriteShop(oppure) || roleGuard(oppure); }
+// Senza collegamento (dalla 0.105.6) chi i gesti di officina li fa davvero
+// legge che manca il server, non che il suo ruolo non può: roleGuard(oppure)
+// guardava solo l'area alternativa, e all'officina — che `catalog` o `docs` non
+// li ha — dava la colpa al ruolo proprio nel momento in cui era la rete.
+function roleGuardShop(oppure) {
+  if (canWriteShop(oppure)) return true;
+  if (canWriteRuolo('shop') || canWriteRuolo(oppure)) { showToast(CLOUD_SOLA_LETTURA_MSG, 'error'); return false; }
+  return roleGuard(oppure);
+}
 const AREA_LABELS = { catalog: 'anagrafiche articoli', bom: 'distinte base', docs: 'richieste e ordini', manage: 'gestione', agenda: 'promemoria', shop: 'avanzamento, ricevimenti e giacenze' };
 function roleLabel(r) { return ROLES[r] || r || '—'; }
 // Il ruolo dice che cosa si può scrivere; il collegamento, se si può adesso.
@@ -1424,7 +1444,12 @@ function openModal(h, wide, key) {
   // una richiamata. Sostituirlo qui vorrebbe dire rendere asincrona l'apertura
   // di ogni scheda dell'app. Il prezzo è un riquadro di sistema fuori tema in un
   // caso che capita di rado; il resto dell'app askConfirm ce l'ha.
-  if (p && k === 'form' && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
+  //
+  // Dalla 0.105.6 si chiede solo se quel form è stato **davvero** cambiato:
+  // la domanda arrivava anche su una scheda appena aperta e mai toccata, e una
+  // domanda che non ha mai niente da proteggere si impara a confermare senza
+  // leggerla — proprio la volta che conta.
+  if (p && k === 'form' && panelModificato(p) && !confirm('Una scheda è già aperta: le modifiche non salvate andranno perse. Continuare?')) return null;
   const nuovo = !p;
   if (nuovo) {
     p = document.createElement('div');
@@ -1453,8 +1478,24 @@ function openModal(h, wide, key) {
   panelRaise(p);
   a11yFields(p);
   panelFocus(p);
+  // Lo stato di partenza dei campi, per sapere poi se il form è cambiato. Si
+  // fissa subito e di nuovo al giro di coda: molti chiamanti riempiono i campi
+  // dopo che openModal ha restituito il pannello (le tendine, i valori
+  // calcolati), e quei valori sono la partenza, non una modifica. Chi scrive
+  // non può farlo prima di quel giro: è lo stesso tratto sincrono.
+  panelFissaStato(p);
+  Promise.resolve().then(() => panelFissaStato(p));
   return p;
 }
+// I valori dei campi di una scheda, in una stringa sola da confrontare.
+function panelStato(p) {
+  if (!p || typeof p.querySelectorAll !== 'function') return '';
+  return Array.prototype.map.call(p.querySelectorAll('input, select, textarea'), c =>
+    (c.type === 'checkbox' || c.type === 'radio' ? (c.checked ? '1' : '0') : String(c.value == null ? '' : c.value))).join('\u0000');
+}
+function panelFissaStato(p) { if (p) p._statoIniziale = panelStato(p); }
+// Senza uno stato di partenza si risponde «cambiato»: nel dubbio si chiede.
+function panelModificato(p) { return !p || p._statoIniziale == null || panelStato(p) !== p._statoIniziale; }
 // ─── Etichette, pulsanti-icona e titolo della scheda ───
 // I template scrivono `<div class="modal-field"><label>Nome</label><input id="…">`:
 // l'associazione fra i due c'è per posizione ma non per il browser, quindi

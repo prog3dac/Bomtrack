@@ -57,6 +57,36 @@ function listExportName(spec, ext) {
   return `bomtrack_${slug}_${oggiISO()}.${ext}`;
 }
 
+// ─── Le colonne che si stanno guardando (dalla 0.105.6) ───
+// Anagrafiche e magazzino hanno la scelta delle colonne («Colonne», columns.js).
+// L'export ne scriveva un insieme fisso: le colonne accese a schermo — il
+// fornitore, la scorta minima, le note — non arrivavano nel file, e quelle
+// spente ci finivano lo stesso. Ora il file porta le colonne visibili, nello
+// stesso ordine, con codice e descrizione sempre (sono `fissa` nel registro).
+// `registro` dà per ogni chiave l'intestazione e il valore: { h, w, num?, v(it) }.
+// Una colonna del registro delle viste senza voce qui (gli indicatori, che a
+// schermo sono icone) resta fuori dal file.
+function listColonneVisibili(vista, registro) {
+  const cols = (colsFor(vista) || []).filter(c => registro[c.key] && (c.fissa || !colIsHidden(vista, c.key)));
+  return {
+    colonne: cols.map(c => { const r = registro[c.key]; return { h: typeof r.h === 'function' ? r.h() : r.h, w: r.w, num: r.num }; }),
+    riga: it => cols.map(c => registro[c.key].v(it)),
+  };
+}
+
+// ─── Il testo che sembra una formula ───
+// Una cella di testo che comincia con =, +, @ (o con un trattino davanti a una
+// parola, o con un tab) alcuni fogli di calcolo la prendono per una formula
+// appena la si tocca, e alcuni appena il file si apre. I testi vengono dagli
+// archivi — il nome di un articolo, di un fornitore, una nota — e li scrive chi
+// vuole: un «=HYPERLINK(…)» piantato in un nome partirebbe dal foglio di chi lo
+// riceve, non da Bomtrack. Un apice davanti lo lascia testo (dalla 0.105.6).
+// Un trattino solo («-», il vuoto) e un numero negativo scritto restano come sono.
+function xlsxTesto(v) {
+  if (typeof v !== 'string') return v;
+  return /^(?:[=+@\t\r]|-(?![\d\s.,]|$))/.test(v) ? "'" + v : v;
+}
+
 // ─── Excel ───
 // Il foglio dati comincia dall'intestazione, in riga 1. La tentazione è
 // scriverci sopra due righe di contesto: rompe l'autofiltro, rompe qualunque
@@ -103,9 +133,9 @@ function exportListXlsx(spec) {
   const wb = XLSX.utils.book_new();
   (spec.sezioni || []).forEach(s => {
     const dataCols = s.colonne.map(c => !!c.data);
-    const conv = r => r.map((v, k) => (dataCols[k] ? listCellData(v) : v));
+    const conv = r => r.map((v, k) => (dataCols[k] ? listCellData(v) : xlsxTesto(v)));
     const aoa = [s.colonne.map(c => c.h)].concat((s.righe || []).map(conv));
-    if (s.totali) aoa.push(s.totali);
+    if (s.totali) aoa.push(s.totali.map(xlsxTesto));
     const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
     ws['!cols'] = s.colonne.map(c => ({ wch: c.w || 14 }));
     // Il formato italiano sulle celle di data: senza, SheetJS le scrive col

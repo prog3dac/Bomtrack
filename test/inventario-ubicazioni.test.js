@@ -95,13 +95,15 @@ describe('Ubicazioni — il QR dello scaffale', () => {
     const h = a.eval("qrSchedaHtml('ubi', ubicazioneRec('A-2'))");
     assert.match(h, /2 articoli/);
     assert.match(h, /Conta questa ubicazione/);
-    assert.match(h, /inventarioAvviaDaQr\(\{ ambito: 'ubi', ubi: 'A-2' \}\)/);
+    // Il codice passa da jsAttr() (dalla 0.105.6): nell'attributo le virgolette
+    // sono &quot;, e il browser le decodifica in un letterale "A-2".
+    assert.match(h, /inventarioAvviaDaQr\(\{ ambito: 'ubi', ubi: &quot;A-2&quot; \}\)/);
   });
   it('un\'ubicazione con un apice non rompe il pulsante', () => {
     const a = app();
     a.eval("getItem('a2').location = \"L'ANGOLO\"");
     const h = a.eval("qrSchedaHtml('ubi', ubicazioneRec(\"L'ANGOLO\"))");
-    assert.match(h, /ubi: 'L\\'ANGOLO'/);
+    assert.match(h, /ubi: &quot;L&#39;ANGOLO&quot;/);
   });
   it('le etichette delle ubicazioni: una per posto, dagli articoli elencati', () => {
     const a = app();
