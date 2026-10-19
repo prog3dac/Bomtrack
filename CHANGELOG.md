@@ -2,6 +2,72 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.105.6 — 2026-10-19
+
+**I miglioramenti e le segnalazioni minori del controllo generale.** **Con l'archivio condiviso va rieseguito `supabase/schema.sql`** (manuale, cap. 31): numeri unici, autori e versioni li decide ora il server. Se l'archivio contiene già due documenti con lo stesso numero, lo schema lo dice con un avviso e quell'indice si crea rieseguendolo dopo averli corretti (Gestione → Backup → controllo delle serie). La funzione `bomtrack-utenti` non cambia.
+
+**Archivio condiviso**
+- **Un rifiuto per permesso non ferma più la coda.** Se il server rifiuta una modifica perché il ruolo non scrive quella tabella, solo quelle modifiche si scartano e tornano come sul server; il resto parte e il PC continua a ricevere. Prima tutta la coda restava ferma.
+- **«Scarta solo i rifiutati».** Quando il server rifiuta un invio, dal pannello Archivio condiviso il lotto parte a pezzi: i record rifiutati tornano come sul server e sono elencati, tutto il resto parte. Prima l'unica uscita era «Scarta e riscarica», che buttava tutto il lavoro in attesa.
+- **Impostazioni di due amministratori.** Prima di inviare le impostazioni si guardano quelle sul server: le voci cambiate da un collega restano, si scrivono solo quelle cambiate su questo PC.
+- **Distinte che non raddoppiano.** Le righe di una distinta arrivate prima del loro articolo rifanno la distinta invece di aggiungersi.
+- **Ricevuto stabile.** Un ricevimento già noto, ricevuto di nuovo, non fa più ripartire la riga d'ordine come modificata.
+- **Supabase in difficoltà non fa uscire.** Un errore temporaneo del servizio di accesso non chiude più la sessione.
+- **«Esci» chiude solo questo PC.**
+- **Ordini di lavoro in modifica protetti** dalla ricezione, come richieste e ordini.
+- **Le modifiche di un PC con l'orologio sbagliato non si perdono più.** Una modifica fatta sulla versione giusta di un record passa, qualunque sia l'ora del PC: decide la versione, non la data. Le righe di distinte, ordini e altri documenti partono se diverse dall'ultimo invio, non se più recenti di un'ora.
+- **Un numero, un documento, anche sul server.** L'archivio condiviso rifiuta due documenti con lo stesso numero, e l'app dà a quello appena arrivato un numero nuovo riservato sul server, dicendolo. La rinumerazione dei doppioni non usa più un numero che un collega poteva aver appena preso.
+- **Due richieste di numero insieme non danno lo stesso numero.** Il server legge i numeri usati solo quando tocca a lui.
+- **Chi ha scritto lo dice il server.** Autore di una modifica, di un documento nuovo, di una voce del cestino e delle impostazioni è l'utente collegato, non quello dichiarato dal PC.
+- **Le richieste d'offerta le scrive chi ha i documenti.** La progettazione non le può più cambiare passando dall'API.
+
+**Produzione e fabbisogno**
+- **Annullare una dichiarazione rispetta la successione.** Un avanzamento non si annulla più se la fase dopo è già partita: si annullano prima le dichiarazioni della fase dopo.
+- **Un avvio sbagliato si annulla.** Finché la fase non ha dichiarazioni, l'avvio ha il suo «Annulla»: sulla prima fase il materiale uscito con lui torna a magazzino.
+- **Le fasi che non ricevono pezzi si chiudono da sole**, e l'ordine si completa invece di restare «in corso» con il materiale nel lavoro in corso.
+- **L'officina dichiara l'avanzamento delle parti dal piano**, come già il montaggio. Non genera più ordini di lavoro ai terzisti da un ODP: sono documenti con prezzo e fornitore.
+- **Lotto e scorta minima delle parti fabbricate.** L'ODP proposto dal piano si arrotonda al lotto di riordino della parte; se lo scaffale è sotto la scorta minima, il piano più urgente che fabbrica la parte lancia anche i pezzi che la ripristinano, una volta sola.
+- **Importi nella scheda degli ordini di produzione**: mostravano € 0,00, ora il costo dei pezzi da lanciare.
+- **Le bozze d'ordine di altri si vedono nel piano** accanto alla riga d'acquisto, e in «Genera ordini» la riga nasce non spuntata.
+- **Data fattibile**: le righe d'ordine in un'altra unità si convertono, e quelle senza data contano come arrivate in tempo.
+- **Copertura della commessa**: «documento non ancora inviato» vale solo per bozze e richieste aperte che coprono quello che manca.
+
+**Magazzino, inventario e acquisti**
+- **Il confronto delle offerte non premia le offerte incomplete.** Un fornitore che quota una riga su tre aveva il totale più basso e finiva in verde. Ora il più basso si cerca solo fra le offerte complete; le altre dicono «incompleta (1/3)».
+- **Il listino del fornitore si propone.** Scelto o cambiato il fornitore di un ordine o di un ordine di lavoro, l'app chiede se applicare il suo listino: di serie alle righe senza prezzo, a quelle con un prezzo diverso solo se lo si chiede.
+- **Dal QR si riceve anche una parte.** Accanto a «Ricevi tutto», «Ricevi una parte» elenca le righe aperte con il residuo già scritto.
+- **Inventario: il valore delle differenze** usa lo stesso costo del valore di giacenza (prima il costo manuale, quasi sempre vuoto per i commerciali).
+- **L'inventario in corso è di chi l'ha cominciato**, e dell'archivio (locale o condiviso) su cui è cominciato.
+- **Rettifica giacenza**: una quantità negativa si rifiuta; cambiando tipo il campo si svuota; l'ordine di conto lavoro resta solo sui movimenti di conto lavoro.
+- **Esistente negativo**: un filtro e una card nel Magazzino; le giacenze negative non abbassano più il valore del magazzino.
+- **Magazzino più veloce**: il numero dei movimenti di ogni riga non scorre più tutto lo storico.
+
+**Catalogo, numerazione e salvataggio**
+- **Un articolo che resta in una revisione rilasciata non si elimina più.** Tolto dalla Rev B, un componente era eliminabile e la Rev A diceva «(articolo eliminato)».
+- **«Espandi tutto» non si blocca più su un anello** di distinta sotto la radice.
+- **Gli anelli di distinta arrivati da un collega si vedono**: dopo ogni ricezione un avviso che resta, coi codici del giro e il pulsante per aprire la distinta.
+- **Il codice automatico conta anche i codici scritti in minuscolo o con gli spazi.** Un «mat-acc-002» importato faceva proporre MAT-ACC-002, subito rifiutato.
+- **Controllo dati: numeri doppi e buchi nei documenti**, per ogni serie di quest'anno e dell'anno scorso.
+- **Archivio illeggibile**: se la copia di soccorso non ci sta, l'avviso lo dice e l'app non salva finché non si scaricano i dati originali come file. Prima diceva che una copia esisteva, e il primo salvataggio la cancellava.
+- **Allegati e archivio condiviso**: «Carica file» avverte che il file resta su questo PC; chi apre un allegato che non ha sa che sta sul PC di un collega, e di chi.
+- **Una copia di sicurezza prima di Importa JSON, Ripristina dati esempio e Azzera tutto**, nella cartella del backup automatico con un nome che non si sovrascrive, oppure scaricata. Se non riesce, l'app chiede prima di proseguire.
+- **Avviso di versione nuova**: le schede aperte mostrano «È disponibile una versione nuova — Ricarica».
+- **L'app installata sul telefono non è più bloccata in orizzontale.**
+
+**Interfaccia, ruoli ed export**
+- **«Salva» a vuoto non tocca più il documento.** Su una richiesta, un ordine o un ODL senza modifiche lo segnava come modificato anche da chi non può scriverlo, e l'archivio condiviso respingeva il lotto. Una nuova prova chiama ogni comando dell'interfaccia con ogni ruolo e verifica che scriva solo le tabelle che il server gli concede.
+- **L'officina non legge più «sola lettura» dove lavora** (Magazzino, Ordini, ODL, ODP). Senza collegamento il messaggio parla del collegamento, non del ruolo.
+- **Ctrl+K trova le commesse, e i documenti dal nome del fornitore o del cliente.** Invio premuto subito dopo l'ultimo tasto apre il risultato di quel che è scritto.
+- **Riepilogo**: un ordine parziale non resta in ritardo per una riga già arrivata; gli obsoleti non chiedono attenzione per scorta o prezzo; gli avvisi sono ordinati per gravità.
+- **Un solo valore di giacenza**: tessera del Magazzino e Cruscotto contano le stesse quantità, positive e di articoli attivi.
+- **Gli export seguono le colonne** accese con «Colonne», nello stesso ordine.
+- **Excel più sicuro**: un testo che comincia come una formula resta testo.
+- **Telefono**: il menu «Esporta» non esce più dallo schermo; le schede lunghe finiscono sopra la barra del browser.
+- **«Modifiche non salvate» solo se c'è qualcosa da perdere.**
+
+**Verifica**
+- Nuovi: `test/cloud-coda.test.js`, `test/magazzino-acquisti.test.js`, `test/controllo-minori-catalogo.test.js`; prove nuove in `schema-sql`, `cloud`, `odp`, `produzione`, `job-coverage`, `schedulazione`, `plandocs`, `guards` (ogni comando dell'interfaccia con ogni ruolo, confrontato con le aree del server), `export-lists`, `home`, `dashboard`.
+
 ### 0.105.5 — 2026-10-19
 
 **Le correzioni di media gravità del controllo generale.** **Con l'archivio condiviso va rieseguito `supabase/schema.sql`** (manuale, cap. 31): la ricezione usa la nuova funzione `pull_istante()`. La funzione `bomtrack-utenti` non cambia.

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.105.5**
+**Versione dell'app documentata: 0.105.6**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3083,6 +3083,19 @@ nominano): i record che il server rifiuta tornano come sono sul server e vengono
 gli altri partono. Prima l'unica uscita era **Scarta e riscarica**, che c'è ancora ma butta
 **tutte** le modifiche non inviate e riscarica l'archivio: va tenuto per ultimo, e l'app stessa,
 chiedendo conferma, suggerisce di provare prima l'altro.
+
+**L'ora del PC non decide più** (dalla 0.105.6). Se due persone modificano la stessa cosa, entra la
+modifica fatta sulla versione più aggiornata; chi lavorava su una copia vecchia riceve quella che ha
+vinto. Vale anche per le righe di distinte e documenti, che partono quando sono diverse dall'ultimo
+invio, non quando sono più recenti: un PC con l'orologio sbagliato non perde più le sue modifiche.
+Anche **chi ha scritto** (autore di una modifica, di un documento nuovo, di una voce del cestino)
+lo stabilisce il server, dall'utente collegato.
+
+**Un numero, un documento** (dalla 0.105.6). Il server rifiuta due documenti con lo stesso numero.
+Se ne arriva uno con un numero già usato (per esempio ripristinato dal cestino), l'app gli dà
+subito un numero nuovo riservato dal server, e lo dice. Se l'archivio conteneva già dei doppioni
+quando si è rieseguito `schema.sql`, l'esecuzione lo segnala: si correggono (il controllo delle
+serie in *Gestione → Backup* li elenca) e si riesegue il file.
 
 Alcuni casi particolari:
 
