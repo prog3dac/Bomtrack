@@ -1713,9 +1713,15 @@ function pickCycleItem(id) {
   if (!child || !CYCLE_CHILD_TYPES.includes(child.type)) { showToast('Nella distinta parte vanno solo commerciali e materie prime', 'error'); return; }
   if (createsCycle(it.id, id)) { showToast('Operazione annullata: creerebbe un ciclo', 'error'); return; }
   if (!Array.isArray(it.cycle)) it.cycle = [];
-  it.cycle.push({ kind: 'item', itemId: id, qty: 1, costOverride: null });
+  // Come nella distinta base (dalla 0.105.7): un articolo già presente prende
+  // una unità in più invece di una seconda riga. Non se la riga ha un costo
+  // forzato: quello vale per la riga intera, e aumentandone la quantità il
+  // pezzo in più resterebbe gratis.
+  const gia = it.cycle.find(r => r.kind !== 'op' && r.itemId === id && r.costOverride == null);
+  if (gia) gia.qty = Math.round(((Number(gia.qty) || 0) + 1) * 1e6) / 1e6;
+  else it.cycle.push({ kind: 'item', itemId: id, qty: 1, costOverride: null });
   closeCyclePicker();
-  touch(it); saveDB(); renderCycles(); savedToast('Articolo aggiunto alla distinta parte');
+  touch(it); saveDB(); renderCycles(); savedToast(gia ? 'Quantità aumentata: l\'articolo era già nella distinta parte' : 'Articolo aggiunto alla distinta parte');
 }
 // Selettore inline di una lavorazione da un centro di lavoro esistente:
 // interna o conto lavoro (a seconda del fornitore scelto), a costo fisso o

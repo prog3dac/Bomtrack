@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.105.6</span>
+        <span class="chip">v0.105.7</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -561,7 +561,7 @@ PRT-…               parte non legata a una macchina</code></pre>
 <p><strong>Cosa si vede.</strong></p>
 <ul><li>In alto la <strong>barra revisioni</strong>: il badge <code>Rev. X · N rilasciate</code>, <strong>Nuova revisione</strong>, <strong>Storico revisioni</strong> (→ <a href="#15-revisioni">cap. 15</a>).</li><li>Le <strong>card di costo</strong> unitario: Materiale · Commerciali · Parti · Lavorazioni · Spese generali · <strong>Costo totale</strong> · <strong>Prezzo vendita</strong>.</li><li>L'<strong>albero</strong> multi-livello, con la <strong>numerazione di posizione</strong>: <code>1</code>, <code>1.1</code>, <code>1.1.1</code>, <code>1.2</code>, <code>2</code>… Colonne: Articolo, Q.tà, U.M., Costo un., <strong>Scarto %</strong>, Costo riga, Azioni.</li></ul>
 <p><strong>Comandi.</strong></p>
-<div class="tw"><table><thead><tr><th>Comando</th><th>Cosa fa</th></tr></thead><tbody><tr><td><strong>Modifica testata</strong></td><td>Le proprietà della distinta (vedi sotto)</td></tr><tr><td><strong>Elimina</strong></td><td>Cancella la distinta</td></tr><tr><td><strong>+ Aggiungi componenti</strong></td><td>Apre il pannello laterale ridimensionabile per pescare dagli archivi</td></tr><tr><td><strong>+ Aggiungi lavorazione</strong></td><td>Aggiunge una fase all'assieme (il montaggio)</td></tr><tr><td><strong>⊞ Espandi tutto</strong> / <strong>⊟ Comprimi tutto</strong></td><td>Apre e chiude tutti i rami</td></tr><tr><td><strong>⇄ Confronta con…</strong> <em>(barra revisioni)</em></td><td>Mette la distinta a fianco di un'altra qualsiasi, su tutti i livelli (→ <a href="#confrontare-due-distinte-diverse">cap. 15</a>)</td></tr></tbody></table></div>
+<div class="tw"><table><thead><tr><th>Comando</th><th>Cosa fa</th></tr></thead><tbody><tr><td><strong>Modifica testata</strong></td><td>Le proprietà della distinta (vedi sotto)</td></tr><tr><td><strong>Elimina</strong></td><td>Cancella la distinta</td></tr><tr><td><strong>+ Aggiungi componenti</strong></td><td>Apre il pannello laterale ridimensionabile per pescare dagli archivi. Un articolo già in distinta non fa una seconda riga: la quantità inserita si somma a quella che c'è (dalla 0.105.7)</td></tr><tr><td><strong>+ Aggiungi lavorazione</strong></td><td>Aggiunge una fase all'assieme (il montaggio)</td></tr><tr><td><strong>⊞ Espandi tutto</strong> / <strong>⊟ Comprimi tutto</strong></td><td>Apre e chiude tutti i rami</td></tr><tr><td><strong>⇄ Confronta con…</strong> <em>(barra revisioni)</em></td><td>Mette la distinta a fianco di un'altra qualsiasi, su tutti i livelli (→ <a href="#confrontare-due-distinte-diverse">cap. 15</a>)</td></tr></tbody></table></div>
 <p><strong>Filtri.</strong> Ricerca «Cerca codice o nome distinta…»; <strong>livello</strong> (Tutti i livelli · Macchine · Gruppi · Sottogruppi); <strong>macchina di appartenenza</strong>; il menu della distinta aperta; il contatore.</p>
 <blockquote><p><strong>La distinta aperta resta sempre raggiungibile</strong>, anche quando il filtro la escluderebbe: non sparisce sotto le mani mentre ci si lavora.</p></blockquote>
 <p><strong>La finestra «Modifica testata».</strong></p>
@@ -576,7 +576,7 @@ PRT-…               parte non legata a una macchina</code></pre>
 <ul><li>I filtri e il <strong>menu di scelta della parte</strong>;</li><li>la <strong>barra revisioni</strong> della parte;</li><li>le card: <em>Distinta parte</em> · <em>Lavorazioni</em> · <em>Costo unitario a mano</em> · <strong>Costo parte</strong>;</li><li>una nota in testa che dice <strong>da dove viene il costo</strong> di quella parte, secondo il suo approvvigionamento;</li><li>le due sezioni: <strong>Distinta parte</strong> e <strong>Ciclo di lavorazione</strong>.</li></ul>
 <p><strong>Filtri.</strong> Ricerca, famiglia, sottofamiglia, e il menu della parte.</p>
 <h3 id="la-distinta-parte">La distinta parte</h3>
-<p>Il materiale e i commerciali che servono a fare il pezzo. Pulsante <strong>+ Articolo</strong>.</p>
+<p>Il materiale e i commerciali che servono a fare il pezzo. Pulsante <strong>+ Articolo</strong>. Un articolo che è già nella distinta parte prende una unità in più invece di una seconda riga (dalla 0.105.7); fa eccezione la riga con il costo forzato, che vale per la riga intera: lì nasce una riga nuova.</p>
 <div class="tw"><table><thead><tr><th>Colonna</th><th>Note</th></tr></thead><tbody><tr><td>Voce</td><td>L'articolo</td></tr><tr><td>Fornitore</td><td>Da chi si compra</td></tr><tr><td>U.M. · Q.tà</td><td>Quanto ne serve per <strong>un</strong> pezzo</td></tr><tr><td><strong>Costo (€/U.M.)</strong></td><td>Il costo a listino, <strong>sovrascrivibile</strong> sulla riga</td></tr><tr><td>Costo riga</td><td>Q.tà × costo</td></tr></tbody></table></div>
 <h3 id="il-ciclo-di-lavorazione">Il ciclo di lavorazione</h3>
 <p>Le fasi, numerate <strong>10, 20, 30…</strong> e riordinabili con le frecce ↑ ↓ (la numerazione a decine lascia posto per infilarne una in mezzo).</p>

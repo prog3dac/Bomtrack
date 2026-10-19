@@ -650,7 +650,12 @@ function bomPanelInsertAll() {
   let added = 0, skipped = 0;
   bomPanelQty.forEach((qty, itemId) => {
     if (!isAllowedChild(it.type, itemId) || createsCycle(it.id, itemId)) { skipped++; return; }
-    it.components.push({ itemId, qty, scrapPct: 0 });
+    // Un articolo che c'è già non fa una seconda riga: se ne aumenta la
+    // quantità (dalla 0.105.7). Due righe dello stesso codice si leggevano
+    // come due voci diverse, e chi correggeva la quantità ne vedeva una sola.
+    const gia = it.components.find(c => c.itemId === itemId);
+    if (gia) gia.qty = Math.round(((Number(gia.qty) || 0) + qty) * 1e6) / 1e6;
+    else it.components.push({ itemId, qty, scrapPct: 0 });
     added++;
   });
   bomPanelQty = new Map();

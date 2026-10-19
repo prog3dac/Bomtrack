@@ -2,6 +2,13 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.105.7 — 2026-10-19
+
+**Distinte: un articolo già presente non fa una seconda riga.** Aggiungendo a una distinta base, dal pannello *+ Aggiungi componenti*, un articolo che c'era già, nasceva una seconda riga dello stesso codice: due voci da tenere allineate a mano, e chi correggeva la quantità ne vedeva una sola. Ora la quantità inserita si somma a quella della riga esistente. Lo stesso nella distinta parte (*+ Articolo*), con un'eccezione: una riga con il costo forzato non si somma, perché quel costo vale per la riga intera e il pezzo in più resterebbe gratis. Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/cycles.test.js`: la quantità sommata nella distinta base e nella distinta parte, l'articolo nuovo in fondo, la riga a costo forzato.
+
 ### 0.105.6 — 2026-10-19
 
 **I miglioramenti e le segnalazioni minori del controllo generale.** **Con l'archivio condiviso va rieseguito `supabase/schema.sql`** (manuale, cap. 31): numeri unici, autori e versioni li decide ora il server. Se l'archivio contiene già due documenti con lo stesso numero, lo schema lo dice con un avviso e quell'indice si crea rieseguendolo dopo averli corretti (Gestione → Backup → controllo delle serie). La funzione `bomtrack-utenti` non cambia.

@@ -130,12 +130,40 @@ describe('Righe: aggiunta, modifica, eliminazione', () => {
     assert.equal(forma(app), 'm,w1,w2,w3');
   });
 
-  it('pickCycleItem accoda un articolo alla distinta e salva', () => {
+  // Dalla 0.105.7 un articolo già in distinta non fa una seconda riga: se ne
+  // aumenta la quantità, e il costo è lo stesso di prima.
+  it('pickCycleItem su un articolo già presente ne aumenta la quantità', () => {
     const app = conDb(dbMisto());
     app.eval('currentCycleItemId = "p"');
     app.eval('pickCycleItem("a")');
-    assert.equal(forma(app), 'm,w1,a,w2,w3,a');
+    assert.equal(forma(app), 'm,w1,a,w2,w3');
+    assert.equal(app.eval('getItem("p").cycle[2].qty'), 2);
     approx(app.eval('costOf("p").total'), 3 * 2 + 5 + 10 + 20 + 30 + 5);
+  });
+
+  it('pickCycleItem accoda un articolo nuovo in fondo', () => {
+    const app = conDb(dbMisto());
+    app.eval('currentCycleItemId = "p"; db.items.push({ id: "b", code: "B", name: "B", type: "acquistato", unitCost: 4, active: true })');
+    app.eval('pickCycleItem("b")');
+    assert.equal(forma(app), 'm,w1,a,w2,w3,b');
+  });
+
+  // Il costo forzato vale per la riga intera: sommarci un pezzo lo regalerebbe.
+  it('una riga a costo forzato non si somma: nasce una riga nuova', () => {
+    const app = conDb(dbMisto());
+    app.eval('currentCycleItemId = "p"; getItem("p").cycle[2].costOverride = 9');
+    app.eval('pickCycleItem("a")');
+    assert.equal(forma(app), 'm,w1,a,w2,w3,a');
+    assert.equal(app.eval('getItem("p").cycle[2].qty'), 1);
+  });
+
+  it('Inserisci nella distinta base somma la quantità a un componente già presente', () => {
+    const { asm } = require('./fixtures.js');
+    const app = conDb(makeDb({ items: [mat('m', 2), acq('a', 5),
+      asm('g', 'gruppo', { components: [{ itemId: 'a', qty: 2, scrapPct: 0 }] })] }));
+    app.eval('currentBomId = "g"; bomPanelQty = new Map([["a", 3], ["m", 1]]); bomPanelInsertAll()');
+    const comp = JSON.parse(app.eval('JSON.stringify(getItem("g").components)'));
+    assert.deepEqual(comp.map(c => c.itemId + ':' + c.qty), ['a:5', 'm:1']);
   });
 
   it('pickCycleOp accoda la lavorazione in fondo al ciclo', () => {

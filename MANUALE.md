@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.105.6**
+**Versione dell'app documentata: 0.105.7**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1076,7 +1076,7 @@ lavorazioni. La schermata si intitola **«Distinta Base & Costificazione»**.
 |---|---|
 | **Modifica testata** | Le proprietà della distinta (vedi sotto) |
 | **Elimina** | Cancella la distinta |
-| **+ Aggiungi componenti** | Apre il pannello laterale ridimensionabile per pescare dagli archivi |
+| **+ Aggiungi componenti** | Apre il pannello laterale ridimensionabile per pescare dagli archivi. Un articolo già in distinta non fa una seconda riga: la quantità inserita si somma a quella che c'è (dalla 0.105.7) |
 | **+ Aggiungi lavorazione** | Aggiunge una fase all'assieme (il montaggio) |
 | **⊞ Espandi tutto** / **⊟ Comprimi tutto** | Apre e chiude tutti i rami |
 | **⇄ Confronta con…** *(barra revisioni)* | Mette la distinta a fianco di un'altra qualsiasi, su tutti i livelli (→ [cap. 15](#confrontare-due-distinte-diverse)) |
@@ -1141,7 +1141,9 @@ di lavoro ai terzisti.
 
 ### La distinta parte
 
-Il materiale e i commerciali che servono a fare il pezzo. Pulsante **+ Articolo**.
+Il materiale e i commerciali che servono a fare il pezzo. Pulsante **+ Articolo**. Un articolo che
+è già nella distinta parte prende una unità in più invece di una seconda riga (dalla 0.105.7);
+fa eccezione la riga con il costo forzato, che vale per la riga intera: lì nasce una riga nuova.
 
 | Colonna | Note |
 |---|---|
