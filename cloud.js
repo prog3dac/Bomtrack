@@ -281,6 +281,13 @@ function cloudPayload(changes, _soglia, puoImpostazioni) {
     if (recs.length) {
       const posizioni = new Map((Store.getAll(c) || []).map((r, i) => [r.id, i]));
       const righe = dbVersoCloud({ [c]: recs });
+      // Un insieme «sostituito» rimasto vuoto parte vuoto (dalla 0.106.1): il
+      // server rifà l'insieme solo delle tabelle che l'invio nomina, e senza
+      // la tabella le righe di prima restavano lì. Tolta l'ultima riga di un
+      // ciclo, il pull dopo la riportava indietro.
+      Object.keys(figli).forEach(k => {
+        if (figli[k].merge === 'replace' && recs.some(x => Array.isArray(x[k]))) upsert[figli[k].table] = upsert[figli[k].table] || [];
+      });
       Object.keys(righe).forEach(t => {
         let r = righe[t];
         if (t === def.table) r.forEach(x => {

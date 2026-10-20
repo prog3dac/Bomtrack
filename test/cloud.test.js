@@ -83,6 +83,17 @@ describe('Archivio condiviso — il lotto da inviare', () => {
     assert.ok(p.upsert.trash, 'il cestino viaggia: è la rete sotto le eliminazioni di tutti');
   });
 
+  // 0.106.1: il server rifà un insieme «sostituito» solo se l'invio nomina la
+  // sua tabella. Tolta l'ultima riga di un ciclo la tabella non partiva, e le
+  // righe di prima tornavano al pull dopo.
+  it('un ciclo svuotato parte vuoto, e il server lo rifà vuoto', () => {
+    const a = appCondivisa(dbCloudCompleto());
+    a.eval(`{ const it = db.items.find(i => i.code === 'PRT-001'); it.cycle = []; touch(it); saveDB(); }`);
+    const p = ev(a, `cloudPayload(Store.pendingChanges(), null, true).payload`);
+    assert.deepEqual(p.upsert.item_cycle_rows, []);
+    assert.equal(p.upsert.item_components, undefined, 'una parte non ha distinta: niente da rifare');
+  });
+
   it('le impostazioni partono solo con la gestione', () => {
     const a = appCondivisa(dbCloudCompleto());
     a.eval(`db.settings.currency = 'CHF'; saveDB();`);
@@ -252,6 +263,18 @@ describe('Archivio condiviso — più PC contro Supabase (finto, con Postgres ve
     B.eval('{ const c = Store.commit; Store.commit = function () { __conta(); return c.apply(this, arguments); }; }');
     await giro(B); await giro(B);
     assert.equal(salvati, 0, 'le righe ripescate dal margine sono uguali a quelle che ci sono');
+  });
+
+  passo('l\'ultima riga tolta da un ciclo non torna al giro dopo', async () => {
+    A.eval(`{ const it = db.items.find(i => i.code === 'PRT-001'); it.cycle = it.cycle.filter(r => r.kind === 'op'); touch(it); saveDB(); }`);
+    await giro(A);
+    assert.equal(srv.db.sql(`select count(*) from item_cycle_rows where kind = 'item'`), '0');
+    A.eval(`{ const it = db.items.find(i => i.code === 'PRT-001'); it.cycle = []; touch(it); saveDB(); }`);
+    await giro(A); await giro(A);
+    assert.equal(srv.db.sql('select count(*) from item_cycle_rows'), '0', 'il server ha rifatto il ciclo vuoto');
+    assert.equal(A.eval(`db.items.find(i => i.code === 'PRT-001').cycle.length`), 0, 'e il pull non lo riporta');
+    await giro(B);
+    assert.equal(B.eval(`db.items.find(i => i.code === 'PRT-001').cycle.length`), 0, 'il collega lo riceve vuoto');
   });
 
   // 0.105.4: uno schema di prima non ha pull_pagina, e lo scaricamento torna al pull intero.
