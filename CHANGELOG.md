@@ -2,6 +2,13 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.106.1 — 2026-10-20
+
+**Con l'archivio condiviso, l'ultima riga tolta da un ciclo tornava dopo pochi secondi.** Svuotando la distinta parte e il ciclo di una parte (l'ultimo materiale o l'ultima fase rimasti), al giro successivo la riga ricompariva. Le righe di ciclo e di distinta si riscrivono in blocco per articolo, ma il server rifà l'insieme solo delle tabelle che l'invio nomina: un insieme rimasto vuoto non produceva righe, la tabella non partiva, e sul server restavano quelle di prima, che il pull riportava indietro. Ora un insieme vuoto parte vuoto. Lo stesso valeva per distinta e lavorazioni di un gruppo o di una macchina svuotate del tutto. Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/cloud.test.js`: un ciclo svuotato parte come insieme vuoto; contro il Supabase finto con Postgres vero, tolto l'ultimo materiale e poi l'ultima fase, il server ha il ciclo vuoto, il pull non lo riporta e il collega lo riceve vuoto.
+
 ### 0.106.0 — 2026-10-19
 
 **Con l'archivio condiviso, cestino e lapidi li pulisce il server.** **Va rieseguito `supabase/schema.sql`** (manuale, cap. 31); finché non lo si fa l'app funziona come prima, ma il cestino sul server non si svuota. La funzione `bomtrack-utenti` non cambia.
