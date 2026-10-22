@@ -164,3 +164,58 @@ describe('Stampa', () => {
     assert.ok(a.html('print-head').includes('Pianificazione › Carico centri'));
   });
 });
+
+// Il sottotitolo del foglio stampato: quale documento si sta stampando
+// (C3 residuo, dalla 0.107.0). Senza, tre fogli di tre ordini diversi escono
+// con la stessa intestazione.
+describe('Stampa: il documento aperto nel sottotitolo', () => {
+  function conDocumenti() {
+    const a = loadApp({ silent: true });
+    a.setDb(makeDb({
+      items: [{ id: 'm1', code: 'MAC-01', name: 'Macchina', type: 'assembly', active: true, components: [] }],
+      orders: [{ id: 'o1', number: 'ODA-2026-007', title: 'Viti', date: '2026-02-05', status: 'bozza', active: true, lines: [] }],
+      rfqs: [{ id: 'r1', number: 'RDO-2026-003', title: 'Profilati', date: '2026-02-01', status: 'bozza', active: true, lines: [] }],
+    }));
+    a.asRole('admin');
+    return a;
+  }
+  const sotto = a => a.eval('printSubtitle()');
+
+  it('l\'ordine aperto dà numero e titolo', () => {
+    const a = conDocumenti();
+    a.eval('setView("orders"); currentOrderId = "o1"');
+    assert.equal(sotto(a), 'ODA-2026-007 Viti');
+  });
+  it('la richiesta d\'offerta aperta, lo stesso', () => {
+    const a = conDocumenti();
+    a.eval('setView("rfq"); currentRfqId = "r1"');
+    assert.equal(sotto(a), 'RDO-2026-003 Profilati');
+  });
+  it('la distinta aperta dà codice e nome dell\'articolo', () => {
+    const a = conDocumenti();
+    a.eval('setView("bom"); currentBomId = "m1"');
+    assert.equal(sotto(a), 'MAC-01 — Macchina');
+  });
+  it('un documento sparito non rompe la stampa', () => {
+    const a = conDocumenti();
+    a.eval('setView("orders"); currentOrderId = "non-esiste"');
+    assert.equal(sotto(a), '');
+    a.eval('printHeadFill()');
+    assert.ok(!/print-sub"> · /.test(a.html('print-head')), 'nessun separatore davanti alla data');
+  });
+  it('nome dell\'azienda e titoli passano da esc()', () => {
+    const a = conDocumenti();
+    a.eval('db.settings.company = { name: "Rossi <&> figli" }; db.orders[0].title = "<b>x</b>"');
+    a.eval('setView("orders"); currentOrderId = "o1"; printHeadFill()');
+    const h = a.html('print-head');
+    assert.ok(h.includes('Rossi &lt;&amp;&gt; figli'), h);
+    assert.ok(!h.includes('<b>'), h);
+  });
+  it('printView riempie l\'intestazione prima di aprire la stampa', () => {
+    const a = conDocumenti();
+    a.eval('setView("orders"); currentOrderId = "o1"');
+    a.eval('globalThis.__alla_stampa = null; window.print = () => { globalThis.__alla_stampa = document.getElementById("print-head").innerHTML; }');
+    a.eval('printView()');
+    assert.ok(String(a.eval('__alla_stampa')).includes('ODA-2026-007 Viti'));
+  });
+});
