@@ -920,7 +920,7 @@ function loadSetCentro(id) { loadSoloCentro = id || ''; renderLoad(); }
 function loadOverloadHtml(tab) {
   const ov = mrpLoadOverload(tab);
   if (!ov.length) return '';
-  const voci = ov.map(o => `${esc(settimanaLabel(o.week))} — ${esc(o.centri.map(c => c.name + ' +' + fmtQty(+c.over.toFixed(1)) + ' h').join(', '))}`).join(' · ');
+  const voci = ov.map(o => `${esc(settimanaLabel(o.week))} — ${esc(o.centri.map(c => c.name + ' +' + fmtQtyIt(+c.over.toFixed(1)) + ' h').join(', '))}`).join(' · ');
   return `<div class="rfq-warn">${ico('warning', 'tinted', '')} <strong>Sovraccarico</strong> in ${ov.length} ${ov.length === 1 ? 'settimana' : 'settimane'}: ${voci}</div>`;
 }
 // ─── Il grafico della saturazione ───
@@ -955,21 +955,21 @@ function loadChartOne(r, settimane) {
   const barre = celle.map((x, i) => {
     const bx = gap + i * (bw + gap);
     const by = y(x.c.hours);
-    const tit = `${settimanaLabel(x.wk)}: ${fmtQty(+x.c.hours.toFixed(2))} h`
-      + (x.c.sat == null ? ' — capacità non dichiarata' : ` su ${fmtQty(cap)} h (${Math.round(x.c.sat * 100)}%)`);
+    const tit = `${settimanaLabel(x.wk)}: ${fmtQtyIt(+x.c.hours.toFixed(2))} h`
+      + (x.c.sat == null ? ' — capacità non dichiarata' : ` su ${fmtQtyIt(cap)} h (${Math.round(x.c.sat * 100)}%)`);
     return `<rect x="${bx}" y="${by.toFixed(1)}" width="${bw}" height="${(base - by).toFixed(1)}" rx="3"
         fill="${loadBarColor(x.c.sat)}"><title>${esc(tit)}</title></rect>
       <text x="${bx + bw / 2}" y="${base + 14}" text-anchor="middle" class="load-chart-lbl">${esc(settimanaLabel(x.wk).split(' · ')[0])}</text>`;
   }).join('');
   const linea = cap > 0
     ? `<line x1="0" y1="${y(cap).toFixed(1)}" x2="${larghezza}" y2="${y(cap).toFixed(1)}" stroke="var(--text-dim)" stroke-dasharray="4 3" stroke-width="1"/>
-       <text x="2" y="${(y(cap) - 4).toFixed(1)}" class="load-chart-lbl">capacità ${fmtQty(cap)} h</text>`
+       <text x="2" y="${(y(cap) - 4).toFixed(1)}" class="load-chart-lbl">capacità ${fmtQtyIt(cap)} h</text>`
     : '';
   const descrizione = `${r.name}, ${celle.length} ${celle.length === 1 ? 'settimana' : 'settimane'}, `
     + (cap > 0 ? (sfondate.length ? 'sovraccarico in ' + sfondate.join(', ') : 'nessun sovraccarico')
       : 'capacità non dichiarata');
   return `<figure class="load-chart">
-    <figcaption>${esc(r.name)} <span class="empty-text" style="padding:0">${cap > 0 ? fmtQty(cap) + ' h/sett' : 'capacità non dichiarata'}</span></figcaption>
+    <figcaption>${esc(r.name)} <span class="empty-text" style="padding:0">${cap > 0 ? fmtQtyIt(cap) + ' h/sett' : 'capacità non dichiarata'}</span></figcaption>
     <svg viewBox="0 0 ${larghezza} ${base + 20}" preserveAspectRatio="xMinYMid meet" role="img" aria-label="${esc(descrizione)}">
       <line x1="0" y1="${base}" x2="${larghezza}" y2="${base}" stroke="var(--hairline)" stroke-width="1"/>
       ${linea}${barre}
@@ -999,16 +999,16 @@ function loadTableHtml(tab, planId) {
       const tit = c.sat == null ? 'Capacità non dichiarata' : `Saturazione ${Math.round(c.sat * 100)}%`;
       const apri = clickAttrs(`loadCellModal('${r.workCenterId}','${wk}'${planId ? `,'${planId}'` : ''})`, 'Dettaglio del carico');
       return `<td style="font-family:var(--mono);text-align:right${col ? ';color:' + col : ''}" title="${esc(tit)}">
-        <span class="plandoc-link plandoc-link-sm" ${apri}>${fmtQty(+c.hours.toFixed(2))}</span>${c.sat != null ? `<div class="empty-text" style="padding:0;font-size:11px">${Math.round(c.sat * 100)}%</div>` : ''}</td>`;
+        <span class="plandoc-link plandoc-link-sm" ${apri}>${fmtQtyIt(+c.hours.toFixed(2))}</span>${c.sat != null ? `<div class="empty-text" style="padding:0;font-size:11px">${Math.round(c.sat * 100)}%</div>` : ''}</td>`;
     }).join('');
-    const cap = r.capacity > 0 ? fmtQty(r.capacity) + ' h'
+    const cap = r.capacity > 0 ? fmtQtyIt(r.capacity) + ' h'
       : '<span class="empty-text" style="padding:0" title="Capacità non dichiarata: il carico si vede, il sovraccarico no">—</span>';
     const nome = planId ? esc(r.name)
       : `<span class="plandoc-link plandoc-link-sm" ${clickAttrs(`loadSetCentro('${r.workCenterId}')`, 'Mostra solo i codici di questo centro')}>${esc(r.name)}</span>`;
     return `<tr><td>${nome}</td>
       <td style="font-family:var(--mono);text-align:right">${cap}</td>
       ${celle}
-      <td style="font-family:var(--mono);text-align:right"><strong>${fmtQty(+r.totale.toFixed(2))}</strong></td></tr>`;
+      <td style="font-family:var(--mono);text-align:right"><strong>${fmtQtyIt(+r.totale.toFixed(2))}</strong></td></tr>`;
   }).join('');
   return `<div class="table-wrap"><table>${head}<tbody>${corpo}</tbody></table></div>`;
 }
@@ -1026,9 +1026,9 @@ function loadItemsHtml(entries) {
     <td>${esc(settimanaLabel(r.week))}</td>
     <td style="font-family:var(--mono)">${codeLink(r.itemId, r.code)}</td>
     <td>${esc(r.name)}</td>
-    <td style="font-family:var(--mono);text-align:right">${fmtQty(+r.qty.toFixed(3))}</td>
-    <td>${r.fasi.map(f => `<span class="cycle-phase">${esc(String(f.faseNo || '—'))}</span> ${esc(f.wcName)} <span class="empty-text" style="padding:0">${fmtQty(f.hoursUnit)} h/pz · ${fmtQty(+f.hours.toFixed(2))} h</span>`).join('<br>')}</td>
-    <td style="font-family:var(--mono);text-align:right"><strong>${fmtQty(+r.hours.toFixed(2))}</strong></td></tr>`).join('');
+    <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(+r.qty.toFixed(3))}</td>
+    <td>${r.fasi.map(f => `<span class="cycle-phase">${esc(String(f.faseNo || '—'))}</span> ${esc(f.wcName)} <span class="empty-text" style="padding:0">${fmtQtyIt(f.hoursUnit)} h/pz · ${fmtQtyIt(+f.hours.toFixed(2))} h</span>`).join('<br>')}</td>
+    <td style="font-family:var(--mono);text-align:right"><strong>${fmtQtyIt(+r.hours.toFixed(2))}</strong></td></tr>`).join('');
   const tot = righe.reduce((s, r) => s + r.hours, 0);
   return `${testa}
     <p class="empty-text" style="text-align:left;padding:0 0 8px">I <strong>pezzi</strong> non si sommano fra le fasi di uno stesso codice: ogni fase lavora gli stessi pezzi. Le <strong>ore</strong> sì.</p>
@@ -1038,7 +1038,7 @@ function loadItemsHtml(entries) {
         <th scope="col" style="text-align:right">Ore</th></tr></thead>
       <tbody>${corpo}</tbody>
       <tfoot><tr><td colspan="5">Totale ore</td>
-        <td style="font-family:var(--mono);text-align:right">${fmtQty(+tot.toFixed(2))}</td></tr></tfoot>
+        <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(+tot.toFixed(2))}</td></tr></tfoot>
     </table></div>`;
 }
 // Il dettaglio di una cella non è un vezzo: vale la stessa regola già scritta
@@ -1057,17 +1057,17 @@ function loadCellModal(wcId, week, planId) {
   if (!cella) return;
   const voci = cella.voci.slice().sort((a, b) => b.hours - a.hours);
   const capTxt = riga.capacity > 0
-    ? ` su ${fmtQty(riga.capacity)} h di capacità (${Math.round(cella.sat * 100)}%)`
+    ? ` su ${fmtQtyIt(riga.capacity)} h di capacità (${Math.round(cella.sat * 100)}%)`
     : ' — capacità non dichiarata';
   openModal(`<h3>${ico('wrench', 'tinted pill', '')} ${esc(riga.name)} — ${esc(settimanaLabel(week))}</h3>
-    <p><strong>${fmtQty(+cella.hours.toFixed(2))} h</strong>${capTxt}.</p>
+    <p><strong>${fmtQtyIt(+cella.hours.toFixed(2))} h</strong>${capTxt}.</p>
     <div style="display:flex;flex-direction:column;gap:6px">
       ${voci.map(v => `<div class="mgmt-item">
         <span style="width:110px;font-family:var(--mono)">${codeLink(v.itemId, v.code)}</span>
         <span style="flex:1">${esc(v.name)}${v.faseNo ? ` <span class="cycle-phase">fase ${esc(String(v.faseNo))}</span>` : ''}</span>
         <span class="empty-text" style="padding:0;width:120px">${esc(v.planNumber || '')}</span>
-        <span class="empty-text" style="padding:0;width:110px;text-align:right">${fmtQty(v.qty)} pz × ${fmtQty(v.hoursUnit)} h</span>
-        <span style="font-family:var(--mono);width:80px;text-align:right">${fmtQty(+v.hours.toFixed(2))} h</span>
+        <span class="empty-text" style="padding:0;width:110px;text-align:right">${fmtQtyIt(v.qty)} pz × ${fmtQtyIt(v.hoursUnit)} h</span>
+        <span style="font-family:var(--mono);width:80px;text-align:right">${fmtQtyIt(+v.hours.toFixed(2))} h</span>
       </div>`).join('')}
     </div>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'carico');
@@ -2504,7 +2504,7 @@ function planAgendaHtml(plan) {
       <td style="font-family:var(--mono)">${e.itemId ? codeLink(e.itemId, e.codice) : esc(e.codice)}</td>
       <td>${esc(e.nome)} <span class="empty-text" style="padding:0">${esc(e.testo || '')}</span></td>
       <td>${esc(e.dove || '')}</td>
-      <td style="font-family:var(--mono);text-align:right">${e.qty ? fmtQty(+e.qty.toFixed(3)) + ' ' + esc(e.uom || '') : ''}</td>
+      <td style="font-family:var(--mono);text-align:right">${e.qty ? fmtQtyIt(+e.qty.toFixed(3)) + ' ' + esc(e.uom || '') : ''}</td>
       <td>${agendaStatoHtml(e.stato)}${docs}</td></tr>`;
   }).join('');
   return `${testa}<div class="table-wrap"><table>
@@ -2655,7 +2655,7 @@ function mrpBuyLineHtml(r) {
   // toggle significherebbe lasciar promettere due volte la stessa merce a chi
   // quel toggle non l'ha acceso.
   if (r.committed > 0) {
-    const chi = r.impegni.map(c => `${c.number}${c.title ? ' — ' + c.title : ''}: ${fmtQty(c.qty)} ${r.uom}`.trim()).join('\n');
+    const chi = r.impegni.map(c => `${c.number}${c.title ? ' — ' + c.title : ''}: ${fmtQtyIt(c.qty)} ${r.uom}`.trim()).join('\n');
     seg.push(`<span class="mrp-warn" title="Già promesso ai piani aperti più urgenti:\n${esc(chi)}\n\nLibero = esistente + in arrivo − impegnato = ${fmtUom(r.libero, r.uom)}">🔒 impegnato ${fmtUom(r.committed, r.uom)}</span>`);
   }
   const urg = URGENZA_LABEL[r.urgenza];
@@ -2663,14 +2663,14 @@ function mrpBuyLineHtml(r) {
   // Dove è già finita questa riga. Si vede qui, senza aprire la generazione:
   // è la domanda «l'ho già ordinato?», e va risposta dove si guarda per primo.
   (r.docRefs || []).forEach(x => seg.push(
-    `<span class="price-best" title="Questo articolo è già in ${esc(docRefLabel(x))} (${fmtQty(x.qty)} ${esc(x.uom)}) generato da questo fabbisogno">📄 ${esc(x.number)}</span>`));
+    `<span class="price-best" title="Questo articolo è già in ${esc(docRefLabel(x))} (${fmtQtyIt(x.qty)} ${esc(x.uom)}) generato da questo fabbisogno">📄 ${esc(x.number)}</span>`));
   if ((r.bozze || []).length) seg.push(mrpBozzeBadge(r));
   const celleStock = mrpNet ? `
-    <td style="font-family:var(--mono);text-align:right;color:var(--text-dim)">${fmtQty(r.qty)}</td>
-    <td style="font-family:var(--mono);text-align:right">${fmtQty(r.onHand)}${r.safety > 0 ? `<span class="empty-text" style="padding:0"> (min ${fmtQty(r.safety)})</span>` : ''}</td>
-    <td style="font-family:var(--mono);text-align:right${r.committed > 0 ? ';color:var(--orange,#d90)' : ''}">${r.committed > 0 ? '−' + fmtQty(r.committed) : '—'}
-      ${r.committed > 0 ? `<div class="empty-text" style="padding:0${r.libero < 0 ? ';color:var(--red)' : ''}">libero ${fmtQty(r.libero)}</div>` : ''}</td>
-    <td style="font-family:var(--mono);text-align:right">${fmtQty(r.incoming)}</td>` : '';
+    <td style="font-family:var(--mono);text-align:right;color:var(--text-dim)">${fmtQtyIt(r.qty)}</td>
+    <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(r.onHand)}${r.safety > 0 ? `<span class="empty-text" style="padding:0"> (min ${fmtQtyIt(r.safety)})</span>` : ''}</td>
+    <td style="font-family:var(--mono);text-align:right${r.committed > 0 ? ';color:var(--orange,#d90)' : ''}">${r.committed > 0 ? '−' + fmtQtyIt(r.committed) : '—'}
+      ${r.committed > 0 ? `<div class="empty-text" style="padding:0${r.libero < 0 ? ';color:var(--red)' : ''}">libero ${fmtQtyIt(r.libero)}</div>` : ''}</td>
+    <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(r.incoming)}</td>` : '';
   // Le due date stanno insieme: quella in cui serve non si può cambiare, quella
   // entro cui ordinare è l'unica su cui si può ancora fare qualcosa.
   const celleDate = `<td style="white-space:nowrap">${r.due ? esc(fmtDateIt(r.due)) : '<span class="empty-text" style="padding:0">—</span>'}</td>
@@ -2684,13 +2684,13 @@ function mrpBuyLineHtml(r) {
     ${celleDate}
     <td>${esc(r.uom)}</td>
     ${celleStock}
-    <td style="font-family:var(--mono);text-align:right"><strong>${fmtQty(r.qtyOrder)}</strong></td>
+    <td style="font-family:var(--mono);text-align:right"><strong>${fmtQtyIt(r.qtyOrder)}</strong></td>
     <td style="font-family:var(--mono);text-align:right">${fmtN(r.price)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtN(r.amount)}</td></tr>`;
 }
 function mrpBozzeBadge(r) {
   const b = r.bozze || [];
-  return `<span class="mrp-warn" title="C'è già una bozza d'ordine con questo articolo, fuori da questo piano: ${esc(b.map(x => `${x.number} (${fmtQty(x.qty)} ${r.uom})`).join(', '))}. Non è ancora in arrivo: prima di ordinarlo di nuovo, guarda se basta quella.">${ico('file', 'tinted', '')} in bozza ${esc(b.map(x => x.number).join(', '))}</span>`;
+  return `<span class="mrp-warn" title="C'è già una bozza d'ordine con questo articolo, fuori da questo piano: ${esc(b.map(x => `${x.number} (${fmtQtyIt(x.qty)} ${r.uom})`).join(', '))}. Non è ancora in arrivo: prima di ordinarlo di nuovo, guarda se basta quella.">${ico('file', 'tinted', '')} in bozza ${esc(b.map(x => x.number).join(', '))}</span>`;
 }
 function mrpBuyTable(rows) {
   if (!rows.length) return '<div class="empty-text">Niente da comprare: il piano è vuoto o i suoi articoli non hanno distinta.</div>';
@@ -2745,8 +2745,8 @@ function mrpPhaseTable(rows) {
       <td>${esc(supplierName(r.supplierId) || '—')}</td>
       <td>${r.due ? fmtDateIt(r.due) : '—'}</td>
       <td>${r.orderBy ? fmtDateIt(r.orderBy) : '—'}${r.leadDays ? ` <span class="empty-text" style="padding:0">−${r.leadDays} gg</span>` : ''}${u && u.txt ? ` <span class="${u.cls}" title="${esc(u.desc)}">${u.txt}</span>` : ''}</td>
-      <td style="font-family:var(--mono);text-align:right">${fmtQty(r.qty)} ${esc(r.uom)}</td>
-      <td style="font-family:var(--mono);text-align:right">${r.hours ? fmtQty(r.hours) : '—'}</td>
+      <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(r.qty)} ${esc(r.uom)}</td>
+      <td style="font-family:var(--mono);text-align:right">${r.hours ? fmtQtyIt(r.hours) : '—'}</td>
       <td style="font-family:var(--mono);text-align:right">${fmtN(r.price)}</td>
       <td style="font-family:var(--mono);text-align:right">${fmtN(r.amount)}</td></tr>`;
   }).join('');
@@ -2762,7 +2762,7 @@ function mrpPhaseTable(rows) {
       <th scope="col" style="text-align:right">Importo (${esc(cur())})</th></tr></thead>
     <tbody>${corpo}</tbody>
     <tfoot><tr><td colspan="8">Totale conto lavoro</td>
-      <td style="font-family:var(--mono);text-align:right">${totOre ? fmtQty(totOre) : '—'}</td>
+      <td style="font-family:var(--mono);text-align:right">${totOre ? fmtQtyIt(totOre) : '—'}</td>
       <td></td><td style="font-family:var(--mono);text-align:right">${fmtN(tot)}</td></tr></tfoot></table></div>`;
 }
 // `planId` serve all'avanzamento: quante di queste parti sono già state fatte si
@@ -2798,8 +2798,8 @@ function mrpMakeTable(make, planId) {
     // continuare a somigliare a lavoro da fare.
     const statoFatti = !planId ? ''
       : fatti <= 0 ? '<span class="empty-text" style="padding:0">—</span>'
-        : resta > 0 ? `<span class="mrp-warn">${fmtQty(fatti)}</span>`
-          : `<span class="price-best">${fmtQty(fatti)}</span>`;
+        : resta > 0 ? `<span class="mrp-warn">${fmtQtyIt(fatti)}</span>`
+          : `<span class="price-best">${fmtQtyIt(fatti)}</span>`;
     const azione = planId && puoScrivere
       ? `<button class="mini-btn" title="Dichiara quanti pezzi sono stati fatti" onclick="produzioneModal('${planId}','${e.item.id}',${e.qty})">${ico('factory', 'tinted', 'Avanzamento')}</button>`
       : '';
@@ -2807,10 +2807,10 @@ function mrpMakeTable(make, planId) {
       <td style="font-family:var(--mono)">${codeLink(e.item.id, e.item.code)}</td>
       <td>${esc(e.item.name)} ${seg.join(' ')}</td>
       <td>${esc(e.item.uom || '')}</td>
-      <td style="font-family:var(--mono);text-align:right">${fmtQty(e.qty)}</td>
+      <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(e.qty)}</td>
       <td>${e.due ? fmtDateIt(e.due) : '—'}${e.start && e.due && e.start < e.due ? `<div class="empty-text" style="padding:0" title="Inizio della prima fase del ciclo, a ritroso dalla data in cui serve: entro questa data va lanciato l'ordine di produzione">lancio ${esc(fmtDateIt(e.start))}</div>` : ''}</td>
       <td style="font-family:var(--mono);text-align:right">${statoFatti}</td>
-      <td style="font-family:var(--mono);text-align:right">${planId ? (resta > 0 ? fmtQty(resta) : '<span class="price-best">finita</span>') : ''}</td>
+      <td style="font-family:var(--mono);text-align:right">${planId ? (resta > 0 ? fmtQtyIt(resta) : '<span class="price-best">finita</span>') : ''}</td>
       <td style="font-family:var(--mono);text-align:right">${fmtN(c)}</td>
       <td style="font-family:var(--mono);text-align:right">${fmtN(c * e.qty)}</td>
       <td class="row-actions" style="text-align:right">${azione}</td></tr>`;
@@ -2834,8 +2834,8 @@ function mrpStockTable(stock) {
       <td style="font-family:var(--mono)">${codeLink(e.item.id, e.item.code)}</td>
       <td>${esc(e.item.name)}</td>
       <td>${esc(e.item.uom || '')}</td>
-      <td style="font-family:var(--mono);text-align:right">${fmtQty(e.qty)}</td>
-      <td style="font-family:var(--mono);text-align:right">${fmtQty(onHandOf(e.item.id))}</td></tr>`).join('');
+      <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(e.qty)}</td>
+      <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(onHandOf(e.item.id))}</td></tr>`).join('');
   return `<p class="empty-text" style="text-align:left;padding:0 0 8px">Parti già pronte a magazzino che questo piano usa invece di fabbricarle: sotto di loro non si compra materiale e non si lancia niente. Lo scaffale si spartisce fra i piani aperti in ordine di consegna, e le parti fabbricate per un piano restano a lui.</p>
     <div class="table-wrap"><table>
     <thead><tr><th scope="col">Codice</th><th scope="col">Parte</th><th scope="col">U.M.</th>
@@ -2854,18 +2854,18 @@ function mrpAsmTable(asm, planId) {
     const resta = daFare(planId, e.item.id, e.qty);
     const nComp = montaggioComponenti(e.item, 1).stock.length;
     const statoFatti = fatti <= 0 ? '<span class="empty-text" style="padding:0">—</span>'
-      : resta > 0 ? `<span class="mrp-warn">${fmtQty(fatti)}</span>` : `<span class="price-best">${fmtQty(fatti)}</span>`;
+      : resta > 0 ? `<span class="mrp-warn">${fmtQtyIt(fatti)}</span>` : `<span class="price-best">${fmtQtyIt(fatti)}</span>`;
     const azione = puoScrivere
       ? `<button class="mini-btn" title="Dichiara il montaggio: i componenti escono dal magazzino" onclick="montaggioModal('${planId}','${e.item.id}',${e.qty})">${ico('wrench', 'tinted', 'Montaggio')}</button>`
       : '';
     return `<tr>
       <td style="font-family:var(--mono)">${codeLink(e.item.id, e.item.code)}</td>
       <td>${esc(e.item.name)}<span class="bom-type-tag tt-${typeKey(e.item.type)}" style="margin-left:6px">${typeShort(e.item.type)}</span></td>
-      <td style="font-family:var(--mono);text-align:right">${fmtQty(e.qty)}</td>
+      <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(e.qty)}</td>
       <td>${e.start && e.due && e.start < e.due ? `${fmtDateIt(e.start)} → ${fmtDateIt(e.due)}` : (e.due ? fmtDateIt(e.due) : '—')}</td>
       <td style="text-align:right">${nComp}</td>
       <td style="font-family:var(--mono);text-align:right">${statoFatti}</td>
-      <td style="font-family:var(--mono);text-align:right">${resta > 0 ? fmtQty(resta) : '<span class="price-best">montati</span>'}</td>
+      <td style="font-family:var(--mono);text-align:right">${resta > 0 ? fmtQtyIt(resta) : '<span class="price-best">montati</span>'}</td>
       <td class="row-actions" style="text-align:right">${azione}</td></tr>`;
   }).join('');
   return `<p class="empty-text" style="text-align:left;padding:0 0 8px">Dichiarare un montaggio <strong>scarica i componenti diretti</strong> dell'assieme che stanno a magazzino — commerciali, parti, materiali — come consumo di produzione per questo piano. I sottoassiemi si dichiarano ciascuno per sé.</p>
@@ -2940,14 +2940,14 @@ function exportMrpPDF(id) {
   doc.text(`${p.title || ''}${p.title ? '   ' : ''}Data: ${p.date ? fmtDateIt(p.date) : new Date().toLocaleDateString('it-IT')}`, 14, 23);
   doc.autoTable({
     startY: 28, head: [['Codice', 'Da produrre', 'Q.tà', 'U.M.']],
-    body: (p.lines || []).map(l => { const it = getItem(l.itemId); return [it ? it.code : '?', it ? it.name : '⚠ mancante', fmtQty(l.qty), it ? (it.uom || '') : '']; }),
+    body: (p.lines || []).map(l => { const it = getItem(l.itemId); return [it ? it.code : '?', it ? it.name : '⚠ mancante', fmtQtyIt(l.qty), it ? (it.uom || '') : '']; }),
     styles: { fontSize: 8 }, headStyles: { fillColor: [58, 123, 232] },
   });
   // Nel netto la quantità porta accanto il lordo fra parentesi: chi riceve il
   // foglio deve poter rifare il conto senza tornare all'app.
   const righe = (mrpGrouped ? mrpGroupBySupplier(buy).flatMap(g => g.rows) : buy)
     .map(r => [r.item.code, r.item.name, supplierName(r.supplierId) || '—',
-      (fmtQty(r.qtyOrder) + ' ' + r.uom).trim() + (mrpNet && r.qtyOrder !== r.qty ? ` (lordo ${fmtQty(r.qty)} ${r.uom})`.trimEnd() : ''),
+      (fmtQtyIt(r.qtyOrder) + ' ' + r.uom).trim() + (mrpNet && r.qtyOrder !== r.qty ? ` (lordo ${fmtQtyIt(r.qty)} ${r.uom})`.trimEnd() : ''),
       fmtN(r.price) + (r.uom ? '/' + r.uom : ''), fmtN(r.amount)]);
   righe.push(['', 'TOTALE', '', '', '', fmtN(buy.reduce((s, r) => s + r.amount, 0))]);
   doc.autoTable({
@@ -2958,7 +2958,7 @@ function exportMrpPDF(id) {
   const fasi = mrpPhaseRowsNette(p.id, exp.phases);
   if (fasi.length) {
     const righeCl = fasi.map(r => [String(r.phaseNo), r.wcName, r.item.code,
-      supplierName(r.supplierId) || '—', (fmtQty(r.qty) + ' ' + r.uom).trim(),
+      supplierName(r.supplierId) || '—', (fmtQtyIt(r.qty) + ' ' + r.uom).trim(),
       r.leadDays ? r.leadDays + ' gg' : '—', r.orderBy ? fmtDateIt(r.orderBy) : '—',
       fmtN(r.price), fmtN(r.amount)]);
     righeCl.push(['', 'TOTALE', '', '', '', '', '', '', fmtN(fasi.reduce((s, r) => s + r.amount, 0))]);
@@ -2975,7 +2975,7 @@ function exportMrpPDF(id) {
       head: [['Codice', 'Da fabbricare', 'Q.tà', 'U.M.', 'Costo un.', 'Importo']],
       body: exp.make.map(e => {
         const c = costOf(e.item.id).total, u = e.item.uom || '';
-        return [e.item.code, e.item.name, fmtQty(e.qty), u, fmtN(c) + (u ? '/' + u : ''), fmtN(c * e.qty)];
+        return [e.item.code, e.item.name, fmtQtyIt(e.qty), u, fmtN(c) + (u ? '/' + u : ''), fmtN(c * e.qty)];
       }),
       styles: { fontSize: 8 }, headStyles: { fillColor: [155, 109, 255] },
     });

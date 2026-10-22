@@ -845,13 +845,40 @@ MB, che resta dentro il budget di un gesto.
 
 ---
 
+## Risolto nella 0.107.0
+
+### 56. C3 residuo — la stampa e le anagrafiche minori avevano zero test
+
+`printSubtitle()` e `printView()` (`shell.js`) ora hanno i loro casi in
+`test/nav.test.js`: il documento aperto nel sottotitolo, un documento sparito,
+l'escaping, l'intestazione riempita prima di `window.print()`. Trasporto e
+pagamento, dati azienda, concetti e centri di lavoro di `views-manage.js` sono
+in `test/anagrafiche-minori.test.js`.
+
+### 57. C5 — le quantità a schermo col punto decimale
+
+Tutte le viste e i PDF passano da `fmtQtyIt()`, anche `fmtUom()`: «1,5 kg».
+`fmtQty()` resta col punto per i campi numerici, e `test/uom-labels.test.js`
+fallisce se uno script dell'app torna a usarlo.
+
+### 58. C1 residuo — la presentazione dei tre documenti
+
+Testata dello schermo, barra «Genera documento», testata del PDF e del foglio
+Excel e nome del file di richiesta, ordine e ordine di lavoro stanno ora in
+`docToolbarHtml`, `docTestaHtml`, `docExportBarHtml`, `docPdfTesta`,
+`docXlsTesta`, `docXlsSalva` e `docNomeFile` (`views-docs.js`). Le righe restano
+di ciascun documento, perché è lì che differiscono davvero. I sei export sono
+stati confrontati prima e dopo con i finti di `test/export-docs.test.js`:
+identici. L'unica differenza a schermo è voluta: i suggerimenti di trasporto e
+pagamento, che erano diversi sulla richiesta, sono gli stessi sui tre.
+
 ## Aperto
 
-> **Lettura per la situazione attuale (0.83.1).** Il backend non è previsto per
-> ora. Le voci contrassegnate *[solo con backend]* — e tutta la sezione D —
-> descrivono cosa servirà il giorno in cui arriverà, e non hanno effetto su
-> come l'app funziona oggi: in locale sono già coperte (un utente solo, e due
-> schede protette dal contatore di revisione, §24). Le altre valgono adesso.
+> **Lettura per la situazione attuale (0.107.0).** L'archivio condiviso su
+> Supabase esiste dalla 0.103.0. Le voci contrassegnate *[solo con backend]*
+> valgono quando un PC è collegato a un archivio condiviso; senza, sono coperte
+> come prima (un utente solo, e due schede protette dal contatore di revisione,
+> §24). Le altre valgono sempre.
 
 ### A. Sicurezza
 
@@ -873,12 +900,8 @@ possono ancora assegnare lo stesso codice in concorrenza: nessuno dei due vede
 l'altro. Prerequisito: la bonifica dei duplicati storici, che ora ha lo
 strumento per essere fatta.
 
-**A7 — numerazione documenti a `Math.max(...) + 1` su scansione** *[solo con backend]*
-(`nextRfqNumber`, `nextOrderNumber`, `nextPlanNumber`). In multiutente due
-persone che creano una richiesta nello stesso minuto ottengono lo stesso numero,
-garantito. Serve un contatore atomico lato server. Attenuante accertata: tutte le
-FK usano l'`id` UUID, **mai il numero** — quindi una rinumerazione al push non
-rompe nessun riferimento.
+*(A7 — numerazione documenti — chiusa nella 0.105.6: con l'archivio condiviso i
+numeri li riserva il server, e un indice unico rifiuta i doppioni.)*
 
 **A8 residuo — i cicli in distinta restano impediti solo lato client.** *[solo con backend: in locale il client è uno, e basta]* Il lato
 applicativo è chiuso e ora copre anche la distinta parte (§15), ma `createsCycle()`
@@ -900,26 +923,10 @@ sembri: le quantità dipendono dal percorso, quindi la memoizzazione va fatta su
 
 ### C. Manutenibilità
 
-**C1 residuo — resta duplicata la *presentazione* dei documenti** *(la logica è
-chiusa nella 0.41.0, vedi §22)*: `renderRfqEdit`/`renderOrderEdit` e i quattro
-export PDF/Excel, circa 300 righe. **Il prerequisito non c'è più**: dalla 0.76.0
-`test/export-docs.test.js` verifica i sette export sui dati che producono — righe,
-totali, piede, nome del file, condizioni in coda — sostituendo jsPDF e SheetJS con
-due finti che annotano ciò che l'app passa loro. Il refactor si può fare, e ora
-ha una rete sotto. *(Nella stessa versione `docCoda()` ha già unificato le tre
-code identiche di richiesta, ordine e ODL.)*
+*(C1 residuo — la presentazione dei documenti — chiuso nella 0.107.0, §58.)*
 
-**C3 residuo — buchi di copertura** *(ridotto nella 0.22.0 §8, di nuovo nella
-0.40.0 con `test/docs-state.test.js`, e nella 0.76.0 con `export-docs`,
-`anagrafiche` e `concorrenza`)*. Export PDF/Excel e `renameUom` sono ora coperti.
-Restano scoperti `printView` (`shell.js`) e le anagrafiche di servizio minori di
-`views-manage.js`.
-
-**C5 — le quantità a schermo sono ancora col punto decimale** *(0.83.2)*. Gli
-importi sono all'italiana, le quantità no («1.5 kg»): `fmtQty` finisce anche in
-campi numerici e in testi che rientrano in Excel. Si chiude con una funzione per
-la sola lettura (`fmtQtyIt` esiste già, usata nella nota delle fasi) applicata
-vista per vista, non cambiando `fmtQty`.
+*(C3 residuo e C5 — test della stampa e delle anagrafiche minori, quantità con
+la virgola — chiusi nella 0.107.0, §56–57.)*
 
 **C4 — file lunghi con scope globale piatto:** `views-docs.js` ~1990 righe,
 `views-catalog.js` ~1970, `views-mrp.js` ~1880, `core.js` ~1430, `store.js` ~1240,

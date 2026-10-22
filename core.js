@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.106.1';
+const APP_VERSION = '0.107.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -124,12 +124,13 @@ function jsAttr(v) { return esc(JSON.stringify(String(v == null ? '' : v))); }
 // L'unità vuota non produce niente: un articolo senza U.M. resta un numero
 // nudo, non "15 " con uno spazio in fondo o "15 (—)".
 function fmtQty(n) { n = Number(n) || 0; return Number.isInteger(n) ? String(n) : String(+n.toFixed(3)); }
-// La stessa quantità con la virgola, per il testo che si **legge** accanto a un
-// importo all'italiana («0,25 h/pz × € 32,00/h»). fmtQty resta col punto: finisce
-// anche nei campi numerici, che la virgola non la accettano.
+// La stessa quantità con la virgola, per tutto quello che si **legge**: le
+// viste, i messaggi, i PDF («1,5 kg», «0,25 h/pz × € 32,00/h»). Dalla 0.107.0
+// ogni vista usa questa. fmtQty resta col punto per i campi numerici, che la
+// virgola non la accettano, e per i file che rientrano in un altro programma.
 function fmtQtyIt(n) { return fmtQty(n).replace('.', ','); }
 function uomSuffix(u) { return u ? ' ' + esc(u) : ''; }
-function fmtUom(n, u) { return fmtQty(n) + uomSuffix(u); }
+function fmtUom(n, u) { return fmtQtyIt(n) + uomSuffix(u); }
 function fmtPer(n, u) { return fmtN(n) + (u ? '/' + esc(u) : ''); }
 function labelUom(testo, u) { return u ? `${testo} (${esc(u)})` : String(testo); }
 // L'unità di un articolo, pronta da appendere. `itemUom(null)` non lancia:

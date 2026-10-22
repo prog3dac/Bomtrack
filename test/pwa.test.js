@@ -67,6 +67,15 @@ describe('Service worker — la versione', () => {
     assert.equal(sw, app,
       'una versione nuova con la cache vecchia resta invisibile a chi ha già aperto l\'app');
   });
+  // Il changelog, l'app, la sua cache e il manuale devono dire la stessa
+  // versione: finora lo garantiva solo la memoria di chi la cambiava.
+  it('è quella in cima al CHANGELOG, e quella del manuale', () => {
+    const app = leggi('core.js').match(/const APP_VERSION = '([^']+)'/)[1];
+    const log = leggi('CHANGELOG.md').match(/^### (\d+\.\d+\.\d+) —/m)[1];
+    assert.equal(app, log, 'la versione in cima a CHANGELOG.md va anche in APP_VERSION (core.js) e in sw.js');
+    assert.match(leggi('manuale.html'), new RegExp('<span class="chip">v' + app.replace(/\./g, '\\.') + '</span>'),
+      'manuale.html va rigenerato: python genera-manuale.py');
+  });
 });
 
 describe('Il manifest', () => {

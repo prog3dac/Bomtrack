@@ -554,6 +554,144 @@ function docCoda(doc, voci, y) {
   });
   return y;
 }
+
+// ─── Le parti uguali di richiesta, ordine e ordine di lavoro (dalla 0.107.0) ───
+// La logica dei tre documenti è comune dalla 0.41.0 (§22 di
+// docs/analisi-tecnica.md); la presentazione era rimasta scritta tre volte, e
+// una correzione fatta su un documento si dimenticava sugli altri due. Qui le
+// parti identiche: la testata dello schermo, la barra dei documenti, la testata
+// del PDF e del foglio Excel, il nome del file. Le righe restano di ciascuno,
+// perché sono proprio quello in cui i tre documenti differiscono.
+//
+// `pfx` è il prefisso dei gestori del documento (rfq, ord, odl): rfqSetField,
+// ordSetLine, odlEditLineModal… hanno tutti lo stesso nome a meno di quello.
+
+function docCoWarnHtml() {
+  const co = db.settings.company || {};
+  return co.name ? '' : `<div class="rfq-warn">${ico('warning', 'tinted', '')} Dati azienda non impostati: compilali in <strong>Gestione › Dati azienda</strong> per stamparli sul documento.</div>`;
+}
+// Il codice e la descrizione che il fornitore usa per l'articolo, sotto la riga.
+function docSupInfoSub(si) {
+  return si ? `<div class="rfq-cmp-sub">${ico('tag', 'tinted', 'Codice presso il fornitore')} ${esc(si.code || '—')}${si.desc ? ' · ' + esc(si.desc) : ''}</div>` : '';
+}
+function docLineNoteSub(l) {
+  return l.note ? `<div class="line-note">${ico('edit', 'tinted', 'Nota di riga')} ${esc(l.note)}</div>` : '';
+}
+function docLineActionsCell(pfx, id, l) {
+  return cell2(`<button class="mini-btn" onclick="${pfx}EditLineModal('${id}','${l.id}')" title="Modifica riga / nota">${ico('edit', 'tinted', 'Modifica riga / nota')}</button>`,
+    `<button class="mini-btn danger lock-contract" onclick="${pfx}DelLine('${id}','${l.id}')" title="Togli la riga">${ico('trash', 'tinted', 'Togli la riga')}</button>`, 'line-actions');
+}
+// Chiudi, numero, stato, Salva e il menu «⋯».
+//   o = { chiudi, cosa, rec, stati, dirty, saveId, salva, menu }
+function docToolbarHtml(o) {
+  return `<div class="bom-toolbar">
+      <div class="bom-toolbar-left">
+        ${worklistCloseBtn(o.chiudi, o.cosa)}
+        <h2 class="section-title" style="font-family:var(--mono)">${esc(o.rec.number)}</h2>
+        ${statusBadge(o.stati, o.rec.status)}
+        <button class="add-btn-sm rfq-save-btn ${o.dirty ? 'dirty' : ''}" id="${o.saveId}" onclick="${o.salva}">${ico('save', 'tinted', '')} Salva</button>
+      </div>
+      <div class="bom-toolbar-right">
+        ${menuAltro(o.menu)}
+      </div>
+    </div>`;
+}
+// Titolo, controparte, data, stato, condizioni e note.
+//   o = { pfx, rec, stati, controparte, data, conferma?, note }
+// `conferma` è l'etichetta del numero di conferma della controparte: la
+// richiesta d'offerta non ce l'ha.
+function docTestaHtml(o) {
+  const r = o.rec, id = r.id;
+  const campo = (k, v) => `onchange="${o.pfx}SetField('${id}','${k}',${v || 'this.value'})"`;
+  const opzioni = arr => (arr || []).map(x => `<option value="${esc(x)}"></option>`).join('');
+  return `<div class="rfq-head">
+      <div class="modal-field"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
+      <div class="rfq-head-row">
+        <div class="modal-field"><label>${o.controparte}</label><select class="lock-contract sel-cerca" onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
+        <div class="modal-field"><label>${o.data}</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" ${campo('date')}></div>
+        <div class="modal-field"><label>Stato</label><select ${campo('status')}>
+          ${Object.entries(o.stati).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${v}</option>`).join('')}
+        </select></div>
+      </div>
+      <div class="rfq-head-row">
+        <div class="modal-field"><label>Tipo di trasporto / resa</label>
+          <input list="${o.pfx}-transport-opts" class="lock-contract" value="${esc(r.transport || '')}" placeholder="es. Porto franco, EXW, DAP…" ${campo('transport')}>
+          <datalist id="${o.pfx}-transport-opts">${opzioni(db.settings.transportOptions)}</datalist></div>
+        <div class="modal-field"><label>Tipo di pagamento</label>
+          <input list="${o.pfx}-payment-opts" class="lock-contract" value="${esc(r.payment || '')}" placeholder="es. Bonifico 30gg, RiBa 60gg…" ${campo('payment')}>
+          <datalist id="${o.pfx}-payment-opts">${opzioni(db.settings.paymentOptions)}</datalist></div>
+      </div>
+      ${o.conferma ? `<div class="rfq-head-row">
+        <div class="modal-field"><label>${o.conferma}</label><input value="${esc(r.supplierConfirmation || '')}" ${campo('supplierConfirmation')}></div>
+      </div>` : ''}
+      <div class="modal-field"><label>${o.note}</label><textarea rows="2" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
+      <div class="modal-field"><label>${ico('lock', 'tinted', '')} Note interne (non stampate sui documenti)</label><textarea rows="2" class="notes-internal" ${campo('notesInternal')}>${esc(r.notesInternal || '')}</textarea></div>
+    </div>`;
+}
+// «Genera documento PDF / Excel», spenti finché il documento non è salvato.
+//   o = { etichetta, cls, pdf, xls, dirty, cosa }
+function docExportBarHtml(o) {
+  const dis = o.dirty ? `disabled title="Salva ${o.cosa} prima di generare il documento"` : '';
+  return `<div class="rfq-export-bar">
+      <label>${o.etichetta}</label>
+      <button class="export-btn-pdf ${o.cls}" onclick="${o.pdf}" ${dis}>${ico('file', 'tinted', '')} Genera documento PDF</button>
+      <button class="export-btn-xls ${o.cls}" onclick="${o.xls}" ${dis}>${ico('sheet', 'tinted', '')} Genera documento Excel</button>
+      ${o.dirty ? '<span class="rfq-dirty-hint">Salva per abilitare la generazione del documento</span>' : ''}
+    </div>`;
+}
+// Il nome del file: numero e controparte, senza i caratteri che un disco rifiuta.
+function docNomeFile(rec, sup, ripiego, ext) {
+  return nomeFileSicuro(rec.number + (sup ? '_' + (sup.name || '') : ''), ripiego) + ext;
+}
+// La testata del PDF: titolo col numero, data, oggetto, e i due blocchi di chi
+// ordina e di chi riceve. Restituisce la y da cui parte la tabella delle righe.
+//   o = { titolo, rec, chi, controparte, vuota, xControparte }
+function docPdfTesta(doc, o) {
+  const r = o.rec;
+  doc.setFontSize(15); doc.setTextColor(30); doc.text(`${o.titolo} — ${r.number}`, 14, 16);
+  doc.setFontSize(9); doc.setTextColor(90);
+  doc.text(`Data / Date: ${fmtDateIt(r.date) || fmtDateIt(nowISO())}`, 14, 22);
+  if (r.title) doc.text(`Oggetto / Subject: ${r.title}`, 14, 27);
+  const yTop = 36;
+  const block = (x, title, rowsTxt) => {
+    doc.setFontSize(8); doc.setTextColor(130); doc.text(title, x, yTop);
+    doc.setFontSize(9); doc.setTextColor(40);
+    const rows = rowsTxt.filter(Boolean);
+    rows.forEach((t, i) => doc.text(String(t), x, yTop + 5 + i * 4.5));
+    return rows.length;
+  };
+  const sup = r.supplierId ? getSupplier(r.supplierId) : null;
+  const n1 = block(14, o.chi, docPartyLines(db.settings.company || {}, true));
+  const n2 = block(o.xControparte || 160, o.controparte, sup ? docPartyLines(sup, true) : [o.vuota]);
+  return yTop + 5 + Math.max(n1, n2) * 4.5 + 4;
+}
+// La testata del foglio Excel: le stesse informazioni, una per riga.
+//   o = { titolo, rec, voci: [[etichetta, valore]…], chi, controparte }
+// Le voci vuote non fanno righe.
+function docXlsTesta(o) {
+  const r = o.rec;
+  const sup = r.supplierId ? getSupplier(r.supplierId) : null;
+  const data = [[o.titolo, r.number], ['Data', fmtDateIt(r.date)]];
+  if (r.title) data.push(['Oggetto', r.title]);
+  o.voci.forEach(([etichetta, valore]) => { if (valore) data.push([etichetta, valore]); });
+  data.push([]);
+  data.push([o.chi, '', o.controparte]);
+  const coLines = docPartyLines(db.settings.company || {}), supLines = docPartyLines(sup);
+  for (let i = 0; i < Math.max(coLines.length, supLines.length); i++) data.push([coLines[i] || '', '', supLines[i] || '']);
+  data.push([]);
+  return data;
+}
+// Le note per la controparte in fondo al foglio, e il file. Solo rec.notes: le
+// note interne (notesInternal) non escono mai sul documento.
+function docXlsSalva(data, rec, foglio, ripiego) {
+  if (rec.notes) { data.push([]); data.push(['Note', rec.notes]); }
+  if (!requireXlsx()) return false;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), foglio);
+  XLSX.writeFile(wb, docNomeFile(rec, rec.supplierId ? getSupplier(rec.supplierId) : null, ripiego, '.xlsx'));
+  showToast('Excel esportato');
+  return true;
+}
 // Eliminazione. Su un documento che non è più una bozza l'avviso dice **cosa**
 // si sta cancellando: «risulta inviato» ferma la mano più di «sei sicuro?».
 // `extraWarn` aggiunge ciò che solo quel tipo sa (i ricevimenti di un ordine).
@@ -1206,8 +1344,8 @@ function renderRfqEdit(id) {
   const r = getRfq(id); if (!r) { rfqView = 'list'; return ''; }
   const lines = (r.lines || []).map((l, i) => {
     const si = rfqLineSupInfo(r, l);
-    const siSub = si ? `<div class="rfq-cmp-sub">${ico('tag', 'tinted', 'Codice presso il fornitore')} ${esc(si.code || '—')}${si.desc ? ' · ' + esc(si.desc) : ''}</div>` : '';
-    const noteSub = l.note ? `<div class="line-note">${ico('edit', 'tinted', 'Nota di riga')} ${esc(l.note)}</div>` : '';
+    const siSub = docSupInfoSub(si);
+    const noteSub = docLineNoteSub(l);
     const lotWarn = lineLotWarn(l);
     const qty = Number(l.qty) || 0;
     const price = (l.price === '' || l.price == null) ? null : Number(l.price);
@@ -1220,53 +1358,21 @@ function renderRfqEdit(id) {
       ${cell2(`<input type="number" class="rfq-price-input lock-offer" value="${price == null ? '' : price}" min="0" step="any" placeholder="—" title="Prezzo unitario" onchange="rfqSetLine('${id}','${l.id}','price',this.value)">`,
     `<span class="ln-amount">${price != null ? fmtN(importoRiga(l)) : '—'}</span>`)}
       ${cell2(`<input type="date" class="rfq-date-input lock-offer" value="${esc(l.deliveryDate || '')}" title="Data di consegna richiesta" onchange="rfqSetLine('${id}','${l.id}','deliveryDate',this.value)">`, '')}
-      ${cell2(`<button class="mini-btn" onclick="rfqEditLineModal('${id}','${l.id}')" title="Modifica riga / nota">${ico('edit', 'tinted', 'Modifica riga / nota')}</button>`,
-    `<button class="mini-btn danger lock-contract" onclick="rfqDelLine('${id}','${l.id}')" title="Togli la riga">${ico('trash', 'tinted', 'Togli la riga')}</button>`, 'line-actions')}
+      ${docLineActionsCell('rfq', id, l)}
     </tr>`;
   }).join('')
     || `<tr><td colspan="6" class="empty-text">Nessuna riga. Aggiungi articoli dal catalogo o manualmente.</td></tr>`;
-  const co = db.settings.company || {};
-  const coWarn = co.name ? '' : `<div class="rfq-warn">${ico('warning', 'tinted', '')} Dati azienda non impostati: compilali in <strong>Gestione › Dati azienda</strong> per stamparli sul documento.</div>`;
-  const dis = rfqDirty ? 'disabled title="Salva la richiesta prima di generare il documento"' : '';
   const mode = rfqMode(r);
   const lockBanner = docLockBanner(mode, 'Richiesta ' + (RFQ_STATUS[r.status] || r.status).toLowerCase(), 'rfq', id);
   return `<div class="manage-wrap">
-    <div class="bom-toolbar">
-      <div class="bom-toolbar-left">
-        ${worklistCloseBtn('rfqBackToList()', 'la richiesta')}
-        <h2 class="section-title" style="font-family:var(--mono)">${esc(r.number)}</h2>
-        ${statusBadge(RFQ_STATUS, r.status)}
-        <button class="add-btn-sm rfq-save-btn ${rfqDirty ? 'dirty' : ''}" id="rfq-save-btn" onclick="rfqSave('${id}')">${ico('save', 'tinted', '')} Salva</button>
-      </div>
-      <div class="bom-toolbar-right">
-        ${menuAltro([
-          { label: 'Crea ordine da questa richiesta', icon: 'receipt', onclick: `orderFromRfq('${id}')` },
-          { label: 'Elimina la richiesta', icon: 'trash', onclick: `delRfq('${id}')`, danger: true },
-        ])}
-      </div>
-    </div>
+    ${docToolbarHtml({ chiudi: 'rfqBackToList()', cosa: 'la richiesta', rec: r, stati: RFQ_STATUS, dirty: rfqDirty,
+      saveId: 'rfq-save-btn', salva: `rfqSave('${id}')`, menu: [
+        { label: 'Crea ordine da questa richiesta', icon: 'receipt', onclick: `orderFromRfq('${id}')` },
+        { label: 'Elimina la richiesta', icon: 'trash', onclick: `delRfq('${id}')`, danger: true },
+      ] })}
     ${docStepperHtml('rfq', r)}${docLinksHtml('rfq', r)}
-    ${coWarn}${lockBanner}${stampLine(r)}
-    <div class="rfq-head">
-      <div class="modal-field"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" onchange="rfqSetField('${id}','title',this.value)"></div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>Fornitore</label><select class="lock-contract sel-cerca" onchange="rfqSetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
-        <div class="modal-field"><label>Data</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" onchange="rfqSetField('${id}','date',this.value)"></div>
-        <div class="modal-field"><label>Stato</label><select onchange="rfqSetField('${id}','status',this.value)">
-          ${Object.entries(RFQ_STATUS).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-        </select></div>
-      </div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>Tipo di trasporto / resa</label>
-          <input list="rfq-transport-opts" class="lock-contract" value="${esc(r.transport || '')}" placeholder="es. Porto franco, EXW, DAP…" onchange="rfqSetField('${id}','transport',this.value)">
-          <datalist id="rfq-transport-opts">${(db.settings.transportOptions || []).map(o => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>
-        <div class="modal-field"><label>Tipo di pagamento</label>
-          <input list="rfq-payment-opts" class="lock-contract" value="${esc(r.payment || '')}" placeholder="es. Bonifico 30gg, RiBa 60gg…" onchange="rfqSetField('${id}','payment',this.value)">
-          <datalist id="rfq-payment-opts">${(db.settings.paymentOptions || []).map(o => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>
-      </div>
-      <div class="modal-field"><label>Note per il fornitore</label><textarea rows="2" onchange="rfqSetField('${id}','notes',this.value)">${esc(r.notes || '')}</textarea></div>
-      <div class="modal-field"><label>${ico('lock', 'tinted', '')} Note interne (non stampate sui documenti)</label><textarea rows="2" class="notes-internal" onchange="rfqSetField('${id}','notesInternal',this.value)">${esc(r.notesInternal || '')}</textarea></div>
-    </div>
+    ${docCoWarnHtml()}${lockBanner}${stampLine(r)}
+    ${docTestaHtml({ pfx: 'rfq', rec: r, stati: RFQ_STATUS, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore' })}
     <h3 class="rfq-subhead">Righe richiesta
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="rfqAddCatalogModal('${id}')">+ Da catalogo</button>
@@ -1282,12 +1388,7 @@ function renderRfqEdit(id) {
         ${th2('Data consegna', '')}
         <th scope="col"></th></tr></thead>
       <tbody>${lines}</tbody></table></div>
-    <div class="rfq-export-bar">
-      <label>Documento di richiesta:</label>
-      <button class="export-btn-pdf rfq-export-btn" onclick="exportRfqPDF('${id}')" ${dis}>${ico('file', 'tinted', '')} Genera documento PDF</button>
-      <button class="export-btn-xls rfq-export-btn" onclick="exportRfqExcel('${id}')" ${dis}>${ico('sheet', 'tinted', '')} Genera documento Excel</button>
-      ${rfqDirty ? '<span class="rfq-dirty-hint">Salva per abilitare la generazione del documento</span>' : ''}
-    </div>
+    ${docExportBarHtml({ etichetta: 'Documento di richiesta:', cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta' })}
     ${rfqPriceBar(r)}
   </div>`;
 }
@@ -1315,28 +1416,14 @@ function exportRfqPDF(id) {
   const r = getRfq(id); if (!r) return;
   if (!(r.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const jsPDF = requirePdf(); if (!jsPDF) return;
-  const co = db.settings.company || {};
-  const sup = r.supplierId ? getSupplier(r.supplierId) : null;
   // Le colonne "codice/descrizione fornitore" compaiono solo se qualche riga è legata
   // allo stesso fornitore della richiesta; in tal caso si usa l'orientamento orizzontale.
   const hasSup = (r.lines || []).some(l => rfqLineSupInfo(r, l));
   const doc = new jsPDF(hasSup ? { orientation: 'landscape' } : undefined);
   // Documento bilingue IT / EN per fornitori esteri
-  doc.setFontSize(15); doc.setTextColor(30); doc.text(`Richiesta di offerta / Request for Quotation — ${r.number}`, 14, 16);
-  doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`Data / Date: ${fmtDateIt(r.date) || fmtDateIt(nowISO())}`, 14, 22);
-  if (r.title) doc.text(`Oggetto / Subject: ${r.title}`, 14, 27);
-  const yTop = 36;
-  const block = (x, title, rowsTxt) => {
-    doc.setFontSize(8); doc.setTextColor(130); doc.text(title, x, yTop);
-    doc.setFontSize(9); doc.setTextColor(40);
-    const rows = rowsTxt.filter(Boolean);
-    rows.forEach((t, i) => doc.text(String(t), x, yTop + 5 + i * 4.5));
-    return rows.length;
-  };
-  const n1 = block(14, 'RICHIEDENTE / BUYER', docPartyLines(co, true));
-  const n2 = block(hasSup ? 160 : 110, 'FORNITORE / SUPPLIER', sup ? docPartyLines(sup, true) : ['(fornitore non selezionato / not selected)']);
-  const startY = yTop + 5 + Math.max(n1, n2) * 4.5 + 4;
+  const startY = docPdfTesta(doc, { titolo: 'Richiesta di offerta / Request for Quotation', rec: r,
+    chi: 'RICHIEDENTE / BUYER', controparte: 'FORNITORE / SUPPLIER', vuota: '(fornitore non selezionato / not selected)',
+    xControparte: hasSup ? 160 : 110 });
   const head = hasSup
     ? ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Cod. forn.\nSuppl. code', 'Descr. forn.\nSuppl. desc.', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Data consegna\nDelivery date']
     : ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Data consegna\nDelivery date'];
@@ -1357,7 +1444,7 @@ function exportRfqPDF(id) {
     { etichetta: 'Pagamento / Payment', testo: r.payment },
     { etichetta: 'Note / Notes', testo: r.notes },
   ], doc.lastAutoTable.finalY + 8);
-  doc.save(nomeFileSicuro(r.number + (sup ? '_' + (sup.name || '') : ''), 'richiesta') + '.pdf');
+  doc.save(docNomeFile(r, r.supplierId ? getSupplier(r.supplierId) : null, 'richiesta', '.pdf'));
   showToast('PDF esportato');
   askMarkSent(r, `PDF generato.\nSegnare la richiesta ${r.number} come inviata?`, 'inviata', renderRfq);
 }
@@ -1365,17 +1452,8 @@ function exportRfqPDF(id) {
 function exportRfqExcel(id) {
   const r = getRfq(id); if (!r) return;
   if (!(r.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
-  const co = db.settings.company || {};
-  const sup = r.supplierId ? getSupplier(r.supplierId) : null;
-  const data = [['Richiesta di offerta', r.number], ['Data', fmtDateIt(r.date)]];
-  if (r.title) data.push(['Oggetto', r.title]);
-  if (r.transport) data.push(['Trasporto / Shipping', r.transport]);
-  if (r.payment) data.push(['Pagamento / Payment', r.payment]);
-  data.push([]);
-  data.push(['RICHIEDENTE', '', 'FORNITORE']);
-  const coLines = docPartyLines(co), supLines = docPartyLines(sup);
-  for (let i = 0; i < Math.max(coLines.length, supLines.length); i++) data.push([coLines[i] || '', '', supLines[i] || '']);
-  data.push([]);
+  const data = docXlsTesta({ titolo: 'Richiesta di offerta', rec: r, chi: 'RICHIEDENTE', controparte: 'FORNITORE', voci: [
+    ['Trasporto / Shipping', r.transport], ['Pagamento / Payment', r.payment]] });
   const hasSup = (r.lines || []).some(l => rfqLineSupInfo(r, l));
   // Come nell'ordine: valuta in intestazione, unità nella colonna U.M.
   const hPrezzo = `Prezzo unitario (${cur()}/U.M.)`;
@@ -1389,14 +1467,7 @@ function exportRfqExcel(id) {
       ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '']
       : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '']);
   });
-  // Solo r.notes: le note interne (notesInternal) non escono mai sul documento.
-  if (r.notes) { data.push([]); data.push(['Note', r.notes]); }
-  if (!requireXlsx()) return;
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'RFQ');
-  XLSX.writeFile(wb, nomeFileSicuro(r.number + (sup ? '_' + (sup.name || '') : ''), 'richiesta') + '.xlsx');
-  showToast('Excel esportato');
+  if (!docXlsSalva(data, r, 'RFQ', 'richiesta')) return;
   askMarkSent(r, `Excel generato.\nSegnare la richiesta ${r.number} come inviata?`, 'inviata', renderRfq);
 }
 
@@ -1566,7 +1637,7 @@ function orderListRows() {
   return list.map(o => {
     const sup = o.supplierId ? supplierName(o.supplierId) : '— nessun fornitore —';
     const rec = orderReception(o);
-    const recTxt = rec.ordered ? `ric. ${fmtQty(rec.received)}/${fmtQty(rec.ordered)}` : '';
+    const recTxt = rec.ordered ? `ric. ${fmtQtyIt(rec.received)}/${fmtQtyIt(rec.ordered)}` : '';
     return worklistRow({
       numero: o.number,
       badge: statusBadge(ORDER_STATUS, o.status),
@@ -1735,7 +1806,7 @@ function renderOrderEdit(id) {
   const o = getOrder(id); if (!o) { orderView = 'list'; return ''; }
   const lines = (o.lines || []).map((l, i) => {
     const si = lineSupInfo(o.supplierId, l);
-    const siSub = si ? `<div class="rfq-cmp-sub">${ico('tag', 'tinted', 'Codice presso il fornitore')} ${esc(si.code || '—')}${si.desc ? ' · ' + esc(si.desc) : ''}</div>` : '';
+    const siSub = docSupInfoSub(si);
     const warn = ordLineListinoWarn(o, l);
     const lotWarn = lineLotWarn(l);
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
@@ -1744,7 +1815,7 @@ function renderOrderEdit(id) {
     return `<tr>
       ${cell2(i + 1, '', 'ln-idx')}
       ${cell2(`<span class="ln-code">${codeLink(l.itemId, l.code || '')}</span>`,
-    `${esc(l.description)}${lineOriginTag(l)}${warn ? ' ' + warn : ''}${lotWarn ? ' ' + lotWarn : ''}${siSub}${l.note ? `<div class="line-note">${ico('edit', 'tinted', 'Nota di riga')} ${esc(l.note)}</div>` : ''}${ordClLineActions(o, l)}`)}
+    `${esc(l.description)}${lineOriginTag(l)}${warn ? ' ' + warn : ''}${lotWarn ? ' ' + lotWarn : ''}${siSub}${docLineNoteSub(l)}${ordClLineActions(o, l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-contract" value="${l.qty}" min="0" step="any" title="Quantità ordinata" onchange="ordSetLine('${id}','${l.id}','qty',this.value)">`,
     esc(l.uom || ''))}
       ${cell2(`<input type="number" class="rfq-price-input lock-contract" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="Prezzo unitario" onchange="ordSetLine('${id}','${l.id}','price',this.value)">`,
@@ -1752,9 +1823,8 @@ function renderOrderEdit(id) {
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="ordSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il fornitore ha confermato" onchange="ordSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" title="${l.phaseKey ? 'Pezzi rientrati dal terzista: portano questo ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.' : 'Quantità ricevuta'}" onchange="ordSetLine('${id}','${l.id}','received',this.value)">`,
-    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Residuo da ricevere">${fmtQty(residual)}</span>`)}
-      ${cell2(`<button class="mini-btn" onclick="ordEditLineModal('${id}','${l.id}')" title="Modifica riga / nota">${ico('edit', 'tinted', 'Modifica riga / nota')}</button>`,
-    `<button class="mini-btn danger lock-contract" onclick="ordDelLine('${id}','${l.id}')" title="Togli la riga">${ico('trash', 'tinted', 'Togli la riga')}</button>`, 'line-actions')}
+    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Residuo da ricevere">${fmtQtyIt(residual)}</span>`)}
+      ${docLineActionsCell('ord', id, l)}
     </tr>`;
   }).join('') || `<tr><td colspan="7" class="empty-text">Nessuna riga. Aggiungi articoli dal catalogo o manualmente.</td></tr>`;
   const total = orderTotal(o);
@@ -1762,48 +1832,14 @@ function renderOrderEdit(id) {
   // in testata: è l'informazione che fa decidere se la commessa slitta, e non
   // deve stare nascosta in una colonna in fondo.
   const ritardo = orderWorstDelay(o);
-  const co = db.settings.company || {};
-  const coWarn = co.name ? '' : `<div class="rfq-warn">${ico('warning', 'tinted', '')} Dati azienda non impostati: compilali in <strong>Gestione › Dati azienda</strong> per stamparli sul documento.</div>`;
-  const dis = orderDirty ? 'disabled title="Salva l\'ordine prima di generare il documento"' : '';
   const mode = ordMode(o);
   const lockBanner = docLockBanner(mode, 'Ordine ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'order', id);
   return `<div class="manage-wrap">
-    <div class="bom-toolbar">
-      <div class="bom-toolbar-left">
-        ${worklistCloseBtn('orderBackToList()', "l'ordine")}
-        <h2 class="section-title" style="font-family:var(--mono)">${esc(o.number)}</h2>
-        ${statusBadge(ORDER_STATUS, o.status)}
-        <button class="add-btn-sm rfq-save-btn ${orderDirty ? 'dirty' : ''}" id="order-save-btn" onclick="ordSave('${id}')">${ico('save', 'tinted', '')} Salva</button>
-      </div>
-      <div class="bom-toolbar-right">
-        ${menuAltro([{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }])}
-      </div>
-    </div>
+    ${docToolbarHtml({ chiudi: 'orderBackToList()', cosa: "l'ordine", rec: o, stati: ORDER_STATUS, dirty: orderDirty,
+      saveId: 'order-save-btn', salva: `ordSave('${id}')`, menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }] })}
     ${docStepperHtml('order', o)}${docLinksHtml('order', o)}
-    ${coWarn}${lockBanner}${stampLine(o)}
-    <div class="rfq-head">
-      <div class="modal-field"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(o.title || '')}" onchange="ordSetField('${id}','title',this.value)"></div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>Fornitore</label><select class="lock-contract sel-cerca" onchange="ordSetSupplier('${id}',this.value)">${supplierOptions(o.supplierId)}</select></div>
-        <div class="modal-field"><label>Data ordine</label><input type="date" class="lock-contract" value="${(o.date || '').slice(0, 10)}" onchange="ordSetField('${id}','date',this.value)"></div>
-        <div class="modal-field"><label>Stato</label><select onchange="ordSetField('${id}','status',this.value)">
-          ${Object.entries(ORDER_STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-        </select></div>
-      </div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>Tipo di trasporto / resa</label>
-          <input list="ord-transport-opts" class="lock-contract" value="${esc(o.transport || '')}" placeholder="es. Porto franco, EXW…" onchange="ordSetField('${id}','transport',this.value)">
-          <datalist id="ord-transport-opts">${(db.settings.transportOptions || []).map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>
-        <div class="modal-field"><label>Tipo di pagamento</label>
-          <input list="ord-payment-opts" class="lock-contract" value="${esc(o.payment || '')}" placeholder="es. Bonifico 60gg…" onchange="ordSetField('${id}','payment',this.value)">
-          <datalist id="ord-payment-opts">${(db.settings.paymentOptions || []).map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>
-      </div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>N° conferma d'ordine fornitore</label><input value="${esc(o.supplierConfirmation || '')}" onchange="ordSetField('${id}','supplierConfirmation',this.value)"></div>
-      </div>
-      <div class="modal-field"><label>Note</label><textarea rows="2" onchange="ordSetField('${id}','notes',this.value)">${esc(o.notes || '')}</textarea></div>
-      <div class="modal-field"><label>${ico('lock', 'tinted', '')} Note interne (non stampate sui documenti)</label><textarea rows="2" class="notes-internal" onchange="ordSetField('${id}','notesInternal',this.value)">${esc(o.notesInternal || '')}</textarea></div>
-    </div>
+    ${docCoWarnHtml()}${lockBanner}${stampLine(o)}
+    ${docTestaHtml({ pfx: 'ord', rec: o, stati: ORDER_STATUS, controparte: 'Fornitore', data: 'Data ordine', conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${ritardo} ${ritardo === 1 ? 'giorno' : 'giorni'}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
     <h3 class="rfq-subhead">Righe ordine
       <span class="rfq-head-actions">
@@ -1823,12 +1859,7 @@ function renderOrderEdit(id) {
       <tbody>${lines}</tbody>
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
     </table></div>
-    <div class="rfq-export-bar">
-      <label>Documento d'ordine:</label>
-      <button class="export-btn-pdf order-export-btn" onclick="exportOrderPDF('${id}')" ${dis}>${ico('file', 'tinted', '')} Genera documento PDF</button>
-      <button class="export-btn-xls order-export-btn" onclick="exportOrderExcel('${id}')" ${dis}>${ico('sheet', 'tinted', '')} Genera documento Excel</button>
-      ${orderDirty ? '<span class="rfq-dirty-hint">Salva per abilitare la generazione del documento</span>' : ''}
-    </div>
+    ${docExportBarHtml({ etichetta: "Documento d'ordine:", cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine" })}
   </div>`;
 }
 
@@ -1836,28 +1867,13 @@ function exportOrderPDF(id) {
   const o = getOrder(id); if (!o) return;
   if (!(o.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const jsPDF = requirePdf(); if (!jsPDF) return;
-  const co = db.settings.company || {};
-  const sup = o.supplierId ? getSupplier(o.supplierId) : null;
   const hasSup = (o.lines || []).some(l => lineSupInfo(o.supplierId, l));
   const doc = new jsPDF({ orientation: 'landscape' });
   // Il QR in alto a destra apre la scheda rapida dell'ordine (qr.js): chi riceve
   // la merce inquadra la copia stampata e registra il ricevimento da lì.
   if (o.number) qrPdfDraw(doc, qrLink('oda', o.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
-  doc.setFontSize(15); doc.setTextColor(30); doc.text(`Ordine di acquisto / Purchase Order — ${o.number}`, 14, 16);
-  doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`Data / Date: ${fmtDateIt(o.date) || fmtDateIt(nowISO())}`, 14, 22);
-  if (o.title) doc.text(`Oggetto / Subject: ${o.title}`, 14, 27);
-  const yTop = 36;
-  const block = (x, title, rowsTxt) => {
-    doc.setFontSize(8); doc.setTextColor(130); doc.text(title, x, yTop);
-    doc.setFontSize(9); doc.setTextColor(40);
-    const rows = rowsTxt.filter(Boolean);
-    rows.forEach((t, i) => doc.text(String(t), x, yTop + 5 + i * 4.5));
-    return rows.length;
-  };
-  const n1 = block(14, 'RICHIEDENTE / BUYER', docPartyLines(co, true));
-  const n2 = block(160, 'FORNITORE / SUPPLIER', sup ? docPartyLines(sup, true) : ['(fornitore non selezionato / not selected)']);
-  const startY = yTop + 5 + Math.max(n1, n2) * 4.5 + 4;
+  const startY = docPdfTesta(doc, { titolo: 'Ordine di acquisto / Purchase Order', rec: o,
+    chi: 'RICHIEDENTE / BUYER', controparte: 'FORNITORE / SUPPLIER', vuota: '(fornitore non selezionato / not selected)' });
   const head = hasSup
     ? ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Cod. forn.\nSuppl. code', 'Descr. forn.\nSuppl. desc.', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Importo\nAmount', 'Data consegna\nDelivery date']
     : ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Importo\nAmount', 'Data consegna\nDelivery date'];
@@ -1881,7 +1897,7 @@ function exportOrderPDF(id) {
     { etichetta: 'Conferma fornitore / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
   ], doc.lastAutoTable.finalY + 8);
-  doc.save(nomeFileSicuro(o.number + (sup ? '_' + (sup.name || '') : ''), 'ordine') + '.pdf');
+  doc.save(docNomeFile(o, o.supplierId ? getSupplier(o.supplierId) : null, 'ordine', '.pdf'));
   showToast('PDF esportato');
   askMarkSent(o, `PDF generato.\nSegnare l'ordine ${o.number} come inviato?`, 'inviato', renderOrders);
 }
@@ -1889,19 +1905,10 @@ function exportOrderPDF(id) {
 function exportOrderExcel(id) {
   const o = getOrder(id); if (!o) return;
   if (!(o.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
-  const co = db.settings.company || {};
-  const sup = o.supplierId ? getSupplier(o.supplierId) : null;
-  const data = [['Ordine di acquisto / Purchase Order', o.number], ['Data', fmtDateIt(o.date)]];
-  if (o.title) data.push(['Oggetto', o.title]);
-  if (o.rfqId && getRfq(o.rfqId)) data.push(['Da richiesta', getRfq(o.rfqId).number]);
-  if (o.transport) data.push(['Trasporto / Shipping', o.transport]);
-  if (o.payment) data.push(['Pagamento / Payment', o.payment]);
-  if (o.supplierConfirmation) data.push(['Conferma fornitore / Order confirmation', o.supplierConfirmation]);
-  data.push([]);
-  data.push(['RICHIEDENTE', '', 'FORNITORE']);
-  const coLines = docPartyLines(co), supLines = docPartyLines(sup);
-  for (let i = 0; i < Math.max(coLines.length, supLines.length); i++) data.push([coLines[i] || '', '', supLines[i] || '']);
-  data.push([]);
+  const data = docXlsTesta({ titolo: 'Ordine di acquisto / Purchase Order', rec: o, chi: 'RICHIEDENTE', controparte: 'FORNITORE', voci: [
+    ['Da richiesta', o.rfqId && getRfq(o.rfqId) ? getRfq(o.rfqId).number : ''],
+    ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
+    ['Conferma fornitore / Order confirmation', o.supplierConfirmation]] });
   const hasSup = (o.lines || []).some(l => lineSupInfo(o.supplierId, l));
   // Nel foglio i numeri restano numeri: la valuta si dichiara in intestazione,
   // l'unità sta nella sua colonna e vale per q.tà, ricevuto e residuo.
@@ -1919,14 +1926,7 @@ function exportOrderExcel(id) {
   });
   data.push([]);
   data.push(['', 'TOTALE IMPONIBILE / TOTAL', orderTotal(o)]);
-  // Solo o.notes: le note interne (notesInternal) non escono mai sul documento.
-  if (o.notes) { data.push([]); data.push(['Note', o.notes]); }
-  if (!requireXlsx()) return;
-  const ws = XLSX.utils.aoa_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Ordine');
-  XLSX.writeFile(wb, nomeFileSicuro(o.number + (sup ? '_' + (sup.name || '') : ''), 'ordine') + '.xlsx');
-  showToast('Excel esportato');
+  if (!docXlsSalva(data, o, 'Ordine', 'ordine')) return;
   askMarkSent(o, `Excel generato.\nSegnare l'ordine ${o.number} come inviato?`, 'inviato', renderOrders);
 }
 
@@ -1980,7 +1980,7 @@ function odlListRows() {
   return list.map(o => {
     const sup = o.supplierId ? supplierName(o.supplierId) : '— nessun terzista —';
     const rec = orderReception(o);
-    const recTxt = rec.ordered ? `rientr. ${fmtQty(rec.received)}/${fmtQty(rec.ordered)}` : '';
+    const recTxt = rec.ordered ? `rientr. ${fmtQtyIt(rec.received)}/${fmtQtyIt(rec.ordered)}` : '';
     return worklistRow({
       numero: o.number,
       badge: statusBadge(ORDER_STATUS, o.status),
@@ -2146,7 +2146,7 @@ function renderOdlEdit(id) {
     return `<tr>
       ${cell2(i + 1, '', 'ln-idx')}
       ${cell2(`<span class="ln-code">${esc(l.code || '')}</span>`,
-    `${esc(l.description)}${l.note ? `<div class="line-note">${ico('edit', 'tinted', 'Nota di riga')} ${esc(l.note)}</div>` : ''}${cl}`)}
+    `${esc(l.description)}${docLineNoteSub(l)}${cl}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-contract" value="${l.qty}" min="0" step="any" title="Pezzi da lavorare" onchange="odlSetLine('${id}','${l.id}','qty',this.value)">`,
     esc(l.uom || ''))}
       ${cell2(`<input type="number" class="rfq-price-input lock-contract" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="Tariffa per pezzo" onchange="odlSetLine('${id}','${l.id}','price',this.value)">`,
@@ -2154,54 +2154,19 @@ function renderOdlEdit(id) {
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="odlSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il terzista ha confermato" onchange="odlSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" ${odlRigaDaOdp(l) ? 'disabled' : ''} title="${odlRigaDaOdp(l) ? 'I pezzi rientrati li dichiara l&rsquo;ordine di produzione: qui si leggono, non si scrivono.' : 'Pezzi rientrati dal terzista: portano l&rsquo;ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.'}" onchange="odlSetLine('${id}','${l.id}','received',this.value)">`,
-    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Pezzi ancora dal terzista">${fmtQty(residual)}</span>`)}
-      ${cell2(`<button class="mini-btn" onclick="odlEditLineModal('${id}','${l.id}')" title="Modifica riga / nota">${ico('edit', 'tinted', 'Modifica riga / nota')}</button>`,
-    `<button class="mini-btn danger lock-contract" onclick="odlDelLine('${id}','${l.id}')" title="Togli la riga">${ico('trash', 'tinted', 'Togli la riga')}</button>`, 'line-actions')}
+    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Pezzi ancora dal terzista">${fmtQtyIt(residual)}</span>`)}
+      ${docLineActionsCell('odl', id, l)}
     </tr>`;
   }).join('') || `<tr><td colspan="7" class="empty-text">Nessuna lavorazione. Un ordine di lavoro si genera dal <strong>Fabbisogno</strong>, oppure si scrive qui con <em>+ Lavorazione da ciclo</em>: si sceglie la parte, le fasi da mandare fuori e i pezzi.</td></tr>`;
   const total = odlTotal(o);
   const ritardo = orderWorstDelay(o);
-  const co = db.settings.company || {};
-  const coWarn = co.name ? '' : `<div class="rfq-warn">${ico('warning', 'tinted', '')} Dati azienda non impostati: compilali in <strong>Gestione › Dati azienda</strong> per stamparli sul documento.</div>`;
-  const dis = odlDirty ? 'disabled title="Salva l\'ordine di lavoro prima di generare il documento"' : '';
   const lockBanner = docLockBanner(odlMode(o), 'Ordine di lavoro ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'odl', id);
   return `<div class="manage-wrap">
-    <div class="bom-toolbar">
-      <div class="bom-toolbar-left">
-        ${worklistCloseBtn('odlBackToList()', "l'ordine di lavoro")}
-        <h2 class="section-title" style="font-family:var(--mono)">${esc(o.number)}</h2>
-        ${statusBadge(ORDER_STATUS, o.status)}
-        <button class="add-btn-sm rfq-save-btn ${odlDirty ? 'dirty' : ''}" id="odl-save-btn" onclick="odlSave('${id}')">${ico('save', 'tinted', '')} Salva</button>
-      </div>
-      <div class="bom-toolbar-right">
-        ${menuAltro([{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }])}
-      </div>
-    </div>
+    ${docToolbarHtml({ chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro", rec: o, stati: ORDER_STATUS, dirty: odlDirty,
+      saveId: 'odl-save-btn', salva: `odlSave('${id}')`, menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }] })}
     ${docStepperHtml('odl', o)}${docLinksHtml('odl', o)}
-    ${coWarn}${odlOdpRef(o)}${lockBanner}${stampLine(o)}
-    <div class="rfq-head">
-      <div class="modal-field"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(o.title || '')}" onchange="odlSetField('${id}','title',this.value)"></div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>Terzista</label><select class="lock-contract sel-cerca" onchange="odlSetSupplier('${id}',this.value)">${supplierOptions(o.supplierId)}</select></div>
-        <div class="modal-field"><label>Data ordine</label><input type="date" class="lock-contract" value="${(o.date || '').slice(0, 10)}" onchange="odlSetField('${id}','date',this.value)"></div>
-        <div class="modal-field"><label>Stato</label><select onchange="odlSetField('${id}','status',this.value)">
-          ${Object.entries(ORDER_STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-        </select></div>
-      </div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>Tipo di trasporto / resa</label>
-          <input list="odl-transport-opts" class="lock-contract" value="${esc(o.transport || '')}" placeholder="es. Porto franco, EXW…" onchange="odlSetField('${id}','transport',this.value)">
-          <datalist id="odl-transport-opts">${(db.settings.transportOptions || []).map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>
-        <div class="modal-field"><label>Tipo di pagamento</label>
-          <input list="odl-payment-opts" class="lock-contract" value="${esc(o.payment || '')}" placeholder="es. Bonifico 60gg…" onchange="odlSetField('${id}','payment',this.value)">
-          <datalist id="odl-payment-opts">${(db.settings.paymentOptions || []).map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>
-      </div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>N° conferma del terzista</label><input value="${esc(o.supplierConfirmation || '')}" onchange="odlSetField('${id}','supplierConfirmation',this.value)"></div>
-      </div>
-      <div class="modal-field"><label>Note</label><textarea rows="2" onchange="odlSetField('${id}','notes',this.value)">${esc(o.notes || '')}</textarea></div>
-      <div class="modal-field"><label>${ico('lock', 'tinted', '')} Note interne (non stampate sui documenti)</label><textarea rows="2" class="notes-internal" onchange="odlSetField('${id}','notesInternal',this.value)">${esc(o.notesInternal || '')}</textarea></div>
-    </div>
+    ${docCoWarnHtml()}${odlOdpRef(o)}${lockBanner}${stampLine(o)}
+    ${docTestaHtml({ pfx: 'odl', rec: o, stati: ORDER_STATUS, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${ritardo} ${ritardo === 1 ? 'giorno' : 'giorni'}</strong> di ritardo sulla data richiesta.</div>` : ''}
     <p class="empty-text" style="text-align:left;padding:0 0 8px">I <strong>pezzi rientrati</strong> portano l'ordine a parziale o evaso ma <strong>non caricano il magazzino</strong>: il materiale che esce e i pezzi che tornano si registrano come movimenti. È la stessa regola per cui queste righe non hanno un articolo — altrimenti la stessa merce verrebbe contata due volte.<br>Il materiale <strong>esce una volta sola</strong>, alla prima fase di ogni parte, ed è quello scritto nel suo <strong>ciclo</strong>; i pezzi rientrano una volta, all'ultima. Le fasi in mezzo non muovono niente: più fasi dallo stesso terzista sono più lavorazioni sullo <em>stesso</em> pezzo, non più pezzi.</p>
     <h3 class="rfq-subhead">Lavorazioni
@@ -2222,12 +2187,7 @@ function renderOdlEdit(id) {
       <tbody>${lines}</tbody>
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
     </table></div>
-    <div class="rfq-export-bar">
-      <label>Documento d'ordine di lavoro:</label>
-      <button class="export-btn-pdf odl-export-btn" onclick="exportOdlPDF('${id}')" ${dis}>${ico('file', 'tinted', '')} Genera documento PDF</button>
-      <button class="export-btn-xls odl-export-btn" onclick="exportOdlExcel('${id}')" ${dis}>${ico('sheet', 'tinted', '')} Genera documento Excel</button>
-      ${odlDirty ? '<span class="rfq-dirty-hint">Salva per abilitare la generazione del documento</span>' : ''}
-    </div>
+    ${docExportBarHtml({ etichetta: "Documento d'ordine di lavoro:", cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro" })}
   </div>`;
 }
 
@@ -2239,26 +2199,11 @@ function exportOdlPDF(id) {
   const o = getOdl(id); if (!o) return;
   if (!(o.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const jsPDF = requirePdf(); if (!jsPDF) return;
-  const co = db.settings.company || {};
-  const sup = o.supplierId ? getSupplier(o.supplierId) : null;
   const doc = new jsPDF({ orientation: 'landscape' });
   // Come sull'ordine d'acquisto: il QR apre la scheda rapida dell'ODL.
   if (o.number) qrPdfDraw(doc, qrLink('odl', o.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
-  doc.setFontSize(15); doc.setTextColor(30); doc.text(`Ordine di lavoro / Subcontract Order — ${o.number}`, 14, 16);
-  doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`Data / Date: ${fmtDateIt(o.date) || fmtDateIt(nowISO())}`, 14, 22);
-  if (o.title) doc.text(`Oggetto / Subject: ${o.title}`, 14, 27);
-  const yTop = 36;
-  const block = (x, title, rowsTxt) => {
-    doc.setFontSize(8); doc.setTextColor(130); doc.text(title, x, yTop);
-    doc.setFontSize(9); doc.setTextColor(40);
-    const rows = rowsTxt.filter(Boolean);
-    rows.forEach((t, i) => doc.text(String(t), x, yTop + 5 + i * 4.5));
-    return rows.length;
-  };
-  const n1 = block(14, 'COMMITTENTE / PRINCIPAL', docPartyLines(co, true));
-  const n2 = block(160, 'TERZISTA / SUBCONTRACTOR', sup ? docPartyLines(sup, true) : ['(terzista non selezionato / not selected)']);
-  const startY = yTop + 5 + Math.max(n1, n2) * 4.5 + 4;
+  const startY = docPdfTesta(doc, { titolo: 'Ordine di lavoro / Subcontract Order', rec: o,
+    chi: 'COMMITTENTE / PRINCIPAL', controparte: 'TERZISTA / SUBCONTRACTOR', vuota: '(terzista non selezionato / not selected)' });
   const head = ['#', 'Parte\nPart', 'Lavorazione\nOperation', 'Pezzi\nQty', 'Tariffa\nUnit rate', 'Importo\nAmount', 'Data consegna\nDelivery date'];
   const body = (o.lines || []).map((l, i) => {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
@@ -2278,26 +2223,17 @@ function exportOdlPDF(id) {
     { etichetta: 'Conferma terzista / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
   ], doc.lastAutoTable.finalY + 8);
-  doc.save(nomeFileSicuro(o.number + (sup ? '_' + (sup.name || '') : ''), 'ordine') + '.pdf');
+  doc.save(docNomeFile(o, o.supplierId ? getSupplier(o.supplierId) : null, 'ordine', '.pdf'));
   showToast('PDF esportato');
   askMarkSent(o, `PDF generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?`, 'inviato', renderOdl);
 }
 function exportOdlExcel(id) {
   const o = getOdl(id); if (!o) return;
   if (!(o.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
-  const co = db.settings.company || {};
-  const sup = o.supplierId ? getSupplier(o.supplierId) : null;
-  const data = [['Ordine di lavoro / Subcontract Order', o.number], ['Data', fmtDateIt(o.date)]];
-  if (o.title) data.push(['Oggetto', o.title]);
-  if (o.rfqId && getRfq(o.rfqId)) data.push(['Da richiesta', getRfq(o.rfqId).number]);
-  if (o.transport) data.push(['Trasporto / Shipping', o.transport]);
-  if (o.payment) data.push(['Pagamento / Payment', o.payment]);
-  if (o.supplierConfirmation) data.push(['Conferma terzista / Order confirmation', o.supplierConfirmation]);
-  data.push([]);
-  data.push(['COMMITTENTE', '', 'TERZISTA']);
-  const coLines = docPartyLines(co), supLines = docPartyLines(sup);
-  for (let i = 0; i < Math.max(coLines.length, supLines.length); i++) data.push([coLines[i] || '', '', supLines[i] || '']);
-  data.push([]);
+  const data = docXlsTesta({ titolo: 'Ordine di lavoro / Subcontract Order', rec: o, chi: 'COMMITTENTE', controparte: 'TERZISTA', voci: [
+    ['Da richiesta', o.rfqId && getRfq(o.rfqId) ? getRfq(o.rfqId).number : ''],
+    ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
+    ['Conferma terzista / Order confirmation', o.supplierConfirmation]] });
   data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', `Tariffa (${cur()}/pz)`, `Importo (${cur()})`, 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
   (o.lines || []).forEach((l, i) => {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? '' : Number(l.price);
@@ -2307,12 +2243,7 @@ function exportOdlExcel(id) {
   });
   data.push([]);
   data.push(['', 'TOTALE IMPONIBILE / TOTAL', odlTotal(o)]);
-  if (o.notes) { data.push([]); data.push(['Note', o.notes]); }
-  if (!requireXlsx()) return;
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), 'Ordine di lavoro');
-  XLSX.writeFile(wb, nomeFileSicuro(o.number + (sup ? '_' + (sup.name || '') : ''), 'ordine') + '.xlsx');
-  showToast('Excel esportato');
+  if (!docXlsSalva(data, o, 'Ordine di lavoro', 'ordine')) return;
   askMarkSent(o, `Excel generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?`, 'inviato', renderOdl);
 }
 
@@ -2323,6 +2254,6 @@ function delOrder(id) {
     // Un ordine con merce già arrivata non si cancella per sbaglio: il numero
     // dei ricevuti è la ragione per cui vale la pena fermarsi a rileggere.
     const rec = orderReception(o);
-    return rec.received ? ` con ${fmtQty(rec.received)} già ricevuti` : '';
+    return rec.received ? ` con ${fmtQtyIt(rec.received)} già ricevuti` : '';
   });
 }

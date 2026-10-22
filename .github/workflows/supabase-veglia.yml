@@ -1,0 +1,72 @@
+# L'archivio condiviso sveglio e salvato, ogni notte (dalla 0.107.0).
+#
+# Il piano gratuito di Supabase ha due rischi che non riguardano lo spazio
+# (docs/sostenibilita-free-tier.md): dopo 7 giorni senza uso sospende il
+# progetto, e l'app non risponde finché qualcuno non lo riprende a mano; e non
+# fa backup. Questo workflow lo tocca una volta al giorno e ne salva una copia
+# cifrata fra gli artifact del workflow, per 30 giorni.
+#
+# Cosa impostare è nel manuale, cap. 31 («Supabase sveglio e una copia ogni
+# notte»). Senza segreti il workflow lo dice e finisce verde: un repo senza
+# archivio condiviso non deve ricevere un errore al giorno.
+name: supabase-veglia
+
+on:
+  schedule:
+    - cron: '17 3 * * *'   # ogni notte alle 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  veglia:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Supabase sveglio
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "::notice::SUPABASE_URL o SUPABASE_KEY non impostati: nessun segnale a Supabase (manuale, cap. 31)."
+            exit 0
+          fi
+          codice=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 10 \
+            -H "apikey: $SUPABASE_KEY" "${SUPABASE_URL%/}/auth/v1/health")
+          if [ "$codice" != 200 ]; then
+            echo "::error::Supabase risponde $codice: il progetto potrebbe essere sospeso. Riprendilo dal pannello di Supabase (Restore project)."
+            exit 1
+          fi
+          echo "Supabase risponde."
+
+      - uses: actions/checkout@v5
+        if: env.SUPABASE_DB_URL != '' && env.BACKUP_PASSPHRASE != ''
+
+      - name: Backup cifrato
+        id: backup
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::notice::SUPABASE_DB_URL o BACKUP_PASSPHRASE non impostati: nessun backup (manuale, cap. 31)."
+            exit 0
+          fi
+          # pg_dump deve essere almeno della versione del server: quello di
+          # Ubuntu può essere più vecchio, il 17 dal repository di PostgreSQL
+          # legge sia i progetti su Postgres 15 sia quelli su 17.
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          export PATH=/usr/lib/postgresql/17/bin:$PATH
+          nome="bomtrack-$(date -u +%Y-%m-%d).sql.gz.gpg"
+          supabase/backup.sh "$nome"
+          echo "file=$nome" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.backup.outputs.file != ''
+        with:
+          name: ${{ steps.backup.outputs.file }}
+          path: ${{ steps.backup.outputs.file }}
+          retention-days: 30
+          if-no-files-found: error

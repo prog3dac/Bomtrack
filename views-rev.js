@@ -435,7 +435,7 @@ function revCompareModal(revId, controId) {
     ${sezione('Aggiunte', d.aggiunte.map(x => riga(x, '+', 'var(--green)', fmtUom(x.qty, x.uom))))}
     ${sezione('Rimosse', d.rimosse.map(x => riga(x, '−', 'var(--red)', fmtUom(x.qty, x.uom))))}
     ${sezione('Cambiate', d.cambiate.map(x => riga(x, '≠', 'var(--orange, #d90)',
-      [Math.abs(x.qtyPrima - x.qty) > 1e-9 ? `${fmtQty(x.qtyPrima)} → ${fmtUom(x.qty, x.uom)}` : '']
+      [Math.abs(x.qtyPrima - x.qty) > 1e-9 ? `${fmtQtyIt(x.qtyPrima)} → ${fmtUom(x.qty, x.uom)}` : '']
         .concat(x.altro || []).filter(Boolean).map(esc).join('; '))))}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'confronto');
 }

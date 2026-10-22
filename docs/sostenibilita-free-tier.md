@@ -3,8 +3,8 @@
 Compagno di [cloud-schema.md](cloud-schema.md): quello dice **come** i dati diventano tabelle,
 questo dice **quanto occupano** e **quando il piano gratuito smette di bastare**.
 
-Stato: nessun codice di rete esiste ancora. Sono stime su uno schema progettato, non misure su un
-database vivo — il modello di calcolo è in fondo, riproducibile, così che il giorno in cui il
+Stato (0.107.0): l'archivio condiviso esiste dalla 0.103.0, ma le cifre qui sotto sono ancora le
+stime fatte sullo schema prima che ci fosse, non misure su un database vivo — il modello di calcolo è in fondo, riproducibile, così che il giorno in cui il
 backend c'è si possa confrontare la previsione con la realtà invece di rifarla da capo.
 
 > I limiti del piano gratuito cambiano senza preavviso. Quelli qui sotto valgono a **settembre 2026**
@@ -16,7 +16,7 @@ backend c'è si possa confrontare la previsione con la realtà invece di rifarla
 |---|---|---|
 | Spazio database | **500 MB** | Il vincolo di cui si parla sempre. Non è il primo che si incontra. |
 | Egress (banda) | **5 GB/mese** | **Il vincolo vero**, se la sincronizzazione è fatta male. |
-| Storage file | 1 GB | Oggi irrilevante: l'app non ha allegati. Vedi «Il giorno in cui arrivano i disegni». |
+| Storage file | 1 GB | Oggi irrilevante: gli allegati stanno in una cartella fuori dall'app e il database ne porta solo il percorso. Vedi «Il giorno in cui arrivano i disegni». |
 | Realtime | 200 connessioni, 2M messaggi/mese | Abbondante per una squadra piccola. |
 | Utenti attivi | 50.000/mese | Fuori scala rispetto al problema. |
 | Progetti gratuiti | 2 | Basta per produzione + collaudo, e non un terzo. |
@@ -143,17 +143,21 @@ sbagliata.
 **Sospensione dopo 7 giorni di inattività.** Un'officina italiana chiude due settimane ad agosto. Al
 rientro il progetto è sospeso e va ripristinato a mano dalla dashboard, con l'app che nel frattempo
 non risponde. Serve un ping schedulato — una GitHub Action giornaliera su un endpoint REST è
-sufficiente. Va predisposto **prima**, non scoperto il 25 agosto.
+sufficiente. Va predisposto **prima**, non scoperto il 25 agosto. *Fatto nella 0.107.0:*
+`.github/workflows/supabase-veglia.yml`, attivo quando si impostano i segreti (manuale, cap. 31).
 
 **Nessun backup automatico.** Il piano gratuito non ne ha: se il progetto si perde, si perde.
 L'export JSON esistente è già la risposta — `Store.importSnapshot()` valida il file e migra i
 formati vecchi, ed è coperto da `test/backup.test.js` — ma va **schedulato fuori da Supabase**,
 altrimenti l'unica copia dei dati sta nello stesso posto che si sta cercando di proteggere.
+*Fatto nella 0.107.0:* lo stesso workflow salva ogni notte una copia cifrata del database fra gli
+artifact di GitHub (`supabase/backup.sh`, si rimette con `supabase/ripristino.sh`).
 
 ## Il giorno in cui arrivano i disegni
 
-Oggi l'app non ha allegati: nessun PDF, nessun DXF, nessuna foto. È il motivo per cui il limite di
-1 GB di storage non compare in nessun conto qui sopra.
+Dalla 0.78.0 gli allegati ci sono, ma i file stanno in una cartella fuori dall'app e il database ne
+porta solo il percorso. È il motivo per cui il limite di 1 GB di storage non compare in nessun conto
+qui sopra.
 
 Se un giorno una richiesta d'offerta portasse con sé il disegno, il calcolo cambia di colpo e va
 rifatto: **1 GB sono ~1.000 PDF da 1 MB**, cioè poche centinaia di articoli con un disegno e due
@@ -171,7 +175,7 @@ Non è lo spazio a decidere. Decidono, in quest'ordine:
 2. la **retention dei movimenti**, che è l'unica cosa che rende la crescita piatta invece che
    monotòna;
 3. i **backup fuori sede** e il **ping anti-sospensione**, che non costano niente e mancano entrambi
-   di serie.
+   di serie (dalla 0.107.0 li fa il workflow `supabase-veglia`, una volta impostati i segreti).
 
 Se il progetto arriverà vicino al limite, ci arriverà **per il tempo trascorso, non per i dati**. E
 il rimedio a quel punto è archiviare, non normalizzare meglio.

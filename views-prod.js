@@ -220,7 +220,7 @@ const ODP_FASE_LABELS = { attesa: 'In attesa', avviabile: 'Avviabile', corso: 'I
 function opMotivoBlocco(odp, fase) {
   const prec = opPrecedente(odp, fase);
   if (!prec) return '';
-  return `la fase ${prec.seq} ${prec.wcName} non è chiusa: ${fmtQty(opProcessati(odp, prec))} di ${fmtQty(opDaFare(odp, prec))}`;
+  return `la fase ${prec.seq} ${prec.wcName} non è chiusa: ${fmtQtyIt(opProcessati(odp, prec))} di ${fmtQtyIt(opDaFare(odp, prec))}`;
 }
 // → { ok: true } oppure { ok: false, motivo, fase: la fase che blocca }
 function opAvviabile(odp, fase) {
@@ -725,7 +725,7 @@ function odpListRows() {
       numero: o.number,
       badge: statusBadge(ODP_STATUS, o.status),
       titolo: `${o.code || ''} ${o.name || ''}`.trim() || o.title || '',
-      meta: `${fmtQty(o.qty)} ${esc(o.uom || 'pz')} · fasi ${chiuse}/${fasi}${corrente ? ' · ' + esc('alla ' + corrente.seq + ' ' + corrente.wcName) : ''}${o.dueDate ? ' · ' + esc(fmtDateIt(o.dueDate)) : ''}`,
+      meta: `${fmtQtyIt(o.qty)} ${esc(o.uom || 'pz')} · fasi ${chiuse}/${fasi}${corrente ? ' · ' + esc('alla ' + corrente.seq + ' ' + corrente.wcName) : ''}${o.dueDate ? ' · ' + esc(fmtDateIt(o.dueDate)) : ''}`,
       sel: odpView === 'edit' && currentOdpId === o.id,
       spenta: o.status === 'annullato' || o.status === 'chiuso',
       azione: `openOdpEdit('${o.id}')`,
@@ -876,9 +876,9 @@ function renderOdpEdit(id) {
     </div>
     ${stampLine(o)}
     <div class="cost-summary">
-      ${kpi('Pezzi lanciati', fmtQty(o.qty), 'accent')}
-      ${kpi('Buoni all\'ultima fase', fmtQty(buoni), 'green')}
-      ${kpi('Scarti', fmtQty(scarti), scarti > 0 ? 'orange' : '')}
+      ${kpi('Pezzi lanciati', fmtQtyIt(o.qty), 'accent')}
+      ${kpi('Buoni all\'ultima fase', fmtQtyIt(buoni), 'green')}
+      ${kpi('Scarti', fmtQtyIt(scarti), scarti > 0 ? 'orange' : '')}
       ${kpi('Fasi chiuse', `${chiuse}/${fasi.length}`, 'purple')}
       ${esterno > 0 ? kpi('Lavorazioni esterne', fmtN(esterno), '') : ''}
     </div>
@@ -918,9 +918,9 @@ function odpPhaseRows(o) {
     ? `${ico('factory', 'tinted', '')} ${esc(f.supplierName || supplierName(f.supplierId) || '—')}`
     : '<span class="empty-text" style="padding:0">Interna</span>'}</td>
       <td style="white-space:nowrap">${odpPlannedCell(f, st)}</td>
-      <td class="num">${fmtQty(opDaFare(o, f))}</td>
-      <td class="num">${fmtQty(opFatti(o, f))}</td>
-      <td class="num">${opScarti(o, f) > 0 ? `<span class="mrp-warn">${fmtQty(opScarti(o, f))}</span>` : '—'}</td>
+      <td class="num">${fmtQtyIt(opDaFare(o, f))}</td>
+      <td class="num">${fmtQtyIt(opFatti(o, f))}</td>
+      <td class="num">${opScarti(o, f) > 0 ? `<span class="mrp-warn">${fmtQtyIt(opScarti(o, f))}</span>` : '—'}</td>
       <td>${statusBadge(ODP_FASE_LABELS, st)}${forzata ? ` <span class="mrp-warn" title="Avviata forzando la successione: il motivo è nello storico">${ico('warning', 'tinted', '')} forzata</span>` : ''}</td>
       <td>${odpPhaseActions(o, f, st, legame)}</td>
     </tr>`;
@@ -980,10 +980,10 @@ function odpMaterialBlock(o) {
         <th scope="col" style="width:100px">Previsto</th><th scope="col" style="width:100px">Uscito</th><th scope="col" style="width:100px">Residuo</th></tr></thead>
       <tbody>${righe.map(m => `<tr>
         <td>${codeLink(m.itemId, m.code)}</td><td>${esc(m.name)}</td>
-        <td class="num">${fmtQty(m.perPezzo)} ${esc(m.uom)}</td>
-        <td class="num">${fmtQty(m.qty)}</td>
-        <td class="num">${fmtQty(m.gia)}</td>
-        <td class="num">${m.residuo > 0 ? fmtQty(m.residuo) : '<span class="price-best">✓</span>'}</td></tr>`).join('')}</tbody>
+        <td class="num">${fmtQtyIt(m.perPezzo)} ${esc(m.uom)}</td>
+        <td class="num">${fmtQtyIt(m.qty)}</td>
+        <td class="num">${fmtQtyIt(m.gia)}</td>
+        <td class="num">${m.residuo > 0 ? fmtQtyIt(m.residuo) : '<span class="price-best">✓</span>'}</td></tr>`).join('')}</tbody>
     </table></div></div>`;
 }
 // Data e ora leggibili: una dichiarazione di produzione si distingue da
@@ -1004,8 +1004,8 @@ function odpDeclBlock(o) {
         <td>${esc(odpQuando(d.date))}</td>
         <td>${esc(nomeFase(d.phaseId))}</td>
         <td>${d.kind === 'forzatura' ? `<span class="mrp-warn">${ico('warning', 'tinted', '')} Forzatura</span>` : esc(etichetta[d.kind] || d.kind)}</td>
-        <td class="num">${d.qty ? fmtQty(d.qty) : '—'}</td>
-        <td class="num">${d.scrap ? fmtQty(d.scrap) : '—'}</td>
+        <td class="num">${d.qty ? fmtQtyIt(d.qty) : '—'}</td>
+        <td class="num">${d.scrap ? fmtQtyIt(d.scrap) : '—'}</td>
         <td>${d.kind === 'forzatura' ? `<strong>${esc(d.motivo || '')}</strong>${d.note ? ` <span class="empty-text" style="padding:0">(${esc(d.note)})</span>` : ''}` : esc(d.note || '')}</td>
         <td>${(d.kind === 'avanzamento' || d.kind === 'avvio') && opDichiarazioneAnnullabile(o, d).ok
     ? `<button class="mini-btn danger lock-reception" onclick="opAnnullaDichiarazioneAsk('${d.id}')" title="${d.kind === 'avvio'
@@ -1031,7 +1031,7 @@ function odpMovBlock(o) {
         <td>${esc(odpQuando(m.date))}</td>
         <td>${it ? codeLink(it.id, it.code) : ''}</td>
         <td>${esc(MOVEMENT_KINDS[m.kind] || m.kind)}</td>
-        <td class="num">${fmtQty(m.qty)}</td>
+        <td class="num">${fmtQtyIt(m.qty)}</td>
         <td>${m.supplierId ? esc(supplierName(m.supplierId) || '') : '<span class="empty-text" style="padding:0">in casa</span>'}</td>
         <td>${esc(m.note || '')}</td></tr>`;
   }).join('')}</tbody>
@@ -1098,11 +1098,11 @@ function odpAnnullaModal(id) {
     <p>Dall'avvio della prima fase è uscito del materiale. Quanto ne torna ${daTerzista ? `da <strong>${esc(prima.supplierName || supplierName(prima.supplierId) || '')}</strong>` : 'a magazzino'}?</p>
     <div style="display:flex;flex-direction:column;gap:6px">${righe.map((r, i) => `<div class="mgmt-item">
       <span style="width:130px;font-family:var(--mono)">${esc(r.code)}</span>
-      <span style="flex:1">${esc(r.name)} <span class="empty-text" style="padding:0">uscito ${fmtQty(r.uscito)} ${esc(r.uom)}</span></span>
+      <span style="flex:1">${esc(r.name)} <span class="empty-text" style="padding:0">uscito ${fmtQtyIt(r.uscito)} ${esc(r.uom)}</span></span>
       <input class="num" type="number" id="op-r-${i}" min="0" step="any" value="${esc(String(r.proposto))}" style="width:110px" aria-label="Quantità di ${esc(r.code)} che torna">
       <span class="empty-text" style="padding:0;width:40px">${esc(r.uom)}</span>
     </div>`).join('')}</div>
-    <p class="empty-text" style="text-align:left;padding:8px 0">La proposta è il materiale dei pezzi che la prima fase <strong>non ha ancora lavorato</strong> (${fmtQty(opResidua(o, prima))} su ${fmtQty(o.qty)}): quello dei pezzi già lavorati non è più materiale. ${daTerzista ? 'Torna con un <strong>rientro da conto lavoro</strong>, che azzera il prospetto presso il terzista.' : 'Torna con un <strong>reso da produzione</strong>.'} Lascia zero per non restituire niente.</p>
+    <p class="empty-text" style="text-align:left;padding:8px 0">La proposta è il materiale dei pezzi che la prima fase <strong>non ha ancora lavorato</strong> (${fmtQtyIt(opResidua(o, prima))} su ${fmtQtyIt(o.qty)}): quello dei pezzi già lavorati non è più materiale. ${daTerzista ? 'Torna con un <strong>rientro da conto lavoro</strong>, che azzera il prospetto presso il terzista.' : 'Torna con un <strong>reso da produzione</strong>.'} Lascia zero per non restituire niente.</p>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Non annullare</button>
       <button class="add-btn-sm" onclick="odpAnnullaSave('${esc(id)}')">Annulla l'ordine</button>
@@ -1163,7 +1163,7 @@ function opAvviaModal(id, faseId) {
     : 'Questa fase <strong>non muove il magazzino</strong>: i pezzi sono già fuori dallo scaffale da quando è partita la prima fase, e non sono ancora la parte finita. Dove stanno lo dice questa tabella, non una giacenza.';
   const corpo = righe.map((m, i) => `<div class="mgmt-item">
       <span style="width:110px;font-family:var(--mono)">${esc(m.code)}</span>
-      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">${fmtQty(m.perPezzo)} ${esc(m.uom)}/pz · a magazzino ${fmtQty(onHandOf(m.itemId))}</span>${m.gia ? ` <span class="rfq-clavoro-tag">già ${fmtQty(m.gia)}</span>` : ''}</span>
+      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">${fmtQtyIt(m.perPezzo)} ${esc(m.uom)}/pz · a magazzino ${fmtQtyIt(onHandOf(m.itemId))}</span>${m.gia ? ` <span class="rfq-clavoro-tag">già ${fmtQtyIt(m.gia)}</span>` : ''}</span>
       <input class="num" type="number" id="op-q-${i}" min="0" step="any" value="${esc(String(+m.residuo.toFixed(4)))}" style="width:110px" oninput="opAvviaAvviso()">
       <span class="empty-text" style="padding:0;width:40px">${esc(m.uom)}</span>
     </div>`).join('');
@@ -1197,7 +1197,7 @@ function opPrelevaRestoModal(id) {
   openModal(`${opTestaModal(o, prima, 'Preleva il resto del materiale')}
     <div style="display:flex;flex-direction:column;gap:6px">${righe.map((m, i) => `<div class="mgmt-item">
       <span style="width:110px;font-family:var(--mono)">${esc(m.code)}</span>
-      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">già uscito ${fmtQty(m.gia)} ${esc(m.uom)} · a magazzino ${fmtQty(onHandOf(m.itemId))}</span></span>
+      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">già uscito ${fmtQtyIt(m.gia)} ${esc(m.uom)} · a magazzino ${fmtQtyIt(onHandOf(m.itemId))}</span></span>
       <input class="num" type="number" id="op-pr-${i}" min="0" step="any" value="${esc(String(+m.residuo.toFixed(4)))}" style="width:110px" aria-label="Quantità di ${esc(m.code)} che esce">
       <span class="empty-text" style="padding:0;width:40px">${esc(m.uom)}</span>
     </div>`).join('')}</div>
@@ -1222,7 +1222,7 @@ function opDichiaraModal(id, faseId) {
   const residua = opResidua(o, f);
   const ultima = opEUltima(o, f);
   openModal(`${opTestaModal(o, f, 'Dichiara l\'avanzamento')}
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Entrati in questa fase: <strong>${fmtQty(opDaFare(o, f))}</strong> · già lavorati: <strong>${fmtQty(opProcessati(o, f))}</strong> · restano <strong>${fmtQty(residua)}</strong>.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Entrati in questa fase: <strong>${fmtQtyIt(opDaFare(o, f))}</strong> · già lavorati: <strong>${fmtQtyIt(opProcessati(o, f))}</strong> · restano <strong>${fmtQtyIt(residua)}</strong>.</p>
     <div class="modal-grid">
       <div class="modal-field"><label>Pezzi buoni</label>
         <input class="num" type="number" id="op-d-qty" min="0" step="any" value="${esc(String(+residua.toFixed(4)))}"></div>
@@ -1271,7 +1271,7 @@ function opChiudiModal(id, faseId) {
   const { o, f } = x;
   const mancano = opResidua(o, f);
   askConfirm(`Chiudere la fase ${f.seq} ${f.wcName}?` + (mancano > 0.000001
-    ? `\n\nMancano ${fmtQty(mancano)} pezzi: non proseguiranno alla fase successiva.` : ''), () => {
+    ? `\n\nMancano ${fmtQtyIt(mancano)} pezzi: non proseguiranno alla fase successiva.` : ''), () => {
     if (!opChiudiFase(id, faseId)) return;
     renderOdp(); showToast('Fase chiusa');
   }, { title: 'Chiudi la fase', ok: 'Chiudi', safe: mancano <= 0.000001 });
@@ -1287,7 +1287,7 @@ function opAnnullaDichiarazioneAsk(declId) {
   const d = (db.prodDecls || []).find(x => x.id === declId); if (!d) return;
   const domanda = d.kind === 'avvio'
     ? 'Annullare l\'avvio di questa fase?\nIl materiale uscito con lui torna a magazzino, e la fase torna da avviare.'
-    : `Annullare questa dichiarazione di ${fmtQty(d.qty)} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lei.`;
+    : `Annullare questa dichiarazione di ${fmtQtyIt(d.qty)} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lei.`;
   askConfirm(domanda, () => {
     if (!opAnnullaDichiarazione(declId)) return;
     renderOdp(); showToast('Dichiarazione annullata');
@@ -1432,7 +1432,7 @@ function odpListExportSpec() {
 function odpDocSpec(o) {
   const fasi = (o.phases || []).map(f => [String(f.seq), f.wcName,
     f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : 'Interna',
-    f.supplierId ? (f.days ? f.days + ' gg' : '') : (f.hours ? fmtQty(f.hours) + ' h/pz' : ''),
+    f.supplierId ? (f.days ? f.days + ' gg' : '') : (f.hours ? fmtQtyIt(f.hours) + ' h/pz' : ''),
     opDaFare(o, f), opFatti(o, f), opScarti(o, f),
     ODP_FASE_LABELS[opStatoFase(o, f)] || '']);
   const mat = opMaterialeResiduo(o).map(m => [m.code, m.name, m.uom, m.qty, m.gia, m.residuo]);
@@ -1459,7 +1459,7 @@ function odpDocSpec(o) {
     // Come ODA e ODL: «ODP-2026-001_PRT-001.pdf» (dalla 0.101.1).
     nomeFile: [o.number || 'ODP', o.code || ''].filter(Boolean).join('_'),
     filtri: [['Parte', `${o.code || ''} ${o.name || ''}`.trim()],
-      ['Pezzi', `${fmtQty(o.qty)} ${o.uom || ''}`],
+      ['Pezzi', `${fmtQtyIt(o.qty)} ${o.uom || ''}`],
       ['Serve per', o.dueDate ? fmtDateIt(o.dueDate) : ''],
       ['Stato', ODP_STATUS[o.status] || o.status || '']],
     sezioni,
@@ -1549,7 +1549,7 @@ function opGeneraOdlAsk(id, faseId) {
   const { o, f } = x;
   const fasi = opRunFasi(o, f);
   const quali = fasi.length === 1 ? `la fase ${f.seq}` : `le fasi ${fasi[0].seq}-${fasi[fasi.length - 1].seq}`;
-  askConfirm(`Commissionare ${quali} a ${f.supplierName || supplierName(f.supplierId) || 'questo terzista'}?\n${fmtQty(opAttesiFase(o, f))} pezzi di ${o.code || ''}.`, () => conNumeri({ ODL: 1 }, () => {
+  askConfirm(`Commissionare ${quali} a ${f.supplierName || supplierName(f.supplierId) || 'questo terzista'}?\n${fmtQtyIt(opAttesiFase(o, f))} pezzi di ${o.code || ''}.`, () => conNumeri({ ODL: 1 }, () => {
     const odl = opGeneraOdl(id, faseId); if (!odl) { renderOdp(); return; }
     renderOdp();
     showToast(`Ordine di lavoro ${odl.number} creato`, 'success');
