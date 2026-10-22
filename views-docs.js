@@ -1566,7 +1566,7 @@ function orderListRows() {
   return list.map(o => {
     const sup = o.supplierId ? supplierName(o.supplierId) : '— nessun fornitore —';
     const rec = orderReception(o);
-    const recTxt = rec.ordered ? `ric. ${fmtQty(rec.received)}/${fmtQty(rec.ordered)}` : '';
+    const recTxt = rec.ordered ? `ric. ${fmtQtyIt(rec.received)}/${fmtQtyIt(rec.ordered)}` : '';
     return worklistRow({
       numero: o.number,
       badge: statusBadge(ORDER_STATUS, o.status),
@@ -1752,7 +1752,7 @@ function renderOrderEdit(id) {
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="ordSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il fornitore ha confermato" onchange="ordSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" title="${l.phaseKey ? 'Pezzi rientrati dal terzista: portano questo ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.' : 'Quantità ricevuta'}" onchange="ordSetLine('${id}','${l.id}','received',this.value)">`,
-    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Residuo da ricevere">${fmtQty(residual)}</span>`)}
+    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Residuo da ricevere">${fmtQtyIt(residual)}</span>`)}
       ${cell2(`<button class="mini-btn" onclick="ordEditLineModal('${id}','${l.id}')" title="Modifica riga / nota">${ico('edit', 'tinted', 'Modifica riga / nota')}</button>`,
     `<button class="mini-btn danger lock-contract" onclick="ordDelLine('${id}','${l.id}')" title="Togli la riga">${ico('trash', 'tinted', 'Togli la riga')}</button>`, 'line-actions')}
     </tr>`;
@@ -1980,7 +1980,7 @@ function odlListRows() {
   return list.map(o => {
     const sup = o.supplierId ? supplierName(o.supplierId) : '— nessun terzista —';
     const rec = orderReception(o);
-    const recTxt = rec.ordered ? `rientr. ${fmtQty(rec.received)}/${fmtQty(rec.ordered)}` : '';
+    const recTxt = rec.ordered ? `rientr. ${fmtQtyIt(rec.received)}/${fmtQtyIt(rec.ordered)}` : '';
     return worklistRow({
       numero: o.number,
       badge: statusBadge(ORDER_STATUS, o.status),
@@ -2154,7 +2154,7 @@ function renderOdlEdit(id) {
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="odlSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il terzista ha confermato" onchange="odlSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" ${odlRigaDaOdp(l) ? 'disabled' : ''} title="${odlRigaDaOdp(l) ? 'I pezzi rientrati li dichiara l&rsquo;ordine di produzione: qui si leggono, non si scrivono.' : 'Pezzi rientrati dal terzista: portano l&rsquo;ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.'}" onchange="odlSetLine('${id}','${l.id}','received',this.value)">`,
-    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Pezzi ancora dal terzista">${fmtQty(residual)}</span>`)}
+    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Pezzi ancora dal terzista">${fmtQtyIt(residual)}</span>`)}
       ${cell2(`<button class="mini-btn" onclick="odlEditLineModal('${id}','${l.id}')" title="Modifica riga / nota">${ico('edit', 'tinted', 'Modifica riga / nota')}</button>`,
     `<button class="mini-btn danger lock-contract" onclick="odlDelLine('${id}','${l.id}')" title="Togli la riga">${ico('trash', 'tinted', 'Togli la riga')}</button>`, 'line-actions')}
     </tr>`;
@@ -2323,6 +2323,6 @@ function delOrder(id) {
     // Un ordine con merce già arrivata non si cancella per sbaglio: il numero
     // dei ricevuti è la ragione per cui vale la pena fermarsi a rileggere.
     const rec = orderReception(o);
-    return rec.received ? ` con ${fmtQty(rec.received)} già ricevuti` : '';
+    return rec.received ? ` con ${fmtQtyIt(rec.received)} già ricevuti` : '';
   });
 }

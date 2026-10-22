@@ -707,7 +707,7 @@ function delSubFamily(familyId, subId) {
 function renderWorkCenters() {
   const list = db.workCenters.map(w => `<div class="mgmt-item">
     <span class="mgmt-item-name">${esc(w.name)}</span>
-    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQty(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQty(w.hoursPerDay) + ' h/gg' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQty(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}</span>
+    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}</span>
     ${activeBadge(w)}
     <div class="mgmt-item-actions">
       ${activeBtn('workCenters', w, 'Centro di lavoro')}

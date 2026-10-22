@@ -258,7 +258,7 @@ function itemInfoComposizione(it) {
         <td>${codeLink(ci.id, ci.code)}</td>
         <td><span class="bom-type-tag tt-${typeKey(ci.type)}">${typeShort(ci.type)}</span> ${esc(ci.name)}${itemBadges(ci)}</td>
         <td style="font-family:var(--mono);text-align:right">${fmtUom(c.qty, itemUom(ci))}</td>
-        <td style="font-family:var(--mono);text-align:right">${c.scrapPct ? fmtQty(c.scrapPct) + '%' : '—'}</td>
+        <td style="font-family:var(--mono);text-align:right">${c.scrapPct ? fmtQtyIt(c.scrapPct) + '%' : '—'}</td>
         <td style="font-family:var(--mono);text-align:right">${fmtN(costOf(ci.id).total * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100))}</td></tr>`;
     }).join('');
     const righeOp = ops.map(o => {
@@ -323,7 +323,7 @@ function itemInfoImpieghi(it) {
       <tbody>${righe.map(r => `<tr>
         <td>${codeLink(r.item.id, r.item.code)}</td>
         <td><span class="bom-type-tag tt-${typeKey(r.item.type)}">${typeShort(r.item.type)}</span> ${esc(r.item.name)}</td>
-        <td style="font-family:var(--mono);text-align:right">${fmtQty(r.qty)}</td></tr>`).join('')}</tbody></table></div>`;
+        <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(r.qty)}</td></tr>`).join('')}</tbody></table></div>`;
   const etichetta = cime.some(c => c.item.type === 'macchina') ? 'Macchine impattate' : 'Assiemi di testa impattati';
   return itemInfoSection(ico('link', 'tinted', '') + ' Dove è usato',
     tab(`Impieghi diretti (${diretti.length})`, diretti)
