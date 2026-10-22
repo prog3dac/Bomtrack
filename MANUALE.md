@@ -763,12 +763,15 @@ le stesse colonne ma si guardano per motivi diversi.
 
 **I quattro tipi.**
 
-| Tipo | Che cos'è | Ha una distinta? |
-|---|---|---|
-| **Macchina** | Il prodotto finito | Sì, l'albero completo |
-| **Gruppo** | Un assieme di primo livello | Sì |
-| **Sottogruppo** | Un assieme dentro un gruppo; può contenerne altri, senza limite | Sì |
-| **Parte (lavorato)** | La foglia: il pezzo che si fa o si compra | Sì: **distinta parte + ciclo** |
+| Tipo | Etichetta | Che cos'è | Ha una distinta? |
+|---|---|---|---|
+| **Macchina** | `MAC`, rossa | Il prodotto finito | Sì, l'albero completo |
+| **Gruppo** | `GRP`, verde | Un assieme di primo livello | Sì |
+| **Sottogruppo** | `SGR`, gialla | Un assieme dentro un gruppo; può contenerne altri, senza limite | Sì |
+| **Parte (lavorato)** | `PRT`, viola | La foglia: il pezzo che si fa o si compra | Sì: **distinta parte + ciclo** |
+
+L'etichetta colorata accompagna il tipo ovunque compaia: elenchi, ricerche, distinta, scheda
+articolo. Gruppo e sottogruppo hanno colori diversi apposta, per non confonderli a colpo d'occhio.
 
 **Comandi.** **Esporta Excel** / **Esporta PDF**; nella barra filtri, **Colonne** e
 **+ Nuovo articolo**.

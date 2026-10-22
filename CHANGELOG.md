@@ -25,6 +25,13 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - `test/ui.test.js`: l'avviso nomina articolo e fornitori e apre il listino; ordine per risparmio percentuale; obsoleti esclusi; prezzo scritto a mano riconosciuto; niente più somma di prezzi unitari.
 - `test/uom.test.js`: il confronto fra unità diverse ora usa due fornitori diversi, come vuole la regola.
 
+### 0.108.1 — 2026-10-22
+
+**Sottogruppi in giallo.** L'etichetta `SGR` dei sottogruppi era verde come quella `GRP` dei gruppi, e nelle liste i due tipi si confondevano. Ora i sottogruppi sono gialli, i gruppi restano verdi; il cambio vale ovunque compaia l'etichetta del tipo (elenchi, ricerche, distinta, scheda articolo, ispettore). Il giallo è un token nuovo, `--yellow`, in tutte e due le palette: acceso sul tema scuro (#E5CC4F, 10,7:1 sulla scheda), scurito su quello chiaro e in stampa (#7A6A00, 5,4:1 sul bianco), distinto dall'ambra dei materiali. Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/theme.test.js`: `--yellow` è fra i colori che si leggono e regge la soglia di 4,5:1 sulla scheda, in tutti e due i temi.
+
 ### 0.108.0 — 2026-10-22
 
 **Da una richiesta di offerta si sceglie quali prezzi registrare a listino, con la data di oggi.**
