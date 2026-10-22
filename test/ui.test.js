@@ -339,7 +339,7 @@ describe('Riepilogo', () => {
     approx(r.voci[0].pct, 20, '2 su 10');
     a.eval('renderHome()');
     const h = a.html('view-home');
-    assert.match(h, /Risparmio possibile a listino/);
+    assert.match(h, /Prezzi da rivedere a listino/);
     assert.match(h, /V1/);
     assert.match(h, /Rossi/);
     assert.match(h, /Bianchi/);
@@ -364,7 +364,7 @@ describe('Riepilogo', () => {
     // Il prezzo dell'articolo è rimasto a 10, ma la riga in uso è già la migliore.
     assert.equal(JSON.parse(a.eval('JSON.stringify(homeRisparmio())')).quanti, 0);
     a.eval('renderHome()');
-    assert.doesNotMatch(a.html('view-home'), /Risparmio possibile/);
+    assert.doesNotMatch(a.html('view-home'), /Prezzi da rivedere/);
   });
 
   it('si disegna senza lanciare, anche su un database vuoto', () => {

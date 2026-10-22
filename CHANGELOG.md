@@ -4,15 +4,26 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 ### 0.109.0 — 2026-10-22
 
-**Il «Risparmio possibile» del Riepilogo dice di quali articoli parla.**
+**Un fornitore ha un solo prezzo valido, il più recente. Il «Risparmio possibile» del Riepilogo diventa «Prezzi da rivedere a listino» e dice di quali articoli parla.**
 
-- **Prima** l'avviso diceva solo «su N articoli il listino contiene una quotazione più bassa: X € per unità, sommati». Non nominava né gli articoli né i fornitori, e il totale sommava prezzi unitari di articoli diversi (un €/m più un €/pz): un numero che non era il risparmio di niente. Il pulsante «Vai alle anagrafiche» portava agli Articoli d'acquisto, senza dire quali guardare.
-- **Ora** è una tabella: per ogni articolo il prezzo in uso e il suo fornitore (o «prezzo scritto a mano»), la quotazione più bassa a listino con fornitore e data, il risparmio per unità di misura e in percentuale. Prima i risparmi più grandi in proporzione; oltre otto articoli, un pulsante porta agli Articoli d'acquisto. **Un clic sulla riga apre il listino dell'articolo**, e alla chiusura il riquadro si aggiorna.
-- **Correzioni al calcolo.** Gli articoli obsoleti non vengono più segnalati, come già per «senza prezzo» e «sotto scorta». Non si segnala più nemmeno l'articolo la cui quotazione in uso è già la più bassa e il cui prezzo è solo rimasto indietro: non c'è un fornitore più conveniente da proporre.
+**Listino**
+- **Una quotazione valida per fornitore.** Fra le quotazioni dello stesso fornitore vale quella con la data più recente. Le precedenti vanno nello **Storico**, in fondo al listino dell'articolo: in sola lettura (si possono solo eliminare), fuori dai confronti, non più selezionabili come prezzo in uso. Una riga nuova ancora senza prezzo non sostituisce niente. Ordini e richieste usavano già la quotazione più recente del fornitore; ora la usa anche la costificazione nei confronti.
+- **Prezzo in uso sostituito.** Se il prezzo in uso viene da una quotazione sostituita, il listino lo dice con il prezzo nuovo e il pulsante **✓ Usa la nuova**. Il costo non cambia da solo.
+- La ↓ «quotazione più bassa» compare solo se ci sono almeno due quotazioni valide da confrontare. La vista *Listino fornitori* segna le quotazioni *storico*, ha il filtro *Senza lo storico* e la colonna *Storico* nell'export.
+
+**Riepilogo**
+- **Prima** l'avviso diceva solo «su N articoli il listino contiene una quotazione più bassa: X € per unità, sommati». Non nominava né gli articoli né i fornitori, e il totale sommava prezzi unitari di articoli diversi (un €/m più un €/pz): un numero che non era il risparmio di niente.
+- **Ora** è una tabella: per ogni articolo il prezzo in uso e il suo fornitore (o «prezzo scritto a mano»), l'altro fornitore più conveniente con prezzo e data, il risparmio per unità di misura e in percentuale. Elenca anche i prezzi in uso sostituiti da un listino più recente dello stesso fornitore (*da aggiornare*). **Un clic sulla riga apre il listino dell'articolo**, e alla chiusura il riquadro si aggiorna.
+- **Il confronto è giusto**: solo con fornitori diversi da quello in uso, contro il suo listino di oggi. Un fornitore solo non dà mai «risparmio». Gli articoli obsoleti non vengono più segnalati.
+
+**Fabbisogno e scheda articolo**
+- Il `↓ risparmio` del fabbisogno e la «Miglior quotazione» della scheda articolo seguono la stessa regola. Il suggerimento del `↓` non chiama più «per unità» un importo che è sulla quantità da ordinare. La scheda articolo segna le quotazioni *storico* e mostra il «Listino più recente» quando il prezzo in uso è stato sostituito.
 - Nessun cambio a `supabase/schema.sql`.
 
 **Verifica**
-- `test/ui.test.js`: l'avviso nomina articolo e fornitori e apre il listino; ordine per risparmio percentuale; obsoleti esclusi; prezzo scritto a mano riconosciuto; nessun avviso se in uso c'è già la quotazione più bassa; niente più somma di prezzi unitari.
+- `test/pricelist.test.js`: la quotazione vecchia dello stesso fornitore va nello storico e non è più la più bassa; il risparmio si confronta con un altro fornitore sul listino nuovo; un fornitore solo non dà risparmio; il prezzo in uso sostituito si segnala e il listino propone la nuova; la sostituita non si può mettere in uso; una riga senza prezzo non sostituisce quella quotata.
+- `test/ui.test.js`: l'avviso nomina articolo e fornitori e apre il listino; ordine per risparmio percentuale; obsoleti esclusi; prezzo scritto a mano riconosciuto; niente più somma di prezzi unitari.
+- `test/uom.test.js`: il confronto fra unità diverse ora usa due fornitori diversi, come vuole la regola.
 
 ### 0.108.0 — 2026-10-22
 

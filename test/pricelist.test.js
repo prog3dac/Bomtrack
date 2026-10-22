@@ -476,3 +476,69 @@ describe('vista Listino fornitori — tutte le quotazioni in un elenco', () => {
     assert.equal(conDue().eval('groupOfView("pricelist").label'), 'Acquisti');
   });
 });
+
+// Dalla 0.109.0: un fornitore ha un solo prezzo valido, il più recente. Le sue
+// quotazioni più vecchie restano a listino come storico.
+describe('Una quotazione valida per fornitore, le altre nello storico', () => {
+  const tre = () => conListino([
+    quota({ id: 'r-gen', supplierId: 's1', price: 8, date: '2026-01-10' }),
+    quota({ id: 'r-set', supplierId: 's1', price: 12, date: '2026-09-15' }),
+    quota({ id: 'b', supplierId: 's2', price: 10, date: '2026-05-01' }),
+  ], { activePriceId: 'r-set', purchasePrice: 12 });
+
+  it('la quotazione vecchia dello stesso fornitore è sostituita e non è più la più bassa', () => {
+    const app = conDb(tre());
+    assert.equal(app.eval('priceRowSuperseded(getItem("a"), priceRows(getItem("a"))[0])'), true);
+    assert.equal(app.eval('validPriceRows(getItem("a")).map(r => r.id).join()'), 'r-set,b');
+    assert.equal(app.eval('bestPriceRow(getItem("a")).id'), 'b');
+  });
+
+  it('il risparmio si confronta con un altro fornitore, sul listino nuovo', () => {
+    const app = conDb(tre());
+    const c = JSON.parse(app.eval('JSON.stringify(priceCompare(getItem("a")))'));
+    assert.equal(c.best.id, 'b');
+    approx(c.saving, 2, '12 di Rossi oggi contro 10 di Bianchi');
+  });
+
+  it('un fornitore solo non dà risparmio, anche se una volta costava meno', () => {
+    const app = conDb(conListino([
+      quota({ id: 'vecchia', price: 8, date: '2026-01-10' }),
+      quota({ id: 'nuova', price: 12, date: '2026-09-15' }),
+    ], { activePriceId: 'nuova', purchasePrice: 12 }));
+    assert.equal(app.eval('priceCompare(getItem("a")).saving'), 0);
+    assert.equal(app.eval('homeRisparmio().quanti'), 0);
+  });
+
+  it('il prezzo in uso sostituito si segnala, con il prezzo nuovo', () => {
+    const app = conDb(Object.assign(tre(), {}));
+    app.eval('const it = getItem("a"); it.activePriceId = "r-gen"; it.purchasePrice = 8;');
+    const c = JSON.parse(app.eval('JSON.stringify(priceCompare(getItem("a")))'));
+    assert.equal(c.superata, true);
+    approx(c.attuale, 12);
+    const r = JSON.parse(app.eval('JSON.stringify(homeRisparmio())'));
+    assert.equal(r.voci[0].superato, true);
+    approx(r.voci[0].attuale, 12);
+    // Il listino lo dice e propone la nuova.
+    const h = app.eval('priceListBody("a")');
+    assert.match(h, /sostituita da quella del/);
+    assert.match(h, /priceUseRow\('r-set'\)/);
+  });
+
+  it('nel listino le sostituite stanno nello storico e non si possono usare', () => {
+    const app = conDb(tre());
+    const h = app.eval('priceListBody("a")');
+    assert.match(h, /Storico: 1 quotazione sostituita/);
+    assert.doesNotMatch(h, /priceUseRow\('r-gen'\)/);
+    app.eval('window.__priceItemId = "a"; priceUseRow("r-gen")');
+    assert.equal(app.eval('getItem("a").activePriceId'), 'r-set', 'la quotazione sostituita non entra in uso');
+  });
+
+  it('una riga nuova ancora senza prezzo non sostituisce quella quotata', () => {
+    const app = conDb(conListino([
+      quota({ id: 'quotata', price: 9, date: '2026-01-10' }),
+      quota({ id: 'vuota', price: '', date: '2026-10-01' }),
+    ], { activePriceId: 'quotata', purchasePrice: 9 }));
+    assert.equal(app.eval('priceRowSuperseded(getItem("a"), priceRows(getItem("a"))[0])'), false);
+    assert.equal(app.eval('supplierPriceRow(getItem("a"), "s1").id'), 'quotata');
+  });
+});
