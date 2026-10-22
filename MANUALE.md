@@ -3157,11 +3157,50 @@ scelta (almeno 4 caratteri), che diventa la sua password su questo PC. Gli altri
 ### Il backup resta
 
 1. **Il piano gratuito non ha backup automatici**: se il progetto si perde, si perde. L'export
-   JSON (*Gestione → Backup*) o il backup automatico in una cartella restano l'unica risposta, e
-   vanno tenuti **fuori** dal servizio che si sta proteggendo.
+   JSON (*Gestione → Backup*) o il backup automatico in una cartella restano la risposta di ogni
+   giorno, e vanno tenuti **fuori** dal servizio che si sta proteggendo. Dalla 0.107.0 se ne può
+   aggiungere uno notturno su GitHub, qui sotto.
 2. **Un progetto inattivo per sette giorni viene sospeso**, e va riacceso a mano dal pannello di
    Supabase. Un'officina che chiude due settimane ad agosto lo scopre al rientro, con la nuvola
-   rossa. Basta riaccenderlo: i dati ci sono.
+   rossa. Basta riaccenderlo: i dati ci sono. Con il segnale notturno qui sotto non succede.
+
+### Supabase sveglio e una copia ogni notte
+
+Dalla 0.107.0 il repository di Bomtrack su GitHub ha un lavoro notturno (`supabase-veglia`) che
+fa due cose, ognuna solo se le dai i suoi dati: **tocca Supabase**, così il progetto non si
+sospende, e **salva una copia cifrata** dell'archivio condiviso, che resta scaricabile per 30
+giorni. Si imposta una volta, dal repository su GitHub: **Settings → Secrets and variables →
+Actions → New repository secret**.
+
+| Segreto | Cosa metterci | Serve per |
+|---|---|---|
+| `SUPABASE_URL` | L'indirizzo del progetto, lo stesso che hai incollato in Bomtrack | Il segnale |
+| `SUPABASE_KEY` | La chiave **pubblica** (*anon* o *publishable*), la stessa di Bomtrack | Il segnale |
+| `SUPABASE_DB_URL` | In Supabase, **Connect** → *Session pooler*: la riga che comincia con `postgresql://`, con la password del database al posto di `[YOUR-PASSWORD]` | La copia |
+| `BACKUP_PASSPHRASE` | Una frase lunga che scegli tu e **scrivi da qualche parte fuori dal PC** | La copia |
+
+- **Usa il *Session pooler*, non la connessione diretta**: quella diretta GitHub non la raggiunge.
+- **La frase non si recupera.** Senza, la copia è illeggibile per tutti, te compreso. È voluto:
+  il repository è pubblico, e la copia contiene anche gli utenti di Supabase.
+- **Per provarlo subito**: su GitHub **Actions → supabase-veglia → Run workflow**. Le copie stanno
+  in fondo alla pagina di ogni esecuzione, alla voce *Artifacts*.
+- **Se Supabase non risponde** il lavoro finisce rosso e GitHub ti manda un'email: il progetto è
+  forse sospeso, e si riprende dal pannello di Supabase.
+- **GitHub spegne i lavori notturni** di un repository in cui non si pubblica niente da 60 giorni,
+  e lo dice per email. Si riaccende da **Actions → supabase-veglia → Enable workflow**.
+- Senza segreti il lavoro non fa niente e lo scrive, senza errori.
+
+**Rimettere una copia in un progetto nuovo.** È un lavoro da fare con calma, da un PC con
+PostgreSQL e GnuPG installati (o da chi ti ha aiutato a mettere in piedi Supabase):
+
+1. Crea un progetto Supabase nuovo ed esegui `supabase/schema.sql` (passi 1 e 2 qui sopra), senza
+   creare utenti.
+2. Scarica la copia da GitHub e scompattala: dentro c'è un file `bomtrack-AAAA-MM-GG.sql.gz.gpg`.
+3. Dalla cartella del repository:
+   `SUPABASE_DB_URL='postgresql://…' BACKUP_PASSPHRASE='…' supabase/ripristino.sh bomtrack-AAAA-MM-GG.sql.gz.gpg`
+   con il *Session pooler* del progetto **nuovo**. Entra tutto o niente.
+4. Ricollega i PC al progetto nuovo (passo 6). Utenti, ruoli e password sono quelli di prima;
+   la funzione `bomtrack-utenti` va ripubblicata (passo 9).
 
 ### Quanto regge il piano gratuito
 
