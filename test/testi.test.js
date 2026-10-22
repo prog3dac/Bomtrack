@@ -64,6 +64,15 @@ describe('Testi coerenti con il comportamento', () => {
     assert.ok(ie.includes("le toglie il server, al più una volta al giorno"));
   });
 
+  it('backup, import e allegati dicono quello che succede', () => {
+    const a = app();
+    const backup = a.eval('renderBackup()');
+    assert.ok(!backup.includes('esporta prima un backup JSON'), 'la copia prima di azzerare la fa l\'app');
+    assert.ok(backup.includes('salva da sola una copia di tutto'));
+    assert.ok(a.eval('renderImport()').includes('Fornitori, Clienti,'), 'il foglio Clienti c\'è');
+    assert.ok(!sorgente('allegati.js').includes('Allegati → Archivio'), 'quella voce non esiste');
+  });
+
   it('il README non dice più che non c\'è nessun server', () => {
     const readme = sorgente('README.md');
     assert.ok(!readme.includes('nessun server, nessun Supabase'));

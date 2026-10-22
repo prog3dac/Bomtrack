@@ -45,7 +45,7 @@ function renderImport() {
     </div>
     <div style="border-top:1px solid var(--border, #2a2a2a);padding-top:16px">
       <strong>${ico('settings', 'tinted', '')} Impostazioni di Gestione</strong>
-      <p>Porta via e rimetti tutto ciò che si configura qui dentro, in <b>un foglio per scheda</b>: <span style="font-family:var(--mono)">Azienda, Utenti, Fornitori, Condizioni offerta, Famiglie commerciali, Famiglie materie prime, Famiglie parti, Concetti, Centri di lavoro, Unità di misura, Impostazioni</span>. Il file esportato <b>è anche il template</b>: si esporta, si modifica, si ricarica — comodo per allestire una postazione nuova senza rifare le anagrafiche a mano.</p>
+      <p>Porta via e rimetti tutto ciò che si configura qui dentro, in <b>un foglio per scheda</b>: <span style="font-family:var(--mono)">Azienda, Utenti, Fornitori, Clienti, Condizioni offerta, Famiglie commerciali, Famiglie materie prime, Famiglie parti, Concetti, Centri di lavoro, Unità di misura, Impostazioni</span>. Il file esportato <b>è anche il template</b>: si esporta, si modifica, si ricarica — comodo per allestire una postazione nuova senza rifare le anagrafiche a mano.</p>
       <p>L'import è <b>additivo</b>: aggiorna ciò che riconosce, crea ciò che manca, <b>non cancella niente</b>. Un foglio assente viene saltato, quindi si può caricare anche una sola scheda. Le <b>password non sono nel file</b>: un utente creato dall'import nasce senza, e non accede finché non gliene imposti una.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button class="btn-outline" onclick="exportSettingsXlsx()">${ico('download', 'tinted', '')} Esporta impostazioni</button>
@@ -1352,7 +1352,7 @@ function renderBackup() {
   return `${renderArchivioCondiviso()}<div class="cloud-section">
     <div style="flex:1">
       <strong>${ico('save', 'tinted', '')} Backup locale</strong>
-      <p>I dati sono salvati nel browser (${inIndexedDb() ? 'IndexedDB' : 'localStorage'}). Esporta un file JSON per conservare un backup o trasferire i dati su un altro PC. L'import sovrascrive i dati attuali.</p>
+      <p>I dati sono salvati nel browser (${inIndexedDb() ? 'IndexedDB' : 'localStorage'}). Esporta un file JSON per conservare un backup o trasferire i dati su un altro PC. L'import sovrascrive i dati attuali, dopo averne salvato una copia.${cloudAttivo() ? ' <strong>Con l\'archivio condiviso</strong> l\'export serve ancora, come copia fuori dal servizio; import, dati di esempio e azzeramento invece sono bloccati, perché toccherebbero tutti i colleghi.' : ''}</p>
       <p><strong>I documenti d'archivio sì, i vecchi file no.</strong> Di un documento d'archivio il backup porta il <em>percorso</em> dentro la cartella, che è un dato come gli altri: ripristinandolo su un PC che ha la sua copia dell'archivio i collegamenti valgono ancora. I file caricati <em>dentro</em> Bomtrack prima della 0.78.0 restano invece fuori dal JSON — sono byte, e nel JSON non ci starebbero — quindi il backup ne porta l'<em>elenco</em> e non il contenuto: si vede che cosa manca invece di trovare una scheda vuota. Prima di trasferirsi su un altro PC vanno riscaricati a mano dalla scheda Allegati di ciascun articolo.</p>
       ${dbSizeLine()}
       ${backupLine()}
@@ -1383,7 +1383,7 @@ function renderBackup() {
   <div class="cloud-section" style="border-color:var(--red);margin-top:16px">
     <div style="flex:1">
       <strong style="color:var(--red)">${ico('trash', 'tinted', '')} Azzera tutto</strong>
-      <p>Svuota completamente il database: articoli, distinte, richieste, ordini, fornitori, famiglie, centri di lavoro, unità di misura, dati azienda e impostazioni. Non restano nemmeno i dati di esempio. <strong>L'operazione è irreversibile</strong>: esporta prima un backup JSON.</p>
+      <p>Svuota completamente il database: articoli, distinte, richieste, ordini, fornitori, famiglie, centri di lavoro, unità di misura, dati azienda e impostazioni. Non restano nemmeno i dati di esempio. <strong>L'operazione è irreversibile</strong>: prima di azzerare l'app salva da sola una copia di tutto (nella cartella del backup automatico, se è attivo, altrimenti come file scaricato), ed è da lì che si torna indietro con Importa JSON.</p>
       <div style="margin-top:8px">
         <button class="btn-outline" style="color:var(--red);border-color:var(--red)" onclick="wipeAll()">${ico('trash', 'tinted', '')} AZZERA TUTTO</button>
       </div>

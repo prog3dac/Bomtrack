@@ -20,13 +20,17 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - **Gestione → Condizioni offerta e Dati azienda.** Parlavano solo delle richieste d'offerta: le condizioni si propongono anche su ordini e ordini di lavoro (la ★ vale se il fornitore non ha un suo predefinito), e i dati azienda si stampano su tutti i documenti. Il manuale (cap. 25) dice lo stesso.
 - **Cestino.** Con l'archivio condiviso le voci scadute non spariscono «al caricamento successivo»: le toglie il server, al più una volta al giorno (0.106.0). Il testo ora distingue i due casi.
 - **Scheda articolo.** «Distinta base → Gestione DB» diventa «Tecnico → Gestione DB», il nome del menu dalla 0.91.0.
+- **Gestione → Backup.** «Azzera tutto» diceva di esportare prima un backup: dalla 0.105.6 la copia la salva l'app da sola, e il testo ora dice dove. Il backup locale dice che anche l'import salva prima una copia e, con l'archivio condiviso, che import, dati di esempio e azzeramento sono bloccati mentre l'export serve ancora.
+- **Gestione → Import.** L'elenco dei fogli delle impostazioni non nominava **Clienti**, che il file contiene.
+- **Allegati.** Con la cartella non impostata il messaggio rimandava ad «Allegati → Archivio», che non esiste: la cartella si sceglie dalla scheda Allegati o da Gestione → Backup.
+- **Primo collegamento all'archivio condiviso.** Gli utenti rimasti fuori si invitano da Gestione → Utenti (0.105.0): il testo e il messaggio finale ora lo dicono.
 
 **Lasciati come sono**
 - I testi di listino, storico delle quotazioni e risparmio (Riepilogo, fabbisogno, scheda articolo) e il colore delle etichette dei sottogruppi: li riscrivono le due modifiche in corso su quelle funzioni.
 - Le citazioni dei vecchi gruppi del menu nel README, già dichiarate come tali.
 
 **Verifica**
-- `test/testi.test.js` (nuovo): la scheda dell'avanzamento dice che la parte entra a magazzino e ce la mette; la nota di Genera ordini non promette il prezzo della costificazione; il listino di una parte si apre; i testi degli elenchi vuoti, del conto lavoro, del cestino e del README non tornano alle frasi di prima.
+- `test/testi.test.js` (nuovo): la scheda dell'avanzamento dice che la parte entra a magazzino e ce la mette; la nota di Genera ordini non promette il prezzo della costificazione; il listino di una parte si apre; i testi degli elenchi vuoti, del conto lavoro, del cestino, del backup, dell'import, degli allegati e del README non tornano alle frasi di prima.
 - Suite completa verde.
 
 ### 0.108.0 — 2026-10-22
