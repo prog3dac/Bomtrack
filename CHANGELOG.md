@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.108.0 — 2026-10-22
+
+**Da una richiesta di offerta si sceglie quali prezzi registrare a listino, con la data di oggi.**
+
+- **Scelta delle righe.** Con più prezzi da registrare, **Registra a listino** apre l'elenco delle righe, tutte spuntate, con il prezzo nuovo (e quello vecchio, se la quotazione c'è già e si aggiorna). Si registrano solo quelle lasciate spuntate; le altre restano da registrare. Con un prezzo solo si registra subito, come prima.
+- **Data della quotazione.** Una quotazione nata da una richiesta prende la data del giorno in cui entra a listino, non più la data della richiesta: l'offerta arriva di solito dopo. Una quotazione già registrata che si aggiorna per un prezzo corretto tiene la sua data.
+- Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/pricelist.test.js`: la data è quella di registrazione; si registrano solo le righe scelte e le altre restano candidate; con una riga il pulsante registra subito, con più righe chiede prima.
+
 ### 0.107.0 — 2026-10-22
 
 **Supabase sveglio e una copia ogni notte.** Il piano gratuito di Supabase sospende il progetto dopo 7 giorni senza uso (la chiusura di agosto basta) e non fa backup. Un nuovo lavoro notturno su GitHub, `supabase-veglia`, tocca il progetto una volta al giorno e ne salva una copia **cifrata** fra gli artifact del workflow, per 30 giorni. Si attiva impostando quattro segreti nel repository (manuale, cap. 31, «Supabase sveglio e una copia ogni notte»); senza, non fa niente e lo dice. La copia contiene i dati di Bomtrack e gli utenti di Supabase Auth, e si rimette in un progetto nuovo con `supabase/ripristino.sh`. Nessun cambio a `supabase/schema.sql`.
