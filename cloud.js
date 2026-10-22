@@ -1856,7 +1856,7 @@ function cloudPrimoCollegamento(stato) {
   }
   const corpo = st.vuoto
     ? `<p>L'archivio condiviso è <strong>vuoto</strong>. Puoi caricarci l'archivio di questo PC: diventerà quello di tutti.</p>
-       <p>Gli utenti passano se hanno su Supabase un utente con la <strong>stessa email</strong> (invitali prima, se vuoi che arrivino già con il loro ruolo). Chi non ce l'ha resta fuori, e si invita dopo. Le password non passano: ognuno usa quella di Supabase.</p>
+       <p>Gli utenti passano se hanno su Supabase un utente con la <strong>stessa email</strong> (invitali prima, se vuoi che arrivino già con il loro ruolo). Chi non ce l'ha resta fuori, e si invita dopo da <strong>Gestione → Utenti</strong>. Le password non passano: ognuno usa quella di Supabase.</p>
        <p>Prima conviene esportare un backup.</p>`
     : `<p>L'archivio condiviso contiene già dei dati. Questo PC lo <strong>scarica</strong> e da adesso lavora su quello.</p>
        ${localeHa ? '<p><strong>I dati che ci sono adesso su questo PC vengono sostituiti.</strong> Se contengono lavoro che non è nell\'archivio condiviso, esporta prima un backup.</p>' : ''}`;
@@ -1890,7 +1890,7 @@ async function cloudPrimoProcedi(carica) {
     else await cloudScaricaArchivio();
     closeModal();
     cloudEntra(st.profilo.id);
-    if (fuori.length) showToast(`Caricato. Restano fuori ${fuori.length} utenti senza account Supabase: ${fuori.map(u => u.name).join(', ')}`, 'error');
+    if (fuori.length) showToast(`Caricato. Restano fuori ${fuori.length} utenti senza account Supabase: ${fuori.map(u => u.name).join(', ')}. Si invitano da Gestione → Utenti`, 'error');
     else showToast(carica ? 'Archivio caricato: da adesso è condiviso' : 'Archivio scaricato');
   } catch (e) {
     if (btn) btn.disabled = false;

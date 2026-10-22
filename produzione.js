@@ -375,7 +375,7 @@ function produzioneBody() {
     ${kpi('Restano', fmtQtyIt(resta) + ' ' + u, resta > 0 ? 'orange' : 'green')}
     ${storico ? `<h4 class="settings-group-title">${ico('clock', 'tinted', '')} Dichiarazioni</h4><div class="mgmt-list">${storico}</div>` : ''}
     ${modulo}
-    <p class="empty-text" style="text-align:left;padding:10px 0 0">Dichiarare pezzi fatti <strong>non muove il magazzino</strong>: la giacenza si muove dai suoi movimenti, e due strade per lo stesso numero darebbero due verità. Serve a sapere quanto resta da fare — e a non rimandare a lavorare fuori pezzi che sono già stati lavorati.</p>`;
+    <p class="empty-text" style="text-align:left;padding:10px 0 0">Dichiarare pezzi fatti <strong>mette la parte a magazzino</strong>, con un versamento legato alla dichiarazione: eliminarla toglie anche il versamento. Serve anche a sapere quanto resta da fare — e a non rimandare a lavorare fuori pezzi che sono già stati lavorati. Le righe d'acquisto del piano non cambiano: il materiale si compra prima di fare la parte.</p>`;
 }
 function produzioneSalva() {
   const q = numVal('prod-qty', -1000000, 1000000);

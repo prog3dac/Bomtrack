@@ -865,7 +865,7 @@ function docClActions(o, l) {
 }
 function lineOriginTag(l) {
   if (l.itemId) return '';
-  if (l.phaseKey) return ` <span class="rfq-clavoro-tag" title="Lavorazione in conto lavoro, generata dal fabbisogno. Non è un articolo a magazzino: i pezzi che rientrano si registrano come movimento, non da qui.">conto lavoro</span>`;
+  if (l.phaseKey) return ` <span class="rfq-clavoro-tag" title="Lavorazione in conto lavoro, non un articolo a magazzino: i pezzi rientrati portano l'ordine a evaso, mentre il magazzino lo muovono i movimenti di conto lavoro o, se la riga viene da un ordine di produzione, la dichiarazione su quell'ordine.">conto lavoro</span>`;
   return ' <span class="rfq-manual-tag">manuale</span>';
 }
 function lineDescDoc(l) { return l.note ? (l.description || '') + '\n' + l.note : (l.description || ''); }
@@ -1648,7 +1648,7 @@ function orderListRows() {
       azione: `openOrderEdit('${o.id}')`,
       etichetta: `Apri l'ordine ${o.number}`,
     });
-  }).join('') || `<div class="empty-text">${db.orders.length ? 'Nessun ordine con questi filtri.' : 'Nessun ordine. Creane uno o generane uno da una richiesta di offerta.'}</div>`;
+  }).join('') || `<div class="empty-text">${db.orders.length ? 'Nessun ordine con questi filtri.' : 'Nessun ordine. Creane uno, oppure generalo da una richiesta di offerta, dal Fabbisogno o dal riordino del Magazzino.'}</div>`;
 }
 function newOrder() {
   if (!roleGuard('docs')) return;
@@ -1967,7 +1967,7 @@ function renderOdl() {
     doc: o ? renderOdlEdit(currentOdlId) : '',
     vuoto: {
       titolo: 'Nessun ordine di lavoro aperto qui',
-      testo: 'Scegli un ordine dall\'elenco a destra. Gli ordini di lavoro nascono dal Fabbisogno, dalle fasi di ciclo affidate a un terzista: al centro compaiono le lavorazioni con la tariffa, la data e i pezzi rientrati.',
+      testo: 'Scegli un ordine dall\'elenco a destra. Gli ordini di lavoro nascono dal Fabbisogno o da un ordine di produzione, dalle fasi di ciclo affidate a un terzista, oppure si scrivono a mano: al centro compaiono le lavorazioni con la tariffa, la data e i pezzi rientrati.',
       comandi: '<button class="add-btn-sm" onclick="newOdl()">+ Nuovo ordine di lavoro</button>',
     },
   });
@@ -1991,7 +1991,7 @@ function odlListRows() {
       azione: `openOdlEdit('${o.id}')`,
       etichetta: `Apri l'ordine di lavoro ${o.number}`,
     });
-  }).join('') || `<div class="empty-text">${tutti.length ? 'Nessun ordine di lavoro con questi filtri.' : 'Nessun ordine di lavoro. Si generano dal Fabbisogno, dalle fasi affidate a un terzista.'}</div>`;
+  }).join('') || `<div class="empty-text">${tutti.length ? 'Nessun ordine di lavoro con questi filtri.' : 'Nessun ordine di lavoro. Si generano dal Fabbisogno o da un ordine di produzione, dalle fasi affidate a un terzista, oppure si scrivono a mano con «+ Nuovo ordine di lavoro».'}</div>`;
 }
 function newOdl() {
   if (!roleGuard('docs')) return;

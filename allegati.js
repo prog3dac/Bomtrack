@@ -245,7 +245,7 @@ function allegatoApri(id) {
   if (!doc) { showToast('NESSUN DOCUMENTO SALVATO', 'error'); return Promise.resolve('nessuno'); }
   return archivioApri(doc.path, rec.page).then(esito => {
     if (esito === 'non-supportato') showToast('Questo browser non può leggere l\'archivio: servono Chrome o Edge', 'error');
-    else if (esito === 'non-configurato') showToast('Archivio allegati non impostato su questo PC: aprilo da Allegati → Archivio', 'error');
+    else if (esito === 'non-configurato') showToast('Archivio allegati non impostato su questo PC: scegli la cartella dalla scheda Allegati o da Gestione → Backup', 'error');
     else if (esito === 'negato') showToast('Permesso negato sulla cartella d\'archivio', 'error');
     else if (esito === 'assente') showToast(`DOCUMENTO NON TROVATO — "${doc.path}" non è in ${archivioNome() || 'archivio'}`, 'error');
     else if (esito === 'errore') showToast('Documento non apribile', 'error');

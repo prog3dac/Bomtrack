@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.109.0**
+**Versione dell'app documentata: 0.109.1**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -525,7 +525,7 @@ includere; ne esce **un documento per fornitore**.
 5. Con più richieste sullo stesso materiale, **Confronta offerte** le mette a fianco.
 6. **Crea ordine** converte la richiesta in ordine. La richiesta passa a *Chiusa*.
 
-**Il percorso corto — quando il prezzo c'è già:** dal piano, **Genera ordini** direttamente.
+**Il percorso corto — quando il prezzo c'è già:** dal piano, **Genera ordini** direttamente. Le righe prendono il prezzo che il listino **di quel fornitore** dà oggi; un articolo che il fornitore non ha a listino nasce senza prezzo, da scrivere nell'ordine.
 
 **Poi, quando la merce arriva:** si apre l'ordine e si scrive quanto è arrivato nella colonna
 **Ricevuto** (o si usa **✓ Segna tutto ricevuto**). Il ricevimento **carica il magazzino da solo**:
@@ -2488,7 +2488,7 @@ I nomi si **propongono nel campo Cliente della commessa**.
 ### 🚚 Condizioni offerta
 
 Due elenchi: **Tipi di trasporto / resa** e **Tipi di pagamento**, ciascuno con una ★ predefinita.
-Sono i valori proposti nei campi omonimi di richieste e ordini.
+Sono i valori proposti nei campi omonimi di richieste, ordini e ordini di lavoro; la ★ precompila i documenti nuovi quando il fornitore non ha un suo predefinito.
 
 ### 🛒 Famiglie commerciali · 📦 Famiglie materie prime · 🔧 Famiglie parti
 

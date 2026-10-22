@@ -707,7 +707,7 @@ function renderOdp() {
     doc: o ? renderOdpEdit(currentOdpId) : '',
     vuoto: {
       titolo: 'Nessun ordine di produzione aperto qui',
-      testo: 'Scegli un ordine dall\'elenco a destra. Gli ordini di produzione nascono dal <strong>Fabbisogno</strong>, dalle parti da fabbricare: al centro compaiono le fasi del ciclo in successione, con l\'avanzamento e i due punti in cui il magazzino si muove.',
+      testo: 'Scegli un ordine dall\'elenco a destra. Gli ordini di produzione nascono dal <strong>Fabbisogno</strong>, dalle parti da fabbricare, oppure si scrivono a mano: al centro compaiono le fasi del ciclo in successione, con l\'avanzamento e i due punti in cui il magazzino si muove.',
       comandi: '<button class="add-btn-sm" onclick="newOdpModal()">+ Nuovo ordine di produzione</button>',
     },
   });
@@ -731,7 +731,7 @@ function odpListRows() {
       azione: `openOdpEdit('${o.id}')`,
       etichetta: `Apri l'ordine di produzione ${o.number}`,
     });
-  }).join('') || `<div class="empty-text">${tutti.length ? 'Nessun ordine di produzione con questi filtri.' : 'Nessun ordine di produzione. Si generano dal Fabbisogno, dalle parti da fabbricare.'}</div>`;
+  }).join('') || `<div class="empty-text">${tutti.length ? 'Nessun ordine di produzione con questi filtri.' : 'Nessun ordine di produzione. Si generano dal Fabbisogno, dalle parti da fabbricare, oppure si scrivono a mano con «+ Nuovo ordine di produzione».'}</div>`;
 }
 function openOdpEdit(id) { currentOdpId = id; odpView = 'edit'; odpUnlockedId = null; renderOdp(); }
 function odpBackToList() { odpView = 'list'; currentOdpId = null; odpUnlockedId = null; renderOdp(); }
