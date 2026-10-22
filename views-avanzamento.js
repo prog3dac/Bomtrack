@@ -67,18 +67,26 @@ function avzModello(planId, lineId) {
   const daComprare = new Set(exp.buy.map(e => mrpBuyRow(e, true, plan.id)).filter(r => r.qtyOrder > 0).map(r => r.item.id));
   const daFabbricare = new Set(exp.make.map(e => mrpMakeRow(e, plan.id)).filter(r => r.qtyOrder > 0).map(r => r.item.id));
 
+  // Le righe in ordine di lettura. Una parte da fabbricare mette **prima** il
+  // materiale del suo ciclo e poi le sue tappe (dalla 0.111.0): è la sequenza
+  // vera — il tondo arriva, poi si tornisce — e nell'ordine dell'albero
+  // (padre, poi figli) il materiale finiva sotto l'ultima fase. Un assieme
+  // resta in testa ai suoi componenti, come nel Gantt del piano.
   const righe = [];
-  const flat = schedFlat(f.tree);
-  flat.forEach(({ node: n, livello }) => {
+  const visita = (n, livello) => {
     const base = { node: n, item: n.item, livello, critico: critici.has(n) };
     if (n.kind === 'buy') righe.push(Object.assign(base, avzAcquisto(n, ordini, richieste, daComprare, oggi)));
-    else if (n.kind === 'asm') righe.push(Object.assign(base, avzMontaggio(n, odp, oggi, plan.id)));
-    else {
+    else if (n.kind === 'asm') {
+      righe.push(Object.assign(base, avzMontaggio(n, odp, oggi, plan.id)));
+      n.children.forEach(c => visita(c, livello + 1));
+    } else {
+      n.children.forEach(c => visita(c, livello + 1));
       const suoi = odp.filter(o => o.itemId === n.item.id);
       if (!n.steps.length) righe.push(Object.assign(base, avzSenzaTappe(n, suoi, daFabbricare, oggi)));
       n.steps.forEach(st => righe.push(Object.assign({}, base, avzTappa(n, st, suoi, odl, daFabbricare, oggi))));
     }
-  });
+  };
+  visita(f.tree, 0);
 
   const conteggi = {};
   Object.keys(AVZ_STATI).forEach(k => { conteggi[k] = 0; });

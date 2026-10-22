@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.110.0**
+**Versione dell'app documentata: 0.111.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1716,6 +1716,8 @@ Gli **indicatori di riga**:
 | `⚠ senza prezzo` | L'articolo non ha nessuna quotazione |
 | `↑ lotto` / `↑ minimo` | La quantità è stata alzata al lotto di riordino |
 | `✓ coperto` | Non serve ordinare niente |
+| `🕒 arriva il …` | Già ordinato, ma l'ordine arriva **dopo** il giorno in cui serve: la data è quella in cui l'in arrivo basta (dalla 0.111.0) |
+| `⚠ ordine scaduto` | Un ordine di quell'articolo ha la data passata e la merce non è ancora stata ricevuta (dalla 0.111.0) |
 | *(impegno)* | Quanta parte è impegnata dai piani più urgenti |
 | *(bozze di altri)* | L'articolo sta già in un **ordine in bozza** che non è di questo piano (dalla 0.105.6) |
 
@@ -1842,7 +1844,10 @@ pronto davvero?** È lo stesso albero, percorso in avanti con le stesse durate:
   del listino** a partire da oggi. Dalla 0.105.6 l'in arrivo è lo stesso del fabbisogno netto: le
   righe d'ordine scritte in un'altra unità si **convertono** nell'unità dell'articolo (16 m di
   barra non sono più 16 kg), e quelle **senza data** contano come arrivate in tempo. Prima si
-  perdevano, e merce già ordinata risultava da comprare col tempo del fornitore;
+  perdevano, e merce già ordinata risultava da comprare col tempo del fornitore. Dalla 0.111.0
+  un arrivo in un giorno di chiusura si riceve il primo giorno lavorativo dopo, e un ordine
+  **scaduto** (data passata, merce non ricevuta) non conta più come pronto oggi: il programma lo
+  aspetta al **prossimo giorno lavorativo**, e il percorso critico dice quale ordine è scaduto;
 - una parte comincia quando è pronto il suo materiale, poi le fasi in fila;
 - un assieme comincia quando sono pronti tutti i componenti, più il montaggio.
 
@@ -1867,6 +1872,11 @@ La sezione **Programma** mette in fila tutte le date del piano, giorno per giorn
 | **Lanciare in produzione** | inizio della prima fase | c'è un ordine di produzione |
 | **Montaggio** | la sua data | i montaggi dichiarati nella scheda *Da montare* coprono la quantità |
 | **Rientro dal terzista** · **Fase interna** · **Consegna** | la loro data | non hanno un documento: sono «previsti» |
+| **Arrivo dal fornitore** | data confermata dell'ordine, o quella chiesta | è «previsto»; **in ritardo** se viene dopo il giorno in cui il materiale serve, o se è passata senza che la merce sia arrivata (dalla 0.111.0) |
+
+Spostare la data di un ordine emesso dal piano non sposta le altre voci: sono il programma a
+ritroso dalla consegna, cioè *entro quando* deve succedere ogni cosa. Sposta invece la voce
+**Arrivo dal fornitore**, la **data fattibile** e il **margine**, e nel Gantt il rombo dell'arrivo.
 
 Una voce oltre la sua data e non fatta è **in ritardo**. **☐ Solo da fare** lascia le voci ancora
 da emettere. Esporta in Excel e PDF, una riga per voce.
@@ -1884,7 +1894,11 @@ nodo dell'albero per riga — assiemi, parti, acquisti — con le barre del prog
 | verde | montaggio |
 
 Il contorno **rosso** e il codice in rosso segnano il **percorso critico**; la linea rossa
-tratteggiata è la consegna richiesta, quella blu oggi. Passando sopra una barra si leggono le date
+tratteggiata è la consegna richiesta, quella blu oggi, quella **verde** la data fattibile
+(**arancione** se viene dopo la consegna richiesta). Sulle righe d'acquisto già ordinate un
+**rombo** segna l'arrivo atteso: **rosso** se arriva dopo il giorno in cui serve, o se l'ordine è
+scaduto (dalla 0.111.0). Le barre non si muovono quando si sposta un ordine: si muovono il rombo,
+la data fattibile e, se cambia, il percorso critico. Passando sopra una barra si leggono le date
 esatte. Oltre 60 righe il disegno si ferma e lo dice: l'elenco completo è nel *Programma*.
 
 Invii e lanci ancora da fare compaiono anche nel **calendario del Riepilogo**, accanto agli ordini
@@ -1899,7 +1913,8 @@ da emettere e ai rientri degli ordini di lavoro.
 la riga da consegnare. Non si modifica niente da qui: è una lettura.
 
 **Una riga per tappa**: un acquisto, ogni fase interna o tratta dal terzista di una parte, un
-montaggio. Su ogni riga:
+montaggio. Le righe seguono la sequenza del lavoro: il **materiale del ciclo** di una parte viene
+**prima** delle sue fasi (dalla 0.111.0), un assieme sta in testa ai suoi componenti. Su ogni riga:
 
 - la **barra grigia** è il programma, la stessa del Gantt;
 - sopra, una **barra colorata** dice quanto è stato fatto: *verde* fatto, *viola* in corso, *rossa*

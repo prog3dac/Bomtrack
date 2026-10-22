@@ -95,6 +95,16 @@ Regole:
   `plannedStart`/`plannedEnd` sulle fasi, con migrazione, tipi cloud e colonne SQL. La
   ripianificazione non scrive nello storico delle dichiarazioni: non è un fatto di produzione.
 
+### 0.111.0 — le date degli ordini già emessi — fatto
+- **Passo in avanti**: un arrivo in un giorno di chiusura si riceve il primo giorno lavorativo
+  dopo; una riga d'ordine scaduta e non ricevuta è pronta il prossimo giorno lavorativo, non oggi.
+  `schedDisponibilita` espone `disp.info` (arrivo atteso, ordini scaduti) e `schedForward` lo
+  copia sui nodi d'acquisto (`attesa`, `scaduti`), letti dal percorso critico e dal Gantt.
+- **Gantt**: linea della data fattibile e rombo dell'arrivo atteso, rosso se tardi o scaduto.
+- **Fabbisogno**: `mrpArrivoTardi` (lo stesso conto di `jobCoverage` con `incomingEntro`) dà
+  `arrivoTardi` e `scaduti` alla riga d'acquisto. **Agenda**: voce `arrivo` dagli ordini del piano.
+- Le date a ritroso e quelle congelate su ODP e ODL **non** guardano gli ordini, come prima.
+
 ## 4. Cosa resta fuori, di proposito
 
 - **Capacità finita** e livellamento: le date non guardano il carico. Il Carico centri mostra il
