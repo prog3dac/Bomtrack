@@ -861,12 +861,16 @@ Tutte le viste e i PDF passano da `fmtQtyIt()`, anche `fmtUom()`: «1,5 kg».
 `fmtQty()` resta col punto per i campi numerici, e `test/uom-labels.test.js`
 fallisce se uno script dell'app torna a usarlo.
 
-### 58. La versione nell'app era rimasta indietro
+### 58. C1 residuo — la presentazione dei tre documenti
 
-La 0.106.1 è uscita con `APP_VERSION` e la cache del service worker ancora a
-0.106.0: chi l'aveva già aperta non riceveva la correzione finché il browser non
-buttava la cache da sé. `test/pwa.test.js` controlla ora che la versione in cima
-al `CHANGELOG.md` sia quella di `APP_VERSION`.
+Testata dello schermo, barra «Genera documento», testata del PDF e del foglio
+Excel e nome del file di richiesta, ordine e ordine di lavoro stanno ora in
+`docToolbarHtml`, `docTestaHtml`, `docExportBarHtml`, `docPdfTesta`,
+`docXlsTesta`, `docXlsSalva` e `docNomeFile` (`views-docs.js`). Le righe restano
+di ciascun documento, perché è lì che differiscono davvero. I sei export sono
+stati confrontati prima e dopo con i finti di `test/export-docs.test.js`:
+identici. L'unica differenza a schermo è voluta: i suggerimenti di trasporto e
+pagamento, che erano diversi sulla richiesta, sono gli stessi sui tre.
 
 ## Aperto
 
@@ -919,14 +923,7 @@ sembri: le quantità dipendono dal percorso, quindi la memoizzazione va fatta su
 
 ### C. Manutenibilità
 
-**C1 residuo — resta duplicata la *presentazione* dei documenti** *(la logica è
-chiusa nella 0.41.0, vedi §22)*: `renderRfqEdit`/`renderOrderEdit` e i quattro
-export PDF/Excel, circa 300 righe. **Il prerequisito non c'è più**: dalla 0.76.0
-`test/export-docs.test.js` verifica i sette export sui dati che producono — righe,
-totali, piede, nome del file, condizioni in coda — sostituendo jsPDF e SheetJS con
-due finti che annotano ciò che l'app passa loro. Il refactor si può fare, e ora
-ha una rete sotto. *(Nella stessa versione `docCoda()` ha già unificato le tre
-code identiche di richiesta, ordine e ODL.)*
+*(C1 residuo — la presentazione dei documenti — chiuso nella 0.107.0, §58.)*
 
 *(C3 residuo e C5 — test della stampa e delle anagrafiche minori, quantità con
 la virgola — chiusi nella 0.107.0, §56–57.)*

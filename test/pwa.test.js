@@ -67,8 +67,8 @@ describe('Service worker — la versione', () => {
     assert.equal(sw, app,
       'una versione nuova con la cache vecchia resta invisibile a chi ha già aperto l\'app');
   });
-  // La 0.106.1 è uscita con APP_VERSION ancora a 0.106.0: il changelog diceva
-  // una cosa, l'app e la sua cache un'altra.
+  // Il changelog, l'app, la sua cache e il manuale devono dire la stessa
+  // versione: finora lo garantiva solo la memoria di chi la cambiava.
   it('è quella in cima al CHANGELOG, e quella del manuale', () => {
     const app = leggi('core.js').match(/const APP_VERSION = '([^']+)'/)[1];
     const log = leggi('CHANGELOG.md').match(/^### (\d+\.\d+\.\d+) —/m)[1];
