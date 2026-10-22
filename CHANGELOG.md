@@ -2,6 +2,21 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.110.0 — 2026-10-22
+
+**La settimana è di cinque giorni anche per fornitori e terzisti.** Il calendario di fabbrica (lunedì–venerdì, festivi nazionali, Pasquetta, chiusure) valeva per le fasi interne e i montaggi, ma i giorni dei fornitori si contavano di calendario: un listino a «10 gg» faceva arrivare il materiale dieci giorni dopo, sabati e domeniche compresi, e le date d'ordine risultavano più tarde del dovuto. Nessun cambio a `supabase/schema.sql`; i dati salvati restano come sono, cambia come si contano.
+
+**Giorni lavorativi**
+- **Giorni di consegna a listino, attraversamento e trasporto del terzista** si contano di serie in giorni **lavorativi** del calendario di fabbrica: «ordinare entro», «invio» delle tratte di conto lavoro e il lancio delle parti si anticipano di conseguenza. Un archivio di prima, che non ha la scelta, vale lavorativi.
+- **Nuova impostazione** in *Gestione → Impostazioni → Calendario di fabbrica*: **Giorni di consegna di fornitori e terzisti**, *Lavorativi* (di serie) o *Di calendario*, per chi ha fornitori che dichiarano giorni pieni. Con *Di calendario* i conti tornano quelli della 0.109.
+- **Arrivi previsti in un giorno di chiusura** (programma in avanti e data fattibile del piano, consegna proposta dal riordino sotto scorta): si spostano al primo giorno lavorativo dopo, in tutti e due i modi. Le date d'ordine e d'invio restano sempre in un giorno lavorativo.
+- **Ritardi confermati dai fornitori** (riga e testata di ordini e ordini di lavoro, Riepilogo) e **consegne scadute** del Cruscotto si contano nella stessa unità dei giorni dei fornitori, e lo dicono: «3 giorni lavorativi di ritardo», «gg lav.». Nel Cruscotto il ritardo diventa rosso oltre due settimane: 10 giorni lavorativi (14 di calendario).
+- **Soglia «da ordinare»** del fabbisogno e degli avvisi del Riepilogo: 5 giorni **lavorativi** (era 7 di calendario, che il venerdì voleva dire tre giorni di lavoro).
+- **Ordine di lavoro da un ordine di produzione senza date pianificate**: la data entro cui emetterlo usa la stessa regola delle tratte del fabbisogno; prima era la data dell'ordine meno i giorni, anche se cadeva di domenica.
+- Il foglio istruzioni dell'import del catalogo dice in che giorni si scrive «GG consegna».
+
+**Manuale** — cap. 19 (le regole e l'esempio della programmazione a ritroso, con i giorni dei fornitori), Riepilogo, listino, ordini, Cruscotto e Calendario di fabbrica aggiornati.
+
 ### 0.109.1 — 2026-10-22
 
 **Note, avvisi e suggerimenti allineati a quello che l'app fa oggi.** Una rilettura di tutti i testi a schermo (messaggi, conferme, suggerimenti dei campi, testi delle pagine vuote, note sotto le tabelle), del README e del manuale, confrontati con il codice. Nessun comportamento cambia, solo le parole. Nessun cambio a `supabase/schema.sql`.

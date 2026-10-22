@@ -1505,7 +1505,7 @@ function opRunDocRow(o, fase) {
     // della tratta**, e va emessa entro il suo invio; un ordine di prima, senza
     // date, ragiona ancora sulla data dell'ordine.
     due: tratta.rientro || o.dueDate || '', leadDays: giorni, days: giorni,
-    orderBy: tratta.invio || (o.dueDate ? addDays(o.dueDate, -giorni) : ''),
+    orderBy: tratta.invio || (o.dueDate ? runSendDate(o.dueDate, giorni) : ''),
     hours: somma('hours'), hoursUnit: somma('hoursUnit'),
     price: prezzo, amount: prezzo * qty, noPrice: !(prezzo > 0),
     qty, qtyOrder: qty,

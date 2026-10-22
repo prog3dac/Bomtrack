@@ -176,3 +176,46 @@ function workDaysBetween(a, b) {
 // Quanti giorni lavorativi ha una settimana tipo: serve a tradurre la capacità
 // settimanale di un centro in ore al giorno.
 function workDaysPerWeek() { return calState().lavorativi.size; }
+
+// ─── I giorni dei fornitori ───
+// Consegna a listino, attraversamento e trasporto del terzista, ritardi
+// confermati: dalla 0.110.0 si contano di serie in giorni **lavorativi** del
+// calendario, come li scrive quasi ogni fornitore italiano («10 gg lav.»), e la
+// settimana è di cinque giorni anche per loro. Chi ha fornitori che dichiarano
+// giorni di calendario lo dice in Gestione › Calendario (`supplierDays:
+// 'calendario'`): allora valgono pieni, sabati e domeniche compresi, come
+// prima. Un archivio che non ha il campo vale lavorativi.
+function calFornitoriLavorativi() { return calSettings().supplierDays !== 'calendario'; }
+// La data `n` giorni-fornitore prima di `iso` (n > 0): l'ultimo giorno in cui
+// mandare l'ordine o la merce perché arrivi il mattino di `iso`. Cade sempre su
+// un giorno lavorativo: un ordine si manda da un ufficio aperto, e anticipare è
+// il modo giusto di sbagliare.
+function supplierDaysBefore(iso, n) {
+  if (!calValida(iso)) return '';
+  const g = Math.max(0, Math.round(Number(n) || 0));
+  if (calFornitoriLavorativi() && g > 0) return addWorkDays(iso, -g);
+  return prevWorkDay(calShift(iso, -g));
+}
+// La data `n` giorni-fornitore dopo `iso`: quando arriva quello che parte (o si
+// ordina) quel giorno. Un arrivo che cadesse in un giorno di chiusura si
+// riceve il primo giorno lavorativo dopo: il magazzino è chiuso anche per lui.
+// Con n = 0 la data resta com'è.
+function supplierDaysAfter(iso, n) {
+  if (!calValida(iso)) return '';
+  const g = Math.max(0, Math.round(Number(n) || 0));
+  if (!g) return String(iso).slice(0, 10);
+  if (calFornitoriLavorativi()) return addWorkDays(iso, g);
+  return nextWorkDay(calShift(iso, g));
+}
+// Quanti giorni-fornitore da `a` a `b`: il ritardo di una conferma sulla data
+// richiesta, o di una consegna scaduta. Negativo se `b` viene prima.
+function supplierDaysBetween(a, b) {
+  if (!calValida(a) || !calValida(b)) return null;
+  if (calFornitoriLavorativi()) return workDaysBetween(a, b);
+  return Math.round((Date.parse(String(b).slice(0, 10) + 'T00:00:00Z') - Date.parse(String(a).slice(0, 10) + 'T00:00:00Z')) / 86400000);
+}
+// «3 giorni lavorativi», «1 giorno»: il ritardo detto nell'unità in cui è contato.
+function supplierDaysText(n) {
+  const uno = Math.abs(n) === 1;
+  return n + ' ' + (uno ? 'giorno' : 'giorni') + (calFornitoriLavorativi() ? (uno ? ' lavorativo' : ' lavorativi') : '');
+}

@@ -48,14 +48,16 @@ describe('Calendario: da dove arrivano le date', () => {
         Object.assign(mat('m2', 5), { priceList: [{ id: 'p2', supplierId: 's1', price: 5, leadDays: 10, date: '2026-01-01' }], activePriceId: 'p2', supplierId: 's1' }),
       ],
     }));
-    const due = giorni(a, 13);
+    // Fra 13 giorni lavorativi: con 10 di consegna si ordina fra 3, dentro la
+    // finestra d'avviso qualunque sia il giorno in cui gira il test.
+    const due = a.eval('addWorkDays(oggiISO(), 13)');
     a.eval(`Store.insert('plans', { id: 'pl1', number: 'FAB-1', active: true, lines: [{ id: 'l1', itemId: 'mac', qty: 1, dueDate: '${due}' }] })`);
     const f = eventi(a).filter(e => e.tipo === 'fabbisogno');
     assert.equal(f.length, 1, 'due articoli dello stesso piano nello stesso giorno sono una voce sola');
-    // L'ordine parte in un giorno lavorativo: se fra 3 giorni è sabato, domenica
-    // o un festivo, si ordina il lavorativo prima. Senza questo il test dipendeva
-    // dal giorno della settimana in cui gira.
-    assert.equal(f[0].data, a.eval(`prevWorkDay(addDays(oggiISO(), 3))`), 'serve fra 13 giorni, consegna in 10: si ordina fra 3, o il lavorativo prima');
+    // I 10 giorni di consegna sono lavorativi (0.110.0): si ordina il decimo
+    // giorno lavorativo prima di quando serve. Calcolato e non scritto, o il
+    // test dipenderebbe dal giorno della settimana in cui gira.
+    assert.equal(f[0].data, a.eval(`addWorkDays('${due}', -10)`), 'serve fra 13 giorni lavorativi, consegna in 10');
     assert.equal(f[0].gravita, 'media', 'dentro la finestra d\'avviso');
     assert.match(f[0].testo, /2 articoli/);
     assert.match(f[0].azione, /homeApri\('plan','pl1'\)/);

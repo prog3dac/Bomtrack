@@ -234,7 +234,7 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `core.js` | stato dell'app, utility, ruoli, pannelli e conferme. `APP_VERSION` in cima è la revisione mostrata nell'header |
 | `auth.js` | accesso, sessione, primo amministratore |
 | `costing.js` | motore di costificazione (rollup ricorsivo, modi di calcolo delle parti) |
-| `calendario.js` | calendario di fabbrica: giorni lavorativi, festivi (Pasquetta calcolata), chiusure; conti a ritroso e in avanti per la programmazione del fabbisogno |
+| `calendario.js` | calendario di fabbrica: giorni lavorativi, festivi (Pasquetta calcolata), chiusure; conti a ritroso e in avanti per la programmazione del fabbisogno; i giorni dei fornitori (lavorativi di serie, o di calendario) |
 | `shell.js` | ricerca globale, stampa, navigazione tra le viste |
 | `views-bom.js` | distinte base e *Dove è usato* |
 | `views-rev.js` | revisioni della distinta: rilascio, storico e confronto |

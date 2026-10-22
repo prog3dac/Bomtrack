@@ -111,7 +111,7 @@ function homeSegnali() {
   agg(ordTardi.map(({ o, tipo }) => {
     const g = orderWorstOpenDelay(o);
     const chi = supplierName(o.supplierId) || (tipo === 'odl' ? 'senza terzista' : 'senza fornitore');
-    return voce(o.number, `${chi} — confermato con ${g} ${g === 1 ? 'giorno' : 'giorni'} di ritardo`,
+    return voce(o.number, `${chi} — confermato con ${supplierDaysText(g)} di ritardo`,
       `homeApri('${tipo}','${o.id}')`);
   }), 'ordine confermato oltre la data richiesta', 'ordini confermati oltre la data richiesta', 'orders', 'media');
 
@@ -324,7 +324,7 @@ const CAL_GRAV_ORD = { alta: 0, media: 1, info: 2 };
 // nel fabbisogno e dieci nel calendario.
 function calGravitaData(data, oggi) {
   if (data < oggi) return 'alta';
-  return data <= addDays(oggi, URGENCY_WARN_DAYS) ? 'media' : 'info';
+  return data <= urgencyLimit(oggi) ? 'media' : 'info';
 }
 function calPeggiore(a, b) { return CAL_GRAV_ORD[a] <= CAL_GRAV_ORD[b] ? a : b; }
 
@@ -623,7 +623,7 @@ function renderHomeCalendar(tutti) {
           <button class="btn-outline" onclick="homeCalMove(1)" title="Mese successivo" aria-label="Mese successivo">›</button>
           <button class="btn-outline" onclick="homeCalToday()">Oggi</button>
           <span class="cal-legend"><span class="cal-dot" style="background:var(--red)"></span>scaduto
-            <span class="cal-dot" style="background:var(--orange)"></span>entro ${URGENCY_WARN_DAYS} giorni
+            <span class="cal-dot" style="background:var(--orange)"></span>entro ${URGENCY_WARN_DAYS} giorni lavorativi
             <span class="cal-dot" style="background:var(--accent)"></span>in programma</span>
         </div>
         <div class="cal-grid">${intest}${celle}</div>

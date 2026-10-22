@@ -66,7 +66,7 @@ describe('Ogni avviso dice chi lo ha fatto scattare', () => {
     });
     const s = perVista(a, 'orders');
     assert.deepEqual(s.voci.map(v => v.testo), ['ODA-2', 'ODA-1']);
-    assert.match(s.voci[1].titolo, /3 giorni/);
+    assert.match(s.voci[1].titolo, /1 giorno lavorativo di ritardo/, 'da venerdì 10 a lunedì 13 c\'è un giorno di lavoro');
   });
 
   it('l\'articolo sotto scorta dice quanto c\'è e quanto ne servirebbe', () => {
@@ -189,7 +189,7 @@ describe('Riepilogo: ritardi, articoli obsoleti e ordine per gravità (dalla 0.1
     });
     const s = perVista(a, 'orders');
     assert.equal(s.n, 1);
-    assert.match(s.voci[0].titolo, /3 giorni di ritardo/);
+    assert.match(s.voci[0].titolo, /3 giorni lavorativi di ritardo/);
   });
   it('un articolo obsoleto non chiede attenzione per la scorta minima né per il prezzo', () => {
     const a = app({ items: [

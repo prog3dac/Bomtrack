@@ -13,6 +13,7 @@
 //            → rientro lun 12, invio mar 6
 //     fase 10 tornitura interna, 1 h/pz × 8 = 8 h = 1 gg → lun 5 – mar 6
 //   tondo, materiale del ciclo di P: serve lun 5/10; listino a 10 gg → ordinare ven 25/9
+// (giorni dei fornitori di calendario: vedi conDb)
 
 const assert = require('node:assert/strict');
 const { describe, it } = require('./tap.js');
@@ -44,6 +45,11 @@ function conDb(over, settings) {
     plans: [{ id: 'pl1', number: 'FAB-2026-001', title: '', date: '2026-09-01', notes: '', active: true,
       lines: [{ id: 'l1', itemId: 'grp', qty: 2, dueDate: '2026-10-16' }] }],
   }, over || {}), ) );
+  // Il caso di riferimento conta i giorni dei fornitori di calendario, come li
+  // contava l'app fino alla 0.109: le date sono scritte a mano su quella
+  // regola. I giorni lavorativi (di serie dalla 0.110.0) hanno i loro casi in
+  // giorni-fornitori.test.js.
+  app.eval("db.settings.calendar = Object.assign(calDefault(), { supplierDays: 'calendario' }); invalidateCaches();");
   if (settings) app.eval(`Object.assign(db.settings, ${JSON.stringify(settings)}); invalidateCaches();`);
   return app;
 }
@@ -460,5 +466,61 @@ describe('Programma: le date delle fasi di un ordine di produzione', () => {
     const h = app.eval(`odpPhaseRows(getOdp(${JSON.stringify(id)}))`);
     assert.match(h, /05\/10 → 06\/10/);
     assert.match(h, /Doveva finire il 06\/10\/2026/);
+  });
+});
+
+// 0.110.0: i giorni dei fornitori sono lavorativi di serie. Lo stesso caso di
+// riferimento, con la settimana di cinque giorni anche per Beta:
+//   fresatura lun 12 – mer 14, come prima (è interna);
+//   zincatura 6 gg lavorativi prima di lun 12 → invio ven 2/10;
+//   tornitura 1 gg → comincia gio 1/10;
+//   tondo: serve gio 1/10, listino a 10 gg lavorativi → ordinare gio 17/9.
+describe('Programmazione: i giorni dei fornitori lavorativi', () => {
+  const lavorativi = () => conDb(null, { calendar: { workDays: [1, 2, 3, 4, 5], holidays: [], easter: true,
+    closures: [], supplierDays: 'lavorativi' } });
+
+  it('la tratta dal terzista salta sabati e domeniche', () => {
+    const r = ev(lavorativi(), `mrpPhaseRuns(mrpPhaseRows(getPlan('pl1'))).map(r => ({ due: r.due, orderBy: r.orderBy, leadDays: r.leadDays }))`);
+    assert.deepEqual(r, [{ due: '2026-10-12', orderBy: '2026-10-02', leadDays: 6 }]);
+  });
+
+  it('la parte si lancia prima, e il materiale si ordina prima', () => {
+    const app = lavorativi();
+    assert.deepEqual(ev(app, "mrpMakeRows(getPlan('pl1')).map(r => ({ due: r.due, orderBy: r.orderBy }))")[0],
+      { due: '2026-10-14', orderBy: '2026-10-01' });
+    assert.deepEqual(ev(app, "mrpBuyRows(getPlan('pl1'), false).map(r => ({ due: r.due, orderBy: r.orderBy }))")[0],
+      { due: '2026-10-01', orderBy: '2026-09-17' }, 'dieci giorni lavorativi prima di giovedì 1');
+  });
+
+  it('un archivio senza la scelta conta lavorativi', () => {
+    const app = conDb(null, { calendar: { workDays: [1, 2, 3, 4, 5], holidays: [], easter: true, closures: [] } });
+    assert.equal(ev(app, "mrpBuyRows(getPlan('pl1'), false)[0].orderBy"), '2026-09-17');
+  });
+
+  it('in avanti un acquisto arriva dopo i suoi giorni lavorativi', () => {
+    const app = lavorativi();
+    app.eval("schedOggi = () => '2026-09-25'");
+    const fine = ev(app, "(() => { const t = schedTree('tondo', 16, '2026-10-01'); return schedForward(t, schedDisponibilita('pl1', getPlan('pl1').lines)); })()");
+    assert.equal(fine, '2026-10-09', 'ordinato venerdì 25, dieci giorni lavorativi: venerdì 9');
+  });
+
+  it('di calendario, un arrivo di sabato si riceve il lunedì', () => {
+    const app = conDb();
+    app.eval("getItem('tondo').priceList[0].leadDays = 8; invalidateCaches(); schedOggi = () => '2026-09-25'");
+    const fine = ev(app, "(() => { const t = schedTree('tondo', 16, '2026-10-01'); return schedForward(t, schedDisponibilita('pl1', getPlan('pl1').lines)); })()");
+    assert.equal(fine, '2026-10-05', 'venerdì 25 più 8 giorni è sabato 3: il magazzino riceve lunedì 5');
+  });
+
+  it('le impostazioni offrono la scelta, e la leggono', () => {
+    const app = conDb();
+    const html = app.eval('renderSettings()');
+    assert.match(html, /id="set-cal-sup"/);
+    assert.match(html, /<option value="calendario" selected>/);
+    const letto = ev(app, `(() => {
+      document.querySelectorAll = () => [1, 2, 3, 4, 5].map(n => ({ checked: true, value: String(n) }));
+      document.getElementById('set-cal-hol').value = '';
+      document.getElementById('set-cal-sup').value = 'lavorativi';
+      return readCalendarSettings().cal.supplierDays; })()`);
+    assert.equal(letto, 'lavorativi');
   });
 });

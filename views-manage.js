@@ -1047,10 +1047,14 @@ function renderCalendarSettings() {
       <div class="modal-field"><label>Festivi ricorrenti (GG/MM)</label><input id="set-cal-hol" value="${esc(festivi)}" placeholder="01/01, 25/04, 01/05…"></div>
       <div class="modal-field"><label>Margine fra livelli di distinta (gg)</label><input type="number" id="set-sched-buf" min="0" max="99" step="1" value="${Number(db.settings.scheduleBufferDays) || 0}"></div>
     </div>
+    <div class="modal-field"><label>Giorni di consegna di fornitori e terzisti</label><select id="set-cal-sup">
+      <option value="lavorativi"${c.supplierDays !== 'calendario' ? ' selected' : ''}>Lavorativi (come il calendario di fabbrica)</option>
+      <option value="calendario"${c.supplierDays === 'calendario' ? ' selected' : ''}>Di calendario (sabati, domeniche e festivi compresi)</option>
+    </select></div>
     <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px"><input type="checkbox" id="set-cal-easter" ${c.easter !== false ? 'checked' : ''}> Pasquetta (calcolata ogni anno)</label>
     <div class="modal-field"><label>Chiusure (una per riga: dal [al] [nota], date AAAA-MM-GG)</label>
       <textarea id="set-cal-clo" rows="3" placeholder="2026-08-10 2026-08-21 Ferie estive">${esc(chiusure)}</textarea></div>
-    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Il fabbisogno programma <strong>a ritroso</strong> dalla consegna: le fasi interne e i montaggi si contano in giorni <strong>lavorativi</strong> di questo calendario; i giorni dei fornitori (consegna a listino, attraversamento del terzista) restano di calendario, e la data d'ordine o d'invio che ne esce, se cade su un giorno di chiusura, si anticipa al lavorativo precedente. Il <strong>margine</strong> anticipa ancora di qualche giorno la data in cui un componente deve essere pronto rispetto all'inizio del lavoro sul padre.</p>`;
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Il fabbisogno programma <strong>a ritroso</strong> dalla consegna: le fasi interne e i montaggi si contano in giorni <strong>lavorativi</strong> di questo calendario. I giorni dei fornitori (consegna a listino, attraversamento e trasporto del terzista, ritardi confermati) seguono la scelta qui sopra: di serie lavorativi, o di calendario se i tuoi fornitori li dichiarano così. In ogni caso la data d'ordine o d'invio cade in un giorno lavorativo (se no si anticipa) e un arrivo previsto in un giorno di chiusura si sposta al primo lavorativo dopo. La soglia «da ordinare» del fabbisogno e del Riepilogo è di 5 giorni lavorativi. Il <strong>margine</strong> anticipa ancora di qualche giorno la data in cui un componente deve essere pronto rispetto all'inizio del lavoro sul padre.</p>`;
 }
 // Legge il calendario dal modulo. Le righe che non si capiscono si scartano e
 // si dicono: un festivo scritto male e taciuto è un giorno di lavoro in più
@@ -1074,7 +1078,8 @@ function readCalendarSettings() {
     closures.push({ from, to, note: m[3] || '' });
   });
   const easterEl = document.getElementById('set-cal-easter');
-  return { cal: { workDays: giorni, holidays: Array.from(new Set(holidays)).sort(), easter: easterEl ? !!easterEl.checked : true, closures }, scartati };
+  const supplierDays = val('set-cal-sup') === 'calendario' ? 'calendario' : 'lavorativi';
+  return { cal: { workDays: giorni, holidays: Array.from(new Set(holidays)).sort(), easter: easterEl ? !!easterEl.checked : true, closures, supplierDays }, scartati };
 }
 function saveSettings() {
   if (!roleGuard('manage')) return;
