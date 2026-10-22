@@ -42,7 +42,26 @@ describe('I tre modi di attaccare un\'unità a un numero', () => {
 
   it('fmtUom mette la quantità con la sua unità', () => {
     assert.equal(ev('fmtUom(15, "m")'), '15 m');
-    assert.equal(ev('fmtUom(1.5, "kg")'), '1.5 kg');
+    // Con la virgola, come gli importi (dalla 0.107.0).
+    assert.equal(ev('fmtUom(1.5, "kg")'), '1,5 kg');
+    assert.equal(ev('fmtUom(0.125, "m")'), '0,125 m');
+  });
+  // fmtQty resta col punto per i campi numerici; quello che si legge passa da
+  // fmtQtyIt. Una vista che torna a fmtQty mostrerebbe di nuovo «1.5».
+  it('nessuna vista mostra le quantità col punto', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const root = path.join(__dirname, '..');
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const script = [...html.matchAll(/<script src="([^"]+\.js)"/g)].map(m => m[1]).filter(f => !f.startsWith('vendor/'));
+    assert.ok(script.length > 10, 'gli script di index.html');
+    script.forEach(f => {
+      const righe = fs.readFileSync(path.join(root, f), 'utf8').split('\n');
+      righe.forEach((r, i) => {
+        if (/\bfunction fmtQty(It)?\(/.test(r)) return;
+        assert.ok(!/\bfmtQty\(/.test(r), `${f}:${i + 1} usa fmtQty: per il testo serve fmtQtyIt`);
+      });
+    });
   });
   it('fmtPer mette il costo *per* unità, valuta compresa', () => {
     assert.equal(ev('fmtPer(3.2, "kg")'), '€ 3,20/kg');

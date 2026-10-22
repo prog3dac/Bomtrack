@@ -175,7 +175,7 @@ function qrEtichettaTesti(tipo, rec) {
     const n = (rec.items || []).length;
     return { codice: rec.code || '', righe: ['Ubicazione', n === 1 ? '1 articolo' : n + ' articoli'] };
   }
-  if (tipo === 'odp') return { codice: rec.number || '', righe: [`${rec.code || ''} ${rec.name || ''}`.trim(), `${fmtQty(rec.qty)} ${rec.uom || ''}`.trim()] };
+  if (tipo === 'odp') return { codice: rec.number || '', righe: [`${rec.code || ''} ${rec.name || ''}`.trim(), `${fmtQtyIt(rec.qty)} ${rec.uom || ''}`.trim()] };
   return { codice: rec.number || '', righe: [rec.title || '', rec.supplierId ? (supplierName(rec.supplierId) || '') : ''] };
 }
 function qrCodiceDi(tipo, rec) { return tipo === 'art' || tipo === 'ubi' ? rec.code : rec.number; }
@@ -364,7 +364,7 @@ function qrSchedaHtml(tipo, rec) {
     let fase = '';
     if (f) {
       const stato = opStatoFase(o, f);
-      fase = `<p>Fase ${esc(String(f.seq))} <strong>${esc(f.wcName || '')}</strong>${f.supplierId ? ' · ' + esc(f.supplierName || supplierName(f.supplierId) || '') : ''} — ${esc(ODP_FASE_LABELS[stato] || stato)} · ${fmtQty(opProcessati(o, f))} di ${fmtQty(opDaFare(o, f))}</p>`;
+      fase = `<p>Fase ${esc(String(f.seq))} <strong>${esc(f.wcName || '')}</strong>${f.supplierId ? ' · ' + esc(f.supplierName || supplierName(f.supplierId) || '') : ''} — ${esc(ODP_FASE_LABELS[stato] || stato)} · ${fmtQtyIt(opProcessati(o, f))} di ${fmtQtyIt(opDaFare(o, f))}</p>`;
       if (canWriteShop('docs')) {
         if (stato === 'avviabile') bottoni.push(qrBtn('Avvia la fase ' + f.seq, 'factory', `opAvviaModal('${o.id}','${f.id}')`, true));
         else if (stato === 'corso') bottoni.push(qrBtn('Dichiara avanzamento', 'check', `opDichiaraModal('${o.id}','${f.id}')`, true));
@@ -375,7 +375,7 @@ function qrSchedaHtml(tipo, rec) {
     }
     bottoni.push(qrBtn("Apri l'ordine", 'factory', `openOdpFromPlan('${o.id}')`, !bottoni.length));
     return `<h3>${ico('factory', 'tinted pill', '')} ${esc(o.number)} ${statusBadge(ODP_STATUS, o.status)}</h3>
-      <p><strong>${esc(`${o.code || ''} ${o.name || ''}`.trim())}</strong> · ${fmtQty(o.qty)} ${esc(o.uom || '')}${o.dueDate ? ' · serve per il ' + esc(fmtDateIt(o.dueDate)) : ''}</p>
+      <p><strong>${esc(`${o.code || ''} ${o.name || ''}`.trim())}</strong> · ${fmtQtyIt(o.qty)} ${esc(o.uom || '')}${o.dueDate ? ' · serve per il ' + esc(fmtDateIt(o.dueDate)) : ''}</p>
       ${fase}<div class="qr-azioni">${bottoni.join('')}</div>`;
   }
   // Ordine di acquisto e di lavoro: stessa forma, stesso registro di stati.
@@ -383,7 +383,7 @@ function qrSchedaHtml(tipo, rec) {
   const righe = (o.lines || []).map(l => `<div class="mgmt-item">
       <span style="width:130px;font-family:var(--mono)">${esc(l.code || '')}</span>
       <span style="flex:1">${esc(l.description || l.name || '')}</span>
-      <span class="num">${fmtQty(Number(l.received) || 0)} / ${fmtQty(Number(l.qty) || 0)} ${esc(l.uom || '')}</span>
+      <span class="num">${fmtQtyIt(Number(l.received) || 0)} / ${fmtQtyIt(Number(l.qty) || 0)} ${esc(l.uom || '')}</span>
     </div>`).join('');
   const aperto = ['inviato', 'confermato', 'parziale'].includes(o.status);
   const daRicevere = (o.lines || []).some(l => (Number(l.received) || 0) < (Number(l.qty) || 0));
@@ -439,7 +439,7 @@ function qrRiceviModal(tipo, id) {
     const residuo = arrotondaQta((Number(l.qty) || 0) - (Number(l.received) || 0));
     return `<div class="mgmt-item" style="flex-wrap:wrap">
       <span style="flex:1;min-width:140px"><span style="font-family:var(--mono)">${esc(l.code || '')}</span> ${esc(l.description || l.name || '')}
-        <span class="empty-text" style="display:block;padding:0;text-align:left">Ricevuti ${fmtQty(Number(l.received) || 0)} su ${fmtQty(Number(l.qty) || 0)}</span></span>
+        <span class="empty-text" style="display:block;padding:0;text-align:left">Ricevuti ${fmtQtyIt(Number(l.received) || 0)} su ${fmtQtyIt(Number(l.qty) || 0)}</span></span>
       <input id="qr-ric-${i}" class="num" type="number" inputmode="decimal" min="0" step="any" value="${residuo}" style="width:90px" aria-label="Quanti ne arrivano di ${esc(l.code || '')}">
       <span>${esc(l.uom || '')}</span>
     </div>`;

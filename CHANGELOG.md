@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.107.0 — 2026-10-22
+### 0.108.0 — 2026-10-22
 
 **Da una richiesta di offerta si sceglie quali prezzi registrare a listino, con la data di oggi.**
 
@@ -12,6 +12,24 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **Verifica**
 - `test/pricelist.test.js`: la data è quella di registrazione; si registrano solo le righe scelte e le altre restano candidate; con una riga il pulsante registra subito, con più righe chiede prima.
+
+### 0.107.0 — 2026-10-22
+
+**Supabase sveglio e una copia ogni notte.** Il piano gratuito di Supabase sospende il progetto dopo 7 giorni senza uso (la chiusura di agosto basta) e non fa backup. Un nuovo lavoro notturno su GitHub, `supabase-veglia`, tocca il progetto una volta al giorno e ne salva una copia **cifrata** fra gli artifact del workflow, per 30 giorni. Si attiva impostando quattro segreti nel repository (manuale, cap. 31, «Supabase sveglio e una copia ogni notte»); senza, non fa niente e lo dice. La copia contiene i dati di Bomtrack e gli utenti di Supabase Auth, e si rimette in un progetto nuovo con `supabase/ripristino.sh`. Nessun cambio a `supabase/schema.sql`.
+
+**Quantità con la virgola.** Le quantità a schermo, nei messaggi e nei PDF si scrivono all'italiana, come gli importi: «1,5 kg» invece di «1.5 kg». I campi in cui si scrive un numero e i fogli Excel non cambiano.
+
+**Pulizia del codice**
+- Richiesta d'offerta, ordine e ordine di lavoro condividono testata, barra dei documenti, testata del PDF e del foglio Excel: una correzione su uno vale per tutti e tre. PDF ed Excel escono identici a prima. A schermo cambia solo il suggerimento nei campi trasporto e pagamento, ora lo stesso sui tre documenti.
+- `docs/analisi-tecnica.md` e `docs/sostenibilita-free-tier.md` non dicono più che il backend non esiste; chiuse C1, C3 e C5.
+
+**Verifica**
+- `test/backup-cloud.test.js`: contro un Postgres vero, un archivio completo esce cifrato (nessun codice leggibile nel file), rientra in un progetto nuovo identico tabella per tabella, autori e versioni compresi, e con la frase sbagliata non entra niente; il workflow carica solo il file cifrato e senza segreti non fallisce.
+- `test/uom-labels.test.js`: «1,5 kg», e nessuna vista torna a usare la quantità col punto.
+- `test/nav.test.js`: il foglio stampato dice quale documento è, e l'intestazione è pronta prima della stampa.
+- `test/anagrafiche-minori.test.js`: trasporto e pagamento, dati azienda, concetti, centri di lavoro.
+- `test/pwa.test.js`: la versione in cima a questo file è quella dell'app, della cache e del manuale.
+- Suite completa verde, con Postgres.
 
 ### 0.106.1 — 2026-10-20
 

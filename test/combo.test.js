@@ -40,7 +40,9 @@ describe('Fornitori: quali campi si possono cercare', () => {
   it('i menu fornitore di documenti, listino, cicli, centri, filtri e magazzino sono marcati', () => {
     const src = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
     const conta = (f, re) => (src(f).match(re) || []).length;
-    assert.equal(conta('views-docs.js', /<select[^>]*sel-cerca[^>]*onchange="(rfq|ord|odl)SetSupplier/g), 3, 'richiesta, ordine, ordine di lavoro');
+    // Dalla 0.107.0 la testata dei tre documenti è una sola (docTestaHtml).
+    assert.equal(conta('views-docs.js', /<select[^>]*sel-cerca[^>]*onchange="\$\{o\.pfx\}SetSupplier/g), 1, 'la testata comune');
+    assert.equal(conta('views-docs.js', /docTestaHtml\(\{ pfx: '(rfq|ord|odl)'/g), 3, 'richiesta, ordine, ordine di lavoro');
     assert.match(src('views-docs.js'), /id="\$\{kind\}f-sup" class="sel-cerca"/);
     assert.match(src('views-docs.js'), /id="pick-sup" class="sel-cerca"/);
     assert.match(src('views-catalog.js'), /class="sel-cerca" \$\{ro\} onchange="priceSetField/);

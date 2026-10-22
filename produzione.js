@@ -259,7 +259,7 @@ function montaggioBody() {
     .map(x => {
       const mov = montaggioMovimenti(x.id);
       return `<div class="mgmt-item">
-      <span class="mgmt-item-name" style="font-family:var(--mono)">${fmtQty(x.qty)} ${esc(u)}</span>
+      <span class="mgmt-item-name" style="font-family:var(--mono)">${fmtQtyIt(x.qty)} ${esc(u)}</span>
       <span class="mgmt-item-meta">${esc(fmtDateIt(x.date))}${x.createdBy ? ' · ' + esc(actorName(x.createdBy)) : ''}${x.note ? ' · ' + esc(x.note) : ''} · ${mov.length} ${mov.length === 1 ? 'componente scaricato' : 'componenti scaricati'}
         ${puoScrivere ? `<button class="mini-btn danger" title="Elimina il montaggio e restituisci i componenti" onclick="produzioneElimina('${x.id}')">${ico('trash', 'tinted', 'Elimina')}</button>` : ''}</span>
     </div>`;
@@ -268,7 +268,7 @@ function montaggioBody() {
     const esistente = onHandOf(x.item.id);
     return `<div class="mgmt-item">
       <span style="width:130px;font-family:var(--mono)">${esc(x.item.code)}</span>
-      <span style="flex:1">${esc(x.item.name)} <span class="empty-text" style="padding:0">${fmtQty(x.perPezzo)} ${esc(itemUom(x.item))}/${esc(u)} · a magazzino ${fmtUom(esistente, itemUom(x.item))}</span></span>
+      <span style="flex:1">${esc(x.item.name)} <span class="empty-text" style="padding:0">${fmtQtyIt(x.perPezzo)} ${esc(itemUom(x.item))}/${esc(u)} · a magazzino ${fmtUom(esistente, itemUom(x.item))}</span></span>
       <input class="num" type="number" id="mont-q-${i}" min="0" step="any" value="${esc(String(+x.qty.toFixed(4)))}" style="width:110px" oninput="montaggioAvviso()" aria-label="Quantità di ${esc(x.item.code)}">
       <span class="empty-text" style="padding:0;width:40px">${esc(itemUom(x.item))}</span>
     </div>`;
@@ -285,9 +285,9 @@ function montaggioBody() {
     <div id="mont-avviso">${montaggioAvvisoHtml()}</div>
     ${comp.sotto.length ? `<p class="empty-text" style="text-align:left;padding:8px 0 0">I sottoassiemi (${comp.sotto.map(x => esc(x.item.code)).join(', ')}) si dichiarano a parte, ciascuno con i suoi componenti.</p>` : ''}
     <div style="margin-top:8px"><button class="add-btn-sm" onclick="montaggioSalva()">Dichiara montaggio</button></div>` : '';
-  return `${kpi('Richiesti dal piano', fmtQty(richiesti) + ' ' + u, '')}
-    ${kpi('Montati', fmtQty(fatti) + ' ' + u, fatti >= richiesti && richiesti > 0 ? 'green' : '')}
-    ${kpi('Restano', fmtQty(resta) + ' ' + u, resta > 0 ? 'orange' : 'green')}
+  return `${kpi('Richiesti dal piano', fmtQtyIt(richiesti) + ' ' + u, '')}
+    ${kpi('Montati', fmtQtyIt(fatti) + ' ' + u, fatti >= richiesti && richiesti > 0 ? 'green' : '')}
+    ${kpi('Restano', fmtQtyIt(resta) + ' ' + u, resta > 0 ? 'orange' : 'green')}
     ${storico ? `<h4 class="settings-group-title">${ico('clock', 'tinted', '')} Montaggi dichiarati</h4><div class="mgmt-list">${storico}</div>` : ''}
     ${modulo}
     <p class="empty-text" style="text-align:left;padding:10px 0 0">Il montaggio <strong>scarica i componenti</strong> come consumo di produzione per questo piano: l'esistente scende, e scende anche l'impegno del piano su di loro. Le quantità si possono correggere riga per riga. Eliminare un montaggio li restituisce.</p>`;
@@ -349,13 +349,13 @@ function produzioneBody() {
     .filter(p => p.planId === planId && p.itemId === itemId)
     .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
     .map(p => `<div class="mgmt-item">
-      <span class="mgmt-item-name" style="font-family:var(--mono)">${p.qty > 0 ? '+' : ''}${fmtQty(p.qty)} ${esc(u)}</span>
+      <span class="mgmt-item-name" style="font-family:var(--mono)">${p.qty > 0 ? '+' : ''}${fmtQtyIt(p.qty)} ${esc(u)}</span>
       <span class="mgmt-item-meta">${esc(fmtDateIt(p.date))}${p.createdBy ? ' · ' + esc(actorName(p.createdBy)) : ''}${p.note ? ' · ' + esc(p.note) : ''}
         ${puoScrivere ? `<button class="mini-btn danger" title="Elimina la dichiarazione" onclick="produzioneElimina('${p.id}')">${ico('trash', 'tinted', 'Elimina')}</button>` : ''}</span>
     </div>`).join('')
     // I pezzi versati dagli ODP del piano sono fra i fatti (0.105.5): si dice da dove vengono.
     + odpDelPiano(planId, itemId).filter(o => opVersato(o) > 0).map(o => `<div class="mgmt-item">
-      <span class="mgmt-item-name" style="font-family:var(--mono)">+${fmtQty(opVersato(o))} ${esc(u)}</span>
+      <span class="mgmt-item-name" style="font-family:var(--mono)">+${fmtQtyIt(opVersato(o))} ${esc(u)}</span>
       <span class="mgmt-item-meta">versati dall'ordine di produzione ${esc(o.number || '')}</span>
     </div>`).join('');
   // Il modulo propone il residuo: il gesto più frequente è «finito», e
@@ -370,9 +370,9 @@ function produzioneBody() {
       <div style="margin-top:8px"><button class="add-btn-sm" onclick="produzioneSalva()">Dichiara</button></div>
       <p class="empty-text" style="text-align:left;padding:8px 0 0">Un numero <strong>negativo</strong> corregge un conteggio sbagliato, come una rettifica di magazzino: lo storico resta, e si vede che cosa è stato corretto.</p>`
     : '';
-  return `${kpi('Richiesti dal piano', fmtQty(richiesti) + ' ' + u, '')}
-    ${kpi('Fatti', fmtQty(fatti) + ' ' + u, fatti >= richiesti && richiesti > 0 ? 'green' : '')}
-    ${kpi('Restano', fmtQty(resta) + ' ' + u, resta > 0 ? 'orange' : 'green')}
+  return `${kpi('Richiesti dal piano', fmtQtyIt(richiesti) + ' ' + u, '')}
+    ${kpi('Fatti', fmtQtyIt(fatti) + ' ' + u, fatti >= richiesti && richiesti > 0 ? 'green' : '')}
+    ${kpi('Restano', fmtQtyIt(resta) + ' ' + u, resta > 0 ? 'orange' : 'green')}
     ${storico ? `<h4 class="settings-group-title">${ico('clock', 'tinted', '')} Dichiarazioni</h4><div class="mgmt-list">${storico}</div>` : ''}
     ${modulo}
     <p class="empty-text" style="text-align:left;padding:10px 0 0">Dichiarare pezzi fatti <strong>non muove il magazzino</strong>: la giacenza si muove dai suoi movimenti, e due strade per lo stesso numero darebbero due verità. Serve a sapere quanto resta da fare — e a non rimandare a lavorare fuori pezzi che sono già stati lavorati.</p>`;

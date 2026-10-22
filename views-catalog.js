@@ -218,7 +218,7 @@ function plvBody(righe) {
       <td>${x.sup ? esc(x.sup.name) : '<span style="color:var(--text-dim)">—</span>'}</td>
       <td>${esc(x.r.code || '')}</td>
       <td class="num">${plvPrezzo(x)}</td>
-      <td class="num">${x.r.minQty === '' || x.r.minQty == null ? '—' : esc(fmtQty(x.r.minQty))}</td>
+      <td class="num">${x.r.minQty === '' || x.r.minQty == null ? '—' : esc(fmtQtyIt(x.r.minQty))}</td>
       <td class="num">${x.r.leadDays === '' || x.r.leadDays == null ? '—' : esc(String(x.r.leadDays))}</td>
       <td>${x.r.date ? esc(fmtDateIt(x.r.date)) : '—'}</td>
       <td>${esc(priceRowOrigin(x.r))}</td></tr>`).join('')}</tbody></table></div>`;
@@ -540,7 +540,7 @@ function usageBody(id) {
       <td style="font-family:var(--mono)">${codeLink(r.item.id, r.item.code)}</td>
       <td>${esc(r.item.name)}</td>
       <td><span class="bom-type-tag tt-${typeKey(r.item.type)}">${typeShort(r.item.type)}</span> ${typeLabel(r.item.type)}</td>
-      <td style="text-align:right;font-family:var(--mono)">${fmtQty(r.qty)}</td>
+      <td style="text-align:right;font-family:var(--mono)">${fmtQtyIt(r.qty)}</td>
       <td style="text-align:right"><button class="mini-btn" title="Apri qui" onclick="usageModal('${r.item.id}')">${ico('link', 'tinted', 'Apri qui')}</button></td>
     </tr>`).join('')}</tbody></table>`;
 
@@ -570,7 +570,7 @@ function usageBody(id) {
     return `<tr>
       <td style="font-family:var(--mono)">${codeLink(c.item.id, c.item.code)}</td>
       <td>${esc(c.item.name)}</td>
-      <td style="text-align:right;font-family:var(--mono)">${fmtQty(c.qty)}</td>
+      <td style="text-align:right;font-family:var(--mono)">${fmtQtyIt(c.qty)}</td>
       <td style="text-align:right;font-family:var(--mono)">${fmtPer(costoOra, uc)}</td>
       <td style="text-align:right;font-family:var(--mono)">${fmtPer(prezzoOra, uc)}</td>
       ${celleSim}</tr>`;

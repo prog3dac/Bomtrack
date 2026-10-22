@@ -625,7 +625,7 @@ function avvisoSottoZero(righe) {
   perArticolo.forEach((q, itemId) => {
     const it = getItem(itemId); if (!it || !hasStock(it)) return;
     const c = onHandOf(itemId);
-    if (q > c + 0.000001) out.push(`${it.code}: ne escono ${fmtQty(q)}, a magazzino ce ne sono ${fmtUom(c, itemUom(it))}`);
+    if (q > c + 0.000001) out.push(`${it.code}: ne escono ${fmtQtyIt(q)}, a magazzino ce ne sono ${fmtUom(c, itemUom(it))}`);
   });
   return out;
 }
@@ -932,7 +932,7 @@ function registraMovimentoManuale(it, kind, delta, inserita, uscita, note, suppl
   if (typeof renderCatalogs === 'function') renderCatalogs();
   // Il toast passa già da esc(): qui l'unità va concatenata cruda, non da fmtUom.
   if (sotto.length) showToast(`Registrato, ma l'esistente va sotto zero: ${sotto.join('; ')}`, 'error');
-  else showToast(`Giacenza aggiornata: ${fmtQty(onHandOf(it.id))} ${itemUom(it)}`.trim());
+  else showToast(`Giacenza aggiornata: ${fmtQtyIt(onHandOf(it.id))} ${itemUom(it)}`.trim());
 }
 
 function stockMovementsModal(itemId) {
@@ -1147,7 +1147,7 @@ function clFromOdlModal(docId, lineId, verso) {
     ? (passaggio ? 'Manda i pezzi al terzista' : 'Spedisci materiale al terzista')
     : (passaggio ? 'Ritira i pezzi dal terzista' : 'Registra rientro dal terzista');
   const testa = `<h3>${ico('factory', 'tinted pill', '')} ${esc(titolo)}</h3>
-    <p>${esc(o.number)} · <strong>${esc(supplierName(o.supplierId) || '')}</strong> — ${esc(parte ? (parte.code || '') + ' ' + (parte.name || '') : l.description || '')}, ${fmtQty(pezzi)} ${esc(l.uom || 'pz')}</p>`;
+    <p>${esc(o.number)} · <strong>${esc(supplierName(o.supplierId) || '')}</strong> — ${esc(parte ? (parte.code || '') + ' ' + (parte.name || '') : l.description || '')}, ${fmtQtyIt(pezzi)} ${esc(l.uom || 'pz')}</p>`;
   if (!righe.length) {
     openModal(`${testa}
       <div class="empty-text" style="text-align:left">${uscita
@@ -1162,7 +1162,7 @@ function clFromOdlModal(docId, lineId, verso) {
     const fatto = gia.get(x.item.id) || 0;
     return `<div class="mgmt-item">
       <span style="width:110px;font-family:var(--mono)">${esc(x.item.code || '')}</span>
-      <span style="flex:1">${esc(x.item.name || '')}${uscita && !passaggio ? ` <span class="empty-text" style="padding:0">${fmtQty(x.perPezzo)} ${esc(itemUom(x.item))}/pz</span>` : ''}${fatto ? ` <span class="rfq-clavoro-tag" title="Già registrato su questa riga">già ${fmtQty(+fatto.toFixed(4))}</span>` : ''}</span>
+      <span style="flex:1">${esc(x.item.name || '')}${uscita && !passaggio ? ` <span class="empty-text" style="padding:0">${fmtQtyIt(x.perPezzo)} ${esc(itemUom(x.item))}/pz</span>` : ''}${fatto ? ` <span class="rfq-clavoro-tag" title="Già registrato su questa riga">già ${fmtQtyIt(+fatto.toFixed(4))}</span>` : ''}</span>
       <input class="num" type="number" id="cl-q-${i}" min="0" step="any" value="${+residuo(x).toFixed(4)}" style="width:110px">
       <span class="empty-text" style="padding:0;width:40px">${esc(itemUom(x.item))}</span>
     </div>`;
@@ -1245,8 +1245,8 @@ function contoLavoroModal(soloItemId) {
         <span style="width:110px;font-family:var(--mono)">${r.item ? codeLink(r.item.id, r.item.code) : '(articolo mancante)'}</span>
         <span style="flex:1">${esc(r.item ? r.item.name : '')}${r.ordini.length ? ` <span class="empty-text" style="padding:0">· ${esc(r.ordini.join(', '))}</span>` : ''}${r.da === 'odp' && r.fase ? ` <span class="rfq-clavoro-tag" title="Letto dall&rsquo;ordine di produzione: fra le fasi non si scrivono movimenti, e dove stanno i pezzi lo dice la fase corrente">fase ${esc(String(r.fase.seq))} ${esc(r.fase.wcName)}</span>` : ''}</span>
         <span class="empty-text" style="padding:0;width:90px">${esc(r.ultima)}</span>
-        <span style="font-family:var(--mono);width:90px;text-align:right" title="Uscito">${fmtQty(r.out)}</span>
-        <span style="font-family:var(--mono);width:90px;text-align:right" title="Rientrato">${fmtQty(r.in)}</span>
+        <span style="font-family:var(--mono);width:90px;text-align:right" title="Uscito">${fmtQtyIt(r.out)}</span>
+        <span style="font-family:var(--mono);width:90px;text-align:right" title="Rientrato">${fmtQtyIt(r.in)}</span>
         <span style="font-family:var(--mono);width:90px;text-align:right;color:var(--orange)" title="Ancora fuori">${fmtUom(r.saldo, r.item ? itemUom(r.item) : '')}</span>
       </div>`).join('')}
     </div>`).join('');
@@ -1411,7 +1411,7 @@ function stockRow(it) {
   const u = itemUom(it);
   const flags = `${it.favorite ? '<span class="pick-fav" title="Preferito">★</span>' : ''}${it.obsolete ? `<span class="obs-mark" title="Obsoleto">${ico('blocked', 'tinted', '')}</span>` : ''}`
     + (st.sotto ? '<span title="Sotto la scorta minima">' + ico('warning', 'tinted', '') + '</span>' : '');
-  const num = (v, colore, col) => `<td class="col-${col}" style="font-family:var(--mono);text-align:right${colore ? ';color:' + colore : ''}">${fmtQty(v)}</td>`;
+  const num = (v, colore, col) => `<td class="col-${col}" style="font-family:var(--mono);text-align:right${colore ? ';color:' + colore : ''}">${fmtQtyIt(v)}</td>`;
   const nMov = stockOf(it.id).nMov;
   return `<tr data-sel="${it.id}" class="${it.obsolete ? 'row-obsolete' : ''}">
     <td class="col-flags" style="width:1%;white-space:nowrap">${flags}</td>
@@ -1429,8 +1429,8 @@ function stockRow(it) {
     ${num(st.lotSize, st.lotSize > 0 ? '' : 'var(--text-dim)', 'lot')}
     <td class="col-subfamily" style="color:var(--text-dim)">${esc(usesFamily(it.type) && it.familyId ? (subFamilyName(it.familyId, it.subFamilyId) || '—') : '—')}</td>
     <td class="col-lotmode" style="color:var(--text-dim)">${esc(it.lotSize ? (LOT_MODE_LABELS[lotModeOf(it)] || '—') : '—')}</td>
-    <td class="col-atsupplier" style="font-family:var(--mono);text-align:right${st.atSupplier > 0.000001 ? '' : ';color:var(--text-dim)'}">${fmtQty(st.atSupplier)}</td>
-    <td class="col-inwork" style="font-family:var(--mono);text-align:right${st.inWork > 0.000001 ? '' : ';color:var(--text-dim)'}">${fmtQty(st.inWork)}</td>
+    <td class="col-atsupplier" style="font-family:var(--mono);text-align:right${st.atSupplier > 0.000001 ? '' : ';color:var(--text-dim)'}">${fmtQtyIt(st.atSupplier)}</td>
+    <td class="col-inwork" style="font-family:var(--mono);text-align:right${st.inWork > 0.000001 ? '' : ';color:var(--text-dim)'}">${fmtQtyIt(st.inWork)}</td>
     <td class="col-notes" style="color:var(--text-dim)">${esc(it.notes || '—')}</td>
     <td class="col-autore" style="color:var(--text-dim)">${esc(recordAuthorShort(it))}</td>
     <td class="row-actions" style="text-align:right;white-space:nowrap">

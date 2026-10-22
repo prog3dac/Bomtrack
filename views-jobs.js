@@ -218,7 +218,7 @@ function jobCoverageHtml(cov) {
   return avviso
     + gruppo(cov.daOrdinare, 'da ordinare: non sono in nessun documento', r => ({
       testo: r.code,
-      titolo: `${r.name} — ${fmtQty(r.qtyOrder)} ${r.uom} da ordinare, piano ${r.planNumber}`
+      titolo: `${r.name} — ${fmtQtyIt(r.qtyOrder)} ${r.uom} da ordinare, piano ${r.planNumber}`
         + (r.due ? `, serve per ${fmtDateIt(r.due)}` : '')
         + (r.orderBy ? `, da ordinare entro ${fmtDateIt(r.orderBy)}` : ''),
       azione: dove(r),
@@ -244,7 +244,7 @@ function jobCoverageDomanda(j, cov) {
       + `\nMetterla in produzione significa avviare il lavoro senza aver detto cosa va prodotto.` + consegna;
   }
   const nomi = righe => {
-    const primi = righe.slice(0, JOB_COV_NOMI_MAX).map(r => `${r.code} (${fmtQty(r.qtyOrder || r.qty)} ${r.uom})`);
+    const primi = righe.slice(0, JOB_COV_NOMI_MAX).map(r => `${r.code} (${fmtQtyIt(r.qtyOrder || r.qty)} ${r.uom})`);
     const resto = righe.length - primi.length;
     return primi.join(', ') + (resto > 0 ? ` e altri ${resto}` : '');
   };

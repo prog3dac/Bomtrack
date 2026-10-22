@@ -83,7 +83,7 @@ function homeSegnali() {
       // manca, il piano dice per cosa. Il click porta al piano, che è dove si
       // genera la richiesta o l'ordine.
       const v = voce(it.code, `${it.name} — piano ${c.number}${c.due ? ', serve per ' + fmtDateIt(c.due) : ''}`
-        + `${r.orderBy ? ', da ordinare entro ' + fmtDateIt(r.orderBy) : ''} · ${fmtQty(r.qtyOrder)} ${itemUom(it)}`,
+        + `${r.orderBy ? ', da ordinare entro ' + fmtDateIt(r.orderBy) : ''} · ${fmtQtyIt(r.qtyOrder)} ${itemUom(it)}`,
       `homeApri('plan','${c.planId}')`);
       v.ordine = r.orderBy || '';
       (r.urgenza === 'ritardo' ? ritardo : urgente).push(v);
@@ -129,7 +129,7 @@ function homeSegnali() {
   // nessuno, e una scorta minima rimasta scritta li teneva qui per sempre.
   const sottoScorta = (db.items || []).filter(it => !it.obsolete && hasStock(it) && safetyStockOf(it) > 0 && onHandOf(it.id) < safetyStockOf(it));
   agg(sottoScorta.map(it => voce(it.code,
-    `${it.name} — esistente ${fmtQty(onHandOf(it.id))} ${itemUom(it)}, scorta minima ${fmtQty(safetyStockOf(it))}`,
+    `${it.name} — esistente ${fmtQtyIt(onHandOf(it.id))} ${itemUom(it)}, scorta minima ${fmtQtyIt(safetyStockOf(it))}`,
     `itemInfoModal('${it.id}')`)),
   'articolo sotto la scorta minima', 'articoli sotto la scorta minima', 'stock', 'media');
 
