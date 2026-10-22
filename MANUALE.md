@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.106.1**
+**Versione dell'app documentata: 0.107.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -520,7 +520,8 @@ includere; ne esce **un documento per fornitore**.
 3. Torna l'offerta: si scrivono i **prezzi** nelle righe. Quando ci sono tutti, lo stato passa da
    solo a *Offerta ricevuta*.
 4. **Registra a listino** trasforma quei prezzi in **quotazioni** nel listino degli articoli: da
-   quel momento la costificazione li conosce.
+   quel momento la costificazione li conosce. Con più righe si sceglie quali registrare; la
+   quotazione porta la data del giorno in cui la registri.
 5. Con più richieste sullo stesso materiale, **Confronta offerte** le mette a fianco.
 6. **Crea ordine** converte la richiesta in ordine. La richiesta passa a *Chiusa*.
 
@@ -2027,7 +2028,10 @@ italiano/inglese**.
 
 **I prezzi di ritorno.** Quando arriva l'offerta si scrivono i prezzi nelle righe. La barra
 **Prezzi d'offerta** ha il pulsante **Registra a listino (N)**, che trasforma quei prezzi in
-quotazioni negli articoli (→ [cap. 10](#10-listino-fornitori)).
+quotazioni negli articoli (→ [cap. 10](#10-listino-fornitori)). Se le righe sono più di una si apre
+l'elenco dei prezzi da registrare, tutti spuntati: togli la spunta a quelli che non vuoi a listino.
+Una riga lasciata fuori resta da registrare e la puoi aggiungere più tardi. La data della quotazione
+è quella di registrazione, non quella della richiesta.
 
 **Confronta offerte.** Sotto-vista che mette a fianco i prezzi di più richieste sullo stesso
 materiale. Il totale più basso, in verde, si cerca **solo fra le offerte complete** (dalla

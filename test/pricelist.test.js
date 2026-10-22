@@ -270,7 +270,7 @@ describe('registrazione dei prezzi da una richiesta di offerta', () => {
     const r = app.snapshot().items.find(i => i.code === 'A').priceList[0];
     assert.equal(r.supplierId, 's1');
     assert.equal(r.price, 8);
-    assert.equal(r.date, '2026-05-10', 'la data è quella della richiesta, non di oggi');
+    assert.equal(r.date, app.eval('oggiISO()'), 'la data è quella di registrazione, non della richiesta');
     assert.equal(r.rfqId, 'r1');
     assert.equal(r.lineId, 'l1');
   });
@@ -324,6 +324,26 @@ describe('registrazione dei prezzi da una richiesta di offerta', () => {
     app.eval('rfqRecordPrices("r1")');
     app.eval('{ const it = getItem("a"); applyPriceRow(it, it.priceList[0]); getRfq("r1").lines[0].price = 7.5; rfqRecordPrices("r1"); }');
     approx(app.ref('getItem')('a').purchasePrice, 7.5);
+  });
+
+  it('si registrano solo le righe scelte', () => {
+    const app = conRfq([{ id: 'l1', itemId: 'a', price: 8 }, { id: 'l2', itemId: 'b', price: 9 }]);
+    app.eval('rfqRecordPrices("r1", ["l2"])');
+    assert.equal(app.eval('priceRows(getItem("a")).length'), 0, 'la riga non scelta resta fuori');
+    assert.equal(app.eval('priceRows(getItem("b")).length'), 1);
+    assert.equal(app.eval('rfqPriceCandidates(getRfq("r1")).length'), 1, 'e resta da registrare');
+  });
+
+  it('con una riga sola il pulsante registra senza chiedere', () => {
+    const app = conRfq([{ id: 'l1', itemId: 'a', price: 8 }]);
+    app.eval('rfqRecordPricesModal("r1")');
+    assert.equal(app.eval('priceRows(getItem("a")).length'), 1);
+  });
+
+  it('con più righe il pulsante chiede quali registrare', () => {
+    const app = conRfq([{ id: 'l1', itemId: 'a', price: 8 }, { id: 'l2', itemId: 'b', price: 9 }]);
+    app.eval('rfqRecordPricesModal("r1")');
+    assert.equal(app.eval('priceRows(getItem("a")).length + priceRows(getItem("b")).length'), 0, 'niente prima della scelta');
   });
 
   it('la quotazione ha lo stesso id su ogni PC: nasce da richiesta e riga', () => {

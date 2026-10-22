@@ -1306,7 +1306,7 @@ function rfqPriceBar(r) {
   if (!nuove && !già) return '';
   return `<div class="rfq-export-bar">
     <label>Prezzi d'offerta:</label>
-    <button class="btn-outline" onclick="rfqRecordPrices('${r.id}')" ${nuove ? '' : 'disabled'}>${ico('euro', 'tinted', '')} Registra a listino${nuove ? ' (' + nuove + ')' : ''}</button>
+    <button class="btn-outline" onclick="rfqRecordPricesModal('${r.id}')" ${nuove ? '' : 'disabled'}>${ico('euro', 'tinted', '')} Registra a listino${nuove ? ' (' + nuove + ')' : ''}</button>
     <span class="rfq-dirty-hint" style="color:var(--text-dim)">${già ? già + ' già registrati. ' : ''}Le quotazioni restano nel listino dell'articolo; il costo in uso si sceglie da lì.</span>
   </div>`;
 }

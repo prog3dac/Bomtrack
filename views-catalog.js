@@ -415,13 +415,57 @@ function rfqPriceCandidates(r) {
 // scrivono la stessa quotazione, non due che il server rifiuta (c'è un indice
 // unico su articolo + richiesta + riga) bloccando l'invio di chi arriva dopo.
 function rfqQuoteId(rfqId, lineId) { return idDaChiave(String(rfqId) + '|' + String(lineId)); }
-function rfqRecordPrices(id) {
+// Con più righe da registrare si sceglie quali: un'offerta può avere prezzi
+// che non si vogliono a listino (un lotto speciale, un prezzo da ritrattare).
+// Con una riga sola non c'è niente da scegliere e si registra subito.
+function rfqRecordPricesModal(id) {
   if (!roleGuard('catalog')) return;
   const r = getRfq(id); if (!r) return;
   if (!r.supplierId) { showToast('La richiesta non ha un fornitore', 'error'); return; }
   const righe = rfqPriceCandidates(r);
   if (!righe.length) { showToast('Nessun prezzo nuovo da registrare', 'error'); return; }
-  const data = (r.date || oggiISO()).slice(0, 10);
+  if (righe.length === 1) { rfqRecordPrices(id); return; }
+  const elenco = righe.map(l => {
+    const it = getItem(l.itemId);
+    const fatta = rfqQuoteRow(it, r, l);
+    const prezzo = fmtPrezzo(Number(l.price) || 0);
+    return `<label class="rfq-pick-row"><input type="checkbox" value="${esc(l.id)}" checked onchange="rfqRecordPickCount()">
+      <span style="font-family:var(--mono)">${esc(it.code || '')}</span> ${esc(it.name || '')}
+      <span class="rfq-pick-type">${fatta ? esc(fmtPrezzo(Number(fatta.price) || 0)) + ' → ' : ''}${esc(prezzo)}</span></label>`;
+  }).join('');
+  openModal(`<h3>${ico('euro', 'tinted pill', '')} Registra a listino</h3>
+    <p>Scegli quali prezzi di ${esc(supplierName(r.supplierId) || 'questo fornitore')} registrare. Quelli già a listino con un prezzo diverso si aggiornano.</p>
+    <div class="rfq-pick-list" id="rfq-rec-list">${elenco}</div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" id="rfq-rec-ok" onclick="rfqRecordPicked('${r.id}')">${ico('check', '', '')} Registra (${righe.length})</button>
+    </div>`, false, 'form');
+}
+function rfqRecordPickIds() {
+  return Array.from(document.querySelectorAll('#rfq-rec-list input:checked')).map(c => c.value);
+}
+function rfqRecordPickCount() {
+  const b = document.getElementById('rfq-rec-ok'); if (!b) return;
+  const n = rfqRecordPickIds().length;
+  b.disabled = !n;
+  b.innerHTML = `${ico('check', '', '')} Registra (${n})`;
+}
+function rfqRecordPicked(id) {
+  const ids = rfqRecordPickIds();
+  if (!ids.length) return;
+  closeModal();
+  rfqRecordPrices(id, ids);
+}
+// `lineIds` limita la registrazione a quelle righe; senza, si registrano tutte.
+// La data della quotazione è quella in cui entra a listino, non quella della
+// richiesta: l'offerta arriva giorni o settimane dopo la richiesta.
+function rfqRecordPrices(id, lineIds) {
+  if (!roleGuard('catalog')) return;
+  const r = getRfq(id); if (!r) return;
+  if (!r.supplierId) { showToast('La richiesta non ha un fornitore', 'error'); return; }
+  const righe = rfqPriceCandidates(r).filter(l => !lineIds || lineIds.includes(l.id));
+  if (!righe.length) { showToast('Nessun prezzo nuovo da registrare', 'error'); return; }
+  const data = oggiISO();
   let nuove = 0, aggiornate = 0;
   righe.forEach(l => {
     const it = getItem(l.itemId);

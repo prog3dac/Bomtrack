@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.107.0 — 2026-10-22
+
+**Da una richiesta di offerta si sceglie quali prezzi registrare a listino, con la data di oggi.**
+
+- **Scelta delle righe.** Con più prezzi da registrare, **Registra a listino** apre l'elenco delle righe, tutte spuntate, con il prezzo nuovo (e quello vecchio, se la quotazione c'è già e si aggiorna). Si registrano solo quelle lasciate spuntate; le altre restano da registrare. Con un prezzo solo si registra subito, come prima.
+- **Data della quotazione.** Una quotazione nata da una richiesta prende la data del giorno in cui entra a listino, non più la data della richiesta: l'offerta arriva di solito dopo. Una quotazione già registrata che si aggiorna per un prezzo corretto tiene la sua data.
+- Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/pricelist.test.js`: la data è quella di registrazione; si registrano solo le righe scelte e le altre restano candidate; con una riga il pulsante registra subito, con più righe chiede prima.
+
 ### 0.106.1 — 2026-10-20
 
 **Con l'archivio condiviso, l'ultima riga tolta da un ciclo tornava dopo pochi secondi.** Svuotando la distinta parte e il ciclo di una parte (l'ultimo materiale o l'ultima fase rimasti), al giro successivo la riga ricompariva. Le righe di ciclo e di distinta si riscrivono in blocco per articolo, ma il server rifà l'insieme solo delle tabelle che l'invio nomina: un insieme rimasto vuoto non produceva righe, la tabella non partiva, e sul server restavano quelle di prima, che il pull riportava indietro. Ora un insieme vuoto parte vuoto. Lo stesso valeva per distinta e lavorazioni di un gruppo o di una macchina svuotate del tutto. Nessun cambio a `supabase/schema.sql`.
