@@ -1420,7 +1420,7 @@ function renderTrash() {
   return `<div class="cloud-section" style="margin-top:16px">
     <div style="flex:1">
       <strong>${ico('trash', 'tinted', '')} Cestino — ${voci.length} ${voci.length === 1 ? 'elemento' : 'elementi'}</strong>
-      <p>Eliminazioni degli ultimi <strong>${TRASH_DAYS} giorni</strong>, recuperabili. Passata quella finestra spariscono da sole al caricamento successivo: il cestino non deve diventare il posto dove il database cresce senza che nessuno guardi.</p>
+      <p>Eliminazioni degli ultimi <strong>${TRASH_DAYS} giorni</strong>, recuperabili. Passata quella finestra spariscono da sole: ${cloudInUso() ? 'le toglie il server, al più una volta al giorno, da tutti i PC' : 'al caricamento successivo'}. Il cestino non deve diventare il posto dove il database cresce senza che nessuno guardi.</p>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${righe}</div>
       <div style="margin-top:10px"><button class="btn-outline" style="color:var(--red);border-color:var(--red)" onclick="emptyTrashConfirm()">Svuota il cestino</button></div>
     </div></div>`;

@@ -248,7 +248,7 @@ function renderTerms() {
       <div class="mgmt-form"><input id="terms-${kind}-new" placeholder="Nuova voce"><button class="add-btn-sm" onclick="termsAdd('${kind}')">+ Aggiungi</button></div>`;
   };
   return `<div class="mgmt-panel">
-    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Gestisci le voci selezionabili per Trasporto e Pagamento nelle richieste di offerta. La voce con ★ precompila automaticamente le nuove richieste.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Gestisci le voci selezionabili per Trasporto e Pagamento in richieste di offerta, ordini e ordini di lavoro. La voce con ★ precompila i documenti nuovi, se il fornitore non ha un suo predefinito.</p>
     ${sect('transport', ico('truck', 'tinted', '') + ' Tipi di trasporto / resa', s.transportDefault)}
     ${sect('payment', ico('card', 'tinted', '') + ' Tipi di pagamento', s.paymentDefault)}</div>`;
 }
@@ -281,7 +281,7 @@ function renderCompany() {
   const co = db.settings.company || {};
   return `<div class="mgmt-panel">
     <h3 class="settings-group-title">${ico('building', 'tinted', '')} Dati azienda (richiedente)</h3>
-    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Questi dati identificano la tua azienda e vengono stampati come intestazione del richiedente sui documenti di richiesta di offerta.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Questi dati identificano la tua azienda e vengono stampati come intestazione su richieste di offerta, ordini, ordini di lavoro e sugli export PDF.</p>
     <div class="modal-grid">
       <div class="modal-field"><label>Ragione sociale</label><input id="co-name" value="${esc(co.name || '')}"></div>
       <div class="modal-field"><label>Referente</label><input id="co-ref" value="${esc(co.referente || '')}"></div>

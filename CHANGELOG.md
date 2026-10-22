@@ -2,6 +2,33 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.109.1 — 2026-10-22
+
+**Note, avvisi e suggerimenti allineati a quello che l'app fa oggi.** Una rilettura di tutti i testi a schermo (messaggi, conferme, suggerimenti dei campi, testi delle pagine vuote, note sotto le tabelle), del README e del manuale, confrontati con il codice. Nessun comportamento cambia, solo le parole. Nessun cambio a `supabase/schema.sql`.
+
+**Testi che dicevano il contrario di quello che succede**
+- **Avanzamento di una parte nel piano.** La scheda diceva che dichiarare pezzi fatti «non muove il magazzino»: dalla 0.105.5 la parte entra a magazzino con un versamento, ed eliminando la dichiarazione esce. Ora lo dice. Lo stesso nel README.
+- **Genera ordini dal fabbisogno.** La nota diceva che le righe nascono «col prezzo in uso nella costificazione»: prendono invece il prezzo che il listino di quel fornitore dà oggi, e un articolo che il fornitore non ha a listino nasce senza prezzo. Il manuale (cap. 4.5) ora lo dice.
+- **Listino di una parte.** Aprendo il listino di un articolo che non ne ha, il messaggio diceva che il listino vale «solo per commerciali e materie prime»: vale anche per le parti.
+- **Carico centri, nel README.** Diceva che le ore stanno nella settimana in cui il pezzo serve pronto e che non c'è calendario: dalla 0.88.0 stanno nella settimana in cui la fase comincia, programmata a ritroso sul calendario di fabbrica, come già dicevano l'app e il manuale.
+- **README e archivio condiviso.** Diceva «nessun server, nessun Supabase» e che la protezione dei ruoli «arriverà»: l'archivio condiviso c'è dalla 0.103.0. Aggiornati anche la nota sulla sicurezza, la descrizione di `cloud-map.js` (con una riga per `cloud.js`, che mancava) e le note finali.
+
+**Testi incompleti**
+- **Ordini di lavoro e di produzione vuoti.** Dicevano che si generano solo dal Fabbisogno: un ordine di lavoro nasce anche da un ordine di produzione o si scrive a mano, un ordine di produzione si scrive anche a mano. Lo stesso per l'elenco vuoto degli ordini a fornitore, che si generano anche dal Fabbisogno e dal riordino del Magazzino.
+- **Riga «conto lavoro» su un ordine.** Il suggerimento diceva «generata dal fabbisogno» e che il rientro si registra come movimento: la riga può venire anche da un ordine di produzione o essere scritta a mano, e in quel caso i pezzi li dichiara l'ordine di produzione.
+- **Da far lavorare fuori.** Le fasi «entrano nelle richieste e negli ordini come le righe d'acquisto»: entrano nelle richieste d'offerta e negli **ordini di lavoro**, non negli ordini d'acquisto.
+- **Gestione → Condizioni offerta e Dati azienda.** Parlavano solo delle richieste d'offerta: le condizioni si propongono anche su ordini e ordini di lavoro (la ★ vale se il fornitore non ha un suo predefinito), e i dati azienda si stampano su tutti i documenti. Il manuale (cap. 25) dice lo stesso.
+- **Cestino.** Con l'archivio condiviso le voci scadute non spariscono «al caricamento successivo»: le toglie il server, al più una volta al giorno (0.106.0). Il testo ora distingue i due casi.
+- **Scheda articolo.** «Distinta base → Gestione DB» diventa «Tecnico → Gestione DB», il nome del menu dalla 0.91.0.
+
+**Lasciati come sono**
+- I testi di listino, storico delle quotazioni e risparmio (Riepilogo, fabbisogno, scheda articolo) e il colore delle etichette dei sottogruppi: li riscrivono le due modifiche in corso su quelle funzioni.
+- Le citazioni dei vecchi gruppi del menu nel README, già dichiarate come tali.
+
+**Verifica**
+- `test/testi.test.js` (nuovo): la scheda dell'avanzamento dice che la parte entra a magazzino e ce la mette; la nota di Genera ordini non promette il prezzo della costificazione; il listino di una parte si apre; i testi degli elenchi vuoti, del conto lavoro, del cestino e del README non tornano alle frasi di prima.
+- Suite completa verde.
+
 ### 0.108.0 — 2026-10-22
 
 **Da una richiesta di offerta si sceglie quali prezzi registrare a listino, con la data di oggi.**

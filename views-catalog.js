@@ -90,7 +90,7 @@ function applyPriceRow(it, row) {
 onPanelClose('listino', () => { window.__priceItemId = null; });
 function priceListModal(id) {
   const it = getItem(id); if (!it) return;
-  if (!hasPriceList(it)) { showToast('Il listino vale solo per commerciali e materie prime', 'error'); return; }
+  if (!hasPriceList(it)) { showToast('Il listino vale solo per commerciali, materie prime e parti', 'error'); return; }
   window.__priceItemId = id;
   openModal(`<h3>${ico('euro', 'tinted pill', '')} Listino fornitori — ${esc(it.code)}</h3>
     <p style="color:var(--text-dim);margin-bottom:14px">${esc(it.name)} · ${typeLabel(it.type)}</p>
@@ -1063,7 +1063,7 @@ function itemModalBody(it, scope) {
       <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()" ${dis(lock.structLocked)} title="${lock.structLocked ? 'Articolo già usato: cambiare l\'unità reinterpreterebbe giacenza, distinte e costi' : ''}">${uomOptions(it ? (it.uom || defaultUom()) : defaultUom())}</select></div>
       <div class="modal-field" id="fld-sourcing"><label>Approvvigionamento</label>
         <select id="it-sourcing">${partSourcingOptions(it ? partSourcing(it) : defaultPartSourcing())}</select></div>
-      <div class="modal-field" id="fld-assembly-note" style="grid-column:1/-1"><label>Composizione</label><span class="empty-text" style="padding:0">La distinta (componenti e lavorazioni) si gestisce in <strong>Distinta base → Gestione DB</strong>.</span></div>
+      <div class="modal-field" id="fld-assembly-note" style="grid-column:1/-1"><label>Composizione</label><span class="empty-text" style="padding:0">La distinta (componenti e lavorazioni) si gestisce in <strong>Tecnico → Gestione DB</strong>.</span></div>
     </div>
     <div class="modal-field" id="fld-pricing">
       <label>Fornitore e prezzo d'acquisto</label>
