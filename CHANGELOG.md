@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.109.0 — 2026-10-22
+
+**Il «Risparmio possibile» del Riepilogo dice di quali articoli parla.**
+
+- **Prima** l'avviso diceva solo «su N articoli il listino contiene una quotazione più bassa: X € per unità, sommati». Non nominava né gli articoli né i fornitori, e il totale sommava prezzi unitari di articoli diversi (un €/m più un €/pz): un numero che non era il risparmio di niente. Il pulsante «Vai alle anagrafiche» portava agli Articoli d'acquisto, senza dire quali guardare.
+- **Ora** è una tabella: per ogni articolo il prezzo in uso e il suo fornitore (o «prezzo scritto a mano»), la quotazione più bassa a listino con fornitore e data, il risparmio per unità di misura e in percentuale. Prima i risparmi più grandi in proporzione; oltre otto articoli, un pulsante porta agli Articoli d'acquisto. **Un clic sulla riga apre il listino dell'articolo**, e alla chiusura il riquadro si aggiorna.
+- **Correzioni al calcolo.** Gli articoli obsoleti non vengono più segnalati, come già per «senza prezzo» e «sotto scorta». Non si segnala più nemmeno l'articolo la cui quotazione in uso è già la più bassa e il cui prezzo è solo rimasto indietro: non c'è un fornitore più conveniente da proporre.
+- Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/ui.test.js`: l'avviso nomina articolo e fornitori e apre il listino; ordine per risparmio percentuale; obsoleti esclusi; prezzo scritto a mano riconosciuto; nessun avviso se in uso c'è già la quotazione più bassa; niente più somma di prezzi unitari.
+
 ### 0.108.0 — 2026-10-22
 
 **Da una richiesta di offerta si sceglie quali prezzi registrare a listino, con la data di oggi.**

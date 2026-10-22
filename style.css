@@ -1118,6 +1118,13 @@ body.insp-on .row-actions{display:none}
 .home-chip.muta:hover{border-color:var(--border);color:var(--text-dim)}
 .home-voci-resto{font-size:11px;color:var(--text-dim);align-self:center}
 @media(max-width:640px){.home-voci{padding-left:0}}
+/* Risparmio possibile: ogni riga apre il listino dell'articolo */
+.home-ris-riga{cursor:pointer}
+.home-ris-riga:hover td{background:var(--bg)}
+.home-ris-riga:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.home-ris th.num{text-align:right}
+.home-ris .num .dash-nota{font-family:var(--font);white-space:normal}
+@media(max-width:640px){.home-ris td,.home-ris th{padding:7px 4px}}
 
 /* ─── Elenco a destra, documento al centro ───
    Il telaio comune di commesse, fabbisogno, richieste e ordini (worklist.js).

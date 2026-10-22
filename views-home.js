@@ -230,20 +230,72 @@ function homeVociHtml(s) {
     ? `<span class="home-voci-resto">+${resto} ${resto === 1 ? 'altro' : 'altri'} in ${esc(viewLabel(s.vista))}</span>` : ''}</div>`;
 }
 
-// Quanto si risparmierebbe scegliendo ovunque la quotazione più bassa già a
-// listino. Non si applica niente da solo — è un'informazione, come nel
+// Gli articoli per cui il listino ha già una quotazione più bassa di quella
+// usata nei costi. Non si applica niente da solo — è un'informazione, come nel
 // fabbisogno.
+//
+// Fino alla 0.108.0 l'avviso diceva solo «su N articoli, X € per unità,
+// sommati»: senza nominare gli articoli né i fornitori, e con una somma di
+// prezzi unitari di articoli diversi (un €/m più un €/pz) che non è il prezzo
+// di niente. Ora ogni voce dice quale articolo, chi lo fornisce adesso e a
+// quanto, chi lo fa a meno e quanto si risparmia per unità; il clic apre il
+// listino dove si sceglie.
+//
+// Gli obsoleti no, come per «senza prezzo» e «sotto scorta»: non li compra
+// più nessuno. E nemmeno la quotazione in uso che risulta anche la migliore:
+// lì il prezzo dell'articolo è solo rimasto indietro, non c'è un fornitore
+// più conveniente da proporre.
 function homeRisparmio() {
-  let tot = 0, quanti = 0;
+  const voci = [];
   (db.items || []).forEach(it => {
-    if (!hasPriceList(it)) return;
+    if (it.obsolete || !hasPriceList(it)) return;
     const campo = costField(it); if (!campo) return;
     const inUso = Number(it[campo]) || 0;
     const best = bestPriceRow(it);
     const migliore = best ? (rowUnitCost(it, best) || 0) : 0;
-    if (inUso > 0 && migliore > 0 && migliore < inUso) { tot += inUso - migliore; quanti++; }
+    if (!(inUso > 0 && migliore > 0 && migliore < inUso)) return;
+    const attiva = activePriceRow(it);
+    if (attiva && attiva.id === best.id) return;
+    voci.push({
+      id: it.id, code: it.code || '', name: it.name || '', uom: it.uom || '',
+      inUso, fornitoreInUso: attiva ? supplierName(attiva.supplierId) : '',
+      aMano: !attiva,   // il prezzo è scritto nell'articolo, non scelto a listino
+      migliore, fornitoreMigliore: supplierName(best.supplierId), dataMigliore: best.date || '',
+      saving: inUso - migliore, pct: (inUso - migliore) / inUso * 100,
+    });
   });
-  return { tot, quanti };
+  // Prima il risparmio più grande in proporzione: 2 € su 4 contano più di
+  // 3 € su 300, e fra articoli di unità diverse è l'unico confronto onesto.
+  voci.sort((a, b) => b.pct - a.pct || String(a.code).localeCompare(String(b.code)));
+  return { quanti: voci.length, voci };
+}
+// Il listino si apre sopra il Riepilogo; alla chiusura l'avviso si ridisegna,
+// così l'articolo appena sistemato sparisce senza dover cambiare vista.
+onPanelClose('listino', () => { if (activeView === 'home') renderHome(); });
+function homeRisparmioHtml(ris) {
+  if (!ris.quanti) return '';
+  const mostrate = ris.voci.slice(0, HOME_VOCI_MAX);
+  const resto = ris.quanti - mostrate.length;
+  const fornitore = (nome, aMano) => aMano ? 'prezzo scritto a mano' : nome ? esc(nome) : 'fornitore non indicato';
+  // Il fornitore sotto il prezzo, non in una colonna sua: quattro colonne
+  // stanno anche sul telefono.
+  const sotto = t => `<div class="dash-nota" style="margin:0">${t}</div>`;
+  const righe = mostrate.map(v => `<tr class="home-ris-riga" ${clickAttrs(`priceListModal('${v.id}')`, `Apri il listino di ${v.code}`)}>
+      <td><strong>${esc(v.code)}</strong>${sotto(esc(v.name))}</td>
+      <td class="num">${fmtPer(v.inUso, v.uom)}${sotto(fornitore(v.fornitoreInUso, v.aMano))}</td>
+      <td class="num">${fmtPer(v.migliore, v.uom)}${sotto(fornitore(v.fornitoreMigliore, false) + (v.dataMigliore ? ' · ' + fmtDateIt(v.dataMigliore) : ''))}</td>
+      <td class="num"><span class="price-best" style="margin:0">−${numIt(v.pct, 0)}%</span>${sotto(fmtPer(v.saving, v.uom) + ' in meno')}</td>
+    </tr>`).join('');
+  return `<div class="mrp-section">
+    <div class="cycle-section-head"><h3>${ico('euro', 'tinted pill', '')} Risparmio possibile a listino</h3></div>
+    <p class="dash-nota" style="margin:0 0 4px">${ris.quanti === 1 ? 'Questo articolo ha' : `Questi ${ris.quanti} articoli hanno`}
+      a listino una quotazione più bassa del prezzo usato nei costi. Il risparmio è per unità di misura. Non cambia niente da solo:
+      clicca un articolo per aprirne il listino e scegliere il prezzo da usare.</p>
+    <div class="table-wrap"><table class="dash-table home-ris"><thead><tr>
+      <th>Articolo</th><th class="num">In uso ora</th><th class="num">Più basso a listino</th><th class="num">Risparmio</th>
+    </tr></thead><tbody>${righe}</tbody></table></div>
+    ${resto > 0 ? `<div style="margin-top:8px"><button class="btn-ghost" onclick="setView('buy')">+${resto} ${resto === 1 ? 'altro' : 'altri'} — apri ${esc(viewLabel('buy'))}</button></div>` : ''}
+  </div>`;
 }
 
 // ─── Calendario ───
@@ -679,12 +731,7 @@ function renderHome() {
 
     <div id="home-cal" style="display:contents">${renderHomeCalendar(_homeEventi = homeEventi())}</div>
 
-    ${ris.tot > 0 ? `<div class="cloud-section" style="margin-top:16px">
-      <div style="flex:1">
-        <strong>↓ Risparmio possibile</strong>
-        <p>Su <strong>${ris.quanti}</strong> ${ris.quanti === 1 ? 'articolo' : 'articoli'} il listino contiene una quotazione più bassa di quella in uso: <strong>${fmtN(ris.tot)}</strong> per unità, sommati. Non si applica niente da solo — il prezzo in uso si cambia dal listino dell'articolo, una scelta per volta.</p>
-        <div style="margin-top:8px"><button class="btn-outline" onclick="setView('buy')">Vai alle anagrafiche</button></div>
-      </div></div>` : ''}
+    ${homeRisparmioHtml(ris)}
 
     <div class="mrp-section">
       <div class="cycle-section-head"><h3>${ico('refresh', 'tinted pill', '')} Riprendi</h3></div>

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.108.0**
+**Versione dell'app documentata: 0.109.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -642,9 +642,16 @@ automatico (→ [cap. 30](#30-backup-e-manutenzione)) conta come backup e azzera
 permesso di scriverci, e lo può richiedere solo su un tuo clic. Se all'avvio il permesso non c'è,
 il segnale 12 lo dice: **Riprendi** riconferma il permesso e salva subito.
 
-**Il risparmio potenziale.** In fondo la pagina calcola quanto si risparmierebbe scegliendo
-ovunque la quotazione più bassa già presente a listino. Non cambia niente da solo: è un invito a
-rivedere i prezzi in uso.
+**Il risparmio possibile a listino** (dalla 0.109.0). Sotto il calendario, il riquadro elenca gli articoli
+d'acquisto per cui il listino ha una quotazione **più bassa del prezzo usato nei costi**. Per ogni
+articolo dice il prezzo in uso e da quale fornitore (o «prezzo scritto a mano», se non viene da una
+riga del listino), la quotazione più bassa con fornitore e data, e quanto si risparmia **per unità
+di misura**, anche in percentuale. In cima vanno i risparmi più grandi in proporzione; oltre otto
+articoli, il pulsante in fondo porta agli *Articoli d'acquisto*. Gli articoli obsoleti non
+compaiono. Non cambia niente da solo: **clicca la riga** per aprire il listino dell'articolo e
+scegliere con *Usa* il prezzo da usare; chiuso il listino, il riquadro si aggiorna. Nel
+*Fabbisogno* lo stesso confronto è pesato sulle quantità da ordinare (→
+[cap. 19](#19-fabbisogno-materiali)).
 
 **Da sapere.** Il Riepilogo è **derivato**: non c'è niente da compilare e niente da spuntare. Un
 segnale sparisce quando sparisce la sua causa.
