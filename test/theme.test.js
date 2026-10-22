@@ -170,7 +170,7 @@ const CHIARO = palette(':root[data-theme=light]');
 
 // Il colore che si legge sta sulla scheda; quello su cui si scrive sta sotto
 // il suo inchiostro. Sono i due mestieri che un valore solo non copre.
-const DA_LEGGERE = ['--text', '--text-dim', '--accent', '--red', '--red-h', '--green', '--orange', '--purple'];
+const DA_LEGGERE = ['--text', '--text-dim', '--accent', '--red', '--red-h', '--green', '--orange', '--yellow', '--purple'];
 const DA_SCRIVERCI = [
   ['--accent-solid', '#FFFFFF'], ['--accent-h', '#FFFFFF'],
   ['--red-solid', '#FFFFFF'], ['--green-solid', '#FFFFFF'],

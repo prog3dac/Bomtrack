@@ -156,9 +156,9 @@ function itemInfoAcquisto(it) {
   const campo = costField(it);
   const inUso = campo ? (Number(it[campo]) || 0) : null;
   const attiva = activePriceRow(it);
-  const best = bestPriceRow(it);
-  const bestCosto = best ? rowUnitCost(it, best) : null;
-  const righe = priceRows(it);
+  const cmp = priceCompare(it);
+  // Le quotazioni valide prima, lo storico (sostituite) in fondo.
+  const righe = priceRows(it).slice().sort((a, b) => priceRowSuperseded(it, a) - priceRowSuperseded(it, b));
 
   // Codice e descrizione si leggono dalla quotazione in uso, non dalla copia sui
   // campi dell'articolo: è la stessa cosa, ma da un posto solo. Sono di **quel**
@@ -175,8 +175,11 @@ function itemInfoAcquisto(it) {
     attiva && attiva.leadDays ? ['Giorni di consegna', String(attiva.leadDays) + ' gg'] : null,
     attiva && attiva.minQty ? ['Quantità minima', fmtUom(attiva.minQty, priceUomOf(it, attiva))] : null,
     hasAltUom(it) ? ['U.M. d\'acquisto', rawHtml(`${_mono(altUomOf(it))} · ${fmtUom(altFactorOf(it), altUomOf(it))} in 1 ${esc(itemUom(it))}`)] : null,
-    best && bestCosto != null && inUso != null && bestCosto < inUso - 0.00005
-      ? ['Miglior quotazione', rawHtml(`<span class="price-best">${fmtPer(bestCosto, itemUom(it))} da ${esc(supplierName(best.supplierId) || '—')}</span> — più bassa di quella in uso, ma il prezzo non cambia da sé: si sceglie dal listino`)]
+    cmp && cmp.superata && cmp.valida
+      ? ['Listino più recente', rawHtml(`<span class="home-ris-superato">${fmtPer(cmp.attuale, itemUom(it))}${cmp.valida.date ? ' dal ' + esc(fmtDateIt(cmp.valida.date)) : ''}</span> — la quotazione in uso è stata sostituita: si aggiorna dal listino`)]
+      : null,
+    cmp && cmp.best
+      ? ['Miglior quotazione', rawHtml(`<span class="price-best">${fmtPer(cmp.migliore, itemUom(it))} da ${esc(supplierName(cmp.best.supplierId) || '—')}</span> — più bassa di quella in uso, ma il prezzo non cambia da sé: si sceglie dal listino`)]
       : null,
   ]);
 
@@ -187,7 +190,8 @@ function itemInfoAcquisto(it) {
       <th scope="col">Data</th><th scope="col"></th></tr></thead>
     <tbody>${righe.map(r => {
       const u = priceUomOf(it, r);
-      return `<tr${r.id === it.activePriceId ? ' style="font-weight:700"' : ''}>
+      const storico = priceRowSuperseded(it, r);
+      return `<tr${r.id === it.activePriceId ? ' style="font-weight:700"' : storico ? ' class="price-storico"' : ''}>
         <td>${esc(supplierName(r.supplierId) || '—')}</td>
         <td style="font-family:var(--mono)">${esc(r.code || '—')}${r.desc ? `<div class="empty-text" style="padding:0;font-family:inherit">${esc(r.desc)}</div>` : ''}</td>
         <td style="font-family:var(--mono);text-align:right">${r.price === '' || r.price == null ? '<span class="empty-text" style="padding:0">in attesa</span>' : fmtN(r.price)}</td>
@@ -195,7 +199,7 @@ function itemInfoAcquisto(it) {
         <td style="font-family:var(--mono);text-align:right">${r.minQty ? fmtUom(r.minQty, u) : '—'}</td>
         <td style="font-family:var(--mono);text-align:right">${r.leadDays ? esc(String(r.leadDays)) + ' gg' : '—'}</td>
         <td>${r.date ? esc(fmtDateIt(r.date)) : '—'}</td>
-        <td>${r.id === it.activePriceId ? '<span class="price-best">✓ in uso</span>' : ''}</td></tr>`;
+        <td>${r.id === it.activePriceId ? '<span class="price-best">✓ in uso</span>' : ''}${storico ? ' <span class="price-tag-storico" title="Sostituita da una quotazione più recente dello stesso fornitore">storico</span>' : ''}</td></tr>`;
     }).join('')}</tbody></table></div>` : '<div class="empty-text">Nessuna quotazione a listino.</div>';
 
   return itemInfoSection(ico('euro', 'tinted', '') + ' Acquisto e listino', testa + tabella);

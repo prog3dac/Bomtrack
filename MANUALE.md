@@ -642,9 +642,24 @@ automatico (→ [cap. 30](#30-backup-e-manutenzione)) conta come backup e azzera
 permesso di scriverci, e lo può richiedere solo su un tuo clic. Se all'avvio il permesso non c'è,
 il segnale 12 lo dice: **Riprendi** riconferma il permesso e salva subito.
 
-**Il risparmio potenziale.** In fondo la pagina calcola quanto si risparmierebbe scegliendo
-ovunque la quotazione più bassa già presente a listino. Non cambia niente da solo: è un invito a
-rivedere i prezzi in uso.
+**Prezzi da rivedere a listino** (dalla 0.109.0). Sotto il calendario, il riquadro elenca gli
+articoli d'acquisto il cui prezzo in uso va rivisto, per uno di due motivi:
+
+- **un altro fornitore quota meno.** Il confronto è con il listino di oggi del fornitore in uso, e
+  solo fra fornitori diversi: per ogni fornitore vale la quotazione più recente (→
+  [cap. 10](#10-listino-fornitori)). Un fornitore che una volta costava meno non conta più;
+- **il prezzo in uso è stato sostituito** da un listino più recente dello stesso fornitore, con un
+  prezzo diverso: sotto il prezzo in uso compare *listino nuovo del …* e la colonna del risparmio
+  dice *da aggiornare*.
+
+Per ogni articolo il riquadro dice il prezzo in uso e da quale fornitore (o «prezzo scritto a
+mano», se non viene da una riga del listino), l'altro fornitore più conveniente con prezzo e data,
+e quanto si risparmia **per unità di misura**, anche in percentuale. In cima vanno i risparmi più
+grandi in proporzione; oltre otto articoli, il pulsante in fondo porta agli *Articoli d'acquisto*.
+Gli articoli obsoleti non compaiono. Non cambia niente da solo: **clicca la riga** per aprire il
+listino dell'articolo e scegliere con *Usa* il prezzo da usare; chiuso il listino, il riquadro si
+aggiorna. Nel *Fabbisogno* lo stesso confronto è pesato sulle quantità da ordinare (→
+[cap. 19](#19-fabbisogno-materiali)).
 
 **Da sapere.** Il Riepilogo è **derivato**: non c'è niente da compilare e niente da spuntare. Un
 segnale sparisce quando sparisce la sua causa.
@@ -748,12 +763,15 @@ le stesse colonne ma si guardano per motivi diversi.
 
 **I quattro tipi.**
 
-| Tipo | Che cos'è | Ha una distinta? |
-|---|---|---|
-| **Macchina** | Il prodotto finito | Sì, l'albero completo |
-| **Gruppo** | Un assieme di primo livello | Sì |
-| **Sottogruppo** | Un assieme dentro un gruppo; può contenerne altri, senza limite | Sì |
-| **Parte (lavorato)** | La foglia: il pezzo che si fa o si compra | Sì: **distinta parte + ciclo** |
+| Tipo | Etichetta | Che cos'è | Ha una distinta? |
+|---|---|---|---|
+| **Macchina** | `MAC`, rossa | Il prodotto finito | Sì, l'albero completo |
+| **Gruppo** | `GRP`, verde | Un assieme di primo livello | Sì |
+| **Sottogruppo** | `SGR`, gialla | Un assieme dentro un gruppo; può contenerne altri, senza limite | Sì |
+| **Parte (lavorato)** | `PRT`, viola | La foglia: il pezzo che si fa o si compra | Sì: **distinta parte + ciclo** |
+
+L'etichetta colorata accompagna il tipo ovunque compaia: elenchi, ricerche, distinta, scheda
+articolo. Gruppo e sottogruppo hanno colori diversi apposta, per non confonderli a colpo d'occhio.
 
 **Comandi.** **Esporta Excel** / **Esporta PDF**; nella barra filtri, **Colonne** e
 **+ Nuovo articolo**.
@@ -949,9 +967,10 @@ fornitori* (dalla 0.91.0).
 
 **La vista d'insieme.** Una quotazione per riga, di tutti i commerciali, le materie prime e le
 parti: articolo, fornitore, codice presso il fornitore, prezzo, quantità minima, giorni di
-consegna, data e origine. ✓ segna il prezzo in uso nella costificazione, ↓ la quotazione più bassa
-dell'articolo. Si filtra per **testo** (articolo, fornitore o codice fornitore), **fornitore**,
-**tipo** e per *solo i prezzi in uso* o *senza prezzo*; l'elenco filtrato si esporta in Excel e
+consegna, data e origine. ✓ segna il prezzo in uso nella costificazione, ↓ la quotazione valida più
+bassa dell'articolo, *storico* le quotazioni sostituite da una più recente dello stesso fornitore.
+Si filtra per **testo** (articolo, fornitore o codice fornitore), **fornitore**, **tipo** e per
+*solo i prezzi in uso*, *senza lo storico* o *senza prezzo*; l'elenco filtrato si esporta in Excel e
 PDF. Serve a rispondere a domande come «cosa mi quota questo fornitore?» o «quali prezzi sono
 vecchi?». Un clic sulla riga apre il listino dell'articolo, che resta **l'unico posto dove una
 quotazione si modifica** e si mette in uso.
@@ -976,9 +995,19 @@ quotazione si modifica** e si mette in uso.
   trasforma i prezzi tornati in quotazioni, con il riferimento alla richiesta da cui vengono. Se
   dopo averli registrati correggi un prezzo sulla richiesta, il pulsante torna attivo e la
   quotazione si **aggiorna** (non se ne aggiunge un'altra); se è quella in uso, il costo la segue.
-- **Il prezzo che entra nella costificazione si sceglie esplicitamente.** Più quotazioni possono
-  convivere; una sola è quella in uso. Il Riepilogo segnala quanto si risparmierebbe scegliendo
-  ovunque la più bassa.
+- **Il prezzo che entra nella costificazione si sceglie esplicitamente.** Quotazioni di fornitori
+  diversi possono convivere; una sola è quella in uso. Il Riepilogo segnala gli articoli per cui un
+  altro fornitore quota meno.
+- **Un fornitore ha un solo prezzo valido: il più recente** (dalla 0.109.0). Quando lo stesso
+  fornitore ha più quotazioni, vale quella con la data più recente; le precedenti finiscono nello
+  **Storico**, in fondo al listino dell'articolo, chiuso. Lì restano in sola lettura (si possono
+  solo eliminare), non entrano nei confronti (la ↓, il risparmio del Riepilogo e del Fabbisogno) e
+  non si possono più mettere in uso. Una riga nuova ancora **senza prezzo** non sostituisce
+  niente: conta solo quando ha un prezzo.
+- **Il prezzo in uso sostituito.** Se l'articolo usa ancora una quotazione che è stata sostituita,
+  il listino lo dice in un riquadro arancione con il prezzo nuovo e il pulsante **✓ Usa la
+  nuova**; finché non lo si preme il costo non cambia. Lo stesso avviso compare nel Riepilogo e
+  nella scheda di sola lettura dell'articolo.
 - Un articolo senza nessuna quotazione compare fra i segnali «articoli d'acquisto senza prezzo».
 
 ---
@@ -1682,7 +1711,7 @@ Gli **indicatori di riga**:
 
 | Indicatore | Significato |
 |---|---|
-| `↓ risparmio` | Esiste a listino una quotazione più bassa di quella in uso |
+| `↓ risparmio` | Un altro fornitore quota meno del listino di oggi del fornitore in uso; l'importo è sulla quantità da ordinare |
 | `⚠ sotto il minimo` | La quantità è sotto la q.tà minima del fornitore |
 | `⚠ senza prezzo` | L'articolo non ha nessuna quotazione |
 | `↑ lotto` / `↑ minimo` | La quantità è stata alzata al lotto di riordino |

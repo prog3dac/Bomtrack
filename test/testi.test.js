@@ -59,6 +59,12 @@ describe('Testi coerenti con il comportamento', () => {
     assert.ok(!sorgente('views-mrp.js').includes("Entrano nelle richieste e negli ordini come le righe d'acquisto"));
   });
 
+  it('il risparmio del fabbisogno parla di altri fornitori, come la regola della 0.109.0', () => {
+    const mrp = sorgente('views-mrp.js');
+    assert.ok(!mrp.includes('Scegliendo ovunque la quotazione più bassa a listino'));
+    assert.ok(mrp.includes('a un altro fornitore che a listino quota meno'));
+  });
+
   it('il cestino distingue il PC da solo dall\'archivio condiviso', () => {
     const ie = sorgente('import-export.js');
     assert.ok(ie.includes("le toglie il server, al più una volta al giorno"));
