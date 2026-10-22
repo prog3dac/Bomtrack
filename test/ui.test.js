@@ -320,7 +320,51 @@ describe('Riepilogo', () => {
     })] }));
     const r = JSON.parse(a.eval('JSON.stringify(homeRisparmio())'));
     assert.equal(r.quanti, 1);
-    approx(r.tot, 11, '16 €/m in uso contro 5 €/m disponibili');
+    approx(r.voci[0].saving, 11, '16 €/m in uso contro 5 €/m disponibili');
+  });
+
+  // Dalla 0.109.0: l'avviso nomina articolo e fornitori, e porta al listino.
+  const fornitori = [{ id: 's1', name: 'Rossi', active: true }, { id: 's2', name: 'Bianchi', active: true }];
+  const conListino = (id, inUso, prezzi, over) => Object.assign(acq(id, inUso), {
+    priceList: prezzi.map((p, i) => ({ id: id + '-' + i, supplierId: p[0], price: p[1], date: '2026-0' + (i + 1) + '-01' })),
+    activePriceId: id + '-0' }, over || {});
+
+  it('il risparmio dice quale articolo, da chi e a quanto, e apre il listino', () => {
+    const a = app(makeDb({ suppliers: fornitori, items: [conListino('v1', 10, [['s1', 10], ['s2', 8]])] }));
+    const r = JSON.parse(a.eval('JSON.stringify(homeRisparmio())'));
+    assert.equal(r.voci[0].code, 'V1');
+    assert.equal(r.voci[0].fornitoreInUso, 'Rossi');
+    assert.equal(r.voci[0].fornitoreMigliore, 'Bianchi');
+    approx(r.voci[0].saving, 2, '10 → 8');
+    approx(r.voci[0].pct, 20, '2 su 10');
+    a.eval('renderHome()');
+    const h = a.html('view-home');
+    assert.match(h, /Prezzi da rivedere a listino/);
+    assert.match(h, /V1/);
+    assert.match(h, /Rossi/);
+    assert.match(h, /Bianchi/);
+    assert.match(h, /priceListModal\('v1'\)/);
+    assert.doesNotMatch(h, /sommati/, 'niente più somma di prezzi unitari di articoli diversi');
+  });
+
+  it('prima il risparmio più grande in proporzione; obsoleti e prezzi a mano', () => {
+    const a = app(makeDb({ suppliers: fornitori, items: [
+      conListino('a1', 300, [['s1', 300], ['s2', 297]]),           // −1%
+      conListino('a2', 4, [['s1', 4], ['s2', 2]]),                 // −50%
+      conListino('a3', 10, [['s1', 10], ['s2', 5]], { obsolete: true }),
+      conListino('a4', 9, [['s1', 7]], { activePriceId: null }),   // scritto a mano
+    ] }));
+    const r = JSON.parse(a.eval('JSON.stringify(homeRisparmio())'));
+    assert.deepEqual(r.voci.map(v => v.code), ['A2', 'A4', 'A1']);
+    assert.equal(r.voci.find(v => v.code === 'A4').aMano, true);
+  });
+
+  it('nessun avviso se la quotazione in uso è già la più bassa', () => {
+    const a = app(makeDb({ suppliers: fornitori, items: [conListino('b1', 10, [['s1', 8], ['s2', 9]])] }));
+    // Il prezzo dell'articolo è rimasto a 10, ma la riga in uso è già la migliore.
+    assert.equal(JSON.parse(a.eval('JSON.stringify(homeRisparmio())')).quanti, 0);
+    a.eval('renderHome()');
+    assert.doesNotMatch(a.html('view-home'), /Prezzi da rivedere/);
   });
 
   it('si disegna senza lanciare, anche su un database vuoto', () => {

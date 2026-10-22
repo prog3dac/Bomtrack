@@ -604,6 +604,11 @@ body.filt-open .filt-summary{display:none}
 .cat-group-title:first-child{margin-top:0}
 /* Listino fornitori: la quotazione in uso e quella più bassa vanno riconosciute a colpo d'occhio */
 .price-active{background:var(--accent-soft)}
+.price-storico td{color:var(--text-dim)}
+.price-tag-storico{font-size:11px;color:var(--text-dim);border:1px solid var(--border);border-radius:4px;padding:0 4px;font-weight:400}
+.price-storico-box{margin-top:12px}
+.price-storico-box > summary{cursor:pointer;color:var(--text-dim);font-size:13px}
+.price-superata{margin-bottom:12px;padding:8px 10px;border:1px solid var(--orange);border-radius:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .price-best{color:var(--green);font-weight:700;margin-left:4px}
 /* La riga era troppo lunga: i numeri stanno in colonne strette (i giorni di
    consegna in quattro cifre) e codice fornitore e origine scendono sotto al
@@ -1121,6 +1126,14 @@ body.insp-on .row-actions{display:none}
 .home-chip.muta:hover{border-color:var(--border);color:var(--text-dim)}
 .home-voci-resto{font-size:11px;color:var(--text-dim);align-self:center}
 @media(max-width:640px){.home-voci{padding-left:0}}
+/* Risparmio possibile: ogni riga apre il listino dell'articolo */
+.home-ris-riga{cursor:pointer}
+.home-ris-riga:hover td{background:var(--bg)}
+.home-ris-riga:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.home-ris th.num{text-align:right}
+.home-ris-superato{color:var(--orange,#d90);font-size:12px;font-family:var(--font);white-space:normal;font-weight:600}
+.home-ris .num .dash-nota{font-family:var(--font);white-space:normal}
+@media(max-width:640px){.home-ris td,.home-ris th{padding:7px 4px}}
 
 /* ─── Elenco a destra, documento al centro ───
    Il telaio comune di commesse, fabbisogno, richieste e ordini (worklist.js).

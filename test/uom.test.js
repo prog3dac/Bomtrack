@@ -178,7 +178,7 @@ describe('Il confronto fra quotazioni in unità diverse', () => {
     a.eval(`const it = getItem("bar");
       it.priceList = [
         { id: 'kg', supplierId: 's1', price: 2, priceUom: 'kg', date: '2026-01-01' },
-        { id: 'm',  supplierId: 's1', price: 5, priceUom: 'm',  date: '2026-01-01' }];
+        { id: 'm',  supplierId: 's2', price: 5, priceUom: 'm',  date: '2026-01-01' }];
       it.activePriceId = 'kg'; applyPriceRow(it, it.priceList[0]);
       Store.insert('plans', { id: 'pl1', number: 'FAB-1', active: true, lines: [{ id: 'l1', itemId: 'mac', qty: 1 }] });`);
     const r = JSON.parse(a.eval('JSON.stringify(mrpBuyRows(getPlan("pl1"), false).find(x => x.item.id === "bar"))'));

@@ -2,6 +2,29 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.109.0 — 2026-10-22
+
+**Un fornitore ha un solo prezzo valido, il più recente. Il «Risparmio possibile» del Riepilogo diventa «Prezzi da rivedere a listino» e dice di quali articoli parla.**
+
+**Listino**
+- **Una quotazione valida per fornitore.** Fra le quotazioni dello stesso fornitore vale quella con la data più recente. Le precedenti vanno nello **Storico**, in fondo al listino dell'articolo: in sola lettura (si possono solo eliminare), fuori dai confronti, non più selezionabili come prezzo in uso. Una riga nuova ancora senza prezzo non sostituisce niente. Ordini e richieste usavano già la quotazione più recente del fornitore; ora la usa anche la costificazione nei confronti.
+- **Prezzo in uso sostituito.** Se il prezzo in uso viene da una quotazione sostituita, il listino lo dice con il prezzo nuovo e il pulsante **✓ Usa la nuova**. Il costo non cambia da solo.
+- La ↓ «quotazione più bassa» compare solo se ci sono almeno due quotazioni valide da confrontare. La vista *Listino fornitori* segna le quotazioni *storico*, ha il filtro *Senza lo storico* e la colonna *Storico* nell'export.
+
+**Riepilogo**
+- **Prima** l'avviso diceva solo «su N articoli il listino contiene una quotazione più bassa: X € per unità, sommati». Non nominava né gli articoli né i fornitori, e il totale sommava prezzi unitari di articoli diversi (un €/m più un €/pz): un numero che non era il risparmio di niente.
+- **Ora** è una tabella: per ogni articolo il prezzo in uso e il suo fornitore (o «prezzo scritto a mano»), l'altro fornitore più conveniente con prezzo e data, il risparmio per unità di misura e in percentuale. Elenca anche i prezzi in uso sostituiti da un listino più recente dello stesso fornitore (*da aggiornare*). **Un clic sulla riga apre il listino dell'articolo**, e alla chiusura il riquadro si aggiorna.
+- **Il confronto è giusto**: solo con fornitori diversi da quello in uso, contro il suo listino di oggi. Un fornitore solo non dà mai «risparmio». Gli articoli obsoleti non vengono più segnalati.
+
+**Fabbisogno e scheda articolo**
+- Il `↓ risparmio` del fabbisogno e la «Miglior quotazione» della scheda articolo seguono la stessa regola. Il suggerimento del `↓` non chiama più «per unità» un importo che è sulla quantità da ordinare. La scheda articolo segna le quotazioni *storico* e mostra il «Listino più recente» quando il prezzo in uso è stato sostituito.
+- Nessun cambio a `supabase/schema.sql`.
+
+**Verifica**
+- `test/pricelist.test.js`: la quotazione vecchia dello stesso fornitore va nello storico e non è più la più bassa; il risparmio si confronta con un altro fornitore sul listino nuovo; un fornitore solo non dà risparmio; il prezzo in uso sostituito si segnala e il listino propone la nuova; la sostituita non si può mettere in uso; una riga senza prezzo non sostituisce quella quotata.
+- `test/ui.test.js`: l'avviso nomina articolo e fornitori e apre il listino; ordine per risparmio percentuale; obsoleti esclusi; prezzo scritto a mano riconosciuto; niente più somma di prezzi unitari.
+- `test/uom.test.js`: il confronto fra unità diverse ora usa due fornitori diversi, come vuole la regola.
+
 ### 0.108.1 — 2026-10-22
 
 **Sottogruppi in giallo.** L'etichetta `SGR` dei sottogruppi era verde come quella `GRP` dei gruppi, e nelle liste i due tipi si confondevano. Ora i sottogruppi sono gialli, i gruppi restano verdi; il cambio vale ovunque compaia l'etichetta del tipo (elenchi, ricerche, distinta, scheda articolo, ispettore). Il giallo è un token nuovo, `--yellow`, in tutte e due le palette: acceso sul tema scuro (#E5CC4F, 10,7:1 sulla scheda), scurito su quello chiaro e in stampa (#7A6A00, 5,4:1 sul bianco), distinto dall'ambra dei materiali. Nessun cambio a `supabase/schema.sql`.

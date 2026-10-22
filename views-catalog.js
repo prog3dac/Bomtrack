@@ -33,12 +33,31 @@ function activePriceRow(it) { return priceRows(it).find(r => r.id === it.activeP
 // parlati, e un listino vecchio di due anni non è il prezzo di oggi. A parità di
 // data vince l'ultima registrata. La quotazione in uso non ha alcun privilegio
 // qui: quella riguarda la costificazione, che è un'altra domanda.
+//
+// Dalla 0.109.0 conta solo una quotazione **con un prezzo**: una riga appena
+// aggiunta e ancora vuota non è un'offerta, e non deve far sparire quella che
+// c'è. Se il fornitore non ha ancora quotato niente, vale la riga vuota più
+// recente — il documento la mostra «senza prezzo», come prima.
 function supplierPriceRow(it, supplierId) {
   if (!it || !supplierId) return null;
-  return priceRows(it)
-    .filter(r => r.supplierId === supplierId)
+  const sue = priceRows(it).filter(r => r.supplierId === supplierId);
+  const quotate = sue.filter(priceRowQuoted);
+  return (quotate.length ? quotate : sue)
     .reduce((best, r) => (!best || (r.date || '') >= (best.date || '') ? r : best), null);
 }
+function priceRowQuoted(r) { return !!r && r.price !== '' && r.price != null; }
+// ─── Quotazioni sostituite: lo storico ───
+// Un fornitore non ha due prezzi nello stesso momento: la quotazione nuova
+// sostituisce la vecchia, che resta a listino solo come storico. Le sostituite
+// non entrano nel confronto (la ↓, il risparmio del Riepilogo e del
+// fabbisogno) e non si possono più scegliere come prezzo in uso. Una riga
+// senza fornitore non ne sostituisce e non ne è sostituita: non si sa di chi è.
+function priceRowSuperseded(it, row) {
+  if (!row || !row.supplierId || !priceRowQuoted(row)) return false;
+  const valida = supplierPriceRow(it, row.supplierId);
+  return !!valida && valida.id !== row.id;
+}
+function validPriceRows(it) { return priceRows(it).filter(r => !priceRowSuperseded(it, r)); }
 // ─── Quotazioni in un'unità diversa da quella di gestione ───
 // L'unità in cui è espressa QUESTA quotazione. Vale solo se è l'unità
 // alternativa dell'articolo: qualunque altra cosa vale come unità di gestione,
@@ -59,8 +78,14 @@ function rowUnitCost(it, row) {
 // sembrerebbe più conveniente di «5 €/m» su una barra che pesa 8 kg/m, e la
 // segnalazione di risparmio consiglierebbe il fornitore più caro — un errore
 // silenzioso e per giunta a effetto opposto.
-function bestPriceRow(it) {
-  const quotate = priceRows(it).filter(r => r.price !== '' && r.price != null);
+//
+// Solo fra le quotazioni **valide** (vedi priceRowSuperseded). Con
+// `esclusoFornitore` si cerca un'alternativa a quel fornitore: è la domanda del
+// risparmio, perché il prezzo nuovo dello stesso fornitore non è un'alternativa
+// ma il suo prezzo di oggi.
+function bestPriceRow(it, esclusoFornitore) {
+  const quotate = validPriceRows(it).filter(r => priceRowQuoted(r)
+    && !(esclusoFornitore && r.supplierId === esclusoFornitore));
   if (!quotate.length) return null;
   return quotate.reduce((best, r) => {
     const d = (rowUnitCost(it, r) || 0) - (rowUnitCost(it, best) || 0);
@@ -68,6 +93,32 @@ function bestPriceRow(it) {
     if (d > 0) return best;
     return (r.date || '') > (best.date || '') ? r : best;
   });
+}
+// ─── Il prezzo in uso confrontato con il listino ───
+// Due domande, la stessa per Riepilogo, fabbisogno e scheda articolo:
+//   - la quotazione in uso è stata **sostituita** da una più recente dello
+//     stesso fornitore? Allora il prezzo di riferimento è quello nuovo;
+//   - un **altro** fornitore quota meno del riferimento? Quello è il risparmio.
+// Un fornitore solo non dà mai risparmio: il suo prezzo nuovo è un
+// aggiornamento, e si segnala come tale.
+function priceCompare(it) {
+  const campo = costField(it); if (!campo) return null;
+  const inUso = Number(it[campo]) || 0;
+  const attiva = activePriceRow(it);
+  const fornitore = (attiva && attiva.supplierId) || '';
+  const superata = !!attiva && priceRowSuperseded(it, attiva);
+  const valida = superata ? supplierPriceRow(it, fornitore) : null;
+  const attuale = valida ? (rowUnitCost(it, valida) || 0) : null;
+  // Il riferimento è il listino di oggi del fornitore in uso; senza una
+  // quotazione in uso, il prezzo scritto a mano nell'articolo.
+  const riferimento = attuale != null ? attuale
+    : attiva && priceRowQuoted(attiva) ? (rowUnitCost(it, attiva) || 0) : inUso;
+  const best = bestPriceRow(it, fornitore);
+  const migliore = best ? (rowUnitCost(it, best) || 0) : 0;
+  const conviene = riferimento > 0 && migliore > 0 && migliore < riferimento - 0.00005;
+  return { inUso, attiva, superata, valida, attuale, riferimento,
+    best: conviene ? best : null, migliore: conviene ? migliore : null,
+    saving: conviene ? riferimento - migliore : 0 };
 }
 // Porta una quotazione nei campi dell'articolo: da qui in poi è quella che costa.
 // È la porta unica in cui avviene la conversione, ed è il motivo per cui il
@@ -110,11 +161,19 @@ function priceListBody(id) {
   const doppia = hasAltUom(it);   // la colonna dell'unità compare solo se serve
 
   // Le quotazioni più recenti in cima: è quello che si guarda per primo.
-  const righe = priceRows(it).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  // Quelle sostituite da una più recente dello stesso fornitore vanno nello
+  // storico, sotto: in sola lettura, e non si possono più usare. Fa eccezione
+  // quella in uso, che resta qui con l'avviso finché non si sceglie la nuova.
+  const tutte = priceRows(it).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const storico = tutte.filter(r => priceRowSuperseded(it, r) && !(inUso && r.id === inUso.id));
+  const righe = tutte.filter(r => !storico.includes(r));
+  const superataDa = inUso && priceRowSuperseded(it, inUso) ? supplierPriceRow(it, inUso.supplierId) : null;
+  // La ↓ ha senso solo se c'è con chi confrontare: almeno due quotazioni valide.
+  const confrontabili = validPriceRows(it).filter(priceRowQuoted).length;
 
   const corpo = righe.map(r => {
     const attiva = inUso && r.id === inUso.id;
-    const best = migliore && r.id === migliore.id && righe.length > 1;
+    const best = migliore && r.id === migliore.id && confrontabili > 1;
     const ro = scrivibile ? '' : 'disabled';
     return `<tr class="${attiva ? 'price-active' : ''}">
       <td class="pl-flag">${attiva ? '<span title="Prezzo in uso nella costificazione">✓</span>' : ''}${best ? '<span class="price-best" title="Quotazione più bassa">↓</span>' : ''}</td>
@@ -124,6 +183,7 @@ function priceListBody(id) {
           <input class="pl-code" value="${esc(r.code || '')}" placeholder="codice fornitore" title="Codice dell'articolo presso il fornitore" ${ro} onchange="priceSetField('${r.id}','code',this.value)">
           <input class="pl-desc" value="${esc(r.desc || '')}" placeholder="descrizione fornitore" title="Descrizione dell'articolo presso il fornitore" ${ro} onchange="priceSetField('${r.id}','desc',this.value)">
           <span title="Da dove arriva la quotazione">${esc(priceRowOrigin(r))}</span>
+          ${attiva && superataDa ? `<span class="home-ris-superato">sostituita dal listino del ${esc(fmtDateIt(superataDa.date) || '—')}</span>` : ''}
         </div>
       </td>
       <td><input type="number" class="num pl-price" min="0" step="0.0001" value="${r.price === '' || r.price == null ? '' : r.price}" ${ro} onchange="priceSetField('${r.id}','price',this.value)">
@@ -146,12 +206,30 @@ function priceListBody(id) {
   // può non essere quella di gestione: quando le due differiscono la colonna
   // dell'unità compare accanto al prezzo e l'intestazione non la anticipa.
   const uQuot = doppia ? 'U.M. quotazione' : (itemUom(it) || 'U.M.');
-  return `${attuale}
+  const avvisoSuperata = superataDa ? `<div class="price-superata">
+      <span style="flex:1">${ico('warning', 'tinted', '')} Il prezzo in uso viene da una quotazione di <strong>${esc(supplierName(inUso.supplierId) || 'questo fornitore')}</strong>
+        sostituita da quella del ${esc(fmtDateIt(superataDa.date) || '—')}: <strong style="font-family:var(--mono)">${fmtPer(rowUnitCost(it, superataDa) || 0, itemUom(it))}</strong>.</span>
+      ${scrivibile ? `<button class="add-btn-sm" onclick="priceUseRow('${superataDa.id}')">✓ Usa la nuova</button>` : ''}
+    </div>` : '';
+  const righeStorico = storico.map(r => `<tr class="price-storico">
+      <td>${esc(supplierName(r.supplierId) || '—')}${r.code ? ` <span style="font-family:var(--mono)">${esc(r.code)}</span>` : ''}</td>
+      <td class="num">${priceRowQuoted(r) ? fmtPer(Number(r.price) || 0, priceUomOf(it, r)) : '—'}</td>
+      <td>${r.date ? esc(fmtDateIt(r.date)) : '—'}</td>
+      <td>${esc(priceRowOrigin(r))}</td>
+      <td class="pl-act">${scrivibile ? `<button class="mini-btn danger" title="Elimina dallo storico" onclick="priceDelRow('${r.id}')">${ico('trash', 'tinted', 'Elimina dallo storico')}</button>` : ''}</td></tr>`).join('');
+  const storicoHtml = storico.length ? `<details class="price-storico-box">
+      <summary>Storico: ${storico.length} ${storico.length === 1 ? 'quotazione sostituita' : 'quotazioni sostituite'} da una più recente dello stesso fornitore</summary>
+      <div class="table-wrap"><table class="price-table">
+        <thead><tr><th scope="col">Fornitore</th><th scope="col" class="num">Prezzo</th><th scope="col">Data</th><th scope="col">Origine</th><th scope="col"></th></tr></thead>
+        <tbody>${righeStorico}</tbody></table></div>
+    </details>` : '';
+  return `${attuale}${avvisoSuperata}
     <div class="table-wrap"><table class="price-table">
       <thead><tr><th scope="col"></th><th scope="col">Fornitore</th><th scope="col">Prezzo (${esc(cur())}/${esc(uQuot)})</th><th scope="col">Q.tà min (${esc(uQuot)})</th>
         <th scope="col" title="Giorni di consegna">GG</th><th scope="col">Data</th><th scope="col"></th></tr></thead>
       <tbody>${corpo || vuoto}</tbody></table></div>
-    <div style="margin-top:10px"><button class="add-btn-sm" onclick="priceAddRow()">+ Aggiungi quotazione</button></div>`;
+    <div style="margin-top:10px"><button class="add-btn-sm" onclick="priceAddRow()">+ Aggiungi quotazione</button></div>
+    ${storicoHtml}`;
 }
 // ═══════════════════════════════════════════════════════════
 //  LISTINO FORNITORI — la vista d'insieme
@@ -170,18 +248,21 @@ function plvRows() {
     if (_plv.tipo && it.type !== _plv.tipo) return;
     const inUso = activePriceRow(it);
     const migliore = bestPriceRow(it);
+    const confrontabili = validPriceRows(it).filter(priceRowQuoted).length;
     const righe = priceRows(it);
     righe.forEach(r => {
       if (_plv.sup && (r.supplierId || '') !== _plv.sup) return;
       const attiva = !!inUso && r.id === inUso.id;
       if (_plv.solo === 'uso' && !attiva) return;
       if (_plv.solo === 'senza' && r.price !== '' && r.price != null) return;
+      const storico = priceRowSuperseded(it, r);
+      if (_plv.solo === 'valide' && storico) return;
       const sup = getSupplier(r.supplierId);
       if (q) {
         const testo = [it.code, it.name, sup && sup.name, r.code, r.desc].join(' ').toLowerCase();
         if (!testo.includes(q)) return;
       }
-      out.push({ it, r, sup, attiva, best: !!migliore && r.id === migliore.id && righe.length > 1 });
+      out.push({ it, r, sup, attiva, storico, best: !!migliore && r.id === migliore.id && confrontabili > 1 });
     });
   });
   // Per codice articolo, e dentro l'articolo le quotazioni più recenti in cima:
@@ -211,8 +292,8 @@ function plvBody(righe) {
     <thead><tr><th scope="col"></th><th scope="col">Articolo</th><th scope="col">Descrizione</th><th scope="col">Fornitore</th>
       <th scope="col">Cod. fornitore</th><th scope="col" class="num">Prezzo</th><th scope="col" class="num">Q.tà min</th>
       <th scope="col" class="num" title="Giorni di consegna">GG</th><th scope="col">Data</th><th scope="col">Origine</th></tr></thead>
-    <tbody>${righe.map(x => `<tr class="${x.attiva ? 'price-active' : ''}" style="cursor:pointer" tabindex="0" onclick="priceListModal('${x.it.id}')" onkeydown="if(event.key==='Enter')priceListModal('${x.it.id}')" title="Apri il listino di ${esc(x.it.code)}">
-      <td class="pl-flag">${x.attiva ? '<span title="Prezzo in uso nella costificazione">✓</span>' : ''}${x.best ? '<span class="price-best" title="Quotazione più bassa">↓</span>' : ''}</td>
+    <tbody>${righe.map(x => `<tr class="${x.attiva ? 'price-active' : x.storico ? 'price-storico' : ''}" style="cursor:pointer" tabindex="0" onclick="priceListModal('${x.it.id}')" onkeydown="if(event.key==='Enter')priceListModal('${x.it.id}')" title="Apri il listino di ${esc(x.it.code)}">
+      <td class="pl-flag">${x.attiva ? '<span title="Prezzo in uso nella costificazione">✓</span>' : ''}${x.best ? '<span class="price-best" title="Quotazione più bassa">↓</span>' : ''}${x.storico ? '<span class="price-tag-storico" title="Sostituita da una quotazione più recente dello stesso fornitore">storico</span>' : ''}</td>
       <td><span class="code">${esc(x.it.code)}</span></td>
       <td>${esc(x.it.name)} <span style="color:var(--text-dim)">· ${esc(typeLabel(x.it.type))}</span></td>
       <td>${x.sup ? esc(x.sup.name) : '<span style="color:var(--text-dim)">—</span>'}</td>
@@ -249,17 +330,18 @@ function renderPriceListView() {
       <select id="plv-solo" onchange="plvSet('solo', this.value)" title="Quali quotazioni">
         <option value="">Tutte le quotazioni</option>
         <option value="uso" ${_plv.solo === 'uso' ? 'selected' : ''}>Solo i prezzi in uso</option>
+        <option value="valide" ${_plv.solo === 'valide' ? 'selected' : ''}>Senza lo storico</option>
         <option value="senza" ${_plv.solo === 'senza' ? 'selected' : ''}>Senza prezzo</option>
       </select>
       <span class="doc-filter-count">${righe.length} ${righe.length === 1 ? 'quotazione' : 'quotazioni'}</span>
     </div>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Tutte le quotazioni di commerciali, materie prime e parti. ✓ è il prezzo in uso nella costificazione, ↓ la quotazione più bassa dell'articolo. Un clic sulla riga apre il listino dell'articolo, dove si modifica e si sceglie il prezzo in uso.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Tutte le quotazioni di commerciali, materie prime e parti. ✓ è il prezzo in uso nella costificazione, ↓ la quotazione più bassa dell'articolo. Per ogni fornitore vale la quotazione più recente: le precedenti sono segnate «storico» e non entrano nei confronti. Un clic sulla riga apre il listino dell'articolo, dove si modifica e si sceglie il prezzo in uso.</p>
     <div id="plv-body">${plvBody(righe)}</div>
   </div>`;
 }
 function plvExportSpec() {
   const righe = plvRows();
-  const solo = { uso: 'Solo i prezzi in uso', senza: 'Senza prezzo' }[_plv.solo] || '';
+  const solo = { uso: 'Solo i prezzi in uso', senza: 'Senza prezzo', valide: 'Senza lo storico' }[_plv.solo] || '';
   return {
     titolo: 'Listino fornitori',
     slug: 'listino_fornitori',
@@ -271,12 +353,12 @@ function plvExportSpec() {
         { h: 'Codice', w: 14 }, { h: 'Descrizione', w: 30 }, { h: 'Tipo', w: 14 }, { h: 'Fornitore', w: 24 },
         { h: 'Cod. fornitore', w: 14 }, { h: 'Prezzo', w: 12, num: true }, { h: 'U.M.', w: 6 },
         { h: 'Q.tà min', w: 9, num: true }, { h: 'GG', w: 6, num: true }, { h: 'Data', w: 11, data: true },
-        { h: 'In uso', w: 7 }, { h: 'Origine', w: 14 }],
+        { h: 'In uso', w: 7 }, { h: 'Storico', w: 8 }, { h: 'Origine', w: 14 }],
       righe: righe.map(x => [x.it.code || '', x.it.name || '', typeLabel(x.it.type), x.sup ? x.sup.name : '',
         x.r.code || '', x.r.price === '' || x.r.price == null ? '' : Number(x.r.price) || 0, priceUomOf(x.it, x.r),
         x.r.minQty === '' || x.r.minQty == null ? '' : Number(x.r.minQty) || 0,
         x.r.leadDays === '' || x.r.leadDays == null ? '' : Number(x.r.leadDays) || 0,
-        x.r.date || '', x.attiva ? 'sì' : '', priceRowOrigin(x.r)]),
+        x.r.date || '', x.attiva ? 'sì' : '', x.storico ? 'sì' : '', priceRowOrigin(x.r)]),
     }],
   };
 }
@@ -342,6 +424,9 @@ function priceSetField(rowId, field, value) {
 function priceUseRow(rowId) {
   if (!roleGuard('catalog')) return;
   const found = priceRowById(rowId); if (!found || !found.row) return;
+  if (priceRowSuperseded(found.it, found.row)) {
+    showToast('Questa quotazione è stata sostituita da una più recente dello stesso fornitore: usa quella', 'error'); return;
+  }
   // Parte prodotta in casa: il costo lo determina il ciclo, non c'è un campo dove
   // scrivere il prezzo. Usarlo significa dire che quella parte la si compra —
   // decisione che sposta il costo di ogni distinta che la contiene, quindi si chiede.

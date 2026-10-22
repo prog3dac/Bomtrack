@@ -667,10 +667,12 @@ function mrpBuyRow(entry, netMode, planId) {
   const it = entry.item;
   const attiva = activePriceRow(it);
   const price = Number(it[costField(it)]) || 0;
-  const best = bestPriceRow(it);
   // Il confronto è fra costi nell'unità di gestione, non fra prezzi grezzi:
-  // vedi bestPriceRow(). Un €/kg accanto a un €/m non è un confronto.
-  const bestPrice = best ? (rowUnitCost(it, best) || 0) : null;
+  // vedi bestPriceRow(). Un €/kg accanto a un €/m non è un confronto. Dalla
+  // 0.109.0 è lo stesso del Riepilogo (priceCompare): solo quotazioni valide e
+  // solo con **altri** fornitori, contro il listino di oggi del fornitore in uso.
+  const cmp = priceCompare(it);
+  const bestPrice = cmp && cmp.best ? cmp.migliore : null;
   const impegni = commitsOn(it.id, planId || null);
   // Quello che i documenti del piano hanno già prelevato è uscito
   // dall'esistente: resta da coprire solo il resto del lordo, o il piano
@@ -720,7 +722,7 @@ function mrpBuyRow(entry, netMode, planId) {
     net: st.net, coperto: !!netMode && st.coperto, qtyOrder,
     supplierId,
     price, amount: price * qtyOrder,
-    bestPrice, saving: (bestPrice != null && bestPrice < price) ? (price - bestPrice) * qtyOrder : 0,
+    bestPrice, saving: cmp && cmp.saving > 0 ? cmp.saving * qtyOrder : 0,
     // Il minimo del fornitore è già stato convertito nell'unità di gestione
     // qui sopra: il confronto è alla pari con la quantità ordinata.
     minQty, underMin: minQty > 0 && qtyOrder > 0 && qtyOrder < minQty,
@@ -2643,7 +2645,7 @@ function planCriticoModal(planId, lineId) {
 // e doversi fidare.
 function mrpBuyLineHtml(r) {
   const seg = [];
-  if (r.bestPrice != null && r.saving > 0) seg.push(`<span class="price-best" title="A listino c'è ${fmtPer(r.bestPrice, r.uom)}: risparmio ${fmtPer(r.saving, r.uom)}">↓ ${fmtN(r.saving)}</span>`);
+  if (r.bestPrice != null && r.saving > 0) seg.push(`<span class="price-best" title="Un altro fornitore quota ${fmtPer(r.bestPrice, r.uom)}: sulla quantità da ordinare si risparmiano ${fmtN(r.saving)}">↓ ${fmtN(r.saving)}</span>`);
   if (r.underMin) seg.push(`<span class="mrp-warn" title="Quantità minima del fornitore: ${fmtUom(r.minQty, r.uom)}">${ico('warning', 'tinted', '')} sotto il minimo</span>`);
   if (r.noPrice) seg.push(`<span class="mrp-warn" title="Nessun prezzo in uso: la riga varrebbe zero in un ordine">${ico('warning', 'tinted', '')} senza prezzo</span>`);
   if (mrpNet && r.lotSize > 0 && r.net > 0) seg.push(r.lotMode === 'min'
