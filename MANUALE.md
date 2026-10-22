@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.108.0**
+**Versione dell'app documentata: 0.108.1**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -748,12 +748,15 @@ le stesse colonne ma si guardano per motivi diversi.
 
 **I quattro tipi.**
 
-| Tipo | Che cos'è | Ha una distinta? |
-|---|---|---|
-| **Macchina** | Il prodotto finito | Sì, l'albero completo |
-| **Gruppo** | Un assieme di primo livello | Sì |
-| **Sottogruppo** | Un assieme dentro un gruppo; può contenerne altri, senza limite | Sì |
-| **Parte (lavorato)** | La foglia: il pezzo che si fa o si compra | Sì: **distinta parte + ciclo** |
+| Tipo | Etichetta | Che cos'è | Ha una distinta? |
+|---|---|---|---|
+| **Macchina** | `MAC`, rossa | Il prodotto finito | Sì, l'albero completo |
+| **Gruppo** | `GRP`, verde | Un assieme di primo livello | Sì |
+| **Sottogruppo** | `SGR`, gialla | Un assieme dentro un gruppo; può contenerne altri, senza limite | Sì |
+| **Parte (lavorato)** | `PRT`, viola | La foglia: il pezzo che si fa o si compra | Sì: **distinta parte + ciclo** |
+
+L'etichetta colorata accompagna il tipo ovunque compaia: elenchi, ricerche, distinta, scheda
+articolo. Gruppo e sottogruppo hanno colori diversi apposta, per non confonderli a colpo d'occhio.
 
 **Comandi.** **Esporta Excel** / **Esporta PDF**; nella barra filtri, **Colonne** e
 **+ Nuovo articolo**.

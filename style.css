@@ -22,6 +22,7 @@
   /* --green-solid non compare in nessuna regola: lo usa showToast() da core.js */
   --green:#2EAE6D;--green-solid:#238452;
   --orange:#E8A33A;--orange-solid:#E8A33A;--orange-h:#E5961F;--on-orange:#171A21;
+  --yellow:#E5CC4F;
   --purple:#9B6DFF;
   /* Auto-referenziarsi qui rendeva la proprietà invalida, e nel tema scuro —
      che è questo, il :root di partenza — ogni box-shadow che la usa veniva
@@ -43,7 +44,7 @@
     --red:#C4381A;--red-solid:#C4381A;--red-h:#A32C12;
     --green:#17784A;--green-solid:#17784A;
     --orange:#95610D;--orange-solid:#95610D;--orange-h:#7A4E08;--on-orange:#FFFFFF;
-    --purple:#6B3FD4;
+    --yellow:#7A6A00;--purple:#6B3FD4;
     --shadow:rgba(23,26,33,.16);--shadow-soft:rgba(23,26,33,.12);
   }
 }
@@ -55,7 +56,7 @@
   --red:#C4381A;--red-solid:#C4381A;--red-h:#A32C12;
   --green:#17784A;--green-solid:#17784A;
   --orange:#95610D;--orange-solid:#95610D;--orange-h:#7A4E08;--on-orange:#FFFFFF;
-  --purple:#6B3FD4;
+  --yellow:#7A6A00;--purple:#6B3FD4;
   --shadow:rgba(23,26,33,.16);--shadow-soft:rgba(23,26,33,.12);
 }
 /* Perché ogni colore vive in due versioni.
@@ -80,6 +81,7 @@
   --red-soft:color-mix(in srgb,var(--red) 15%,transparent);
   --green-soft:color-mix(in srgb,var(--green) 14%,transparent);
   --orange-soft:color-mix(in srgb,var(--orange) 13%,transparent);
+  --yellow-soft:color-mix(in srgb,var(--yellow) 14%,transparent);
   --purple-soft:color-mix(in srgb,var(--purple) 14%,transparent);
   --purple-veil:color-mix(in srgb,var(--purple) 5%,transparent);
   --hairline:color-mix(in srgb,var(--border) 55%,transparent);
@@ -396,7 +398,8 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .tt-materiale{background:var(--orange-soft);color:var(--orange)}
 .tt-acquistato{background:var(--accent-soft-hi);color:var(--accent)}
 .tt-parte{background:var(--purple-soft);color:var(--purple)}
-.tt-sottogruppo{background:var(--green-soft);color:var(--green)}
+/* Giallo, non verde: accanto al gruppo (verde) il sottogruppo si distingue a colpo d'occhio. */
+.tt-sottogruppo{background:var(--yellow-soft);color:var(--yellow)}
 .tt-gruppo{background:color-mix(in srgb,var(--green) 22%,transparent);color:var(--green)}
 .tt-macchina{background:var(--red-soft);color:var(--red)}
 .tt-lav{background:var(--green-soft);color:var(--green)}
@@ -690,7 +693,7 @@ textarea.notes-internal{border-style:dashed}
     --red:#C4381A;--red-solid:#C4381A;--red-h:#A32C12;
     --green:#17784A;--green-solid:#17784A;
     --orange:#95610D;--orange-solid:#95610D;--orange-h:#7A4E08;--on-orange:#FFFFFF;
-    --purple:#6B3FD4;--shadow:transparent;--shadow-soft:transparent}
+    --yellow:#7A6A00;--purple:#6B3FD4;--shadow:transparent;--shadow-soft:transparent}
   input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:none}
   body{background:#fff;color:#000;font-size:11px}
   #app-header,#sub-nav,#toast,#modal-root,#login-screen,#unsaved-badge{display:none!important}
