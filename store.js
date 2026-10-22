@@ -632,10 +632,12 @@ function loadDB() {
 // Il calendario di fabbrica di serie: lunedì–venerdì e le festività nazionali
 // italiane, ricorrenti. Pasqua e Pasquetta si calcolano (`easter`, vedi
 // calendario.js); santo patrono, ferie d'agosto e ponti stanno in `closures`,
-// intervalli con una data intera, perché cambiano ogni anno.
+// intervalli con una data intera, perché cambiano ogni anno. I giorni dei
+// fornitori (`supplierDays`) sono lavorativi di serie dalla 0.110.0; un
+// archivio di prima, senza il campo, vale lo stesso.
 const CAL_FESTIVI_IT = ['01-01', '01-06', '04-25', '05-01', '06-02', '08-15', '11-01', '12-08', '12-25', '12-26'];
 function calDefault() {
-  return { workDays: [1, 2, 3, 4, 5], holidays: CAL_FESTIVI_IT.slice(), easter: true, closures: [] };
+  return { workDays: [1, 2, 3, 4, 5], holidays: CAL_FESTIVI_IT.slice(), easter: true, closures: [], supplierDays: 'lavorativi' };
 }
 // Le copie lasciate da quella semina ripetuta (fino alla 0.105.1): stessa
 // quotazione a mano, identica in tutto tranne l'id. Resta quella in uso, se è

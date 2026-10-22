@@ -1571,16 +1571,20 @@ function giorniTra(a, b) {
   if (isNaN(d1) || isNaN(d2)) return null;
   return Math.round((d2 - d1) / 86400000);
 }
+// Lo scarto si conta in giorni-fornitore (calendario.js): lavorativi di serie
+// dalla 0.110.0, come i giorni di consegna a listino.
 function ordLineDelay(l) {
-  const g = giorniTra(l && l.deliveryDate, l && l.confirmedDate);
+  const a = l && l.deliveryDate, b = l && l.confirmedDate;
+  if (!a || !b) return null;
+  const g = typeof supplierDaysBetween === 'function' ? supplierDaysBetween(a, b) : giorniTra(a, b);
   return g == null ? null : g;
 }
 function ordLineDelayHtml(l) {
   const g = ordLineDelay(l);
   if (g == null || g === 0) return '';
   return g > 0
-    ? `<div class="line-note" style="color:var(--red)">+${g} ${g === 1 ? 'giorno' : 'giorni'} sulla richiesta</div>`
-    : `<div class="line-note" style="color:var(--green)">${g} ${g === -1 ? 'giorno' : 'giorni'} — in anticipo</div>`;
+    ? `<div class="line-note" style="color:var(--red)">+${supplierDaysText(g)} sulla richiesta</div>`
+    : `<div class="line-note" style="color:var(--green)">${supplierDaysText(g)} — in anticipo</div>`;
 }
 // Il ritardo peggiore dell'ordine: è quello che decide se la commessa slitta.
 function orderWorstDelay(o) {
@@ -1840,7 +1844,7 @@ function renderOrderEdit(id) {
     ${docStepperHtml('order', o)}${docLinksHtml('order', o)}
     ${docCoWarnHtml()}${lockBanner}${stampLine(o)}
     ${docTestaHtml({ pfx: 'ord', rec: o, stati: ORDER_STATUS, controparte: 'Fornitore', data: 'Data ordine', conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
-    ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${ritardo} ${ritardo === 1 ? 'giorno' : 'giorni'}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
+    ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
     <h3 class="rfq-subhead">Righe ordine
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="ordAddCatalogModal('${id}')">+ Da catalogo</button>
@@ -2167,7 +2171,7 @@ function renderOdlEdit(id) {
     ${docStepperHtml('odl', o)}${docLinksHtml('odl', o)}
     ${docCoWarnHtml()}${odlOdpRef(o)}${lockBanner}${stampLine(o)}
     ${docTestaHtml({ pfx: 'odl', rec: o, stati: ORDER_STATUS, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', note: 'Note' })}
-    ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${ritardo} ${ritardo === 1 ? 'giorno' : 'giorni'}</strong> di ritardo sulla data richiesta.</div>` : ''}
+    ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta.</div>` : ''}
     <p class="empty-text" style="text-align:left;padding:0 0 8px">I <strong>pezzi rientrati</strong> portano l'ordine a parziale o evaso ma <strong>non caricano il magazzino</strong>: il materiale che esce e i pezzi che tornano si registrano come movimenti. È la stessa regola per cui queste righe non hanno un articolo — altrimenti la stessa merce verrebbe contata due volte.<br>Il materiale <strong>esce una volta sola</strong>, alla prima fase di ogni parte, ed è quello scritto nel suo <strong>ciclo</strong>; i pezzi rientrano una volta, all'ultima. Le fasi in mezzo non muovono niente: più fasi dallo stesso terzista sono più lavorazioni sullo <em>stesso</em> pezzo, non più pezzi.</p>
     <h3 class="rfq-subhead">Lavorazioni
       <span class="rfq-head-actions">

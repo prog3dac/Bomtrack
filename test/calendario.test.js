@@ -122,6 +122,40 @@ describe('Calendario: contare a ritroso e in avanti', () => {
   });
 });
 
+describe('Calendario: i giorni dei fornitori', () => {
+  const CAL = { workDays: [1, 2, 3, 4, 5], holidays: ['12-08'], easter: true, closures: [] };
+  it('di serie sono lavorativi: prima, dopo e fra due date', () => {
+    const app = conCal(CAL);
+    assert.equal(ev(app, 'calFornitoriLavorativi()'), true);
+    assert.equal(ev(app, "supplierDaysBefore('2026-10-12', 5)"), '2026-10-05', 'cinque giorni di lavoro prima di lunedì 12');
+    assert.equal(ev(app, "supplierDaysAfter('2026-10-02', 5)"), '2026-10-09', 'da venerdì 2, cinque giorni di lavoro');
+    assert.equal(ev(app, "supplierDaysBetween('2026-10-02', '2026-10-09')"), 5);
+    assert.equal(ev(app, "supplierDaysBetween('2026-10-09', '2026-10-02')"), -5);
+    assert.equal(ev(app, "supplierDaysAfter('2026-12-04', 3)"), '2026-12-10', 'salta il weekend e l\'Immacolata');
+  });
+  it('di calendario si contano pieni, ma gli estremi cadono in giorni aperti', () => {
+    const app = conCal(Object.assign({}, CAL, { supplierDays: 'calendario' }));
+    assert.equal(ev(app, 'calFornitoriLavorativi()'), false);
+    assert.equal(ev(app, "supplierDaysBefore('2026-10-12', 2)"), '2026-10-09', 'sabato 10 si anticipa a venerdì');
+    assert.equal(ev(app, "supplierDaysAfter('2026-10-02', 1)"), '2026-10-05', 'sabato 3 si riceve lunedì');
+    assert.equal(ev(app, "supplierDaysBetween('2026-10-02', '2026-10-09')"), 7);
+  });
+  it('zero giorni non spostano niente, e una data illeggibile resta vuota', () => {
+    const app = conCal(CAL);
+    assert.equal(ev(app, "supplierDaysAfter('2026-10-03', 0)"), '2026-10-03');
+    assert.equal(ev(app, "supplierDaysBefore('2026-10-03', 0)"), '2026-10-02', 'un ordine non parte di sabato');
+    assert.equal(ev(app, "supplierDaysBefore('', 3)"), '');
+    assert.equal(ev(app, "supplierDaysBetween('', '2026-10-03')"), null);
+  });
+  it('il ritardo si dice nell\'unità in cui è contato', () => {
+    const app = conCal(CAL);
+    assert.equal(ev(app, 'supplierDaysText(1)'), '1 giorno lavorativo');
+    assert.equal(ev(app, 'supplierDaysText(4)'), '4 giorni lavorativi');
+    app.eval("db.settings.calendar = Object.assign({}, db.settings.calendar, { supplierDays: 'calendario' });");
+    assert.equal(ev(app, 'supplierDaysText(4)'), '4 giorni');
+  });
+});
+
 describe('Calendario: il fuso orario', () => {
   it('a est di Greenwich le date non scivolano al giorno prima', () => {
     // Un processo a parte, perché il fuso si legge all'avvio.

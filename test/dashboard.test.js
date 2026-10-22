@@ -82,7 +82,8 @@ describe('Sotto scorta e consegne scadute', () => {
   it('le consegne scadute: data confermata se c\'è, solo il residuo, niente bozze', () => {
     const a = app();
     const s = modello(a).scaduti;
-    assert.deepEqual(s.map(e => [e.nome, e.righe, e.valore, e.ritardoMax]), [['SKF', 1, 12, 22], ['Beta', 1, 8, 2]]);
+    assert.deepEqual(s.map(e => [e.nome, e.righe, e.valore, e.ritardoMax]), [['SKF', 1, 12, 15], ['Beta', 1, 8, 0]],
+      'il ritardo è in giorni lavorativi (0.110.0): da domenica 20/9 a lunedì 12/10 sono 15; da sabato 10 a lunedì 12 nessuno');
     assert.deepEqual(s[0].docs.map(d => d.numero), ['ODA-2026-001']);
   });
 

@@ -199,7 +199,7 @@ describe('Blocchi: cosa si può ancora toccare, e quando', () => {
     const a = conOrdine(app(), 'confermato', 10, 0);
     a.eval('ordSetLine("o1", "ol1", "confirmedDate", "2026-03-20")');
     assert.equal(ordine(a).lines[0].confirmedDate, '2026-03-20');
-    assert.equal(a.eval('orderWorstDelay(getOrder("o1"))'), 19, 'chiesto il 1° marzo, confermato il 20');
+    assert.equal(a.eval('orderWorstDelay(getOrder("o1"))'), 14, 'chiesto domenica 1° marzo, confermato venerdì 20: 14 giorni lavorativi');
   });
 
   it('un ordine annullato è sola lettura, ricevimenti compresi', () => {

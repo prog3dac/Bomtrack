@@ -399,7 +399,7 @@ function catInfoAoa(scope) {
     // giro. L'unità si dichiara qui, dove si legge prima di compilare.
     ['', 'Scorta minima, Lotto riordino e le quantità sono nell\'UM dell\'articolo (colonna UM).'],
     ['', 'Q.tà min è invece nell\'UM della quotazione (UM prezzo, se valorizzata; altrimenti UM).'],
-    ['', 'GG consegna è in giorni di calendario.'],
+    ['', 'GG consegna è in giorni lavorativi, o di calendario se così impostato in Gestione › Calendario di fabbrica.'],
     [],
     ['Prezzi', ''],
     ['', 'Prezzo e fornitore sulla riga articolo creano una QUOTAZIONE nel listino e diventano il prezzo in uso.'],

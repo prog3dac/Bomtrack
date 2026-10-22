@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.109.1**
+**Versione dell'app documentata: 0.110.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -609,7 +609,7 @@ Ogni segnale **nomina i codici e i numeri che lo riguardano** (fino a otto, poi 
 | 1 | Commesse oltre la data di consegna | 🔴 alta | alla commessa |
 | 2 | Commesse in produzione con materiale da ordinare | 🔴 alta | alla commessa |
 | 3 | Righe di fabbisogno da ordinare, **già oltre la data** | 🔴 alta | al piano |
-| 4 | Righe di fabbisogno da ordinare **entro 7 giorni** | 🟠 media | al piano |
+| 4 | Righe di fabbisogno da ordinare **entro 5 giorni lavorativi** | 🟠 media | al piano |
 | 5 | Ordini confermati oltre la data richiesta (ODA e ODL) | 🟠 media | all'ordine |
 | 6 | Richieste inviate in attesa di risposta | 🔵 info | alla richiesta |
 | 7 | Articoli sotto la scorta minima | 🟠 media | alla scheda articolo |
@@ -695,7 +695,7 @@ insieme in una pagina sola. È in sola lettura, per tutti i ruoli.
 | **Valore per tipo / per famiglia** | Esistente × costo unitario, come la tessera del *Magazzino*; solo le giacenze positive. Dalla 0.105.6 la tessera e il cruscotto contano esattamente le stesse quantità |
 | **Articoli fermi** | Con giacenza e nessun movimento da 3, 6 o 12 mesi, dal più costoso: è il denaro immobilizzato a scaffale |
 | **Sotto scorta minima** | Quanto manca alla scorta e quanto è già in arrivo; ✓ se l'arrivo basta |
-| **Consegne scadute per fornitore** | Righe di ODA e ODL non ancora ricevute oltre la data confermata (o richiesta): quante, quanto valgono, il ritardo peggiore e i documenti, cliccabili |
+| **Consegne scadute per fornitore** | Righe di ODA e ODL non ancora ricevute oltre la data confermata (o richiesta): quante, quanto valgono, il ritardo peggiore (in giorni lavorativi, «gg lav.», o di calendario: rosso oltre due settimane) e i documenti, cliccabili |
 
 **Da sapere.** I ricevimenti d'ordine non hanno una data propria — il ricevuto è un numero sulla
 riga — quindi per gli *articoli fermi* un ricevimento conta con la **data dell'ordine**. Tutto il
@@ -985,7 +985,7 @@ quotazione si modifica** e si mette in uso.
 | **Prezzo** | L'importo |
 | **U.M. del prezzo** | A che unità si riferisce |
 | **Q.tà minima** | Sotto la quale il prezzo non vale |
-| **Giorni di consegna** | Il lead time dichiarato |
+| **Giorni di consegna** | Il lead time dichiarato, in giorni lavorativi (o di calendario, se così impostato nel calendario di fabbrica) |
 | **Data** | Quando la quotazione è stata raccolta |
 
 **Da sapere.**
@@ -1785,9 +1785,9 @@ consegna del gruppo (ven 16)
     └ perno, serve mer 14
         fase 40 fresatura (interna) 16 h → 2 gg .. lun 12 → mer 14
         fasi 20-30 zincatura da Beta 3+1 gg
-              + 2 gg di trasporto ................ invio mar 6 → rientro lun 12
-        fase 10 tornitura (interna) 8 h → 1 gg ... lun 5 → mar 6      ← lancio dell'ODP
-        tondo, materiale del ciclo: serve lun 5; listino a 10 gg → ordinare entro ven 25/9
+              + 2 gg di trasporto ................ invio ven 2 → rientro lun 12
+        fase 10 tornitura (interna) 8 h → 1 gg ... gio 1 → ven 2      ← lancio dell'ODP
+        tondo, materiale del ciclo: serve gio 1; listino a 10 gg → ordinare entro gio 17/9
 ```
 
 **Le regole.**
@@ -1796,8 +1796,18 @@ consegna del gruppo (ven 16)
 |---|---|---|
 | **Montaggio** di un assieme | i *giorni di montaggio* dell'assieme o, a zero, le ore delle sue lavorazioni come fasi interne in fila | lavorativi |
 | **Fase interna** | (attrezzaggio del centro + ore/pz × pezzi) ÷ ore al giorno del centro, arrotondato al giorno, + giorni di coda | lavorativi |
-| **Tratta di conto lavoro** (fasi consecutive dello stesso terzista) | somma dei giorni di attraversamento + giorni di trasporto del terzista | di calendario; l'invio si anticipa al lavorativo precedente |
-| **Acquisto** | giorni di consegna del listino | di calendario; la data d'ordine si anticipa al lavorativo precedente |
+| **Tratta di conto lavoro** (fasi consecutive dello stesso terzista) | somma dei giorni di attraversamento + giorni di trasporto del terzista | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); l'invio cade sempre in un giorno lavorativo |
+| **Acquisto** | giorni di consegna del listino | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); la data d'ordine cade sempre in un giorno lavorativo |
+
+**I giorni dei fornitori** (dalla 0.110.0). La settimana è di cinque giorni anche per fornitori e
+terzisti: i giorni di consegna a listino, l'attraversamento e il trasporto del terzista e i ritardi
+confermati sugli ordini si contano **di serie in giorni lavorativi** del calendario di fabbrica,
+come li indica quasi ogni fornitore («10 gg lav.»). Se i tuoi fornitori dichiarano invece giorni di
+calendario, in *Gestione → Impostazioni → Calendario di fabbrica* scegli **Giorni di consegna di
+fornitori e terzisti: Di calendario**: allora valgono pieni, sabati, domeniche e festivi compresi,
+come fino alla 0.109. In tutti e due i casi la data d'ordine o d'invio cade in un giorno lavorativo
+(se no si anticipa) e un arrivo previsto in un giorno di chiusura si riceve il primo giorno
+lavorativo dopo. I dati salvati non cambiano: cambia solo come si contano.
 
 - Le date sono «il mattino in cui il pezzo è pronto»: una fase di un giorno che deve finire
   lunedì comincia venerdì, e la fase prima deve finire venerdì. Nessun buco, nessuna
@@ -2105,7 +2115,7 @@ In fondo il **Totale imponibile**.
 **Da sapere.**
 
 - Se il fornitore conferma una data **oltre** quella richiesta, l'app lo dice **in rosso** sulla
-  riga, con i giorni di ritardo.
+  riga, con i giorni di ritardo (lavorativi, se così si contano i giorni dei fornitori).
 - **Il ricevimento carica il magazzino.** Non serve registrare anche un movimento; anzi, farlo
   raddoppierebbe la merce.
 - Lo stato passa da solo a **Parziale** e poi a **Evaso** man mano che si registrano i ricevimenti.
@@ -2564,10 +2574,14 @@ non apre l'app per più giorni di così rientra con la password.
 | Pasquetta | sì, calcolata ogni anno |
 | Chiusure | nessuna — una per riga: `2026-08-10 2026-08-21 Ferie estive` |
 | Margine fra livelli di distinta (gg) | 0 |
+| Giorni di consegna di fornitori e terzisti | lavorativi (dalla 0.110.0) |
 
 Il calendario serve alla programmazione a ritroso del fabbisogno: fasi interne e montaggi si
-contano in giorni lavorativi; le date d'ordine e d'invio che cadono su un giorno chiuso si
-anticipano al lavorativo precedente. Il santo patrono si scrive fra le chiusure.
+contano in giorni lavorativi, e di serie anche i giorni dei fornitori (consegna a listino,
+attraversamento e trasporto del terzista, ritardi confermati); scegliendo **Di calendario** questi
+ultimi si contano pieni. Le date d'ordine e d'invio che cadono su un giorno chiuso si anticipano al
+lavorativo precedente, gli arrivi si spostano al lavorativo dopo. La soglia «da ordinare» del
+fabbisogno e del Riepilogo è di **5 giorni lavorativi**. Il santo patrono si scrive fra le chiusure.
 
 **Etichette QR**
 

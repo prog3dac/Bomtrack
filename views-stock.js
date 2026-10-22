@@ -1669,7 +1669,7 @@ function riordinoGenera(itemIds) {
       payment: (sup && sup.defaultPayment) || db.settings.paymentDefault || '',
       rfqId: null, planId: null, supplierConfirmation: '', notes: '', notesInternal: 'Generato dal riordino sotto scorta del magazzino.',
       lines: ps.map(p => Object.assign(docLineFromItem(p.it, supplierId), {
-        qty: p.qty, received: 0, deliveryDate: p.leadDays ? addDays(oggi, p.leadDays) : '' })),
+        qty: p.qty, received: 0, deliveryDate: p.leadDays ? supplierArrival(oggi, p.leadDays) : '' })),
       active: true });
     db.orders.push(o);
     creati.push(o);
@@ -1694,7 +1694,7 @@ function riordinoModal() {
       <td class="num">${fmtQtyIt(p.onHand)}</td><td class="num">${p.incoming ? fmtQtyIt(p.incoming) : '—'}</td>
       <td class="num">${p.committed ? fmtQtyIt(p.committed) : '—'}</td><td class="num">${fmtQtyIt(p.safety)}</td>
       <td class="num"><strong>${fmtUom(p.qty, u)}</strong></td>
-      <td>${p.leadDays ? fmtDateIt(addDays(oggiISO(), p.leadDays)) : '—'}</td></tr>`;
+      <td>${p.leadDays ? fmtDateIt(supplierArrival(oggiISO(), p.leadDays)) : '—'}</td></tr>`;
   };
   const perFornitore = new Map();
   ps.forEach(p => { const k = p.supplierId || ''; if (!perFornitore.has(k)) perFornitore.set(k, []); perFornitore.get(k).push(p); });

@@ -96,7 +96,7 @@ function dashModello(oggi, mesi) {
     const e = fornitori.get(k) || { supplierId: k, nome: supplierName(k) || '(senza fornitore)', righe: 0, valore: 0, ritardoMax: 0, docs: new Map() };
     e.righe++;
     e.valore += r.residuo * (Number(r.l.price) || 0);
-    e.ritardoMax = Math.max(e.ritardoMax, giorniTra(r.data, oggi) || 0);
+    e.ritardoMax = Math.max(e.ritardoMax, supplierDaysBetween(r.data, oggi) || 0);
     e.docs.set(r.o.id, { id: r.o.id, tipo: r.tipo, numero: r.o.number || '' });
     fornitori.set(k, e);
   });
@@ -115,6 +115,11 @@ function dashModello(oggi, mesi) {
   };
 }
 
+// Il ritardo delle consegne scadute si conta in giorni-fornitore
+// (calendario.js), e diventa rosso oltre due settimane: dieci giorni
+// lavorativi, o quattordici di calendario.
+function dashGg() { return calFornitoriLavorativi() ? 'gg lav.' : 'gg'; }
+function dashDueSettimane() { return calFornitoriLavorativi() ? 2 * workDaysPerWeek() : 14; }
 function renderDash() {
   invalidateCaches();
   const host = document.getElementById('view-dash');
@@ -152,7 +157,7 @@ function renderDash() {
   const scaduti = m.scaduti.length ? tabella(
     '<th>Fornitore</th><th class="num">Righe</th><th class="num">Valore da ricevere</th><th class="num">Ritardo massimo</th><th>Documenti</th>',
     m.scaduti.map(e => `<tr><td>${esc(e.nome)}</td><td class="num">${e.righe}</td><td class="num">${fmtN(e.valore)}</td>
-      <td class="num" style="color:${e.ritardoMax > 14 ? 'var(--red)' : 'var(--orange)'}">${e.ritardoMax} gg</td>
+      <td class="num" style="color:${e.ritardoMax > dashDueSettimane() ? 'var(--red)' : 'var(--orange)'}">${e.ritardoMax} ${dashGg()}</td>
       <td><div class="home-voci" style="padding:0">${e.docs.map(d => `<button class="home-chip" onclick="homeApri('${d.tipo}','${d.id}')">${esc(d.numero || '(senza numero)')}</button>`).join('')}</div></td></tr>`).join(''))
     : vuoto('Nessuna consegna scaduta.');
 
@@ -204,7 +209,7 @@ function dashExportSpec() {
         righe: m.fermi.map(f => art(f.it).concat([f.onHand, f.valore, f.ultima])) },
       { nome: 'Sotto scorta', colonne: [{ h: 'Codice', w: 18 }, { h: 'Descrizione', w: 40 }, { h: 'UM', w: 6 }, { h: 'Esistente', w: 12, num: true }, { h: 'Scorta min.', w: 12, num: true }, { h: 'Manca', w: 12, num: true }, { h: 'In arrivo', w: 12, num: true }],
         righe: m.sotto.map(s => art(s.it).concat([s.onHand, s.safety, s.manca, s.incoming])) },
-      { nome: 'Consegne scadute', colonne: [{ h: 'Fornitore', w: 34 }, { h: 'Righe', w: 8, num: true }, { h: 'Valore da ricevere', w: 16, num: true }, { h: 'Ritardo massimo (gg)', w: 14, num: true }, { h: 'Documenti', w: 40 }],
+      { nome: 'Consegne scadute', colonne: [{ h: 'Fornitore', w: 34 }, { h: 'Righe', w: 8, num: true }, { h: 'Valore da ricevere', w: 16, num: true }, { h: 'Ritardo massimo (' + dashGg() + ')', w: 14, num: true }, { h: 'Documenti', w: 40 }],
         righe: m.scaduti.map(e => [e.nome, e.righe, e.valore, e.ritardoMax, e.docs.map(d => d.numero).join(', ')]) },
     ],
   };

@@ -202,14 +202,15 @@ describe('Conto lavoro: il tempo si misura in giorni', () => {
   });
 
   it('l ordine di lavoro va mandato con quell anticipo', () => {
-    // Serve pronto il 30 settembre, il terzista ci mette 5 giorni: entro il 25.
-    assert.equal(righe(conGiorni(5))[0].orderBy, '2026-09-25');
+    // Serve pronto mercoledì 30 settembre, il terzista ci mette 5 giorni
+    // lavorativi (0.110.0): entro mercoledì 23.
+    assert.equal(righe(conGiorni(5))[0].orderBy, '2026-09-23');
   });
 
   it('l anticipo attraversa il cambio di mese senza sbagliare', () => {
     const app = conDb();
     app.eval("getPlan('pl1').lines[0].dueDate = '2026-10-02'; getItem('perno').cycle[2].days = 7; invalidateCaches();");
-    assert.equal(righe(app)[0].orderBy, '2026-09-25');
+    assert.equal(righe(app)[0].orderBy, '2026-09-23', 'sette giorni lavorativi prima di venerdì 2 ottobre');
   });
 
   it('senza data in cui serve non si inventa una data d ordine', () => {
@@ -388,7 +389,7 @@ describe('Tratte: dalle fasi alle lavorazioni da commissionare', () => {
     app.eval("getItem('perno').cycle.splice(3, 1); invalidateCaches();");
     const t = tratte(app)[0];
     assert.equal(t.giorni, 5, '3 + 2 giorni di attraversamento');
-    assert.equal(t.ordinare, '2026-09-25', 'serve il 30, va mandato cinque giorni prima');
+    assert.equal(t.ordinare, '2026-09-23', 'serve il 30, va mandato cinque giorni lavorativi prima');
   });
 
   it('una fase interna in mezzo spezza la tratta in due', () => {

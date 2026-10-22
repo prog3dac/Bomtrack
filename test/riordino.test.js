@@ -70,7 +70,7 @@ describe('Riordino: gli ordini', () => {
     const skf = creati.find(o => o.supplierId === 's1');
     assert.equal(skf.status, 'bozza');
     assert.deepEqual(skf.lines.map(l => [l.itemId, l.qty, l.price]), [['a1', 10, 2], ['a2', 25, 3]]);
-    assert.equal(skf.lines[0].deliveryDate, a.eval('addDays(oggiISO(), 5)'));
+    assert.equal(skf.lines[0].deliveryDate, a.eval('addWorkDays(oggiISO(), 5)'), 'cinque giorni lavorativi di listino');
     assert.match(skf.number, /^ODA-/);
     assert.equal(a.eval('db.orders.length'), 2, 'salvati');
   });

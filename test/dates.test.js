@@ -109,8 +109,18 @@ describe('La data scende lungo la distinta', () => {
 });
 
 describe('Lead time: entro quando ordinare', () => {
-  it('la data d\'ordine è quella in cui serve meno i giorni di consegna', () => {
+  // Dalla 0.110.0 i giorni dei fornitori sono lavorativi di serie: 21 giorni
+  // di consegna sono quattro settimane di lavoro e un giorno, non tre settimane.
+  it('la data d\'ordine è quella in cui serve meno i giorni di consegna, lavorativi', () => {
     const a = piano(app(), [{ id: 'l1', itemId: 'mac', qty: 1, dueDate: '2026-09-30' }]);
+    const r = righe(a);
+    assert.equal(r.find(x => x.code === 'M1').orderBy, '2026-09-01', '21 giorni lavorativi prima di mercoledì 30');
+    assert.equal(r.find(x => x.code === 'C1').orderBy, '2026-09-23', '5 giorni lavorativi prima: mercoledì 23');
+  });
+
+  it('con i giorni dei fornitori di calendario si contano pieni', () => {
+    const a = piano(app(), [{ id: 'l1', itemId: 'mac', qty: 1, dueDate: '2026-09-30' }]);
+    a.eval("db.settings.calendar = Object.assign(calDefault(), { supplierDays: 'calendario' }); invalidateCaches();");
     const r = righe(a);
     assert.equal(r.find(x => x.code === 'M1').orderBy, '2026-09-09', '21 giorni prima');
     assert.equal(r.find(x => x.code === 'C1').orderBy, '2026-09-25', '5 giorni prima');
@@ -167,11 +177,12 @@ describe('Semaforo di urgenza', () => {
     const a = app();
     assert.equal(u(a)(a.eval('oggiISO()')), 'urgente');
   });
-  it('entro la soglia è urgente, oltre è tranquillo', () => {
+  it('entro la soglia è urgente, oltre è tranquillo: la soglia è in giorni lavorativi', () => {
     const a = app();
     const soglia = a.eval('URGENCY_WARN_DAYS');
-    assert.equal(u(a)(a.eval(`addDays(oggiISO(), ${soglia})`)), 'urgente');
-    assert.equal(u(a)(a.eval(`addDays(oggiISO(), ${soglia + 1})`)), 'ok');
+    assert.equal(soglia, 5, 'una settimana di lavoro');
+    assert.equal(u(a)(a.eval(`addWorkDays(oggiISO(), ${soglia})`)), 'urgente');
+    assert.equal(u(a)(a.eval(`addWorkDays(oggiISO(), ${soglia + 1})`)), 'ok');
   });
   it('senza data nessun semaforo', () => {
     const a = app();
@@ -226,12 +237,19 @@ describe('Data richiesta contro data confermata', () => {
   };
   it('il fornitore conferma più tardi: si conta il ritardo', () => {
     const a = conRiga(app(), { deliveryDate: '2026-09-30', confirmedDate: '2026-10-07' });
+    assert.equal(a.eval('ordLineDelay(db.orders[0].lines[0])'), 5, 'una settimana dopo: cinque giorni lavorativi');
+    assert.equal(a.eval('orderWorstDelay(db.orders[0])'), 5);
+    assert.match(a.eval('ordLineDelayHtml(db.orders[0].lines[0])'), /\+5 giorni lavorativi sulla richiesta/);
+  });
+  it('con i giorni dei fornitori di calendario il ritardo si conta pieno', () => {
+    const a = conRiga(app(), { deliveryDate: '2026-09-30', confirmedDate: '2026-10-07' });
+    a.eval("db.settings.calendar = Object.assign(calDefault(), { supplierDays: 'calendario' }); invalidateCaches();");
     assert.equal(a.eval('ordLineDelay(db.orders[0].lines[0])'), 7);
-    assert.equal(a.eval('orderWorstDelay(db.orders[0])'), 7);
+    assert.match(a.eval('ordLineDelayHtml(db.orders[0].lines[0])'), /\+7 giorni sulla richiesta/);
   });
   it('conferma in anticipo: numero negativo, nessun allarme', () => {
     const a = conRiga(app(), { deliveryDate: '2026-09-30', confirmedDate: '2026-09-25' });
-    assert.equal(a.eval('ordLineDelay(db.orders[0].lines[0])'), -5);
+    assert.equal(a.eval('ordLineDelay(db.orders[0].lines[0])'), -3, 'da venerdì 25 a mercoledì 30: tre giorni lavorativi');
     assert.equal(a.eval('orderWorstDelay(db.orders[0])'), null, 'l\'anticipo non è un problema da segnalare in testata');
   });
   it('stessa data: nessuno scarto', () => {
@@ -250,7 +268,7 @@ describe('Data richiesta contro data confermata', () => {
       { id: 'a', deliveryDate: '2026-09-01', confirmedDate: '2026-09-03' },
       { id: 'b', deliveryDate: '2026-09-01', confirmedDate: '2026-09-20' },
       { id: 'c', deliveryDate: '2026-09-01', confirmedDate: '2026-09-02' }] }); saveDB();`);
-    assert.equal(a.eval('orderWorstDelay(db.orders[0])'), 19, 'è il peggiore a decidere se la commessa slitta');
+    assert.equal(a.eval('orderWorstDelay(db.orders[0])'), 14, 'è il peggiore a decidere se la commessa slitta: da martedì 1 a domenica 20, quattordici giorni lavorativi');
   });
   it('la data confermata si scrive anche a ordine inviato', () => {
     const a = conRiga(app(), { deliveryDate: '2026-09-30' });

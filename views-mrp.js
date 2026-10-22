@@ -224,8 +224,9 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
 //     in giorni **lavorativi** (calendario.js);
 //   - tratta **di conto lavoro** (fasi consecutive dello stesso terzista): la
 //     somma dei giorni di attraversamento più il trasporto del terzista, in
-//     giorni **di calendario** come li dichiara lui, con l'invio spostato al
-//     lavorativo precedente;
+//     giorni **dei fornitori** (calendario.js: lavorativi di serie dalla
+//     0.110.0, di calendario se così impostato), con l'invio sempre in un
+//     giorno lavorativo;
 //   - **montaggio** di un assieme: i giorni dichiarati sull'assieme o, senza,
 //     le ore delle sue lavorazioni come fasi interne in sequenza.
 // Ore lavorate in un giorno da un centro: dichiarate, o ricavate dalla
@@ -251,16 +252,24 @@ function supplierTransitDays(supplierId) {
   const s = supplierId ? getSupplier(supplierId) : null;
   return s ? Math.max(0, Number(s.transitDays) || 0) : 0;
 }
-// Giorni di calendario di una tratta: attraversamento delle sue fasi più il
+// Giorni-fornitore di una tratta: attraversamento delle sue fasi più il
 // trasporto, una volta sola — il pezzo va e torna una volta per tratta.
 function runLeadDays(fasiDays, supplierId) {
   return fasiDays.reduce((s, g) => s + Math.max(0, Number(g) || 0), 0) + supplierTransitDays(supplierId);
 }
-// L'invio di una tratta che deve rientrare il giorno `rientro`.
+// L'invio di una tratta (o l'ordine di un acquisto) che deve rientrare il
+// giorno `rientro`: `giorni` giorni-fornitore prima (calendario.js).
 function runSendDate(rientro, giorni) {
   if (!rientro) return '';
-  const d = addDays(rientro, -(Number(giorni) || 0));
-  return typeof prevWorkDay === 'function' ? prevWorkDay(d) : d;
+  if (typeof supplierDaysBefore === 'function') return supplierDaysBefore(rientro, giorni) || addDays(rientro, -(Number(giorni) || 0));
+  return addDays(rientro, -(Number(giorni) || 0));
+}
+// L'arrivo di quello che parte (o si ordina) il giorno `da`: il verso opposto
+// di runSendDate, con la stessa aritmetica.
+function supplierArrival(da, giorni) {
+  if (!da) return '';
+  if (typeof supplierDaysAfter === 'function') return supplierDaysAfter(da, giorni) || addDays(da, Number(giorni) || 0);
+  return addDays(da, Number(giorni) || 0);
 }
 // Indietro di `n` giorni lavorativi (calendario.js); senza calendario caricato
 // si ricade sui giorni di calendario, che è il comportamento di prima.
@@ -441,7 +450,7 @@ function schedDisponibilita(planId, lines) {
         if (libero >= serve) { coperto = true; break; }
       }
       if (!coperto) {
-        const comprato = addDays(oggi, buyLeadDays(it));
+        const comprato = supplierArrival(oggi, buyLeadDays(it));
         if (comprato > pronto) pronto = comprato;
       }
     }
@@ -479,7 +488,7 @@ function schedForward(node, disp) {
   node.steps.forEach(st => {
     if (st.esterna) {
       st.fStart = nextWorkDay(pronto);
-      st.fEnd = st.days > 0 ? addDays(st.fStart, st.days) : st.fStart;
+      st.fEnd = st.days > 0 ? supplierArrival(st.fStart, st.days) : st.fStart;
     } else {
       st.fStart = st.days > 0 ? nextWorkDay(pronto) : pronto;
       st.fEnd = st.days > 0 ? addWorkDays(st.fStart, st.days) : pronto;
@@ -545,7 +554,14 @@ function mrpAddLoad(map, workCenterId, due, oreUnit, pezzi, it, faseNo) {
 // `leadDays` stava a listino da versioni e non entrava in nessun conto: c'era
 // scritto che il fornitore consegna in 21 giorni e nessuno se ne faceva niente.
 // Adesso è il ponte fra «serve per il 30 settembre» e «va ordinato entro il 9».
-const URGENCY_WARN_DAYS = 7;   // sotto una settimana di margine si avvisa
+// Sotto una settimana di lavoro di margine si avvisa: cinque giorni
+// **lavorativi** (dalla 0.110.0; prima erano sette di calendario, che il
+// venerdì voleva dire tre giorni di lavoro e a Natale anche meno).
+const URGENCY_WARN_DAYS = 5;
+// L'ultimo giorno dentro la finestra d'avviso, a partire da `oggi`.
+function urgencyLimit(oggi) {
+  return typeof addWorkDays === 'function' ? addWorkDays(oggi, URGENCY_WARN_DAYS) : addDays(oggi, URGENCY_WARN_DAYS);
+}
 // I conti si fanno in UTC, non nell'ora locale. Con `T00:00:00` la data nasce a
 // mezzanotte locale e `toISOString()` la riporta in UTC: a est di Greenwich
 // torna indietro di un giorno, e ogni data d'ordine risultava anticipata di
@@ -618,11 +634,11 @@ function urgenzaOrdine(orderBy) {
   if (!orderBy) return '';
   const oggi = oggiISO();
   if (orderBy < oggi) return 'ritardo';
-  return orderBy <= addDays(oggi, URGENCY_WARN_DAYS) ? 'urgente' : 'ok';
+  return orderBy <= urgencyLimit(oggi) ? 'urgente' : 'ok';
 }
 const URGENZA_LABEL = {
   ritardo: { txt: ico('warning', 'tinted', '') + ' in ritardo', cls: 'mrp-warn', desc: 'La data entro cui ordinare è già passata' },
-  urgente: { txt: ico('clock', 'tinted', '') + ' da ordinare', cls: 'mrp-warn', desc: 'Meno di ' + URGENCY_WARN_DAYS + ' giorni di margine' },
+  urgente: { txt: ico('clock', 'tinted', '') + ' da ordinare', cls: 'mrp-warn', desc: 'Meno di ' + URGENCY_WARN_DAYS + ' giorni lavorativi di margine' },
   ok: { txt: '', cls: '', desc: '' },
 };
 
@@ -706,8 +722,8 @@ function mrpBuyRow(entry, netMode, planId) {
 
   // Data in cui serve, giorni di consegna di quel listino, data entro cui ordinare.
   const due = entry.due || '';
-  // Giorni del fornitore, di calendario; la data d'ordine cade su un giorno in
-  // cui l'ufficio è aperto (vedi calendario.js).
+  // Giorni del fornitore, lavorativi o di calendario come impostato; la data
+  // d'ordine cade su un giorno in cui l'ufficio è aperto (vedi calendario.js).
   const leadDays = leadDaysOfRow(doc);
   const orderBy = due ? runSendDate(due, leadDays) : '';
   return {
