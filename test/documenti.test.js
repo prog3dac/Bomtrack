@@ -258,39 +258,63 @@ describe('Documenti emessi — nel database', () => {
 });
 
 describe('Documenti emessi — il documento eliminato', () => {
-  async function conCopia() {
-    const r = app('inviato');
+  async function conCopia(opt) {
+    const r = app('inviato', null, opt);
     r.a.eval('docEmessoArchiviaOra("order", "o1")');
     await finche(() => emessi(r.a).length);
     return r;
   }
+  const spia = a => a.eval('var __msg = ""; var __ac = askConfirm; askConfirm = function (m, f, o) { __msg = m; return __ac(m, f, o); };');
 
-  it('l\'eliminazione avvisa che la copia resta, e non tocca né il file né il record', async () => {
+  it('l\'avviso dice che il PDF si cancella, e lo cancella con il suo record', async () => {
     const { a, files } = await conCopia();
-    a.eval('var __msg = ""; var __ac = askConfirm; askConfirm = function (m, f, o) { __msg = m; return __ac(m, f, o); };');
+    spia(a);
     a.eval('delOrder("o1")');
-    assert.match(a.eval('__msg'), /La copia PDF in archivio resta nella cartella/);
+    assert.match(a.eval('__msg'), /Verrà cancellata anche la copia PDF/);
     a.eval('confirmYes()');
+    await finche(() => !emessi(a).length);
     assert.equal(a.eval('getOrder("o1") ? "c\'è" : "eliminato"'), 'eliminato');
-    assert.equal(emessi(a).length, 1);
-    assert.equal(files[PERCORSO], 'PDF-1');
+    assert.equal(emessi(a).length, 0);
+    assert.equal(files[PERCORSO], undefined);
   });
 
-  it('in Gestione la copia di un documento eliminato si ritrova, e si apre', async () => {
-    const { a } = await conCopia();
-    a.eval('Store.remove("orders", "o1")');
+  it('il documento rifatto con lo stesso numero e fornitore riprende il nome pulito', async () => {
+    const { a, files } = await conCopia();
+    a.eval('delOrder("o1")');
+    a.eval('confirmYes()');
+    await finche(() => !emessi(a).length);
+    a.eval(`db.orders.push({ id: 'o2', number: 'ODA-2026-007', status: 'inviato', supplierId: 's1', date: '2026-08-02', active: true,
+      lines: [{ id: 'l2', itemId: 'C1', code: 'C1', description: 'Cuscinetto', qty: 3, price: 5, uom: 'pz' }] });`);
+    a.eval('docEmessoArchiviaOra("order", "o2")');
+    await finche(() => emessi(a).length);
+    assert.equal(emessi(a)[0].path, PERCORSO);
+    assert.ok(files[PERCORSO]);
+  });
+
+  it('se il PDF non si può cancellare, il record resta fra le copie da sistemare in Gestione', async () => {
+    const { a, files } = await conCopia();
+    a.eval('localStorage.removeItem("bomtrack_archivio_nome")');
+    a.eval('delOrder("o1")');
+    a.eval('confirmYes()');
+    await finche(() => false);
+    assert.equal(emessi(a).length, 1);
     assert.equal(a.eval('docEmessiOrfani().length'), 1);
     const html = a.eval('docEmessiVerificaHtml()');
     assert.match(html, /Copie di documenti eliminati \(1\)/);
-    assert.match(html, /ODA-2026-007/);
-    assert.match(html, /docEmessoApri/);
+    assert.match(html, /docEmessoCancellaOrfano/);
+    // Da un PC che ha la cartella si cancella.
+    a.eval('localStorage.setItem("bomtrack_archivio_nome", "Disegni")');
+    a.eval(`docEmessoCancellaOrfano(${JSON.stringify(emessi(a)[0].id)})`);
+    a.eval('confirmYes()');
+    await finche(() => !emessi(a).length);
+    assert.equal(emessi(a).length, 0);
+    assert.equal(files[PERCORSO], undefined);
   });
 
-  it('ripristinato dal cestino, il documento ritrova le sue copie', async () => {
-    const { a } = await conCopia();
-    a.eval('Store.remove("orders", "o1")');
-    a.eval('Store.restore(Store.lastRemoved())');
-    assert.equal(a.eval('docEmessiOrfani().length'), 0);
-    assert.equal(a.eval('docEmessi("order", "o1").length'), 1);
+  it('un PDF già sparito dalla cartella non blocca la cancellazione del record', async () => {
+    const { a, files } = await conCopia();
+    delete files[PERCORSO];
+    assert.equal(await a.eval('docEmessiElimina("order", "o1")'), 1);
+    assert.equal(emessi(a).length, 0);
   });
 });

@@ -219,12 +219,46 @@ function docEmessiVerifica() {
 }
 
 // ─── I documenti eliminati ───
-// Eliminare una richiesta o un ordine non tocca le sue copie: sono ciò che è
-// partito, e restano una prova anche quando il documento in Bomtrack non c'è
-// più. Ma senza documento nessuna scheda le mostra, e una copia che nessuno
-// trova è come persa: per questo Gestione → Backup le elenca a parte. Se il
-// documento torna dal cestino, le copie tornano nella sua scheda da sole —
-// il legame è l'id, che il ripristino conserva.
+// Eliminare una richiesta o un ordine cancella anche le sue copie, file e
+// record (scelta di Andrea, 0.112.0): un documento rifatto con lo stesso numero
+// e lo stesso fornitore deve riavere il suo nome pulito, non un «(2)» accanto
+// al PDF di un documento che non esiste più. L'avviso di eliminazione lo dice
+// prima, e ripristinare il documento dal cestino non riporta le copie.
+//
+// Un file che non si riesce a togliere (cartella non impostata su questo PC,
+// permesso negato) tiene il suo record: resta fra le «copie di documenti
+// eliminati» in Gestione → Backup, da cancellare da un PC che ha la cartella.
+function docEmessiElimina(kind, refId) {
+  return docEmessiCancella(docEmessi(kind, refId));
+}
+function docEmessiCancella(copie) {
+  if (!copie.length) return Promise.resolve(0);
+  if (archivioStato() !== 'configurato') {
+    showToast('Copie PDF non cancellate: la cartella d\'archivio non è impostata su questo PC. Si cancellano da Gestione → Backup', 'error');
+    return Promise.resolve(0);
+  }
+  const passo = (i, n) => {
+    if (i >= copie.length) return Promise.resolve(n);
+    const d = copie[i];
+    return archivioElimina(d.path).then(esito => {
+      if (!esito) return passo(i + 1, n);
+      Store.remove('generatedDocs', d.id);
+      return passo(i + 1, n + 1);
+    });
+  };
+  return passo(0, 0).then(n => {
+    if (n < copie.length) showToast(`${copie.length - n} copie PDF non cancellate: restano in Gestione → Backup`, 'error');
+    return n;
+  });
+}
+// Il pulsante in Gestione per le copie rimaste.
+function docEmessoCancellaOrfano(id) {
+  if (!roleGuard('docs')) return;
+  const d = docEmessiOrfani().find(x => x.id === id); if (!d) return;
+  askConfirm(`Cancellare il PDF ${d.path} dalla cartella d'archivio?`, () => docEmessiCancella([d]).then(() => {
+    if (typeof activeView !== 'undefined' && activeView === 'manage') renderManage();
+  }), { title: 'Copia di un documento eliminato', ok: 'Cancella' });
+}
 function docEmessiOrfani() {
   return (db.generatedDocs || []).filter(d => {
     const t = DOC_EMESSI_TIPI[d.kind];
@@ -248,10 +282,11 @@ function docEmessiOrfaniHtml(etichetta) {
   const righe = orfani.map(d => `<div class="mgmt-item">
       <span class="mgmt-item-name">${ico('file', 'tinted', '')} ${etichetta(d)}</span>
       <span class="mgmt-item-meta">${esc(fmtDateIt(d.sentAt || d.createdAt))}${d.createdBy ? ' · ' + esc(actorName(d.createdBy)) : ''}</span>
-      <div class="mgmt-item-actions"><button class="mini-btn" title="Apri il PDF archiviato" onclick="docEmessoApri('${d.id}')">${ico('eye', 'tinted', 'Apri')}</button></div>
+      <div class="mgmt-item-actions"><button class="mini-btn" title="Apri il PDF archiviato" onclick="docEmessoApri('${d.id}')">${ico('eye', 'tinted', 'Apri')}</button>
+        <button class="mini-btn danger" title="Cancella il PDF dalla cartella" onclick="docEmessoCancellaOrfano('${d.id}')">${ico('trash', 'tinted', 'Cancella')}</button></div>
     </div>`).join('');
   return `<div style="margin-top:8px"><strong>Copie di documenti eliminati (${orfani.length})</strong>
-    <p class="empty-text" style="text-align:left;padding:2px 0 6px">Il documento non c'è più in Bomtrack, ma la copia inviata resta in archivio. Ripristinandolo dal cestino torna nella sua scheda.</p>
+    <p class="empty-text" style="text-align:left;padding:2px 0 6px">Il documento è stato eliminato, ma il suo PDF non si è potuto cancellare (cartella non impostata o non raggiungibile su quel PC). Da qui si apre o si cancella.</p>
     <div class="mgmt-list">${righe}</div></div>`;
 }
 function docEmessiEsitoHtml(n, e, etichetta) {

@@ -282,6 +282,24 @@ function archivioSalvaIn(path, blob) {
   }).catch(e => { console.error('Scrittura in archivio fallita:', e); return null; });
 }
 
+// ─── Togliere un file dall'archivio ───
+// Serve ai documenti emessi, che si cancellano con il documento (documenti.js).
+// 'ok' se l'ha tolto, 'assente' se non c'era già più — per chi chiama le due
+// cose finiscono allo stesso modo —, null se la cartella non è pronta o il
+// sistema rifiuta: allora il file resta, e chi chiama lo dice.
+function archivioElimina(path) {
+  const parti = String(path || '').split('/').filter(Boolean);
+  if (!parti.length) return Promise.resolve(null);
+  const nome = parti.pop();
+  return archivioPronto(true).then(h => {
+    if (!h) return null;
+    const scendi = (dir, i) => (i >= parti.length ? Promise.resolve(dir)
+      : dir.getDirectoryHandle(parti[i]).then(sub => scendi(sub, i + 1)));
+    return scendi(h, 0).then(dir => dir.getFileHandle(nome).then(() => dir.removeEntry(nome).then(() => 'ok'), () => 'assente'),
+      () => 'assente');
+  }).catch(e => { console.error('Eliminazione dall\'archivio fallita:', e); return null; });
+}
+
 // L'impronta di un file: SHA-256 in esadecimale, o '' dove il browser non sa
 // calcolarla (pagina aperta senza https). Serve a dire, mesi dopo, se il PDF
 // in cartella è ancora quello emesso.

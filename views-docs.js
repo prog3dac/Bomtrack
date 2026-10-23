@@ -708,9 +708,10 @@ function docDel(k, id, before, extraWarn) {
   if (!guardiaDocumentoUltimo(doc, db[K.coll], k === 'rfq' ? 'Chiudila invece di eliminarla.' : 'Annullalo invece di eliminarlo.')) return;
   const warn = doc.status === 'bozza' ? ''
     : `\nAttenzione: risulta ${docStatusLabel(K, doc)}${extraWarn ? extraWarn(doc) : ''}.`;
-  // Le copie emesse non si cancellano con il documento (documenti.js): si dice.
-  const copie = docEmessi({ rfq: 'rfq', order: 'order', odl: 'workOrder' }[k], id).length;
-  const avviso = copie ? `\n${copie === 1 ? 'La copia PDF in archivio resta' : 'Le ' + copie + ' copie PDF in archivio restano'} nella cartella, e si ritrova${copie === 1 ? '' : 'no'} in Gestione → Backup.` : '';
+  // Le copie emesse si cancellano con il documento (documenti.js): si dice prima.
+  const kEmessi = { rfq: 'rfq', order: 'order', odl: 'workOrder' }[k];
+  const copie = docEmessi(kEmessi, id).length;
+  const avviso = copie ? `\nVerrà cancellat${copie === 1 ? 'a anche la copia PDF' : 'e anche le ' + copie + ' copie PDF'} nella cartella d'archivio, e ripristinando il documento non tornerà${copie === 1 ? '' : 'nno'}.` : '';
   const invece = k === 'rfq' ? 'Chiudila invece di eliminarla.' : 'Annullalo invece di eliminarlo.';
   askConfirm(`Eliminare ${K.pronome} ${K.nome.toLowerCase()} ${doc.number}?${warn}${avviso}`, () => eliminaSeAncoraUltimo(() => {
     const d = K.get(id);
@@ -719,7 +720,7 @@ function docDel(k, id, before, extraWarn) {
     if (before) before();
     // Il documento aperto che si elimina non ha più niente da salvare.
     if (K.dirty() && K.currentId && K.currentId() === id) K.dirty(false);
-    removeConUndo(K.coll, id, `${K.nome} ${doc.number} eliminat${K.suffisso}`, () => K.render());
+    if (removeConUndo(K.coll, id, `${K.nome} ${doc.number} eliminat${K.suffisso}`, () => K.render()) && copie) docEmessiElimina(kEmessi, id);
   }));
 }
 // Lasciare il documento aperto: quel che era in sospeso si salva, e lo sblocco

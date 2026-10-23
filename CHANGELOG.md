@@ -16,7 +16,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 **Nella scheda**
 - **Copie in archivio**, sotto i pulsanti di generazione: le copie dalla più recente, con chi le ha emesse e il pulsante per aprirle; **Archivia il PDF** / **Archivia come nuova revisione** archivia senza scaricare.
 
-**Documento eliminato**: le sue copie restano in cartella e nel database, l'avviso di eliminazione lo dice, e *Gestione → Backup* le elenca come «Copie di documenti eliminati», apribili. Ripristinato dal cestino, il documento le ritrova nella sua scheda.
+**Documento eliminato**: le sue copie si cancellano con lui, file e record, così il documento rifatto con lo stesso numero e fornitore riprende il nome pulito. L'avviso di eliminazione lo dice; ripristinando dal cestino le copie non tornano. Un PDF che non si può cancellare (cartella non impostata su quel PC) resta in *Gestione → Backup* fra le «Copie di documenti eliminati», da aprire o cancellare.
 
 **Verifica archivio** (*Gestione → Backup*) controlla anche le copie emesse: quelle che non si trovano più e quelle diverse dall'impronta SHA-256 registrata, cioè sostituite o modificate fuori da Bomtrack. I PDF di `Documenti Bomtrack` non compaiono fra quelli da collegare a un codice.
 
@@ -25,7 +25,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 **Manuale** — cap. 28: «Le copie in archivio»; cap. 8: i documenti emessi nella cartella d'archivio; appendice: la collezione `generatedDocs` e `documenti.js`.
 
 **Verifica**
-- `test/documenti.test.js`: copia scritta al «segna come inviato» con percorso, revisione e impronta; nessuna copia su «resta in bozza»; ristampa senza domanda; revisione dopo una modifica senza toccare la prima; prima copia di un documento già inviato; «Archivia» senza download; nome già preso non sovrascritto; senza cartella, su browser senza cartelle e senza permessi il PDF resta un download; sezione in scheda; apertura; verifica di copie mancanti e alterate; cartella esclusa dagli allegati; migrazione della collezione; documento eliminato con avviso, copie elencate in Gestione e ritrovate al ripristino.
+- `test/documenti.test.js`: copia scritta al «segna come inviato» con percorso, revisione e impronta; nessuna copia su «resta in bozza»; ristampa senza domanda; revisione dopo una modifica senza toccare la prima; prima copia di un documento già inviato; «Archivia» senza download; nome già preso non sovrascritto; senza cartella, su browser senza cartelle e senza permessi il PDF resta un download; sezione in scheda; apertura; verifica di copie mancanti e alterate; cartella esclusa dagli allegati; migrazione della collezione; documento eliminato con avviso e copie cancellate, nome pulito al documento rifatto, copie non cancellabili elencate e cancellate da Gestione, PDF già sparito.
 - `test/schema-sql.test.js` (anche in Postgres): la tabella `generated_docs` dice le stesse cose del codice e fa il giro completo.
 - Suite completa verde.
 
