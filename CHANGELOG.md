@@ -18,6 +18,8 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **Documento eliminato**: le sue copie si cancellano con lui, file e record, così il documento rifatto con lo stesso numero e fornitore riprende il nome pulito. L'avviso di eliminazione lo dice; ripristinando dal cestino le copie non tornano. Un PDF che non si può cancellare (cartella non impostata su quel PC) resta in *Gestione → Backup* fra le «Copie di documenti eliminati», da aprire o cancellare.
 
+**Allegati dei codici: il PDF si cancella con il documento.** Scollegare un allegato dall'**ultimo** codice che lo cita cancella anche il PDF dalla cartella d'archivio; se altri codici lo citano, il file resta (cancellarlo romperebbe il loro allegato), e l'avviso lo dice in entrambi i casi. Anche **Elimina** in *Gestione → Backup* cancella il file, non solo la voce dell'elenco. Senza cartella su quel PC il documento resta in Gestione, senza codici, da eliminare dopo.
+
 **Verifica archivio** (*Gestione → Backup*) controlla anche le copie emesse: quelle che non si trovano più e quelle diverse dall'impronta SHA-256 registrata, cioè sostituite o modificate fuori da Bomtrack. I PDF di `Documenti Bomtrack` non compaiono fra quelli da collegare a un codice.
 
 **Pronto per l'invio mail.** Ogni copia registra già quando è partita e come (`sent_at`, `sent_via`, `sent_to`): oggi `manuale`, domani la mail che parte dall'app allegherà esattamente il PDF archiviato.
@@ -26,6 +28,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **Verifica**
 - `test/documenti.test.js`: copia scritta al «segna come inviato» con percorso, revisione e impronta; nessuna copia su «resta in bozza»; ristampa senza domanda; revisione dopo una modifica senza toccare la prima; prima copia di un documento già inviato; «Archivia» senza download; nome già preso non sovrascritto; senza cartella, su browser senza cartelle e senza permessi il PDF resta un download; sezione in scheda; apertura; verifica di copie mancanti e alterate; cartella esclusa dagli allegati; migrazione della collezione; documento eliminato con avviso e copie cancellate, nome pulito al documento rifatto, copie non cancellabili elencate e cancellate da Gestione, PDF già sparito.
+- `test/archivio.test.js`: il PDF si cancella scollegandolo dall'ultimo codice e con «Elimina»; resta se un altro codice lo cita o se la cartella non è impostata.
 - `test/schema-sql.test.js` (anche in Postgres): la tabella `generated_docs` dice le stesse cose del codice e fa il giro completo.
 - Suite completa verde.
 

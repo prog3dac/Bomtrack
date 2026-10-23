@@ -870,8 +870,12 @@ appeso a tutti gli articoli di una serie. Il documento è censito una volta sola
   corregge per tutti;
 - la **pagina** appartiene invece al singolo collegamento: un catalogo di trecento pagine si apre
   dove serve a *quel* codice;
-- **scollegare** toglie il documento da un codice; il file resta in archivio e resta allegato agli
-  altri. Un documento citato da almeno un codice non si elimina dall'elenco;
+- **scollegare** toglie il documento da un codice. Se altri codici lo citano, il file resta in
+  archivio e resta allegato a loro; se era **l'ultimo codice**, il documento si cancella davvero,
+  dall'elenco e **dalla cartella d'archivio** (dalla 0.112.0), e l'avviso lo dice prima. Senza
+  cartella impostata su quel PC il PDF non si può cancellare: il documento resta in *Gestione →
+  Backup*, senza codici, e da lì si elimina — eliminarlo cancella anche il file. Un documento citato
+  da almeno un codice non si elimina;
 - se il PDF viene **rinominato o spostato**, si corregge in un punto solo con **Ricollega**
   (*Gestione → Backup*), e tutti i codici che lo citavano seguono.
 
