@@ -218,6 +218,20 @@ function docEmessiVerifica() {
   });
 }
 
+// ─── I documenti eliminati ───
+// Eliminare una richiesta o un ordine non tocca le sue copie: sono ciò che è
+// partito, e restano una prova anche quando il documento in Bomtrack non c'è
+// più. Ma senza documento nessuna scheda le mostra, e una copia che nessuno
+// trova è come persa: per questo Gestione → Backup le elenca a parte. Se il
+// documento torna dal cestino, le copie tornano nella sua scheda da sole —
+// il legame è l'id, che il ripristino conserva.
+function docEmessiOrfani() {
+  return (db.generatedDocs || []).filter(d => {
+    const t = DOC_EMESSI_TIPI[d.kind];
+    return !t || !(db[t.coll] || []).some(r => r.id === d.refId);
+  }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
 // L'esito in Gestione → Backup, sotto quello degli allegati. Prima della
 // verifica dice solo quante copie ci sono; dopo, quali mancano e quali non
 // corrispondono più all'impronta registrata.
@@ -226,6 +240,21 @@ function docEmessiVerificaHtml() {
   if (!n) return '';
   const e = window.__emessiEsito;
   const etichetta = d => `${esc(d.number || '')}${Number(d.seq) > 0 ? ' rev. ' + esc(String(d.seq)) : ''} <span style="font-family:var(--mono)">${esc(d.path || '')}</span>`;
+  return docEmessiEsitoHtml(n, e, etichetta) + docEmessiOrfaniHtml(etichetta);
+}
+function docEmessiOrfaniHtml(etichetta) {
+  const orfani = docEmessiOrfani();
+  if (!orfani.length) return '';
+  const righe = orfani.map(d => `<div class="mgmt-item">
+      <span class="mgmt-item-name">${ico('file', 'tinted', '')} ${etichetta(d)}</span>
+      <span class="mgmt-item-meta">${esc(fmtDateIt(d.sentAt || d.createdAt))}${d.createdBy ? ' · ' + esc(actorName(d.createdBy)) : ''}</span>
+      <div class="mgmt-item-actions"><button class="mini-btn" title="Apri il PDF archiviato" onclick="docEmessoApri('${d.id}')">${ico('eye', 'tinted', 'Apri')}</button></div>
+    </div>`).join('');
+  return `<div style="margin-top:8px"><strong>Copie di documenti eliminati (${orfani.length})</strong>
+    <p class="empty-text" style="text-align:left;padding:2px 0 6px">Il documento non c'è più in Bomtrack, ma la copia inviata resta in archivio. Ripristinandolo dal cestino torna nella sua scheda.</p>
+    <div class="mgmt-list">${righe}</div></div>`;
+}
+function docEmessiEsitoHtml(n, e, etichetta) {
   if (!e) return `<p style="margin-top:6px">${ico('file', 'tinted', '')} Documenti emessi in archivio: <strong>${n}</strong>. La verifica controlla anche loro.</p>`;
   if (!e.mancanti.length && !e.alterati.length) return `<p style="margin-top:6px">Tutti i ${n} documenti emessi sono al loro posto e integri.</p>`;
   const voci = e.mancanti.map(d => `<li>${etichetta(d)} — <strong>non trovato</strong></li>`)

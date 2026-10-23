@@ -2850,6 +2850,11 @@ non può modificare i documenti, il PDF si scarica come prima e la scheda dice p
 archiviato. Le **bozze** non si archiviano: una stampa di controllo non è un documento emesso.
 L'**Excel** resta un file di lavoro e non va in archivio.
 
+**Eliminare il documento non elimina le sue copie.** Il file resta nella cartella e il record nel
+database: è ciò che è partito. L'avviso di eliminazione lo dice, e in *Gestione → Backup* le copie
+dei documenti eliminati sono elencate a parte, con il pulsante per aprirle. Ripristinando il
+documento dal cestino, le copie tornano nella sua scheda.
+
 **La verifica** di *Gestione → Backup* controlla anche le copie emesse: dice quali **non si
 trovano** più e quali sono **diverse** da quella emessa (sostituite o modificate fuori da Bomtrack).
 
