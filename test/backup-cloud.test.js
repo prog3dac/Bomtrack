@@ -1,5 +1,6 @@
-// Il backup notturno dell'archivio condiviso (dalla 0.107.0):
-// supabase/backup.sh, supabase/ripristino.sh e il workflow che li lancia.
+// Il backup dell'archivio condiviso (dalla 0.107.0): supabase/backup.sh e
+// supabase/ripristino.sh, che si lanciano dal proprio PC, e il workflow
+// notturno che tiene sveglio Supabase senza portare dati su GitHub (0.111.1).
 //
 // Un backup che non si è mai ripristinato è una speranza, non un backup. Dove
 // c'è un Postgres (BOMTRACK_PG) si fa il giro intero: un archivio completo
@@ -20,7 +21,7 @@ const pg = require('./pg.js');
 const ROOT = path.join(__dirname, '..');
 const leggi = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
-describe('Supabase sveglio e backup: il workflow', () => {
+describe('Supabase sveglio: il workflow', () => {
   const wf = leggi('.github/workflows/supabase-veglia.yml');
 
   it('gira ogni giorno, e si può lanciare a mano', () => {
@@ -28,27 +29,24 @@ describe('Supabase sveglio e backup: il workflow', () => {
     assert.match(wf, /workflow_dispatch:/);
   });
 
-  it('il file caricato è solo quello cifrato', () => {
-    // Il repo è pubblico: un artifact in chiaro lo scarica chiunque abbia un
-    // account GitHub, hash delle password compresi.
-    const caricati = [...wf.matchAll(/uses: actions\/upload-artifact@/g)];
-    assert.equal(caricati.length, 1, 'un solo file caricato');
-    assert.match(wf, /path: \$\{\{ steps\.backup\.outputs\.file \}\}/);
-    assert.match(wf, /nome="bomtrack-[^"\n]*\.gpg"/);
-    assert.match(wf, /supabase\/backup\.sh "\$nome"/);
+  it('su GitHub resta solo il codice: nessun dato esce dal workflow', () => {
+    // Il repo è pubblico: un artifact lo scarica chiunque abbia un account
+    // GitHub. Dalla 0.111.1 l'archivio e gli utenti non ci passano, nemmeno
+    // cifrati, e il workflow non ha più la password del database.
+    const codice = wf.split('\n').filter(r => !/^\s*#/.test(r)).join('\n');   // senza i commenti
+    assert.doesNotMatch(codice, /upload-artifact/);
+    assert.doesNotMatch(codice, /backup\.sh|pg_dump/);
+    assert.doesNotMatch(codice, /SUPABASE_DB_URL|BACKUP_PASSPHRASE/);
   });
 
   it('senza segreti impostati non fallisce: lo dice e salta', () => {
     assert.match(wf, /SUPABASE_URL: \$\{\{ secrets\.SUPABASE_URL \}\}/);
-    assert.match(wf, /SUPABASE_DB_URL: \$\{\{ secrets\.SUPABASE_DB_URL \}\}/);
-    assert.match(wf, /BACKUP_PASSPHRASE: \$\{\{ secrets\.BACKUP_PASSPHRASE \}\}/);
+    assert.match(wf, /SUPABASE_KEY: \$\{\{ secrets\.SUPABASE_KEY \}\}/);
     assert.match(wf, /::notice::/);
   });
+});
 
-  it('usa gli script del repo, non una copia', () => {
-    assert.match(wf, /supabase\/backup\.sh/);
-  });
-
+describe('Backup dal PC: gli script', () => {
   it('gli script sono eseguibili e falliscono al primo errore', () => {
     ['supabase/backup.sh', 'supabase/ripristino.sh'].forEach(f => {
       assert.match(leggi(f), /^#!\/usr\/bin\/env bash\n/, f);
@@ -59,7 +57,7 @@ describe('Supabase sveglio e backup: il workflow', () => {
   });
 });
 
-describe('Supabase sveglio e backup: il giro intero su Postgres', () => {
+describe('Backup dal PC: il giro intero su Postgres', () => {
   const strumenti = ['pg_dump', 'gpg', 'gzip'].every(c => {
     try { execFileSync(c, ['--version'], { stdio: 'ignore' }); return true; } catch (e) { return false; }
   });

@@ -150,8 +150,9 @@ sufficiente. Va predisposto **prima**, non scoperto il 25 agosto. *Fatto nella 0
 L'export JSON esistente è già la risposta — `Store.importSnapshot()` valida il file e migra i
 formati vecchi, ed è coperto da `test/backup.test.js` — ma va **schedulato fuori da Supabase**,
 altrimenti l'unica copia dei dati sta nello stesso posto che si sta cercando di proteggere.
-*Fatto nella 0.107.0:* lo stesso workflow salva ogni notte una copia cifrata del database fra gli
-artifact di GitHub (`supabase/backup.sh`, si rimette con `supabase/ripristino.sh`).
+*Fatto nella 0.107.0:* `supabase/backup.sh` fa una copia cifrata del database, e si rimette con
+`supabase/ripristino.sh`. Dalla 0.111.1 si lancia dal proprio PC: il workflow notturno non la salva
+più fra gli artifact di GitHub, perché su un repo pubblico ci deve stare solo il codice.
 
 ## Il giorno in cui arrivano i disegni
 
@@ -175,7 +176,8 @@ Non è lo spazio a decidere. Decidono, in quest'ordine:
 2. la **retention dei movimenti**, che è l'unica cosa che rende la crescita piatta invece che
    monotòna;
 3. i **backup fuori sede** e il **ping anti-sospensione**, che non costano niente e mancano entrambi
-   di serie (dalla 0.107.0 li fa il workflow `supabase-veglia`, una volta impostati i segreti).
+   di serie (dalla 0.107.0 il ping lo fa il workflow `supabase-veglia`, una volta impostati i
+   segreti; la copia intera del database si fa dal PC con `supabase/backup.sh`).
 
 Se il progetto arriverà vicino al limite, ci arriverà **per il tempo trascorso, non per i dati**. E
 il rimedio a quel punto è archiviare, non normalizzare meglio.

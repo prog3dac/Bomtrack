@@ -3,8 +3,9 @@
 #
 # Il piano gratuito di Supabase non fa backup: se il progetto si perde, si
 # perde (docs/sostenibilita-free-tier.md). Questo script scarica i dati e li
-# cifra con una frase segreta; lo lancia ogni notte
-# .github/workflows/supabase-veglia.yml, e si può lanciare a mano.
+# cifra con una frase segreta. Si lancia dal proprio PC (manuale, cap. 31), e
+# il file si tiene con gli altri backup: mai su GitHub, nemmeno cifrato (dalla
+# 0.111.1 il workflow notturno non lo lancia più).
 #
 #   SUPABASE_DB_URL=postgresql://…  BACKUP_PASSPHRASE=…  supabase/backup.sh archivio.sql.gz.gpg
 #
