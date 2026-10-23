@@ -2,6 +2,13 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.112.2 — 2026-10-23
+
+**Un codice lasciato da un articolo rinominato si può riusare subito.** Con l'archivio condiviso, dare un codice a un articolo lo impegna sul server per un'ora, il tempo che l'articolo arrivi. Se nel frattempo l'articolo veniva rinominato, l'impegno sul codice vecchio restava: per un'ora nessuno poteva darlo a un altro articolo, nemmeno chi l'aveva appena lasciato, e l'app diceva «l'ha appena preso un collega» per un codice che non aveva più nessuno. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (cambia solo la funzione `impegna_codici`, non tocca i dati).
+
+- **Sul server**: un impegno fatto per un articolo che porta ormai un altro codice non vale più, e il codice si dà a chi lo chiede. Sistema anche gli impegni già rimasti appesi.
+- **Nell'app**: rinominando un articolo il codice vecchio si restituisce subito, anche quando l'articolo non è ancora arrivato al server.
+
 ### 0.112.1 — 2026-10-23
 
 **Lo storico delle modifiche si legge senza codici interni.** Cambiando il prezzo in uso di un articolo, lo storico mostrava «Prezzo in uso: 72eb3495-1803-…», cioè l'id della riga di listino, e accanto campi tecnici come «priceListSeeded: true → (vuoto)» o «unitCost». Nessun cambio a `supabase/schema.sql`.

@@ -932,6 +932,30 @@ describe('Archivio condiviso — numeri e codici li dà il server', () => {
     assert.deepEqual(Array.from(await B.eval(`cloudImpegnaCodici([{ codice: '${c}' }])`)), []);
   });
 
+  passo('il codice lasciato da un articolo rinominato torna libero', async () => {
+    const vecchio = 'PROVA-RINOMINA-S00', nuovo = 'PROVA-RINOMINA-S01';
+    const it = { id: U(910), type: 'materiale', name: 'Da rinominare', code: vecchio, active: true };
+    A.eval(`globalThis.__ren = ${JSON.stringify(it)}`);
+    await A.eval(`conCodiceImpegnato(__ren, null, () => Store.insert('items', __ren))`);
+    await giro(A);
+    // La rinomina arriva al server: l'impegno sul codice vecchio, fatto per
+    // quell'articolo, non vale più — né per un collega né per chi l'ha lasciato.
+    await A.eval(`conCodiceImpegnato({ id: '${U(910)}', code: '${nuovo}' }, null, () => Store.update('items', '${U(910)}', { code: '${nuovo}' }))`);
+    await giro(A);
+    assert.deepEqual(Array.from(await B.eval(`cloudImpegnaCodici([{ codice: '${vecchio}' }])`)), [], 'un collega lo prende');
+    await B.eval(`cloudLiberaCodici(['${vecchio}'])`);
+    assert.deepEqual(Array.from(await A.eval(`cloudImpegnaCodici([{ codice: '${vecchio}', item: '${U(911)}' }])`)), [],
+      'e anche chi l\'ha lasciato, per un altro articolo');
+    // Il codice nuovo invece è dell'articolo rinominato.
+    assert.deepEqual(Array.from(await B.eval(`cloudImpegnaCodici([{ codice: '${nuovo}' }])`)), [nuovo]);
+  });
+
+  passo('un impegno resta valido finché l\'articolo non è sul server', async () => {
+    const c = 'PROVA-ATTESA-1';
+    assert.deepEqual(Array.from(await A.eval(`cloudImpegnaCodici([{ codice: '${c}', item: '${U(920)}' }])`)), []);
+    assert.equal(Array.from(await B.eval(`cloudImpegnaCodici([{ codice: '${c}', item: '${U(921)}' }])`)).join(), c);
+  });
+
   passo('un lettore non prenota numeri', async () => {
     srv.db.sql(`set session_replication_role = replica; update profiles set role = 'lettore' where id = '${bruno}';`);
     await assert.rejects(B.eval(`cloudRpc('riserva_numeri', { prefisso: 'ODA-${anno}-', quanti: 1, minimo: 0 })`), /non scrive/);

@@ -720,7 +720,9 @@ di usarli:
   (`codici_impegnati`). Il confronto ignora maiuscole e spazi. Lato client
   `conCodiceImpegnato` e l'import del catalogo; i codici rifiutati finiscono
   in `_codiciAltrui`, che la generazione automatica salta fino al giro dopo.
-  Quelli impegnati e non usati tornano con `libera_codici`.
+  Quelli impegnati e non usati tornano con `libera_codici`. Un impegno per un
+  articolo che sul server porta ormai un altro codice (rinominato) non vale più,
+  e rinominando l'app restituisce il codice vecchio.
 
 Le tabelle hanno RLS senza policy: le toccano solo le due funzioni
 (`security definer`). La rinumerazione dopo il pull (`cloudNumeriDoppi`) resta
