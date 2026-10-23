@@ -437,7 +437,7 @@ const STORICO_COLL = {
   orders: 'Ordine fornitore', workOrders: 'Ordine di lavoro', plans: 'Piano di fabbisogno',
   prodOrders: 'Ordine di produzione', jobs: 'Commessa', users: 'Utente', families: 'Famiglia',
   workCenters: 'Centro di lavoro', reminders: 'Promemoria', attachments: 'Allegato',
-  attachmentDocs: 'Documento d\'archivio', productions: 'Produzione', settings: 'Impostazioni',
+  attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione', settings: 'Impostazioni',
 };
 const STORICO_CAMPI = {
   code: 'Codice', name: 'Nome', description: 'Descrizione', type: 'Tipo', uom: 'U.M.',
@@ -465,6 +465,9 @@ const STORICO_CAMPI = {
   defaultTransport: 'Trasporto predefinito', defaultPayment: 'Pagamento predefinito',
   hourlyRate: 'Tariffa oraria', capacityHours: 'Ore di capacità', suppliers: 'Fornitori',
   sigla: 'Sigla', subs: 'Sottofamiglie', username: 'Nome utente', color: 'Colore', path: 'Percorso',
+  // Copie dei documenti emessi
+  seq: 'Revisione', format: 'Formato', size: 'Dimensione', sha256: 'Impronta',
+  sentAt: 'Inviato il', sentVia: 'Inviato con', sentTo: 'Inviato a',
   // Impostazioni
   overheadPct: 'Spese generali %', marginPct: 'Margine %', currency: 'Valuta', codeDigits: 'Cifre del codice',
   codePrefixAcquistato: 'Prefisso codici commerciali', codePrefixMateriale: 'Prefisso codici materiali',

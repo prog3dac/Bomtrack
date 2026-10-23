@@ -405,6 +405,14 @@ const SCHEMA = {
   // rinominato ci sarebbero quaranta righe da correggere a mano, sperando di
   // trovarle tutte. Così se ne corregge una.
   attachmentDocs: { table: 'attachment_docs' },
+  // I documenti emessi (documenti.js): la copia PDF di una richiesta, di un
+  // ordine o di un ordine di lavoro così come è partita, scritta nella stessa
+  // cartella d'archivio. Come per `attachmentDocs` qui sta solo **dove** si
+  // trova il file, più ciò che serve a ritrovarlo e a fidarsene: a quale
+  // documento appartiene (`kind` + `refId`), la revisione (`seq`), l'impronta
+  // (`sha256`) e l'invio (`sentAt`, `sentVia`, `sentTo`). Un record per file,
+  // mai riscritto: una copia emessa è una prova, e una prova non si corregge.
+  generatedDocs: { table: 'generated_docs' },
   // Avanzamento di produzione: una dichiarazione per volta, mai un saldo
   // riscritto. Stessa scelta dei movimenti di magazzino — la giacenza non è un
   // campo — e per la stessa ragione: un totale che si ricostruisce si può
@@ -671,6 +679,8 @@ function migrateDB() {
   // riga qui sopra — una collezione dichiarata esiste sempre, così nessuna
   // lettura deve ricordarsi di difendersi.
   if (!db.attachmentDocs) db.attachmentDocs = [];
+  // Documenti emessi: collezione nata nella 0.112.0, stessa ragione.
+  if (!db.generatedDocs) db.generatedDocs = [];
   if (!db.productions) db.productions = [];
   if (!db.rfqs) db.rfqs = [];
   if (!db.orders) db.orders = [];

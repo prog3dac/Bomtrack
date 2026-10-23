@@ -26,6 +26,10 @@ function app(files, opt) {
   a.archivio(files || { 'catalogo.pdf': 'PDF-1', 'cataloghi/skf.pdf': 'PDF-2' }, opt);
   return a;
 }
+// Le cancellazioni dalla cartella sono asincrone: si aspetta l'effetto, con un tetto.
+async function finche(cond) {
+  for (let i = 0; i < 100 && !cond(); i++) await new Promise(r => setTimeout(r, 5));
+}
 const collega = (a, item, path, desc, pag) =>
   a.eval(`allegatoCollega(${JSON.stringify(item)}, ${JSON.stringify(path)}, ${JSON.stringify(desc || '')}, ${JSON.stringify(pag == null ? '' : String(pag))})`);
 
@@ -109,13 +113,57 @@ describe('Archivio — scollegare ed eliminare', () => {
     assert.equal(a.snapshot().attachmentDocs.length, 1);
   });
 
-  it('senza più nessun codice si elimina, e il file resta in archivio', () => {
-    const a = app();
+  // Dalla 0.112.0 eliminare un documento cancella anche il suo PDF.
+  it('senza più nessun codice si elimina, e il file esce dall\'archivio', async () => {
+    const files = { 'catalogo.pdf': 'PDF-1', 'altro.pdf': 'PDF-2' };
+    const a = app(files);
     collega(a, 'M1', 'catalogo.pdf', 'Catalogo');
     const docId = a.snapshot().attachmentDocs[0].id;
     a.eval('db.attachments = [];');
     a.eval(`allegatoDocElimina(${JSON.stringify(docId)}); confirmYes();`);
+    await finche(() => !a.snapshot().attachmentDocs.length);
     assert.equal(a.snapshot().attachmentDocs.length, 0);
+    assert.equal(files['catalogo.pdf'], undefined);
+    assert.equal(files['altro.pdf'], 'PDF-2');
+  });
+
+  it('scollegato dall\'ultimo codice, il PDF si cancella con il documento', async () => {
+    const files = { 'cataloghi/skf.pdf': 'PDF-2' };
+    const a = app(files);
+    collega(a, 'M1', 'cataloghi/skf.pdf', 'Catalogo');
+    a.eval('var __msg = ""; var __ac = askConfirm; askConfirm = function (m, f, o) { __msg = m; return __ac(m, f, o); };');
+    a.eval(`allegatoScollega(${JSON.stringify(a.snapshot().attachments[0].id)})`);
+    assert.match(a.eval('__msg'), /verrà cancellato anche dalla cartella/);
+    a.eval('confirmYes()');
+    await finche(() => !a.snapshot().attachmentDocs.length);
+    assert.equal(a.snapshot().attachments.length, 0);
+    assert.equal(a.snapshot().attachmentDocs.length, 0);
+    assert.equal(files['cataloghi/skf.pdf'], undefined);
+  });
+
+  it('scollegato da un codice ma citato da un altro, il PDF resta', async () => {
+    const files = { 'catalogo.pdf': 'PDF-1' };
+    const a = app(files);
+    collega(a, 'M1', 'catalogo.pdf', 'Catalogo');
+    collega(a, 'M2', 'catalogo.pdf', '');
+    a.eval('var __msg = ""; var __ac = askConfirm; askConfirm = function (m, f, o) { __msg = m; return __ac(m, f, o); };');
+    a.eval(`allegatoScollega(${JSON.stringify(a.snapshot().attachments[0].id)}); confirmYes();`);
+    assert.match(a.eval('__msg'), /allegato anche a un altro codice/);
+    await finche(() => false);
+    assert.equal(files['catalogo.pdf'], 'PDF-1');
+    assert.equal(a.snapshot().attachmentDocs.length, 1);
+  });
+
+  it('senza cartella su questo PC il documento resta in elenco, da cancellare dopo', async () => {
+    const files = { 'catalogo.pdf': 'PDF-1' };
+    const a = app(files);
+    collega(a, 'M1', 'catalogo.pdf', 'Catalogo');
+    a.eval('localStorage.removeItem("bomtrack_archivio_nome")');
+    a.eval(`allegatoScollega(${JSON.stringify(a.snapshot().attachments[0].id)}); confirmYes();`);
+    await finche(() => false);
+    assert.equal(a.snapshot().attachments.length, 0);
+    assert.equal(a.snapshot().attachmentDocs.length, 1, 'resta in Gestione, senza codici');
+    assert.equal(files['catalogo.pdf'], 'PDF-1');
   });
 });
 

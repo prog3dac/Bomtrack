@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..');
 // Stessa sequenza di index.html: i file si caricano nello stesso contesto e
 // condividono lo scope globale, esattamente come i <script> della pagina.
 const SRC = ['icons.js', 'theme.js', 'store.js', 'cloud-map.js', 'cloud.js', 'core.js', 'auth.js', 'costing.js', 'calendario.js', 'shell.js', 'worklist.js',
-  'views-bom.js', 'views-rev.js', 'views-stock.js', 'views-catalog.js', 'views-report.js', 'views-jobs.js', 'views-home.js', 'views-dash.js', 'produzione.js', 'views-mrp.js', 'allegati.js', 'archivio.js', 'views-item.js',
+  'views-bom.js', 'views-rev.js', 'views-stock.js', 'views-catalog.js', 'views-report.js', 'views-jobs.js', 'views-home.js', 'views-dash.js', 'produzione.js', 'views-mrp.js', 'allegati.js', 'archivio.js', 'documenti.js', 'views-item.js',
   'views-docs.js', 'views-prod.js', 'views-avanzamento.js', 'views-manage.js', 'export-lists.js', 'import-catalog.js', 'columns.js', 'filters.js', 'inspector.js', 'qr.js', 'inventario.js', 'combo.js', 'import-export.js'];
 
 // localStorage finto. `quotaBytes` opzionale: oltre soglia lancia lo stesso
@@ -242,9 +242,11 @@ function loadApp(opts) {
           let i = 0;
           return { next: () => Promise.resolve(i < voci.length ? { done: false, value: voci[i++] } : { done: true }) };
         },
-        getDirectoryHandle(sub) {
+        // Una cartella vuota qui non esiste (i file sono un elenco piatto):
+        // `create` la fa esistere per chi ci scriverà dentro subito dopo.
+        getDirectoryHandle(sub, opt) {
           const p = (prefisso || '') + sub + '/';
-          if (!Object.keys(files).some(k => k.startsWith(p))) return Promise.reject(new Error('NotFound'));
+          if (!(opt && opt.create) && !Object.keys(files).some(k => k.startsWith(p))) return Promise.reject(new Error('NotFound'));
           return Promise.resolve(dir(sub, p));
         },
         getFileHandle(sub, opt) {
@@ -266,6 +268,7 @@ function loadApp(opts) {
       getFile: () => Promise.resolve({
         name: path.split('/').pop(), size: String(files[path] || '').length,
         lastModified: 0, _testo: files[path],
+        arrayBuffer: () => Promise.resolve(new TextEncoder().encode(String(files[path] || '')).buffer),
       }),
       createWritable: () => Promise.resolve({
         write(b) { files[path] = typeof b === 'string' ? b : (b && (b._testo || b.name)) || ''; return Promise.resolve(); },

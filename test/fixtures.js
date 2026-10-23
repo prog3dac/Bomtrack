@@ -10,7 +10,7 @@ function makeDb(over) {
   const base = {
     schemaVersion: 2,
     suppliers: [], rfqs: [], orders: [], workOrders: [], users: [], families: [],
-    attachments: [], attachmentDocs: [], productions: [],
+    attachments: [], attachmentDocs: [], generatedDocs: [], productions: [],
     prodOrders: [], prodDecls: [],
     workCenters: o.workCenters || [],
     items: o.items || [],
@@ -49,8 +49,8 @@ const T0 = '2026-03-01T08:00:00.000Z';
 const st = o => Object.assign({ createdAt: T0, updatedAt: T0 }, o);
 function dbCloudCompleto() {
   const [s1, s2, wc1, fam, sub, job, m1, c1, p1, g1, mac, pr1, pr2, rfq, rl1, rl2, ord, ol1, plan, pll,
-    odp, ph1, ph2, mt1, odl, wl1, dec, mv1, mv2, rc1, prd, rev, adoc, att, rem, trash, cust, wcs, usr, cn] =
-    Array.from({ length: 40 }, (_, i) => U(i + 1));
+    odp, ph1, ph2, mt1, odl, wl1, dec, mv1, mv2, rc1, prd, rev, adoc, att, rem, trash, cust, wcs, usr, cn, gdoc] =
+    Array.from({ length: 41 }, (_, i) => U(i + 1));
   return makeDb({
     users: [st({ id: usr, name: 'Anna', username: 'anna', email: 'a@x.it', role: 'admin', color: '#3A7BE8', active: true, passwordHash: 'h', passwordSalt: 's' })],
     suppliers: [st({ id: s1, name: 'SKF', referente: '', email: '', phone: '', vat: '', street: '', streetNumber: '', zip: '', city: '', province: '', country: '', defaultTransport: '', defaultPayment: '', active: true }),
@@ -96,6 +96,8 @@ function dbCloudCompleto() {
     revisions: [st({ id: rev, itemId: mac, rev: 'A', date: '2026-02-20T10:00:00.000Z', motivo: 'prima emissione', snapshot: { components: [{ itemId: g1, qty: 1 }], cost: 123.4 } })],
     attachmentDocs: [st({ id: adoc, path: 'cataloghi/skf.pdf', description: 'Catalogo SKF' })],
     attachments: [st({ id: att, itemId: c1, docId: adoc, page: 12 })],
+    generatedDocs: [st({ id: gdoc, kind: 'order', refId: ord, number: 'ODA-2026-001', seq: 0, path: 'Documenti Bomtrack/ODA/2026/ODA-2026-001_SKF.pdf',
+      format: 'pdf', size: 48213, sha256: 'ab'.repeat(32), sentAt: '2026-02-05T10:00:00.000Z', sentVia: 'manuale', sentTo: '' })],
     reminders: [st({ id: rem, date: '2026-03-20', title: 'Sollecitare SKF', notes: '', gravita: 'media', done: false, jobId: job, active: true })],
     trash: [{ id: trash, coll: 'suppliers', deletedAt: T0, deletedBy: usr, record: { id: U(99), name: 'Vecchio' } }],
   });
