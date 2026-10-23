@@ -151,7 +151,7 @@ L'export JSON esistente è già la risposta — `Store.importSnapshot()` valida 
 formati vecchi, ed è coperto da `test/backup.test.js` — ma va **schedulato fuori da Supabase**,
 altrimenti l'unica copia dei dati sta nello stesso posto che si sta cercando di proteggere.
 *Fatto nella 0.107.0:* `supabase/backup.sh` fa una copia cifrata del database, e si rimette con
-`supabase/ripristino.sh`. Dalla 0.110.1 si lancia dal proprio PC: il workflow notturno non la salva
+`supabase/ripristino.sh`. Dalla 0.111.1 si lancia dal proprio PC: il workflow notturno non la salva
 più fra gli artifact di GitHub, perché su un repo pubblico ci deve stare solo il codice.
 
 ## Il giorno in cui arrivano i disegni

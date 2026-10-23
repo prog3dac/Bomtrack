@@ -5,9 +5,9 @@
 # lo riprende a mano. Questo workflow lo tocca una volta al giorno: chiede
 # soltanto se il servizio risponde, non legge dati e non salva niente.
 #
-# Su GitHub sta solo il codice (dalla 0.110.1): il repo è pubblico, e
+# Su GitHub sta solo il codice (dalla 0.111.1): il repo è pubblico, e
 # l'archivio e gli utenti non ci devono passare, nemmeno cifrati. Fino alla
-# 0.110.0 lo stesso workflow salvava una copia del database fra gli artifact;
+# 0.111.0 lo stesso workflow salvava una copia del database fra gli artifact;
 # la copia intera ora si fa dal proprio PC con supabase/backup.sh.
 #
 # Cosa impostare è nel manuale, cap. 31 («Supabase sveglio ogni notte»).

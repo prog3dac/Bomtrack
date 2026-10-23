@@ -412,12 +412,23 @@ function schedFlat(node, livello, out) {
 //     e mai prima dell'ultimo arrivo già atteso.
 // La scorta minima non trattiene niente: è un margine, e in un ritardo si usa.
 //
+// La data di una riga d'ordine si legge come la data di un listino (dalla
+// 0.111.0): un arrivo in un giorno di chiusura si riceve il primo giorno
+// lavorativo dopo, e un arrivo **scaduto** — la data è passata e la merce non
+// è stata ricevuta — non vale «pronto oggi»: se stamattina non c'è, il primo
+// mattino in cui può esserci è il prossimo giorno lavorativo. Prima un ordine
+// in ritardo di tre settimane dava la data fattibile più ottimista possibile.
+// Gli ordini scaduti usati per coprire si ricordano (`disp.info`): il percorso
+// critico e il Gantt li dicono.
+//
 // Limiti, detti: le parti prodotte non si guardano a magazzino (come nel
 // fabbisogno, dove non hanno netto), un ordine di produzione già avviato
 // accorcia il conto solo per il materiale che ha prelevato, e la capacità
 // resta infinita.
 function schedDisponibilita(planId, lines) {
   const oggi = schedOggi();
+  const scade = oggiISO();
+  const domani = addWorkDays(oggi, 1);
   const lordo = new Map();
   mrpExplode(lines, mrpOpzPiano(planId)).buy.forEach(e => lordo.set(e.item.id, e.qty));
   // Gli arrivi vengono dall'indice del magazzino (dalla 0.105.6), lo stesso del
@@ -427,12 +438,17 @@ function schedDisponibilita(planId, lines) {
   // merce già ordinata risultava ancora da comprare col tempo del fornitore.
   const arrivi = new Map();
   const arriviDi = id => {
-    if (!arrivi.has(id)) arrivi.set(id, (stockOf(id).arrivi || [])
-      .map(a => ({ data: a.eta ? String(a.eta).slice(0, 10) : oggi, qty: Number(a.qty) || 0 })));
+    if (!arrivi.has(id)) arrivi.set(id, (stockOf(id).arrivi || []).map(a => {
+      const eta = a.eta ? String(a.eta).slice(0, 10) : '';
+      const scaduto = !!eta && eta < scade;
+      const giorno = eta && !scaduto ? (nextWorkDay(eta) || eta) : '';
+      const data = !eta ? oggi : scaduto ? domani : (giorno > oggi ? giorno : oggi);
+      return { data, eta, scaduto, number: a.number || '', qty: Number(a.qty) || 0 };
+    }));
     return arrivi.get(id);
   };
   const memo = new Map();
-  return it => {
+  const calcola = it => {
     if (memo.has(it.id)) return memo.get(it.id);
     // Il già prelevato dai documenti del piano non è più a magazzino e non va
     // più cercato: vedi commitIndex.
@@ -440,23 +456,28 @@ function schedDisponibilita(planId, lines) {
     const s = stockOf(it.id);
     const impegnato = commitsOn(it.id, planId || null).reduce((t, c) => t + c.qty, 0);
     let libero = s.onHand - impegnato;
-    let pronto = oggi;
+    const out = { pronto: oggi, attesa: '', scaduti: [] };
     if (libero < serve) {
       const righe = arriviDi(it.id).slice().sort((a, b) => a.data.localeCompare(b.data));
       let coperto = false;
       for (const r of righe) {
         libero += r.qty;
-        if (r.data > pronto) pronto = r.data;
+        if (r.data > out.pronto) out.pronto = r.data;
+        if (r.eta && r.data > out.attesa) out.attesa = r.data;
+        if (r.scaduto) out.scaduti.push({ number: r.number, eta: r.eta });
         if (libero >= serve) { coperto = true; break; }
       }
       if (!coperto) {
         const comprato = supplierArrival(oggi, buyLeadDays(it));
-        if (comprato > pronto) pronto = comprato;
+        if (comprato > out.pronto) out.pronto = comprato;
       }
     }
-    memo.set(it.id, pronto);
-    return pronto;
+    memo.set(it.id, out);
+    return out;
   };
+  const disp = it => calcola(it).pronto;
+  disp.info = calcola;
+  return disp;
 }
 // Oggi, per il programma: il primo giorno in cui si può fare qualcosa. Sta in
 // una funzione sola perché i test la fermano a una data.
@@ -469,6 +490,11 @@ function schedForward(node, disp) {
     node.fEnd = disp(node.item);
     node.fStart = oggi;
     node.crit = null;
+    // Quando arriva quello che è già ordinato, e quali ordini sono scaduti:
+    // il percorso critico e il Gantt lo dicono accanto alla data.
+    const inf = disp.info ? disp.info(node.item) : null;
+    node.attesa = inf ? inf.attesa : '';
+    node.scaduti = inf ? inf.scaduti : [];
     return node.fEnd;
   }
   let pronto = oggi, crit = null;
@@ -726,6 +752,7 @@ function mrpBuyRow(entry, netMode, planId) {
   // d'ordine cade su un giorno in cui l'ufficio è aperto (vedi calendario.js).
   const leadDays = leadDaysOfRow(doc);
   const orderBy = due ? runSendDate(due, leadDays) : '';
+  const tardi = mrpArrivoTardi(it, due, Math.max(0, entry.qty - prelevato), st);
   return {
     item: it, qty: entry.qty, uom: itemUom(it),
     due, leadDays, orderBy, urgenza: urgenzaOrdine(orderBy),
@@ -756,7 +783,35 @@ function mrpBuyRow(entry, netMode, planId) {
     // Le bozze d'ordine di **altri** (riordino, un altro piano, scritte a mano)
     // con questo articolo: non sono in arrivo, e il netto non le vede.
     bozze: bozzeAltrui(it.id, planId),
+    // Ordinato, ma arriva dopo il giorno in cui serve (dalla 0.111.0): la data
+    // in cui l'in arrivo basta davvero, o vuota. E gli ordini scaduti.
+    arrivoTardi: tardi.data, scaduti: tardi.scaduti,
   };
+}
+// «Coperto» guardava solo le quantità: un ordine che arriva il 5/11 copriva un
+// fabbisogno del 30/10 come se fosse già a scaffale, e la riga spariva dal
+// netto senza un avviso (la copertura di commessa lo diceva già). Stesso conto
+// del netto con il solo in arrivo **in tempo** (incomingEntro, come
+// jobCoverage): se così il netto cresce, la merce c'è ma tardi, e la data è
+// quella in cui gli arrivi tardivi bastano. Scaduti: righe d'ordine aperte con
+// la data già passata, che il programma aspetta al prossimo giorno lavorativo.
+function mrpArrivoTardi(it, due, lordo, st) {
+  const oggi = oggiISO();
+  const scaduti = (stockOf(it.id).arrivi || []).filter(a => a.eta && String(a.eta).slice(0, 10) < oggi)
+    .map(a => ({ number: a.number || '', eta: String(a.eta).slice(0, 10) }));
+  const out = { data: '', scaduti };
+  if (!due || !(lordo > 0)) return out;
+  const arr = incomingEntro(it.id, due);
+  if (!arr.tardivi.length) return out;
+  const netto = inc => netRequirement(lordo, st.onHand, inc, st.safety, st.lotSize, st.committed, st.lotMode);
+  if (!(netto(arr.inTempo) > st.net)) return out;
+  let inc = arr.inTempo;
+  for (const a of arr.tardivi) {
+    inc += a.qty;
+    out.data = String(a.eta).slice(0, 10);
+    if (!(netto(inc) > st.net)) break;
+  }
+  return out;
 }
 // ─── Le bozze d'ordine degli altri (dalla 0.105.6) ───
 // Una bozza non è merce in arrivo — non è partita — e il netto giustamente non
@@ -2433,6 +2488,7 @@ const AGENDA_TIPI = {
   lancio: { label: 'Lanciare in produzione', icona: 'factory' },
   lavora: { label: 'Fase interna', icona: 'wrench' },
   montaggio: { label: 'Montaggio', icona: 'wrench' },
+  arrivo: { label: 'Arrivo dal fornitore', icona: 'package' },
   consegna: { label: 'Consegna', icona: 'clipboard' },
 };
 const AGENDA_STATI = { fatto: 'fatto', richiesto: 'richiesto', ritardo: 'in ritardo', 'da fare': 'da fare', previsto: 'previsto' };
@@ -2458,6 +2514,26 @@ function planAgenda(plan) {
     ev({ data: r.orderBy, tipo: 'ordina', item: r.item, qty: r.qtyOrder, dove: supplierName(r.supplierId) || '',
       testo: `serve per il ${fmtDateIt(r.due)}`, stato: stato(r.orderBy, refs, ['order']), docs: refs });
   });
+  // Gli arrivi degli ordini del piano (dalla 0.111.0): con l'ordine emesso
+  // l'acquisto era «fatto» e spariva, anche se il fornitore aveva spostato la
+  // consegna oltre il giorno in cui il materiale serve. La data è quella
+  // confermata, o quella chiesta; in ritardo se viene dopo il «serve per» o se
+  // è passata senza che la merce sia arrivata.
+  const servePer = new Map(exp.buy.map(e => [e.item.id, e.due || '']));
+  (db.orders || []).filter(o => o.planId === plan.id && o.active !== false && ORDER_INCOMING_STATES.includes(o.status)).forEach(o =>
+    (o.lines || []).forEach(l => {
+      if (!l.itemId || !servePer.has(l.itemId)) return;
+      const it = getItem(l.itemId); if (!it) return;
+      const manca = (Number(l.qty) || 0) - (Number(l.received) || 0);
+      const data = String(l.confirmedDate || l.deliveryDate || '').slice(0, 10);
+      if (!(manca > 0) || !data) return;
+      const serve = servePer.get(l.itemId);
+      const scaduto = data < oggi;
+      ev({ data, tipo: 'arrivo', item: it, qty: fromAltUom(it, manca, l.uom), dove: supplierName(o.supplierId) || '',
+        testo: `${scaduto ? 'scaduto, ' : ''}${serve ? 'serve per il ' + fmtDateIt(serve) : ''}`,
+        stato: scaduto || (serve && data > serve) ? 'ritardo' : 'previsto',
+        docs: [{ kind: 'order', id: o.id, number: o.number || '' }] });
+    }));
   mrpPhaseRuns(mrpPhaseRowsNette(plan.id, exp.phases)).forEach(r => {
     const refs = [].concat(...(r.phaseKeys || [r.phaseKey]).map(k => gia.get(k) || []));
     const st = stato(r.orderBy, refs, ['odl', 'odp']);
@@ -2490,7 +2566,7 @@ function planAgenda(plan) {
   });
   // In un giorno: prima le cose da emettere, poi quelle che accadono; la
   // consegna per ultima, come nella realtà.
-  const ordine = ['ordina', 'invia', 'lancio', 'rientro', 'lavora', 'montaggio', 'consegna'];
+  const ordine = ['ordina', 'invia', 'lancio', 'rientro', 'arrivo', 'lavora', 'montaggio', 'consegna'];
   return out.sort((a, b) => a.data.localeCompare(b.data) || ordine.indexOf(a.tipo) - ordine.indexOf(b.tipo)
     || String(a.codice).localeCompare(String(b.codice)));
 }
@@ -2578,7 +2654,7 @@ function planGanttHtml(plan, feas) {
   // L'asse va dalla prima data utile all'ultima, oggi compreso.
   const date = [oggiISO(), f.richiesta, f.fattibile].filter(Boolean);
   righe.forEach(({ node: n }) => {
-    [n.start, n.end].forEach(d => { if (d) date.push(d); });
+    [n.start, n.end, n.attesa].forEach(d => { if (d) date.push(d); });
     n.steps.forEach(st => [st.start, st.end].forEach(d => { if (d) date.push(d); }));
   });
   const da = date.reduce((m, d) => d < m ? d : m), al = date.reduce((m, d) => d > m ? d : m);
@@ -2604,8 +2680,18 @@ function planGanttHtml(plan, feas) {
     const etichetta = `<text x="${4 + livello * 12}" y="${y + H / 2 + 4}" class="gantt-lbl${crit ? ' gantt-crit' : ''}">${esc(n.item.code || '')}</text>`;
     let barre = '';
     if (n.kind === 'buy') {
+      const arrivo = schedArrivoTesto(n);
       barre = barra(n.start, n.end, y, GANTT_COLORI.buy, crit,
-        `${n.item.code} — ${schedNodeLabel(n)}: ordinare entro ${fmtDateIt(n.start)}, serve il ${fmtDateIt(n.end)}`);
+        `${n.item.code} — ${schedNodeLabel(n)}: ordinare entro ${fmtDateIt(n.start)}, serve il ${fmtDateIt(n.end)}${arrivo ? ' — ' + arrivo : ''}`);
+      // L'arrivo di quello che è già ordinato (dalla 0.111.0): le barre sono il
+      // programma a ritroso e non si muovono, il rombo sì. Rosso se arriva dopo
+      // il giorno in cui serve, o se l'ordine è scaduto.
+      if (n.attesa) {
+        const tardi = (n.scaduti || []).length || (n.end && n.attesa > n.end);
+        const cx = x(n.attesa), cy = y + H / 2;
+        barre += `<polygon class="gantt-arrivo${tardi ? ' gantt-arrivo-tardi' : ''}" points="${(cx - 5).toFixed(1)},${cy} ${cx.toFixed(1)},${cy - 5} ${(cx + 5).toFixed(1)},${cy} ${cx.toFixed(1)},${cy + 5}"
+          fill="${tardi ? 'var(--red)' : 'var(--text)'}"><title>${esc(`${n.item.code} — ${arrivo}${tardi && !(n.scaduti || []).length ? ', serve il ' + fmtDateIt(n.end) : ''}`)}</title></polygon>`;
+      }
     } else if (n.kind === 'asm') {
       barre = barra(n.start, n.end, y, GANTT_COLORI.asm, crit, `${n.item.code} — montaggio dal ${fmtDateIt(n.start)} al ${fmtDateIt(n.end)}`);
     } else {
@@ -2616,14 +2702,18 @@ function planGanttHtml(plan, feas) {
   }).join('');
   const altezza = top + righe.length * H + 6;
   const linea = (d, colore, testo) => d ? `<line x1="${x(d).toFixed(1)}" y1="${top - 4}" x2="${x(d).toFixed(1)}" y2="${altezza - 4}" stroke="${colore}" stroke-width="1.5" stroke-dasharray="4 3"><title>${esc(testo)}</title></line>` : '';
+  // La data fattibile (dalla 0.111.0): entrava nella scala ma non si vedeva, e
+  // spostare un ordine non cambiava niente nel disegno. Arancione se viene dopo
+  // la consegna richiesta.
+  const fattOk = !f.fattibile || !f.richiesta || f.fattibile <= f.richiesta;
   const legenda = [['buy', 'attesa fornitore'], ['int', 'fase interna'], ['est', 'conto lavoro'], ['asm', 'montaggio']]
     .map(([k, t]) => `<span class="gantt-key"><i style="background:${GANTT_COLORI[k]}"></i>${t}</span>`).join('');
   const descr = `Gantt di ${f.tree.item.code}: ${righe.length} righe, dal ${fmtDateIt(da)} al ${fmtDateIt(al)}, consegna richiesta ${fmtDateIt(f.richiesta)}, fattibile ${fmtDateIt(f.fattibile)}`;
   return `${testa}
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Le barre sono il programma a ritroso: entro quando deve succedere ogni cosa perché la consegna regga. Il contorno <span style="color:var(--red)">rosso</span> segna il percorso critico; la linea rossa è la consegna richiesta, quella blu oggi.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Le barre sono il programma a ritroso: entro quando deve succedere ogni cosa perché la consegna regga. Il contorno <span style="color:var(--red)">rosso</span> segna il percorso critico; la linea rossa è la consegna richiesta, quella blu oggi, quella ${fattOk ? 'verde' : 'arancione'} la data fattibile. Il rombo è l'arrivo atteso di un ordine già emesso: rosso se arriva dopo il giorno in cui serve, o se è scaduto.</p>
     <div class="gantt-legend">${legenda}</div>
     <figure class="gantt"><svg viewBox="0 0 ${L + W + 10} ${altezza}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${esc(descr)}">
-      ${tacche}${corpo}${linea(oggiISO(), 'var(--accent)', 'Oggi')}${linea(f.richiesta, 'var(--red)', 'Consegna richiesta ' + fmtDateIt(f.richiesta))}
+      ${tacche}${corpo}${linea(oggiISO(), 'var(--accent)', 'Oggi')}${linea(f.richiesta, 'var(--red)', 'Consegna richiesta ' + fmtDateIt(f.richiesta))}${linea(f.fattibile, fattOk ? 'var(--green)' : 'var(--orange)', 'Data fattibile ' + fmtDateIt(f.fattibile))}
     </svg></figure>
     ${tutte.length > righe.length ? `<p class="empty-text" style="text-align:left">${ico('warning', 'tinted', '')} Disegnate le prime ${righe.length} righe su ${tutte.length}: la distinta è più grande di quanto un Gantt leggibile possa mostrare. Il Programma le elenca tutte.</p>` : ''}`;
 }
@@ -2637,6 +2727,21 @@ function planFeasCell(f) {
   return `<td style="white-space:nowrap"><span class="plandoc-link plandoc-link-sm" ${apri}>${esc(fmtDateIt(f.fattibile))}</span></td>
     <td style="white-space:nowrap">${marg ? `<span class="${neg ? 'mrp-warn' : 'empty-text'}" style="padding:0" title="${neg ? 'Giorni lavorativi di ritardo sulla consegna richiesta' : 'Giorni lavorativi di margine sulla consegna richiesta'}">${neg ? ico('warning', 'tinted', '') + ' ' : ''}${esc(marg)}</span>` : ''}</td>`;
 }
+// L'arrivo già ordinato di un acquisto, accanto alla sua data: «in arrivo il
+// 5/11», o in rosso gli ordini scaduti — la data è passata e la merce non c'è,
+// e il programma la aspetta al prossimo giorno lavorativo (dalla 0.111.0).
+function schedArrivoTesto(n) {
+  if (!n || n.kind !== 'buy') return '';
+  if ((n.scaduti || []).length) return 'ordine scaduto: ' + n.scaduti.map(x => `${x.number || 'senza numero'} (atteso il ${fmtDateIt(x.eta)})`).join(', ');
+  return n.attesa ? 'in arrivo il ' + fmtDateIt(n.attesa) : '';
+}
+function schedArrivoHtml(n) {
+  const t = schedArrivoTesto(n);
+  if (!t) return '';
+  return (n.scaduti || []).length
+    ? ` <span class="mrp-warn" style="padding:0" title="La data dell'ordine è passata e la merce non è stata ricevuta: il programma la aspetta al prossimo giorno lavorativo. Sollecita il fornitore e aggiorna la data confermata.">${ico('warning', 'tinted', '')} ${esc(t)}</span>`
+    : ` <span class="empty-text" style="padding:0">${esc(t)}</span>`;
+}
 function planCriticoModal(planId, lineId) {
   const p = getPlan(planId); if (!p) return;
   const f = planFeasibility(p).find(x => x.lineId === lineId);
@@ -2644,7 +2749,7 @@ function planCriticoModal(planId, lineId) {
   const voci = f.critico.map((n, i) => `<div class="mgmt-item">
       <span style="width:24px" class="empty-text">${i + 1}</span>
       <span style="width:120px;font-family:var(--mono)">${codeLink(n.item.id, n.item.code)}</span>
-      <span style="flex:1">${esc(n.item.name || '')} <span class="empty-text" style="padding:0">${esc(schedNodeLabel(n))}</span></span>
+      <span style="flex:1">${esc(n.item.name || '')} <span class="empty-text" style="padding:0">${esc(schedNodeLabel(n))}</span>${schedArrivoHtml(n)}</span>
       <span style="width:190px;text-align:right;font-family:var(--mono)">${esc(fmtDateIt(n.fStart))} → ${esc(fmtDateIt(n.fEnd))}</span>
     </div>`).join('');
   const neg = f.margine != null && f.margine < 0;
@@ -2668,6 +2773,8 @@ function mrpBuyLineHtml(r) {
     ? `<span class="mrp-warn" title="Portato al minimo ordinabile di ${fmtUom(r.lotSize, r.uom)}">↑ minimo ${fmtUom(r.lotSize, r.uom)}</span>`
     : `<span class="mrp-warn" title="Arrotondato al lotto di riordino di ${fmtUom(r.lotSize, r.uom)}">↑ lotto ${fmtUom(r.lotSize, r.uom)}</span>`);
   if (r.coperto) seg.push(`<span class="price-best" title="Esistente e in arrivo bastano, al netto di quanto è già impegnato">✓ coperto</span>`);
+  if (r.arrivoTardi) seg.push(`<span class="mrp-warn" title="Già ordinato, ma l'ordine arriva il ${fmtDateIt(r.arrivoTardi)} e serve il ${fmtDateIt(r.due)}: sollecita il fornitore o rivedi la consegna">${ico('clock', 'tinted', '')} arriva il ${esc(fmtDateIt(r.arrivoTardi))}</span>`);
+  if ((r.scaduti || []).length) seg.push(`<span class="mrp-warn" title="Righe d'ordine con la data passata e la merce non ricevuta: ${esc(r.scaduti.map(x => `${x.number} (atteso il ${fmtDateIt(x.eta)})`).join(', '))}">${ico('warning', 'tinted', '')} ordine scaduto ${esc(r.scaduti.map(x => x.number).join(', '))}</span>`);
   // L'impegno si segnala **sempre**, anche col netto spento: è la risposta alla
   // domanda «la giacenza che vedo è davvero mia?», e nasconderla dietro un
   // toggle significherebbe lasciar promettere due volte la stessa merce a chi

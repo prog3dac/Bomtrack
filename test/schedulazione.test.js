@@ -524,3 +524,72 @@ describe('Programmazione: i giorni dei fornitori lavorativi', () => {
     assert.equal(letto, 'lavorativi');
   });
 });
+
+// ─── 0.111.0: le date degli ordini nel programma ───
+// Lo stesso caso di riferimento: il tondo serve lunedì 5/10, sedici kg.
+describe('Programma: le date degli ordini già emessi', () => {
+  const oda = (app, campi) => {
+    app.eval(`db.orders.push(Object.assign({ id: 'o1', number: 'ODA-2026-001', status: 'inviato', supplierId: 'beta', planId: 'pl1', active: true,
+      lines: [Object.assign({ id: 'ol1', itemId: 'tondo', qty: 16, received: 0 }, ${JSON.stringify(campi)})] })); invalidateCaches();`);
+    return app;
+  };
+  const tondoAvanti = app => ev(app, "(() => { const t = schedTree('tondo', 16, '2026-10-01'); return schedForward(t, schedDisponibilita('pl1', getPlan('pl1').lines)); })()");
+
+  it('un ordine scaduto e non ricevuto non è pronto oggi, ma il prossimo giorno lavorativo', () => {
+    // Gio 1/10, confermato per lunedì 28/9 e mai arrivato: pronto venerdì 2.
+    const app = oda(oggi(conDb(), '2026-10-01'), { confirmedDate: '2026-09-28' });
+    assert.equal(tondoAvanti(app), '2026-10-02');
+    // Tornitura 2→5, zincatura 5→12, fresatura 12→14, montaggio 14→16.
+    assert.deepEqual(fattibile(app), { fattibile: '2026-10-16', margine: 0, critico: ['GRP', 'PERNO', 'TONDO'] });
+  });
+
+  it('il percorso critico dice quale ordine è scaduto', () => {
+    const app = oda(oggi(conDb(), '2026-10-01'), { confirmedDate: '2026-09-28' });
+    const t = ev(app, `(() => { const n = planFeasibility(getPlan('pl1'))[0].critico.find(x => x.kind === 'buy'); return { s: n.scaduti, a: n.attesa, h: schedArrivoHtml(n) }; })()`);
+    assert.deepEqual(t.s, [{ number: 'ODA-2026-001', eta: '2026-09-28' }]);
+    assert.equal(t.a, '2026-10-02');
+    assert.match(t.h, /ordine scaduto: ODA-2026-001 \(atteso il 28\/09\/2026\)/);
+  });
+
+  it('un arrivo di sabato si riceve il lunedì', () => {
+    const app = oda(oggi(conDb(), '2026-09-21'), { confirmedDate: '2026-09-26' });
+    assert.equal(tondoAvanti(app), '2026-09-28');
+  });
+
+  it('un arrivo in tempo resta com è, e non è segnalato', () => {
+    const app = oda(oggi(conDb(), '2026-09-21'), { deliveryDate: '2026-09-25', confirmedDate: '2026-09-28' });
+    assert.equal(tondoAvanti(app), '2026-09-28');
+    const r = ev(app, "mrpBuyRows(getPlan('pl1'), true).map(r => ({ coperto: r.coperto, tardi: r.arrivoTardi, scaduti: r.scaduti }))")[0];
+    assert.deepEqual(r, { coperto: true, tardi: '', scaduti: [] });
+  });
+
+  it('il fabbisogno dice quando arriva un ordine che arriva dopo il giorno in cui serve', () => {
+    const app = oda(oggi(conDb(), '2026-09-21'), { deliveryDate: '2026-10-01', confirmedDate: '2026-10-07' });
+    app.eval('mrpNet = true;');
+    const r = ev(app, "mrpBuyRows(getPlan('pl1'), true).map(r => ({ coperto: r.coperto, tardi: r.arrivoTardi, due: r.due }))")[0];
+    assert.deepEqual(r, { coperto: true, tardi: '2026-10-07', due: '2026-10-05' }, 'coperto nelle quantità, ma tardi');
+    assert.match(app.eval("mrpBuyLineHtml(mrpBuyRows(getPlan('pl1'), true)[0])"), /arriva il 07\/10\/2026/);
+  });
+
+  it('l agenda mette l arrivo, in ritardo se viene dopo il giorno in cui serve', () => {
+    const agenda = app => ev(app, "planAgenda(getPlan('pl1')).filter(e => e.tipo === 'arrivo').map(e => [e.data, e.codice, e.stato, e.testo])");
+    assert.deepEqual(agenda(oda(oggi(conDb(), '2026-09-21'), { confirmedDate: '2026-10-07' })),
+      [['2026-10-07', 'TONDO', 'ritardo', 'serve per il 05/10/2026']]);
+    assert.deepEqual(agenda(oda(oggi(conDb(), '2026-09-21'), { confirmedDate: '2026-10-02' })),
+      [['2026-10-02', 'TONDO', 'previsto', 'serve per il 05/10/2026']]);
+    assert.deepEqual(agenda(oda(oggi(conDb(), '2026-10-01'), { confirmedDate: '2026-09-28' })),
+      [['2026-09-28', 'TONDO', 'ritardo', 'scaduto, serve per il 05/10/2026']]);
+  });
+
+  it('il Gantt disegna la data fattibile e l arrivo atteso', () => {
+    const app = oda(oggi(conDb(), '2026-09-21'), { confirmedDate: '2026-10-07' });
+    app.eval("currentPlanId = 'pl1';");
+    const h = app.eval("planGanttHtml(getPlan('pl1'), planFeasibility(getPlan('pl1')))");
+    assert.match(h, /<title>Data fattibile \d\d\/\d\d\/2026<\/title>/);
+    assert.match(h, /class="gantt-arrivo gantt-arrivo-tardi"/);
+    assert.match(h, /<title>TONDO — in arrivo il 07\/10\/2026, serve il 05\/10\/2026<\/title>/);
+    // Un arrivo in tempo è un rombo neutro.
+    const ok = oda(oggi(conDb(), '2026-09-21'), { confirmedDate: '2026-10-02' });
+    assert.match(ok.eval("planGanttHtml(getPlan('pl1'), planFeasibility(getPlan('pl1')))"), /class="gantt-arrivo"/);
+  });
+});

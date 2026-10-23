@@ -1,6 +1,6 @@
 // Il backup dell'archivio condiviso (dalla 0.107.0): supabase/backup.sh e
 // supabase/ripristino.sh, che si lanciano dal proprio PC, e il workflow
-// notturno che tiene sveglio Supabase senza portare dati su GitHub (0.110.1).
+// notturno che tiene sveglio Supabase senza portare dati su GitHub (0.111.1).
 //
 // Un backup che non si è mai ripristinato è una speranza, non un backup. Dove
 // c'è un Postgres (BOMTRACK_PG) si fa il giro intero: un archivio completo
@@ -31,7 +31,7 @@ describe('Supabase sveglio: il workflow', () => {
 
   it('su GitHub resta solo il codice: nessun dato esce dal workflow', () => {
     // Il repo è pubblico: un artifact lo scarica chiunque abbia un account
-    // GitHub. Dalla 0.110.1 l'archivio e gli utenti non ci passano, nemmeno
+    // GitHub. Dalla 0.111.1 l'archivio e gli utenti non ci passano, nemmeno
     // cifrati, e il workflow non ha più la password del database.
     const codice = wf.split('\n').filter(r => !/^\s*#/.test(r)).join('\n');   // senza i commenti
     assert.doesNotMatch(codice, /upload-artifact/);
