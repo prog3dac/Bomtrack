@@ -324,7 +324,7 @@ describe('ODL a mano: la lavorazione viene dal ciclo', () => {
     const daPiano = JSON.parse(app.eval(`(() => {
       const p = getPlan('pl1');
       const g = planDocGroups(planDocRows(p, 'odl'), 'odl')[0];
-      return JSON.stringify(Object.assign(planPhaseDocLine(g.rows[0], true), { received: 0 }));
+      return JSON.stringify(planOdlLine(g.rows[0]));
     })()`));
     const senzaId = x => { const y = Object.assign({}, x); delete y.id; return y; };
     assert.deepEqual(senzaId(aMano), senzaId(daPiano),
