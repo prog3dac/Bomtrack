@@ -3009,101 +3009,236 @@ function mrpAsmTable(asm, planId) {
 // fmtQty / fmtUom / fmtPer.
 
 // ─── Export ───
+// L'export porta **quello che la scheda mostra**: testata del piano, righe a
+// piano con la data fattibile, acquisti con le date e le note, conto lavoro,
+// parti da fabbricare con l'avanzamento, parti dal magazzino e assiemi da
+// montare. Prima della 0.112.0 il foglio aveva solo codice, quantità e prezzo, e
+// chi lo riceveva doveva tornare all'app per sapere *quando* ordinare e *cosa*
+// era già stato fatto. I dati si raccolgono una volta qui, con gli stessi conti
+// di renderPlanEdit, e Excel e PDF li scrivono ciascuno a modo suo.
+function mrpExportData(p) {
+  const exp = mrpExplodePlan(p);
+  const buy = mrpRowsOf(exp.buy, p.id);
+  const fasi = mrpPhaseRowsNette(p.id, exp.phases);
+  const gia = planDocumentedKeys(p.id);
+  buy.forEach(r => { r.docRefs = gia.get(r.item.id) || []; });
+  fasi.forEach(r => { r.docRefs = gia.get(r.phaseKey) || []; });
+  const feas = new Map(planFeasibility(p).map(f => [f.lineId, f]));
+  const righe = (p.lines || []).map(l => ({ l, it: getItem(l.itemId), f: feas.get(l.id) || null }));
+  const make = exp.make.map(e => ({
+    e, costo: costOf(e.item.id).total,
+    fatti: prodottiDi(p.id, e.item.id), resta: daFare(p.id, e.item.id, e.qty),
+    odp: (gia.get('make#' + e.item.id) || []).filter(x => x.kind === 'odp'),
+    senzaCiclo: !clCycleRuns(e.item).length,
+  }));
+  const asm = exp.asm.map(e => ({
+    e, fatti: prodottiDi(p.id, e.item.id), resta: daFare(p.id, e.item.id, e.qty),
+    nComp: montaggioComponenti(e.item, 1).stock.length,
+  }));
+  const job = p.jobId ? getJob(p.jobId) : null;
+  return {
+    exp, righe, make, asm, fasi, stock: exp.stock,
+    buy: mrpGrouped ? mrpGroupBySupplier(buy).flatMap(g => g.rows) : buy,
+    commessa: job ? jobLabel(job) : '',
+    totale: buy.reduce((s, r) => s + r.amount, 0),
+    totaleCl: fasi.reduce((s, r) => s + r.amount, 0),
+    totaleMake: make.reduce((s, m) => s + m.costo * m.e.qty, 0),
+    fornitori: new Set(buy.filter(r => r.supplierId).map(r => r.supplierId)).size,
+    risparmio: buy.reduce((s, r) => s + r.saving, 0),
+  };
+}
+// Le etichette accanto al nome, scritte in parole: in un foglio non c'è il
+// tooltip, e «sotto il minimo» o «già in ODA-…» sono proprio le cose che
+// cambiano cosa fare di quella riga.
+const URGENZA_TESTO = { ritardo: 'in ritardo', urgente: 'da ordinare' };
+function mrpBuyNoteTesto(r) {
+  const n = [];
+  if (r.coperto) n.push('coperto');
+  if (URGENZA_TESTO[r.urgenza]) n.push(URGENZA_TESTO[r.urgenza]);
+  if (r.underMin) n.push(`sotto il minimo del fornitore (${fmtQtyIt(r.minQty)} ${r.uom})`.replace(' )', ')'));
+  if (r.noPrice) n.push('senza prezzo');
+  if (mrpNet && r.lotSize > 0 && r.net > 0) n.push((r.lotMode === 'min' ? 'portato al minimo ' : 'arrotondato al lotto ') + `${fmtQtyIt(r.lotSize)} ${r.uom}`.trim());
+  if (r.arrivoTardi) n.push('già ordinato, arriva il ' + fmtDateIt(r.arrivoTardi));
+  if ((r.scaduti || []).length) n.push('ordine scaduto ' + r.scaduti.map(x => x.number).join(', '));
+  if (r.committed > 0) n.push(`impegnato da ${r.impegni.map(c => c.number).join(', ')}`);
+  if (r.saving > 0) n.push('altro fornitore: risparmio ' + fmtN(r.saving));
+  (r.docRefs || []).forEach(x => n.push('già in ' + docRefLabel(x)));
+  if ((r.bozze || []).length) n.push('in bozza ' + r.bozze.map(x => x.number).join(', '));
+  return n.join('; ');
+}
+function mrpPhaseNoteTesto(r) {
+  const n = [];
+  if (URGENZA_TESTO[r.urgenza]) n.push(URGENZA_TESTO[r.urgenza]);
+  (r.docRefs || []).forEach(x => n.push((x.kind === 'odp' ? 'coperta da ' : 'già in ') + docRefLabel(x)));
+  if (r.noPrice) n.push('senza tariffa');
+  return n.join('; ');
+}
+function mrpMakeNoteTesto(m) {
+  if (m.odp.length) return 'lanciata con ' + m.odp.map(docRefLabel).join(', ');
+  return m.senzaCiclo ? 'senza ciclo' : '';
+}
+function mrpMargineTesto(f) {
+  return f && f.margine != null ? (f.margine > 0 ? '+' : '') + f.margine + ' gg' : '';
+}
 function exportMrpExcel(id) {
   const p = getPlan(id); if (!p) return;
-  const exp = mrpExplodePlan(p);
-  const buy = mrpRowsOf(exp.buy, id);
-  // Nel netto l'esportazione porta anche le colonne che spiegano il numero:
-  // un foglio con solo "15" non permette a nessuno di rifare il conto.
+  const d = mrpExportData(p);
   // Le quantità restano numeri, sommabili: l'unità è nella colonna U.M. e la
-  // valuta nell'intestazione delle colonne di denaro.
+  // valuta nell'intestazione delle colonne di denaro. Le date sono quelle
+  // della scheda, scritte all'italiana come negli altri export.
+  const q = n => +(Number(n) || 0).toFixed(3), eur = n => +(Number(n) || 0).toFixed(2);
+  const piano = [
+    ['Piano', p.number], ['Titolo', p.title || ''], ['Stato', p.active === false ? 'chiuso' : 'aperto'],
+    ['Data', fmtDateIt(p.date)], ['Consegna richiesta', fmtDateIt(p.dueDate)],
+    ['Commessa', d.commessa], ['Note', p.notes || ''],
+    ['Quantità acquisti', mrpNet ? 'nette' : 'lorde'],
+    [],
+    ['Codice', 'Da produrre', 'U.M.', 'Quantità', 'Serve per', 'Fattibile', 'Margine'],
+  ];
+  d.righe.forEach(({ l, it, f }) => piano.push([it ? it.code : '?', it ? it.name : 'articolo mancante', it ? (it.uom || '') : '',
+    q(l.qty), fmtDateIt(l.dueDate), f ? fmtDateIt(f.fattibile) : '', mrpMargineTesto(f)]));
+  piano.push([], ['Riepilogo'],
+    [`Totale acquisti (${cur()})`, eur(d.totale)], ['Articoli da comprare', d.buy.length],
+    ['Fornitori coinvolti', d.fornitori], ['Parti da fabbricare', d.make.length]);
+  if (d.fasi.length) piano.push([`Conto lavoro (${cur()})`, eur(d.totaleCl)]);
+  if (d.risparmio > 0) piano.push([`Risparmio possibile cambiando fornitore (${cur()})`, eur(d.risparmio)]);
+  if (d.exp.cycle) piano.push([], ['Attenzione: riferimento ciclico nelle distinte, il fabbisogno è troncato su quel ramo']);
+
   const colPrezzo = `Prezzo (${cur()}/U.M.)`, colImporto = `Importo (${cur()})`;
+  const date = ['Serve per', 'Ordinare entro', 'Giorni consegna'];
   const acquisti = [mrpNet
-    ? ['Codice', 'Articolo', 'Fornitore', 'U.M.', 'Lordo', 'Esistente', 'Impegnato', 'In arrivo', 'Da comprare', colPrezzo, colImporto]
-    : ['Codice', 'Articolo', 'Fornitore', 'U.M.', 'Quantità', colPrezzo, colImporto]];
-  (mrpGrouped ? mrpGroupBySupplier(buy).flatMap(g => g.rows) : buy).forEach(r => {
-    const testa = [r.item.code, r.item.name, supplierName(r.supplierId) || '', r.uom];
-    const coda = [+r.price.toFixed(4), +r.amount.toFixed(2)];
+    ? ['Codice', 'Articolo', 'Fornitore', ...date, 'U.M.', 'Lordo', 'Esistente', 'Scorta minima', 'Impegnato', 'Libero', 'In arrivo', 'Da comprare', colPrezzo, colImporto, 'Note']
+    : ['Codice', 'Articolo', 'Fornitore', ...date, 'U.M.', 'Quantità', colPrezzo, colImporto, 'Note']];
+  d.buy.forEach(r => {
+    const testa = [r.item.code, r.item.name, supplierName(r.supplierId) || '', fmtDateIt(r.due), fmtDateIt(r.orderBy), r.leadDays || '', r.uom];
+    const coda = [+r.price.toFixed(4), eur(r.amount), mrpBuyNoteTesto(r)];
     acquisti.push(mrpNet
-      ? testa.concat([+r.qty.toFixed(3), +r.onHand.toFixed(3), +r.committed.toFixed(3), +r.incoming.toFixed(3), +r.qtyOrder.toFixed(3)], coda)
-      : testa.concat([+r.qty.toFixed(3)], coda));
+      ? testa.concat([q(r.qty), q(r.onHand), q(r.safety), q(r.committed), r.committed > 0 ? q(r.libero) : '', q(r.incoming), q(r.qtyOrder)], coda)
+      : testa.concat([q(r.qty)], coda));
   });
   acquisti.push([]);
   const rigaTotale = new Array(acquisti[0].length).fill('');
   rigaTotale[1] = 'TOTALE';
-  rigaTotale[rigaTotale.length - 1] = +buy.reduce((s, r) => s + r.amount, 0).toFixed(2);
+  rigaTotale[rigaTotale.length - 2] = eur(d.totale);
   acquisti.push(rigaTotale);
-  const produzione = [['Codice', 'Parte', 'U.M.', 'Quantità', `Costo unitario (${cur()}/U.M.)`, `Importo (${cur()})`]];
-  exp.make.forEach(e => {
-    const c = costOf(e.item.id).total;
-    produzione.push([e.item.code, e.item.name, e.item.uom || '', +e.qty.toFixed(3), +c.toFixed(4), +(c * e.qty).toFixed(2)]);
-  });
+
   // Foglio a sé, e non righe in coda agli acquisti: le colonne sono diverse
   // (una fase ha una parte, un centro e delle ore) e mescolarle produrrebbe un
   // foglio pieno di celle vuote che nessuno può filtrare.
   const contoLavoro = [['Fase', 'Lavorazione', 'Codice parte', 'Parte', 'Terzista', 'Serve per',
-    'Giorni', 'Ordinare entro', 'Quantità', 'U.M.', 'Ore totali', `Prezzo/pz (${cur()})`, `Importo (${cur()})`]];
-  mrpPhaseRows(p).forEach(r => contoLavoro.push([r.phaseNo, r.wcName, r.item.code, r.item.name,
-    supplierName(r.supplierId) || '', r.due || '', r.leadDays, r.orderBy || '',
-    +r.qty.toFixed(3), r.uom, +r.hours.toFixed(2), +r.price.toFixed(4), +r.amount.toFixed(2)]));
+    'Giorni', 'Ordinare entro', 'Quantità', 'U.M.', 'Ore totali', `Prezzo/pz (${cur()})`, `Importo (${cur()})`, 'Note']];
+  d.fasi.forEach(r => contoLavoro.push([r.phaseNo, r.wcName, r.item.code, r.item.name,
+    supplierName(r.supplierId) || '', fmtDateIt(r.due), r.leadDays, fmtDateIt(r.orderBy),
+    q(r.qty), r.uom, +r.hours.toFixed(2), +r.price.toFixed(4), eur(r.amount), mrpPhaseNoteTesto(r)]));
+  if (d.fasi.length) contoLavoro.push([], ['', 'TOTALE', '', '', '', '', '', '', '', '',
+    +d.fasi.reduce((s, r) => s + r.hours, 0).toFixed(2), '', eur(d.totaleCl), '']);
+
+  const produzione = [['Codice', 'Parte', 'U.M.', 'Quantità', 'Serve per', 'Lancio entro', 'Fatti', 'Restano',
+    `Costo unitario (${cur()}/U.M.)`, `Importo (${cur()})`, 'Note']];
+  d.make.forEach(m => {
+    const e = m.e;
+    produzione.push([e.item.code, e.item.name, e.item.uom || '', q(e.qty), fmtDateIt(e.due),
+      e.start && e.due && e.start < e.due ? fmtDateIt(e.start) : '', q(m.fatti), q(Math.max(0, m.resta)),
+      +m.costo.toFixed(4), eur(m.costo * e.qty), mrpMakeNoteTesto(m)]);
+  });
+  if (d.make.length) produzione.push([], ['', 'TOTALE', '', '', '', '', '', '', '', eur(d.totaleMake), '']);
+
+  const magazzino = [['Codice', 'Parte', 'U.M.', 'Presi', 'Esistente']];
+  d.stock.forEach(e => magazzino.push([e.item.code, e.item.name, e.item.uom || '', q(e.qty), q(onHandOf(e.item.id))]));
+  const montaggio = [['Codice', 'Assieme', 'Quantità', 'Inizio montaggio', 'Fine montaggio', 'Componenti', 'Montati', 'Restano']];
+  d.asm.forEach(a => montaggio.push([a.e.item.code, a.e.item.name, q(a.e.qty),
+    a.e.start && a.e.due && a.e.start < a.e.due ? fmtDateIt(a.e.start) : '', fmtDateIt(a.e.due),
+    a.nComp, q(a.fatti), q(Math.max(0, a.resta))]));
+
   if (!requireXlsx()) return;
   const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(piano), 'Piano');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(acquisti), 'Acquisti');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(contoLavoro), 'Conto lavoro');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(produzione), 'Produzione');
+  if (d.stock.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(magazzino), 'Dal magazzino');
+  if (d.asm.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(montaggio), 'Da montare');
   XLSX.writeFile(wb, 'Fabbisogno_' + nomeFileSicuro(p.number, 'piano') + '.xlsx');
   showToast('Excel esportato');
 }
 function exportMrpPDF(id) {
   const p = getPlan(id); if (!p) return;
-  const exp = mrpExplodePlan(p);
-  const buy = mrpRowsOf(exp.buy, id);
+  const d = mrpExportData(p);
   const jsPDF = requirePdf(); if (!jsPDF) return;
-  const doc = new jsPDF();
-  doc.setFontSize(15); doc.text(`Fabbisogno materiali — ${p.number}`, 14, 16);
+  // Orizzontale: con le date e le note le colonne non stanno in verticale.
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const qu = (n, u) => (fmtQtyIt(n) + ' ' + (u || '')).trim();
+  const dt = v => v ? fmtDateIt(v) : '—';
+  const stile = colore => ({ styles: { fontSize: 7.5 }, headStyles: { fillColor: colore } });
+  doc.setFontSize(15); doc.text(`Fabbisogno materiali — ${p.number}${p.active === false ? ' (chiuso)' : ''}`, 14, 16);
   doc.setFontSize(10); doc.setTextColor(120);
-  doc.text(`${p.title || ''}${p.title ? '   ' : ''}Data: ${p.date ? fmtDateIt(p.date) : new Date().toLocaleDateString('it-IT')}`, 14, 23);
-  doc.autoTable({
-    startY: 28, head: [['Codice', 'Da produrre', 'Q.tà', 'U.M.']],
-    body: (p.lines || []).map(l => { const it = getItem(l.itemId); return [it ? it.code : '?', it ? it.name : '⚠ mancante', fmtQtyIt(l.qty), it ? (it.uom || '') : '']; }),
-    styles: { fontSize: 8 }, headStyles: { fillColor: [58, 123, 232] },
-  });
-  // Nel netto la quantità porta accanto il lordo fra parentesi: chi riceve il
-  // foglio deve poter rifare il conto senza tornare all'app.
-  const righe = (mrpGrouped ? mrpGroupBySupplier(buy).flatMap(g => g.rows) : buy)
-    .map(r => [r.item.code, r.item.name, supplierName(r.supplierId) || '—',
-      (fmtQtyIt(r.qtyOrder) + ' ' + r.uom).trim() + (mrpNet && r.qtyOrder !== r.qty ? ` (lordo ${fmtQtyIt(r.qty)} ${r.uom})`.trimEnd() : ''),
-      fmtN(r.price) + (r.uom ? '/' + r.uom : ''), fmtN(r.amount)]);
-  righe.push(['', 'TOTALE', '', '', '', fmtN(buy.reduce((s, r) => s + r.amount, 0))]);
-  doc.autoTable({
-    startY: doc.lastAutoTable.finalY + 8,
-    head: [['Codice', mrpNet ? 'Da acquistare (netto)' : 'Da acquistare', 'Fornitore', 'Q.tà', 'Prezzo', 'Importo']], body: righe,
-    styles: { fontSize: 8 }, headStyles: { fillColor: [58, 123, 232] },
-  });
-  const fasi = mrpPhaseRowsNette(p.id, exp.phases);
-  if (fasi.length) {
-    const righeCl = fasi.map(r => [String(r.phaseNo), r.wcName, r.item.code,
-      supplierName(r.supplierId) || '—', (fmtQtyIt(r.qty) + ' ' + r.uom).trim(),
-      r.leadDays ? r.leadDays + ' gg' : '—', r.orderBy ? fmtDateIt(r.orderBy) : '—',
-      fmtN(r.price), fmtN(r.amount)]);
-    righeCl.push(['', 'TOTALE', '', '', '', '', '', '', fmtN(fasi.reduce((s, r) => s + r.amount, 0))]);
-    doc.autoTable({
+  const testata = [p.title || '', 'Data: ' + (p.date ? fmtDateIt(p.date) : new Date().toLocaleDateString('it-IT')),
+    p.dueDate ? 'Consegna: ' + fmtDateIt(p.dueDate) : '', d.commessa ? 'Commessa: ' + d.commessa : ''].filter(Boolean).join('   ');
+  doc.text(testata, 14, 23);
+  let y = 28;
+  if (p.notes) { doc.text('Note: ' + p.notes, 14, 28); y = 33; }
+  const riep = [`Totale acquisti ${fmtN(d.totale)}`, `${d.buy.length} articoli da comprare`, `${d.fornitori} fornitori`,
+    `${d.make.length} parti da fabbricare`, d.fasi.length ? `Conto lavoro ${fmtN(d.totaleCl)}` : ''].filter(Boolean).join('  ·  ');
+  doc.text(riep, 14, y); y += 5;
+  doc.setTextColor(0);
+  doc.autoTable(Object.assign({
+    startY: y, head: [['Codice', 'Da produrre', 'Q.tà', 'U.M.', 'Serve per', 'Fattibile', 'Margine']],
+    body: d.righe.map(({ l, it, f }) => [it ? it.code : '?', it ? it.name : '⚠ mancante', fmtQtyIt(l.qty), it ? (it.uom || '') : '',
+      dt(l.dueDate), f && f.fattibile ? fmtDateIt(f.fattibile) : '—', mrpMargineTesto(f) || '—']),
+  }, stile([58, 123, 232])));
+  // Nel netto le colonne che spiegano il numero ci sono anche qui: chi riceve
+  // il foglio deve poter rifare il conto senza tornare all'app.
+  const testaBuy = ['Codice', mrpNet ? 'Da acquistare (netto)' : 'Da acquistare', 'Fornitore', 'Serve per', 'Ordinare entro']
+    .concat(mrpNet ? ['Lordo', 'Esistente', 'Impegnato', 'In arrivo', 'Da comprare'] : ['Q.tà'], ['Prezzo', 'Importo', 'Note']);
+  const righe = d.buy.map(r => [r.item.code, r.item.name, supplierName(r.supplierId) || '—', dt(r.due),
+    dt(r.orderBy) + (r.leadDays ? ` (${r.leadDays} gg)` : '')]
+    .concat(mrpNet ? [qu(r.qty, r.uom), qu(r.onHand, r.uom), r.committed > 0 ? qu(r.committed, r.uom) : '—', qu(r.incoming, r.uom), qu(r.qtyOrder, r.uom)] : [qu(r.qtyOrder, r.uom)],
+      [fmtN(r.price) + (r.uom ? '/' + r.uom : ''), fmtN(r.amount), mrpBuyNoteTesto(r)]));
+  const totBuy = new Array(testaBuy.length).fill('');
+  totBuy[1] = 'TOTALE'; totBuy[testaBuy.length - 2] = fmtN(d.totale);
+  righe.push(totBuy);
+  doc.autoTable(Object.assign({ startY: doc.lastAutoTable.finalY + 8, head: [testaBuy], body: righe }, stile([58, 123, 232])));
+  if (d.fasi.length) {
+    const righeCl = d.fasi.map(r => [String(r.phaseNo), r.wcName, r.item.code, r.item.name,
+      supplierName(r.supplierId) || '—', dt(r.due), dt(r.orderBy) + (r.leadDays ? ` (${r.leadDays} gg)` : ''),
+      qu(r.qty, r.uom), r.hours ? fmtQtyIt(r.hours) : '—', fmtN(r.price), fmtN(r.amount), mrpPhaseNoteTesto(r)]);
+    righeCl.push(['', 'TOTALE', '', '', '', '', '', '', fmtQtyIt(d.fasi.reduce((s, r) => s + r.hours, 0)), '', fmtN(d.totaleCl), '']);
+    doc.autoTable(Object.assign({
       startY: doc.lastAutoTable.finalY + 8,
-      head: [['Fase', 'Da far lavorare fuori', 'Parte', 'Terzista', 'Q.tà', 'Attrav.', 'Ordinare entro', 'Prezzo/pz', 'Importo']],
+      head: [['Fase', 'Da far lavorare fuori', 'Codice', 'Parte', 'Terzista', 'Serve per', 'Ordinare entro', 'Q.tà', 'Ore tot.', 'Prezzo/pz', 'Importo', 'Note']],
       body: righeCl,
-      styles: { fontSize: 8 }, headStyles: { fillColor: [46, 164, 121] },
-    });
+    }, stile([46, 164, 121])));
   }
-  if (exp.make.length) {
-    doc.autoTable({
-      startY: doc.lastAutoTable.finalY + 8,
-      head: [['Codice', 'Da fabbricare', 'Q.tà', 'U.M.', 'Costo un.', 'Importo']],
-      body: exp.make.map(e => {
-        const c = costOf(e.item.id).total, u = e.item.uom || '';
-        return [e.item.code, e.item.name, fmtQtyIt(e.qty), u, fmtN(c) + (u ? '/' + u : ''), fmtN(c * e.qty)];
-      }),
-      styles: { fontSize: 8 }, headStyles: { fillColor: [155, 109, 255] },
+  if (d.make.length) {
+    const righeMake = d.make.map(m => {
+      const e = m.e, u = e.item.uom || '';
+      return [e.item.code, e.item.name, qu(e.qty, u),
+        dt(e.due) + (e.start && e.due && e.start < e.due ? ` (lancio ${fmtDateIt(e.start)})` : ''),
+        m.fatti > 0 ? fmtQtyIt(m.fatti) : '—', m.resta > 0 ? fmtQtyIt(m.resta) : 'finita',
+        fmtN(m.costo) + (u ? '/' + u : ''), fmtN(m.costo * e.qty), mrpMakeNoteTesto(m)];
     });
+    righeMake.push(['', 'TOTALE', '', '', '', '', '', fmtN(d.totaleMake), '']);
+    doc.autoTable(Object.assign({
+      startY: doc.lastAutoTable.finalY + 8,
+      head: [['Codice', 'Da fabbricare', 'Q.tà', 'Serve per', 'Fatti', 'Restano', 'Costo un.', 'Importo', 'Note']],
+      body: righeMake,
+    }, stile([155, 109, 255])));
+  }
+  if (d.stock.length) {
+    doc.autoTable(Object.assign({
+      startY: doc.lastAutoTable.finalY + 8,
+      head: [['Codice', 'Dal magazzino', 'Presi', 'Esistente']],
+      body: d.stock.map(e => [e.item.code, e.item.name, qu(e.qty, e.item.uom), qu(onHandOf(e.item.id), e.item.uom)]),
+    }, stile([120, 120, 120])));
+  }
+  if (d.asm.length) {
+    doc.autoTable(Object.assign({
+      startY: doc.lastAutoTable.finalY + 8,
+      head: [['Codice', 'Da montare', 'Q.tà', 'Montaggio', 'Componenti', 'Montati', 'Restano']],
+      body: d.asm.map(a => [a.e.item.code, a.e.item.name, fmtQtyIt(a.e.qty),
+        a.e.start && a.e.due && a.e.start < a.e.due ? `${fmtDateIt(a.e.start)} – ${fmtDateIt(a.e.due)}` : dt(a.e.due),
+        String(a.nComp), a.fatti > 0 ? fmtQtyIt(a.fatti) : '—', a.resta > 0 ? fmtQtyIt(a.resta) : 'montati']),
+    }, stile([217, 136, 30])));
   }
   doc.save('Fabbisogno_' + nomeFileSicuro(p.number, 'piano') + '.pdf');
   showToast('PDF esportato');

@@ -1682,6 +1682,15 @@ delle righe su cui agisce, vedi sotto.
 
 **I campi di testata.** Titolo · Data · **Consegna richiesta** · **Commessa** · Note.
 
+**Cosa esce dall'export** (dalla 0.112.0). L'Excel e il PDF portano quello che la scheda mostra:
+la testata (titolo, data, consegna, commessa, note), le righe **Da produrre** con *Serve per*,
+*Fattibile* e *Margine*, il riepilogo dei KPI, gli acquisti con *Serve per*, *Ordinare entro*,
+i giorni di consegna e una colonna **Note** con le etichette della riga (coperto, sotto il minimo,
+senza prezzo, impegnato, già in un documento…), il conto lavoro con il totale, le parti da
+fabbricare con data di lancio, **Fatti** e **Restano**, le parti **dal magazzino** e gli assiemi
+**da montare**. Nel netto l'Excel ha anche scorta minima e libero. Il PDF è in orizzontale.
+Programma, Gantt e Carico restano nell'app.
+
 ### Le sezioni
 
 In alto, sempre visibili, stanno le righe **Da produrre** e i **KPI**. Il resto è diviso in

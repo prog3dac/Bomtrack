@@ -24,6 +24,8 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **Pronto per l'invio mail.** Ogni copia registra già quando è partita e come (`sent_at`, `sent_via`, `sent_to`): oggi `manuale`, domani la mail che parte dall'app allegherà esattamente il PDF archiviato.
 
+**Export del fabbisogno completo.** L'Excel e il PDF di un piano portavano solo codice, quantità e prezzo: mancavano la testata (consegna, commessa, note), le righe a piano con la data fattibile e il margine, le date d'ordine, le note delle righe, l'avanzamento delle parti, le parti prese dal magazzino e gli assiemi da montare. Ora escono tutti: l'Excel ha in più i fogli *Piano*, *Dal magazzino* e *Da montare*, colonne *Serve per*, *Ordinare entro*, *Note* (e nel netto *Scorta minima* e *Libero*), i totali di conto lavoro e produzione; il PDF passa in orizzontale con le stesse sezioni della scheda. I dati si raccolgono in `mrpExportData`, con gli stessi conti della scheda. Verifica: `test/export-mrp.test.js`.
+
 **Manuale** — cap. 28: «Le copie in archivio»; cap. 8: i documenti emessi nella cartella d'archivio; appendice: la collezione `generatedDocs` e `documenti.js`.
 
 **Verifica**
