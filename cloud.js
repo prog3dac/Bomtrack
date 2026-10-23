@@ -1591,7 +1591,7 @@ const CLOUD_ORDINE_CARICAMENTO = ['profiles', 'suppliers', 'customers', 'familie
   'work_center_suppliers', 'jobs', 'items*', 'production_plans', 'production_plan_lines', 'rfqs', 'rfq_lines',
   'item_prices', 'items', 'orders', 'order_lines', 'production_orders', 'production_order_phases',
   'production_order_materials', 'work_orders', 'work_order_lines', 'production_declarations', 'stock_movements',
-  'order_receipts', 'productions', 'item_revisions', 'attachment_docs', 'attachments', 'reminders', 'trash'];
+  'order_receipts', 'productions', 'item_revisions', 'attachment_docs', 'attachments', 'generated_docs', 'reminders', 'trash'];
 const CLOUD_AUTORIFERIMENTI = { items: ['machine_item_id', 'group_item_id', 'active_price_id'] };
 function cloudLottiCaricamento(payload, n) {
   const up = payload.upsert || {}, lotti = [], fatti = new Set();

@@ -437,7 +437,7 @@ const STORICO_COLL = {
   orders: 'Ordine fornitore', workOrders: 'Ordine di lavoro', plans: 'Piano di fabbisogno',
   prodOrders: 'Ordine di produzione', jobs: 'Commessa', users: 'Utente', families: 'Famiglia',
   workCenters: 'Centro di lavoro', reminders: 'Promemoria', attachments: 'Allegato',
-  attachmentDocs: 'Documento d\'archivio', productions: 'Produzione', settings: 'Impostazioni',
+  attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione', settings: 'Impostazioni',
 };
 const STORICO_CAMPI = {
   code: 'Codice', name: 'Nome', description: 'Descrizione', type: 'Tipo', uom: 'U.M.',

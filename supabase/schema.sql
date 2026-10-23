@@ -439,6 +439,19 @@ create table if not exists public.attachments (
   synced_at timestamptz not null default clock_timestamp()
 );
 
+-- Documenti emessi (0.112.0): la copia PDF di richieste, ordini e ordini di
+-- lavoro, scritta nella cartella d'archivio. Qui solo il percorso e ciò che
+-- serve a ritrovarla: il file non passa mai dal server. `ref_id` punta a una
+-- di tre tabelle secondo `kind`, per questo non ha una chiave esterna.
+create table if not exists public.generated_docs (
+  id uuid primary key,
+  kind text, ref_id uuid, number text, seq int,
+  path text, format text, size numeric, sha256 text,
+  sent_at timestamptz, sent_via text, sent_to text,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+
 create table if not exists public.reminders (
   id uuid primary key,
   date date, title text, notes text, gravita text, done boolean, done_at timestamptz,
@@ -492,6 +505,7 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('item_revisions', null, null, 'root'),
   ('attachment_docs', null, null, 'root'),
   ('attachments', null, null, 'root'),
+  ('generated_docs', null, null, 'root'),
   ('reminders', null, null, 'root'),
   ('trash', null, null, 'root')
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
@@ -997,6 +1011,7 @@ select t, a from (values
   ('production_plans', 'docs'), ('production_plan_lines', 'docs'),
   ('production_orders', 'docs'), ('production_order_phases', 'docs'), ('production_order_materials', 'docs'),
   ('production_declarations', 'docs'), ('productions', 'docs'),
+  ('generated_docs', 'docs'),
   ('stock_movements', 'catalog'), ('stock_movements', 'docs'),
   -- L'officina (area `shop`): ricevimenti sugli ordini e sugli ODL, avanzamento
   -- degli ordini di produzione, giacenze. Un ricevimento riscrive anche il
@@ -1034,7 +1049,7 @@ language sql immutable set search_path = public as $$
   select t from (values
     ('items', 'items'), ('revisions', 'item_revisions'), ('movements', 'stock_movements'),
     ('receipts', 'order_receipts'), ('attachments', 'attachments'), ('attachmentDocs', 'attachment_docs'),
-    ('productions', 'productions'), ('suppliers', 'suppliers'), ('customers', 'customers'),
+    ('generatedDocs', 'generated_docs'), ('productions', 'productions'), ('suppliers', 'suppliers'), ('customers', 'customers'),
     ('workCenters', 'work_centers'), ('families', 'families'), ('rfqs', 'rfqs'), ('orders', 'orders'),
     ('workOrders', 'work_orders'), ('plans', 'production_plans'), ('prodOrders', 'production_orders'),
     ('prodDecls', 'production_declarations'), ('jobs', 'jobs'), ('reminders', 'reminders'),

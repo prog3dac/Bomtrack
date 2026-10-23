@@ -248,6 +248,7 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `produzione.js` | avanzamento di produzione: le dichiarazioni di pezzi fatti dentro un piano, e il netto che ne discende sulle lavorazioni |
 | `allegati.js` | allegati degli articoli: i documenti d'archivio e i loro collegamenti ai codici; i byte dei vecchi file in IndexedDB |
 | `archivio.js` | la cartella dei PDF: scelta, permesso, lettura, copia e verifica. Impostazione **locale**, un PC alla volta |
+| `documenti.js` | le copie PDF dei documenti emessi (RFQ, ODA, ODL) nella cartella d'archivio, con revisioni e verifica |
 | `export-lists.js` | export PDF ed Excel degli elenchi: una specifica per vista, due traduttori |
 | `views-item.js` | scheda articolo di sola lettura e codice cliccabile; come si legge lo storico delle modifiche |
 | `views-docs.js` | richieste di offerta e ordini |

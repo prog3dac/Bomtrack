@@ -171,19 +171,48 @@ function allegatoCollega(itemId, path, descrizione, pagina) {
   savedToast('Documento allegato');
   return rec;
 }
-// Togliere il legame, non il documento: il PDF resta in archivio e resta
-// allegato agli altri codici. Sono due gesti diversi perché sono due decisioni
-// diverse, e confonderle significherebbe che chi sbaglia codice cancella un
-// catalogo a tutta l'azienda.
+// Togliere il legame. Se altri codici citano lo stesso PDF — il catalogo di un
+// commerciale, appeso a tutta una serie — il file resta: cancellarlo
+// romperebbe l'allegato a tutti gli altri. Se era l'ultimo codice a citarlo,
+// il documento si cancella davvero, dall'elenco e dalla cartella d'archivio
+// (0.112.0, scelta di Andrea: un allegato tolto non deve restare in giro).
 function allegatoScollega(id) {
   if (!roleGuard('catalog')) return;
   const rec = (db.attachments || []).find(a => a.id === id);
   if (!rec) return;
   const doc = allegatoDoc(rec.docId);
-  askConfirm(`Togliere "${allegatoDocEtichetta(doc)}" da questo codice?\nIl file resta in archivio e resta allegato agli altri codici.`, () => {
+  const altri = doc ? allegatoDocUsi(doc.id) - 1 : 0;
+  const seguito = !doc ? ''
+    : (altri > 0 ? `\nIl file resta in archivio: è allegato anche ${altri === 1 ? 'a un altro codice' : 'ad altri ' + altri + ' codici'}.`
+      : '\nNessun altro codice lo cita: il PDF verrà cancellato anche dalla cartella d\'archivio.');
+  askConfirm(`Togliere "${allegatoDocEtichetta(doc)}" da questo codice?${seguito}`, () => {
     Store.remove('attachments', id);
+    if (doc && altri <= 0) {
+      allegatoDocCancella(doc).then(() => allegatiRefresh());
+      return;
+    }
     savedToast('Documento scollegato');
     allegatiRefresh();
+  }, altri > 0 || !doc ? undefined : { title: 'Scollega e cancella', ok: 'Scollega e cancella il PDF' });
+}
+// Il documento esce dall'elenco e il suo PDF dalla cartella. Se il file non si
+// può togliere (cartella non impostata su questo PC, permesso negato) il
+// documento resta nell'elenco di Gestione → Backup, senza codici, e da lì si
+// cancella da un PC che ha la cartella: un file dimenticato in archivio è
+// proprio ciò che non si vuole.
+function allegatoDocCancella(doc) {
+  if (archivioStato() !== 'configurato') {
+    showToast('Scollegato, ma il PDF non è stato cancellato: la cartella d\'archivio non è impostata su questo PC. Si cancella da Gestione → Backup', 'error');
+    return Promise.resolve(false);
+  }
+  return archivioElimina(doc.path).then(esito => {
+    if (!esito) {
+      showToast('Il PDF non si è potuto cancellare dalla cartella: resta in Gestione → Backup', 'error');
+      return false;
+    }
+    Store.remove('attachmentDocs', doc.id);
+    savedToast(esito === 'ok' ? 'Documento scollegato e PDF cancellato' : 'Documento tolto (il PDF non era già più in cartella)');
+    return true;
   });
 }
 function allegatoDocDescrizione(docId, testo) {
@@ -191,19 +220,20 @@ function allegatoDocDescrizione(docId, testo) {
   const doc = allegatoDoc(docId); if (!doc) return;
   Store.update('attachmentDocs', docId, { description: String(testo || '').trim() });
 }
-// Eliminare il documento dal censimento. Non tocca il file su disco — l'app non
-// possiede l'archivio, ci guarda dentro — e non si fa finché qualcuno lo cita:
-// stessa regola del cliente citato da una commessa.
+// Eliminare il documento: dall'elenco e, dalla 0.112.0, anche il PDF dalla
+// cartella d'archivio. Non si fa finché qualcuno lo cita: stessa regola del
+// cliente citato da una commessa.
 function allegatoDocElimina(docId) {
   if (!roleGuard('catalog')) return;
   const doc = allegatoDoc(docId); if (!doc) return;
   const usi = allegatoDocUsi(docId);
   if (usi) { showToast(`Documento allegato a ${usi} ${usi === 1 ? 'codice' : 'codici'}: va prima scollegato`, 'error'); return; }
-  askConfirm(`Togliere "${allegatoDocEtichetta(doc)}" dall'elenco dei documenti?\nIl file NON viene eliminato dall'archivio.`, () => {
-    Store.remove('attachmentDocs', docId);
-    savedToast('Documento rimosso dall\'elenco');
-    allegatiRefresh();
-  });
+  askConfirm(`Eliminare "${allegatoDocEtichetta(doc)}"?\nIl PDF viene cancellato anche dalla cartella d'archivio.`, () => {
+    allegatoDocCancella(doc).then(() => {
+      allegatiRefresh();
+      if (typeof activeView !== 'undefined' && activeView === 'manage') renderManage();
+    });
+  }, { title: 'Elimina documento', ok: 'Elimina e cancella il PDF' });
 }
 // Il percorso cambia — qualcuno ha rinominato o spostato il PDF — e si corregge
 // qui, una volta, per tutti i codici che lo citano. È il rimedio al difetto
@@ -672,20 +702,25 @@ function renderArchivio() {
       <p>I PDF non stanno dentro Bomtrack: stanno in una cartella, e il database ne memorizza il percorso. La cartella è un'impostazione <strong>di questo PC</strong> — ognuno indica la propria, che sia locale o quella di un servizio sincronizzato — e non finisce nel backup: un altro computer avrà un'altra lettera di unità.</p>
       ${archivioBlocco(false)}
       ${esito}
+      ${typeof docEmessiVerificaHtml === 'function' ? docEmessiVerificaHtml() : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">
         <button class="btn-outline" onclick="archivioVerificaUI()">${ico('check', 'tinted', '')} Verifica archivio</button>
         <button class="btn-outline" onclick="archivioSceglieModal()">${ico('folder', 'tinted', '')} ${archivioNome() ? 'Cambia cartella' : 'Scegli cartella'}</button>
       </div>
       <div class="mgmt-list">${righe}</div>
-      <p class="empty-text" style="text-align:left;padding:6px 0 0">Togliere un documento dall'elenco <strong>non elimina il file</strong>: l'app guarda dentro l'archivio, non lo possiede. E non si può togliere finché un codice lo cita.</p>
+      <p class="empty-text" style="text-align:left;padding:6px 0 0">Eliminare un documento <strong>cancella anche il PDF</strong> dalla cartella d'archivio. Non si può finché un codice lo cita; scollegandolo dall'ultimo codice si cancella da sé.</p>
     </div></div>`;
 }
 function archivioVerificaUI() {
   if (archivioStato() !== 'configurato') { archivioSceglieModal(); return; }
-  archivioVerifica().then(mancanti => {
+  // Gli allegati e i documenti emessi stanno nella stessa cartella: una
+  // verifica sola le controlla tutte e due.
+  Promise.all([archivioVerifica(), docEmessiVerifica()]).then(([mancanti, emessi]) => {
     if (!mancanti) { showToast('Archivio non leggibile: permesso negato o cartella non disponibile', 'error'); return; }
     window.__archivioMancanti = new Set(mancanti.map(d => String(d.path || '').toLowerCase()));
-    showToast(mancanti.length ? `${mancanti.length} documenti non trovati` : 'Tutti i documenti sono al loro posto');
+    window.__emessiEsito = emessi;
+    const guasti = mancanti.length + (emessi ? emessi.mancanti.length + emessi.alterati.length : 0);
+    showToast(guasti ? `${guasti} documenti da controllare` : 'Tutti i documenti sono al loro posto');
     if (typeof activeView !== 'undefined' && activeView === 'manage') renderManage();
   });
 }
