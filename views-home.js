@@ -374,7 +374,8 @@ function homeEventi() {
   (db.plans || []).forEach(p => {
     if (p.active === false || typeof planAgenda !== 'function') return;
     planAgenda(p).forEach(e => {
-      if ((e.tipo !== 'invia' && e.tipo !== 'lancio') || e.stato === 'fatto') return;
+      // Un invio con il materiale già partito non è più da fare: resta il rientro.
+      if ((e.tipo !== 'invia' && e.tipo !== 'lancio') || e.stato === 'fatto' || e.stato === 'lavorazione') return;
       const grav = e.stato === 'ritardo' ? 'alta' : calGravitaData(e.data, oggi);
       const g = raggruppa('prog|' + e.tipo + '|' + p.id + '|' + e.data, { tipo: 'programma', data: e.data,
         icona: e.tipo === 'invia' ? 'truck' : 'factory', numero: p.number || '', azione: `homeApri('plan','${p.id}')` }, grav);

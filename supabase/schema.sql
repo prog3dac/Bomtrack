@@ -353,7 +353,7 @@ create table if not exists public.work_order_lines (
   item_id uuid,
   phase_key text, phase_keys text,
   code text, description text, uom text, qty numeric, price numeric,
-  delivery_date date, confirmed_date date, note text,
+  delivery_date date, confirmed_date date, start_date date, note text,
   odp_id uuid references public.production_orders(id) on delete set null deferrable initially deferred,
   odp_phase_id uuid references public.production_order_phases(id) on delete set null deferrable initially deferred,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
@@ -361,6 +361,9 @@ create table if not exists public.work_order_lines (
   -- Un ODL manda pezzi a lavorare, non compra merce: nessuna riga ha un articolo.
   constraint work_order_lines_mai_articolo check (item_id is null)
 );
+-- 0.113.0: l'inizio lavoro, cioè quando consegniamo il materiale al terzista,
+-- per i database già creati.
+alter table public.work_order_lines add column if not exists start_date date;
 
 -- ─── Eventi ─────────────────────────────────────────────────
 -- Righe piatte, che si aggiungono e non si correggono: la giacenza, il

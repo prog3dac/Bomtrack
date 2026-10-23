@@ -2,6 +2,16 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.113.0 — 2026-10-23
+
+**L'invio al terzista è fatto quando parte il materiale, non quando esce l'ordine di lavoro.** L'ODL si emette prima, per avvisare il terzista in tempo, ma il programma del piano segnava «fatto» l'invio appena esisteva un ODL, anche in bozza: la voce spariva dal calendario del Riepilogo e una scadenza mancata non avvisava più. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge la colonna `start_date` a `work_order_lines`, non tocca i dati).
+
+- **Tre stati per la tratta**, nel *Programma* del piano e sulla riga dell'ODL: *da inviare* finché il materiale non parte (con l'ODL emesso la voce resta, con il suo numero, e oltre la data è in ritardo); *in lavorazione* con l'uscita registrata dalla riga dell'ODL o con **Avvia** sulla fase dell'ordine di produzione; *fatto* quando i pezzi sono rientrati, o con **Dichiara** che chiude la tratta.
+- **Inizio lavoro sulla riga dell'ODL**: il giorno in cui consegniamo il materiale. Si compila da solo con la data d'invio della tratta (dal piano, dall'ordine di produzione, o a mano dal ciclo), si corregge, ed esce nel PDF e nell'Excel accanto alla consegna. Se c'è, il programma usa quella.
+- **Riepilogo**: «Inviare al terzista» resta in calendario fino all'uscita del materiale; da lì si segue il rientro.
+
+**Manuale** — cap. 5 calendario delle scadenze, cap. 19 «Il programma», cap. 23 «Emettere l'ODL non è inviare».
+
 ### 0.112.2 — 2026-10-23
 
 **Un codice lasciato da un articolo rinominato si può riusare subito.** Con l'archivio condiviso, dare un codice a un articolo lo impegna sul server per un'ora, il tempo che l'articolo arrivi. Se nel frattempo l'articolo veniva rinominato, l'impegno sul codice vecchio restava: per un'ora nessuno poteva darlo a un altro articolo, nemmeno chi l'aveva appena lasciato, e l'app diceva «l'ha appena preso un collega» per un codice che non aveva più nessuno. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (cambia solo la funzione `impegna_codici`, non tocca i dati).
