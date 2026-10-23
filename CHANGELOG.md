@@ -2,6 +2,32 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.111.0 — 2026-10-22
+
+**Le date degli ordini già emessi si vedono nel programma.** Spostare la data di consegna di un ordine collegato a un fabbisogno cambiava la data fattibile e il margine, ma il Gantt, la lista d'acquisto e il Programma del piano non lo dicevano, e un ordine scaduto contava come materiale pronto oggi. Le date a ritroso (ordinare entro, invio, lancio) e gli ordini di produzione e di lavoro già emessi non cambiano, come prima. Nessun cambio a `supabase/schema.sql`.
+
+**Data fattibile**
+- **Ordine scaduto**: una riga d'ordine con la data passata e la merce non ricevuta non vale più «pronto oggi», ma il prossimo giorno lavorativo. Il percorso critico dice quale ordine è scaduto e quando era atteso.
+- **Arrivo in un giorno di chiusura**: la data confermata (o chiesta) di un ordine che cade di sabato, domenica o in un festivo si riceve il primo giorno lavorativo dopo, come già gli arrivi calcolati dal listino.
+
+**Gantt del piano**
+- **Linea della data fattibile**, verde, arancione se viene dopo la consegna richiesta: entrava nella scala ma non si vedeva.
+- **Rombo dell'arrivo atteso** sulle righe d'acquisto già ordinate: rosso se arriva dopo il giorno in cui il materiale serve, o se l'ordine è scaduto. Il suggerimento della barra lo dice a parole.
+
+**Fabbisogno e Programma**
+- **Da acquistare**: due indicatori nuovi. *Arriva il …* quando l'articolo è già ordinato ma l'ordine arriva dopo il giorno in cui serve: la riga risultava «coperta» senza altro avviso. *Ordine scaduto* quando un ordine di quell'articolo ha la data passata senza ricevimento. Lo stesso conto della copertura di commessa.
+- **Programma**: nuova voce **Arrivo dal fornitore** per le righe ancora da ricevere degli ordini del piano, alla data confermata (o chiesta); in ritardo se viene dopo il giorno in cui il materiale serve o se è scaduta. Prima, emesso l'ordine, l'acquisto era «fatto» e dall'agenda non si capiva più quando arrivava.
+
+**Avanzamento**
+- **Il materiale del ciclo viene prima delle fasi** della sua parte: il tondo, poi la tornitura e la zincatura. Prima le righe seguivano l'albero (la parte, poi i suoi figli) e il materiale finiva sotto l'ultima fase. L'export segue lo stesso ordine.
+
+**Manuale** — cap. 19: data fattibile, Programma, Gantt, Avanzamento e indicatori di *Da acquistare*.
+
+**Verifica**
+- `test/schedulazione.test.js`: ordine scaduto pronto il giorno lavorativo dopo, con la data fattibile e il percorso critico; arrivo di sabato ricevuto il lunedì; arrivo in tempo non segnalato; indicatore «arriva il» nel fabbisogno; voce d'arrivo nel Programma, in tempo, tardiva e scaduta; linea della data fattibile e rombo dell'arrivo nel Gantt.
+- `test/avanzamento.test.js`: il materiale del ciclo prima delle fasi della parte.
+- Suite completa verde.
+
 ### 0.110.0 — 2026-10-22
 
 **La settimana è di cinque giorni anche per fornitori e terzisti.** Il calendario di fabbrica (lunedì–venerdì, festivi nazionali, Pasquetta, chiusure) valeva per le fasi interne e i montaggi, ma i giorni dei fornitori si contavano di calendario: un listino a «10 gg» faceva arrivare il materiale dieci giorni dopo, sabati e domeniche compresi, e le date d'ordine risultavano più tarde del dovuto. Nessun cambio a `supabase/schema.sql`; i dati salvati restano come sono, cambia come si contano.
