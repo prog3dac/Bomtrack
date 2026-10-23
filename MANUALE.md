@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.111.1**
+**Versione dell'app documentata: 0.111.2**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2914,7 +2914,10 @@ commesse), anagrafiche, utenti e impostazioni.
 | *Gestione → Backup → Storico delle modifiche* | Le ultime 200 modifiche di tutto l'archivio, con una ricerca per codice, numero, utente, campo o valore |
 
 - Le **righe** di un documento o del listino si contano: «3 righe → 4 righe (+1, 1 cambiata)».
-- I fornitori, i clienti, le famiglie e gli articoli citati si leggono **col nome di oggi**.
+- I fornitori, i clienti, le famiglie e gli articoli citati si leggono **col nome di oggi**; un
+  record che nel frattempo è stato eliminato si legge «(record eliminato)».
+- Il **prezzo in uso** si legge come la quotazione del listino: «TORNITORE SRL · 102,00 € ·
+  22/10/2026». Se quella riga è stata tolta dal listino: «quotazione non più a listino».
 - Un import da Excel o una generazione di documenti che tocca **più di 50 record** di un tipo
   diventa **una voce sola** («120 nuovi, 3 modificati»).
 - Non entrano i movimenti di magazzino, i ricevimenti, le dichiarazioni di produzione e le

@@ -449,14 +449,72 @@ const STORICO_CAMPI = {
   email: 'Email', passwordHash: 'Password', transport: 'Trasporto', payment: 'Pagamento',
   number: 'Numero', leadDays: 'Giorni di consegna', weight: 'Peso', workCenterId: 'Centro di lavoro',
   itemId: 'Articolo', jobId: 'Commessa', planId: 'Piano', makeOrBuy: 'Fare o comprare',
+  // Articoli
+  unitCost: 'Costo unitario', purchasePrice: 'Prezzo d\'acquisto', subFamilyId: 'Sottofamiglia',
+  altUom: 'U.M. alternativa', altFactor: 'Fattore di conversione', conceptId: 'Concetto',
+  favorite: 'Preferito', sourcing: 'Approvvigionamento', lotSize: 'Lotto', lotMode: 'Tipo di lotto',
+  safetyStock: 'Scorta di sicurezza', machineItemId: 'Macchina', groupItemId: 'Gruppo', rev: 'Revisione',
+  supplierCode: 'Codice fornitore', supplierDesc: 'Descrizione fornitore', costMode: 'Modo di calcolo',
+  // Documenti
+  rfqId: 'Richiesta d\'offerta', odpId: 'Ordine di produzione', supplierConfirmation: 'Conferma fornitore',
+  customerRef: 'Riferimento cliente', docId: 'Documento d\'archivio', page: 'Pagina', motivo: 'Motivo',
+  note: 'Nota', kind: 'Tipo', done: 'Fatto', gravita: 'Gravità', phases: 'Fasi', materials: 'Materiali',
+  // Anagrafiche
+  referente: 'Referente', phone: 'Telefono', vat: 'Partita IVA', street: 'Via', streetNumber: 'Civico',
+  zip: 'CAP', city: 'Città', province: 'Provincia', country: 'Nazione',
+  defaultTransport: 'Trasporto predefinito', defaultPayment: 'Pagamento predefinito',
+  hourlyRate: 'Tariffa oraria', capacityHours: 'Ore di capacità', suppliers: 'Fornitori',
+  sigla: 'Sigla', subs: 'Sottofamiglie', username: 'Nome utente', color: 'Colore', path: 'Percorso',
+  // Impostazioni
+  overheadPct: 'Spese generali %', marginPct: 'Margine %', currency: 'Valuta', codeDigits: 'Cifre del codice',
+  codePrefixAcquistato: 'Prefisso codici commerciali', codePrefixMateriale: 'Prefisso codici materiali',
+  codePrefixParte: 'Prefisso codici parti', partSourcingDefault: 'Approvvigionamento predefinito delle parti',
+  partCostModeDefault: 'Calcolo del costo predefinito delle parti', uoms: 'Unità di misura',
+  uomDefault: 'U.M. predefinita', concepts: 'Concetti', company: 'Azienda', calendar: 'Calendario',
+  transportDefault: 'Trasporto predefinito', transportOptions: 'Opzioni di trasporto',
+  paymentDefault: 'Pagamento predefinito', paymentOptions: 'Opzioni di pagamento',
+  scheduleBufferDays: 'Giorni di margine', sessionDays: 'Durata della sessione (giorni)', qr: 'Codici QR',
 };
 const STORICO_RIF = { supplierId: 'suppliers', customerId: 'customers', familyId: 'families',
-  workCenterId: 'workCenters', itemId: 'items', jobId: 'jobs', planId: 'plans' };
-function _storicoNomeRif(k, v) {
+  workCenterId: 'workCenters', itemId: 'items', jobId: 'jobs', planId: 'plans',
+  machineItemId: 'items', groupItemId: 'items', rfqId: 'rfqs', odpId: 'prodOrders', docId: 'attachmentDocs' };
+// Valori in codice che hanno un nome per chi legge.
+const STORICO_VALORI = {
+  sourcing: { make: 'produzione interna', buy: 'acquisto' },
+  partSourcingDefault: { make: 'produzione interna', buy: 'acquisto' },
+  lotMode: { min: 'quantità minima', multiple: 'multiplo esatto' },
+};
+const _storicoUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// `e`: la voce, per i riferimenti che vivono dentro il record stesso (la riga
+// di listino in uso sta nel listino dell'articolo).
+function _storicoNomeRif(k, v, e) {
+  if (v === '' || v == null) return v;
+  if (v === 'true') return 'sì';
+  if (v === 'false') return 'no';
+  if (STORICO_VALORI[k] && STORICO_VALORI[k][v]) return STORICO_VALORI[k][v];
+  if (k === 'activePriceId') {
+    // Le voci scritte da qui in avanti portano già l'etichetta; quelle vecchie
+    // l'id, che si risolve nel listino di adesso finché la riga c'è.
+    if (!/^[\w-]+$/.test(v)) return v;
+    const it = e && e.c === 'items' ? (db.items || []).find(x => x && x.id === e.id) : null;
+    return storicoQuotazione(it, v) || 'quotazione non più a listino';
+  }
+  if (k === 'subFamilyId') {
+    for (const f of db.families || []) {
+      const s = (f.subs || []).find(x => x && x.id === v);
+      if (s) return s.name || v;
+    }
+    return 'sottofamiglia rimossa';
+  }
+  if (k === 'conceptId') {
+    const c = ((db.settings && db.settings.concepts) || []).find(x => x && x.id === v);
+    return c ? c.name : 'concetto rimosso';
+  }
   const c = STORICO_RIF[k];
-  if (!c || !v) return v;
+  if (!c) return v;
   const r = (db[c] || []).find(x => x && x.id === v);
-  return r ? storicoEtichetta(r) : v;
+  // Un id che non si trova più non si mostra grezzo: a chi legge non dice niente.
+  return r ? storicoEtichetta(r) : (_storicoUuid.test(v) ? '(record eliminato)' : v);
 }
 function _storicoQuando(t) {
   const d = new Date(t);
@@ -473,8 +531,11 @@ function storicoVoceHtml(e, conRecord) {
   const coll = STORICO_COLL[e.c] || e.c;
   const cosa = e.op === 'b' ? `${coll.toLowerCase()}: ${esc(e.n || '')}`
     : (conRecord ? `${coll.toLowerCase()} <strong>${esc(e.n || '')}</strong>` : '');
-  const righe = (e.d || []).map(x => {
-    const a = _storicoNomeRif(x.k, x.a), b = _storicoNomeRif(x.k, x.b);
+  // I flag interni («*Seeded») non si annotano più, ma le voci vecchie li hanno.
+  const d = (e.d || []).filter(x => !storicoInterno(x.k));
+  if (e.d && e.d.length && !d.length) return '';
+  const righe = d.map(x => {
+    const a = _storicoNomeRif(x.k, x.a, e), b = _storicoNomeRif(x.k, x.b, e);
     return `<li><span class="storico-campo">${esc(STORICO_CAMPI[x.k] || x.k)}</span>
       ${a !== '' ? `<span class="storico-prima">${esc(a)}</span> → ` : ''}${b !== '' ? esc(b) : '<em>(vuoto)</em>'}${x.r ? ` <span class="storico-prima">(${esc(x.r)})</span>` : ''}</li>`;
   }).join('');
@@ -501,7 +562,7 @@ function storicoVociFiltrate(q) {
     const e = tutte[i];
     if (f) {
       const testo = [e.n, _storicoChi(e.u), STORICO_COLL[e.c] || e.c, _storicoQuando(e.t)]
-        .concat((e.d || []).map(x => [STORICO_CAMPI[x.k] || x.k, _storicoNomeRif(x.k, x.a), _storicoNomeRif(x.k, x.b)].join(' ')))
+        .concat((e.d || []).map(x => [STORICO_CAMPI[x.k] || x.k, _storicoNomeRif(x.k, x.a, e), _storicoNomeRif(x.k, x.b, e)].join(' ')))
         .join(' ').toLowerCase();
       if (testo.indexOf(f) < 0) continue;
     }

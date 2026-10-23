@@ -151,6 +151,43 @@ describe('Storico: backup e lettura', () => {
     assert.ok(html.indexOf('FAG') < html.lastIndexOf('SKF'), 'la più recente in alto');
   });
 
+  it('il prezzo in uso si legge come fornitore, prezzo e data, non come id', () => {
+    const a = app();
+    a.eval(`const it = getItem('m1'); it.priceList = [{ id: '72eb3495-1803-48ab-a1d3-f5c176770923', supplierId: 's1', price: 102, date: '2026-10-22' }];
+      it.activePriceId = '72eb3495-1803-48ab-a1d3-f5c176770923'; it.unitCost = 102; Store.commit();`);
+    const html = a.eval("storicoBody('items', 'm1')");
+    assert.doesNotMatch(html, /72eb3495/);
+    assert.match(html, /Prezzo in uso<\/span>\s*SKF · 102,00 € · 22\/10\/2026/);
+    assert.match(html, /Costo unitario/);
+  });
+
+  it('una voce vecchia con l\'id grezzo si risolve nel listino di adesso, o dice che la riga non c\'è più', () => {
+    const a = app();
+    a.eval(`getItem('m1').priceList = [{ id: 'q1', supplierId: 's2', price: 3, date: '2026-01-05' }]; storicoFotografa();
+      db.storico = [{ t: '2026-10-22T15:15:00Z', u: 'u-test', c: 'items', id: 'm1', op: 'm', n: 'M1', d: [
+        { k: 'activePriceId', a: 'q0', b: 'q1' }, { k: 'priceListSeeded', a: 'true', b: '' }] }];`);
+    const html = a.eval("storicoBody('items', 'm1')");
+    assert.match(html, /quotazione non più a listino<\/span> → FAG · 3,00 € · 05\/01\/2026/);
+    assert.doesNotMatch(html, /priceListSeeded/);
+  });
+
+  it('i flag interni di semina non entrano nel registro', () => {
+    const a = app();
+    a.eval("getItem('m1').priceListSeeded = true; Store.commit(); delete getItem('m1').priceListSeeded; Store.commit();");
+    assert.deepEqual(storico(a), []);
+  });
+
+  it('sì/no, valori in codice e riferimenti eliminati si leggono in italiano', () => {
+    const a = app();
+    a.eval(`db.storico = [{ t: '2026-10-22T15:15:00Z', u: 'u-test', c: 'items', id: 'm1', op: 'm', n: 'M1', d: [
+        { k: 'active', a: 'true', b: 'false' }, { k: 'sourcing', a: 'buy', b: 'make' },
+        { k: 'supplierId', a: '00000000-0000-4000-8000-000000000099', b: 's1' }] }];`);
+    const html = a.eval("storicoBody('items', 'm1')");
+    assert.match(html, /sì<\/span> → no/);
+    assert.match(html, /acquisto<\/span> → produzione interna/);
+    assert.match(html, /\(record eliminato\)<\/span> → SKF/);
+  });
+
   it('senza modifiche la scheda dice da quando si conta', () => {
     assert.match(app().eval("storicoBody('items', 'm1')"), /dalla 0\.95\.0/);
   });
