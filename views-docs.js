@@ -58,12 +58,16 @@ function statusBadge(map, status) {
 // non ha guardia, e un lettore che rispondeva «sì» segnava il documento come
 // inviato — nell'archivio condiviso un invio che il server rifiuta e che
 // fermava la coda.
-function askMarkSent(doc, question, sentStatus, rerender) {
+// `dopo` (dalla 0.112.0) è ciò che segue il «sì»: la copia del PDF in archivio
+// (documenti.js). Il documento diventa ufficiale in quel momento, ed è quella
+// la copia da conservare.
+function askMarkSent(doc, question, sentStatus, rerender, dopo) {
   if (doc.status !== 'bozza' || !canWrite('docs')) return;
-  askConfirm(question, () => {
+  askConfirm(question + (dopo ? '\nIl PDF verrà copiato nella cartella d\'archivio.' : ''), () => {
     doc.status = sentStatus;
     touch(doc); saveDB(); rerender();
     showToast('Stato: ' + sentStatus.charAt(0).toUpperCase() + sentStatus.slice(1));
+    if (dopo) dopo();
   }, { title: 'Documento generato', ok: 'Sì, segna come inviato', cancel: 'No, resta in bozza', safe: true });
 }
 
@@ -629,7 +633,8 @@ function docTestaHtml(o) {
     </div>`;
 }
 // «Genera documento PDF / Excel», spenti finché il documento non è salvato.
-//   o = { etichetta, cls, pdf, xls, dirty, cosa }
+// Sotto, le copie già in archivio (documenti.js).
+//   o = { etichetta, cls, pdf, xls, dirty, cosa, kind, rec }
 function docExportBarHtml(o) {
   const dis = o.dirty ? `disabled title="Salva ${o.cosa} prima di generare il documento"` : '';
   return `<div class="rfq-export-bar">
@@ -637,7 +642,8 @@ function docExportBarHtml(o) {
       <button class="export-btn-pdf ${o.cls}" onclick="${o.pdf}" ${dis}>${ico('file', 'tinted', '')} Genera documento PDF</button>
       <button class="export-btn-xls ${o.cls}" onclick="${o.xls}" ${dis}>${ico('sheet', 'tinted', '')} Genera documento Excel</button>
       ${o.dirty ? '<span class="rfq-dirty-hint">Salva per abilitare la generazione del documento</span>' : ''}
-    </div>`;
+    </div>
+    ${o.kind && !o.dirty ? docEmessiHtml(o.kind, o.rec) : ''}`;
 }
 // Il nome del file: numero e controparte, senza i caratteri che un disco rifiuta.
 function docNomeFile(rec, sup, ripiego, ext) {
@@ -1388,7 +1394,7 @@ function renderRfqEdit(id) {
         ${th2('Data consegna', '')}
         <th scope="col"></th></tr></thead>
       <tbody>${lines}</tbody></table></div>
-    ${docExportBarHtml({ etichetta: 'Documento di richiesta:', cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta' })}
+    ${docExportBarHtml({ etichetta: 'Documento di richiesta:', cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta', kind: 'rfq', rec: r })}
     ${rfqPriceBar(r)}
   </div>`;
 }
@@ -1412,7 +1418,7 @@ function rfqPriceBar(r) {
   </div>`;
 }
 
-function exportRfqPDF(id) {
+function exportRfqPDF(id, modo) {
   const r = getRfq(id); if (!r) return;
   if (!(r.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const jsPDF = requirePdf(); if (!jsPDF) return;
@@ -1444,9 +1450,8 @@ function exportRfqPDF(id) {
     { etichetta: 'Pagamento / Payment', testo: r.payment },
     { etichetta: 'Note / Notes', testo: r.notes },
   ], doc.lastAutoTable.finalY + 8);
-  doc.save(docNomeFile(r, r.supplierId ? getSupplier(r.supplierId) : null, 'richiesta', '.pdf'));
-  showToast('PDF esportato');
-  askMarkSent(r, `PDF generato.\nSegnare la richiesta ${r.number} come inviata?`, 'inviata', renderRfq);
+  return docPdfEmetti('rfq', r, doc, { ripiego: 'richiesta', modo, stato: 'inviata', rerender: renderRfq,
+    domanda: `PDF generato.\nSegnare la richiesta ${r.number} come inviata?` });
 }
 
 function exportRfqExcel(id) {
@@ -1863,11 +1868,11 @@ function renderOrderEdit(id) {
       <tbody>${lines}</tbody>
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
     </table></div>
-    ${docExportBarHtml({ etichetta: "Documento d'ordine:", cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine" })}
+    ${docExportBarHtml({ etichetta: "Documento d'ordine:", cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine", kind: 'order', rec: o })}
   </div>`;
 }
 
-function exportOrderPDF(id) {
+function exportOrderPDF(id, modo) {
   const o = getOrder(id); if (!o) return;
   if (!(o.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const jsPDF = requirePdf(); if (!jsPDF) return;
@@ -1901,9 +1906,8 @@ function exportOrderPDF(id) {
     { etichetta: 'Conferma fornitore / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
   ], doc.lastAutoTable.finalY + 8);
-  doc.save(docNomeFile(o, o.supplierId ? getSupplier(o.supplierId) : null, 'ordine', '.pdf'));
-  showToast('PDF esportato');
-  askMarkSent(o, `PDF generato.\nSegnare l'ordine ${o.number} come inviato?`, 'inviato', renderOrders);
+  return docPdfEmetti('order', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOrders,
+    domanda: `PDF generato.\nSegnare l'ordine ${o.number} come inviato?` });
 }
 
 function exportOrderExcel(id) {
@@ -2191,7 +2195,7 @@ function renderOdlEdit(id) {
       <tbody>${lines}</tbody>
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
     </table></div>
-    ${docExportBarHtml({ etichetta: "Documento d'ordine di lavoro:", cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro" })}
+    ${docExportBarHtml({ etichetta: "Documento d'ordine di lavoro:", cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro", kind: 'workOrder', rec: o })}
   </div>`;
 }
 
@@ -2199,7 +2203,7 @@ function renderOdlEdit(id) {
 // Bilingue come l'ordine d'acquisto, e con le colonne che servono a un
 // terzista: la parte, la lavorazione, i pezzi. Nessuna colonna «codice presso
 // il fornitore»: una lavorazione non ha un codice a catalogo di nessuno.
-function exportOdlPDF(id) {
+function exportOdlPDF(id, modo) {
   const o = getOdl(id); if (!o) return;
   if (!(o.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const jsPDF = requirePdf(); if (!jsPDF) return;
@@ -2227,9 +2231,8 @@ function exportOdlPDF(id) {
     { etichetta: 'Conferma terzista / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
   ], doc.lastAutoTable.finalY + 8);
-  doc.save(docNomeFile(o, o.supplierId ? getSupplier(o.supplierId) : null, 'ordine', '.pdf'));
-  showToast('PDF esportato');
-  askMarkSent(o, `PDF generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?`, 'inviato', renderOdl);
+  return docPdfEmetti('workOrder', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOdl,
+    domanda: `PDF generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?` });
 }
 function exportOdlExcel(id) {
   const o = getOdl(id); if (!o) return;

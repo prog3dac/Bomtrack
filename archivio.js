@@ -64,6 +64,10 @@ const ARCHIVIO_CONFIG_KEY = 'cartella';
 const ARCHIVIO_PROFONDITA = 3;
 // Stessa ragione, dall'altro lato: un tetto al numero di file elencati.
 const ARCHIVIO_MAX_FILE = 5000;
+// La sottocartella dei documenti emessi (documenti.js). Un nome solo, scritto
+// qui perché anche la scansione degli allegati deve saperlo: quei PDF non sono
+// cataloghi da collegare a un codice.
+const ARCHIVIO_CARTELLA_EMESSI = 'Documenti Bomtrack';
 
 // ─── C'è o non c'è ───
 function archivioSupportato() {
@@ -167,6 +171,9 @@ function _scandisci(dir, prefisso, prof, out) {
   return _perOgniVoce(dir, (nome, h) => {
     if (out.length >= ARCHIVIO_MAX_FILE) return null;
     const path = prefisso ? prefisso + '/' + nome : nome;
+    // I documenti emessi (documenti.js) non sono allegati da collegare a un
+    // codice: stanno nella stessa cartella, ma fuori da questo elenco.
+    if (h.kind === 'directory' && !prefisso && nome === ARCHIVIO_CARTELLA_EMESSI) return null;
     if (h.kind === 'directory') return _scandisci(h, path, prof + 1, out);
     if (!/\.pdf$/i.test(nome)) return null;
     return h.getFile()
@@ -242,6 +249,48 @@ function archivioNomeLibero(nome) {
     };
     return prova(1);
   });
+}
+
+// ─── Metterci dentro un file, in una sottocartella ───
+// Come archivioSalva, ma il percorso può avere delle cartelle davanti, che si
+// creano se mancano: `Documenti Bomtrack/ODA/2026/ODA-2026-105_Rossi.pdf`.
+// Il nome non si sovrascrive mai: se c'è già, si prende il primo libero
+// (`… (2).pdf`) e si restituisce il percorso vero, che è quello da registrare.
+// null se la cartella non è pronta o la scrittura non riesce — chi chiama ha
+// già il file in mano e lo dice, non lo perde.
+function archivioSalvaIn(path, blob) {
+  const parti = String(path || '').split('/').filter(Boolean);
+  if (!parti.length) return Promise.resolve(null);
+  const nome = parti.pop();
+  return archivioPronto(true).then(h => {
+    if (!h) return null;
+    const scendi = (dir, i) => (i >= parti.length ? Promise.resolve(dir)
+      : dir.getDirectoryHandle(parti[i], { create: true }).then(sub => scendi(sub, i + 1)));
+    return scendi(h, 0).then(dir => {
+      const punto = nome.lastIndexOf('.');
+      const base = punto > 0 ? nome.slice(0, punto) : nome;
+      const est = punto > 0 ? nome.slice(punto) : '';
+      const prova = i => {
+        const c = i === 1 ? nome : (i >= 999 ? base + ' ' + Date.now() + est : base + ' (' + i + ')' + est);
+        return _archivioEsiste(dir, c).then(c_e => (c_e && i < 999 ? prova(i + 1) : c));
+      };
+      return prova(1).then(libero => dir.getFileHandle(libero, { create: true })
+        .then(fh => fh.createWritable())
+        .then(w => Promise.resolve(w.write(blob)).then(() => w.close()))
+        .then(() => parti.concat(libero).join('/')));
+    });
+  }).catch(e => { console.error('Scrittura in archivio fallita:', e); return null; });
+}
+
+// L'impronta di un file: SHA-256 in esadecimale, o '' dove il browser non sa
+// calcolarla (pagina aperta senza https). Serve a dire, mesi dopo, se il PDF
+// in cartella è ancora quello emesso.
+function archivioImpronta(blob) {
+  const c = typeof crypto !== 'undefined' && crypto.subtle;
+  if (!c || !blob || typeof blob.arrayBuffer !== 'function') return Promise.resolve('');
+  return blob.arrayBuffer().then(buf => c.digest('SHA-256', buf))
+    .then(h => Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join(''))
+    .catch(() => '');
 }
 
 // ─── Aprire un PDF ───

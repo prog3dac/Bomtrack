@@ -672,6 +672,7 @@ function renderArchivio() {
       <p>I PDF non stanno dentro Bomtrack: stanno in una cartella, e il database ne memorizza il percorso. La cartella è un'impostazione <strong>di questo PC</strong> — ognuno indica la propria, che sia locale o quella di un servizio sincronizzato — e non finisce nel backup: un altro computer avrà un'altra lettera di unità.</p>
       ${archivioBlocco(false)}
       ${esito}
+      ${typeof docEmessiVerificaHtml === 'function' ? docEmessiVerificaHtml() : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">
         <button class="btn-outline" onclick="archivioVerificaUI()">${ico('check', 'tinted', '')} Verifica archivio</button>
         <button class="btn-outline" onclick="archivioSceglieModal()">${ico('folder', 'tinted', '')} ${archivioNome() ? 'Cambia cartella' : 'Scegli cartella'}</button>
@@ -682,10 +683,14 @@ function renderArchivio() {
 }
 function archivioVerificaUI() {
   if (archivioStato() !== 'configurato') { archivioSceglieModal(); return; }
-  archivioVerifica().then(mancanti => {
+  // Gli allegati e i documenti emessi stanno nella stessa cartella: una
+  // verifica sola le controlla tutte e due.
+  Promise.all([archivioVerifica(), docEmessiVerifica()]).then(([mancanti, emessi]) => {
     if (!mancanti) { showToast('Archivio non leggibile: permesso negato o cartella non disponibile', 'error'); return; }
     window.__archivioMancanti = new Set(mancanti.map(d => String(d.path || '').toLowerCase()));
-    showToast(mancanti.length ? `${mancanti.length} documenti non trovati` : 'Tutti i documenti sono al loro posto');
+    window.__emessiEsito = emessi;
+    const guasti = mancanti.length + (emessi ? emessi.mancanti.length + emessi.alterati.length : 0);
+    showToast(guasti ? `${guasti} documenti da controllare` : 'Tutti i documenti sono al loro posto');
     if (typeof activeView !== 'undefined' && activeView === 'manage') renderManage();
   });
 }

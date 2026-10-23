@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.111.1**
+**Versione dell'app documentata: 0.112.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -891,6 +891,11 @@ sovrascrivere un file che ha già quel nome.
 documenti che non ci sono più: una volta per documento, non una per collegamento. Serve perché
 un collegamento rotto è l'unico difetto di questo modo di lavorare che non si annuncia da sé —
 lo si scoprirebbe il giorno che qualcuno prova ad aprire il disegno.
+
+**I documenti emessi** (dalla 0.112.0) stanno nella stessa cartella, sotto `Documenti Bomtrack`:
+sono le copie PDF di richieste, ordini e ordini di lavoro inviati (→
+[cap. 28](#28-export-di-elenchi-e-documenti)). Non compaiono fra i PDF da collegare a un codice, e
+la verifica controlla anche loro.
 
 **Gli allegati caricati dentro l'app** prima della versione 0.78.0 restano dove sono e continuano
 a funzionare, in una sezione separata della scheda. Di quelli il backup JSON porta l'elenco e non
@@ -2808,6 +2813,49 @@ Per richieste e ordini, quei pulsanti sono **disabilitati finché ci sono modifi
 alla generazione l'app propone di far passare lo stato da *Bozza* a *Inviata* / *Inviato*.
 Rifiutando, il file si scarica lo stesso e lo stato non cambia.
 
+### Le copie in archivio (dalla 0.112.0)
+
+**Il PDF che parte resta in archivio.** Quando richiesta, ordine o ordine di lavoro si segnano come
+inviati, il PDF appena generato viene scritto anche nella **cartella d'archivio** degli allegati
+(→ [cap. 8](#8-la-scheda-articolo-campo-per-campo)), in una sottocartella sua:
+
+```
+<cartella d'archivio>/
+  Documenti Bomtrack/
+    RFQ/2026/  RDO-2026-014_Rossi.pdf
+    ODA/2026/  ODA-2026-105_Bianchi.pdf
+               ODA-2026-105_Bianchi_r1.pdf
+    ODL/2026/  ODL-2026-031_Zincatura Verdi.pdf
+```
+
+L'anno è quello del documento. Bomtrack ne memorizza il percorso, chi l'ha emesso, quando e
+l'impronta del file: con l'archivio condiviso l'elenco arriva ai colleghi, e con la cartella
+sincronizzata (OneDrive, Dropbox, rete) il file è già sui loro PC. I PDF non passano mai da Supabase.
+
+**Nella scheda** del documento, sotto i pulsanti di generazione, c'è **Copie in archivio**: le copie
+dalla più recente, ciascuna con il pulsante per aprirla.
+
+**Una copia emessa non si sovrascrive mai.** È ciò che il fornitore ha ricevuto, e vale come tale:
+
+- se il documento **cambia dopo l'invio** (sbloccato, corretto) e si rigenera il PDF, l'app
+  propone di archiviarlo come **revisione** (`_r1`, `_r2`…); la copia di prima resta;
+- **ristampare** un documento che non è cambiato non chiede niente;
+- un documento inviato prima di questa versione, rigenerato, propone la sua prima copia;
+- **Archivia il PDF** / **Archivia come nuova revisione**, nella scheda, archivia senza scaricare;
+- se in cartella c'è già un file con quel nome, l'app ne sceglie uno libero (`… (2).pdf`) e
+  registra quello.
+
+**Il download resta sempre.** Senza cartella d'archivio su quel PC, con Firefox o Safari, o per chi
+non può modificare i documenti, il PDF si scarica come prima e la scheda dice perché non è stato
+archiviato. Le **bozze** non si archiviano: una stampa di controllo non è un documento emesso.
+L'**Excel** resta un file di lavoro e non va in archivio.
+
+**La verifica** di *Gestione → Backup* controlla anche le copie emesse: dice quali **non si
+trovano** più e quali sono **diverse** da quella emessa (sostituite o modificate fuori da Bomtrack).
+
+> Conviene dare **sola lettura** sulla cartella `Documenti Bomtrack` a chi non emette documenti: è
+> OneDrive (o il server) a impedire di cancellarli, non Bomtrack.
+
 ---
 
 ## 29. Stampa
@@ -3579,6 +3627,7 @@ timestamp). Le migrazioni sono **idempotenti**: un backup vecchio si auto-migra 
 | `movements` | I movimenti di magazzino | — |
 | `productions` | Le dichiarazioni di avanzamento di produzione | — |
 | `attachmentDocs` | **I documenti d'archivio**: il percorso di un PDF dentro la cartella, e la sua descrizione. Uno per file, mai duplicato | — |
+| `generatedDocs` | **I documenti emessi**: il percorso della copia PDF di una richiesta, di un ordine o di un ordine di lavoro, con revisione, impronta SHA-256 e invio. Uno per file, mai riscritto | — |
 | `attachments` | **I legami** fra un articolo e un allegato: con `docId` è un documento d'archivio (e può portare la `page`), senza è un file custodito in IndexedDB | — |
 | `suppliers` · `customers` | Fornitori e clienti | — |
 | `workCenters` | I centri di lavoro | `suppliers` (fornitori conto lavoro) |
@@ -3630,6 +3679,7 @@ Ogni record porta `id` (UUID), `createdAt` / `updatedAt`, `createdBy` / `updated
 | `views-manage.js` | Gestione |
 | `produzione.js` | Avanzamento di produzione |
 | `allegati.js` · `archivio.js` | Allegati e documenti degli articoli · la cartella d'archivio (scelta, permesso, lettura, copia, verifica) |
+| `documenti.js` | Le copie dei documenti emessi nella cartella d'archivio: quando si archiviano, le revisioni, la sezione in scheda e la verifica |
 | `export-lists.js` · `import-catalog.js` · `import-export.js` | Export elenchi · import articoli · import distinte, backup, avvio |
 | `cloud-map.js` | Traduzione della forma dati verso un futuro backend. Funzioni pure, nessun codice di rete |
 | `vendor/` | jsPDF, jsPDF-AutoTable, SheetJS |

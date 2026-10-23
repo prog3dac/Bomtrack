@@ -2,6 +2,31 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.112.0 — 2026-10-23
+
+**I documenti emessi restano in archivio.** Il PDF di richieste d'offerta, ordini d'acquisto e ordini di lavoro si scaricava e da lì l'app lo perdeva di vista: ognuno lo teneva dove capitava, e nessun collega sapeva quale copia fosse partita. Ora, quando il documento si segna come inviato, il PDF viene scritto anche nella cartella d'archivio degli allegati, sotto `Documenti Bomtrack/<RFQ|ODA|ODL>/<anno>/`, e si ritrova dalla scheda del documento. I file non passano da Supabase: il database ne tiene il percorso, come per gli allegati. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge la tabella `generated_docs`, non tocca i dati).
+
+**Quando si archivia**
+- **«Segna come inviato»** dopo la generazione del PDF scrive la copia in archivio. Le bozze di controllo non si archiviano.
+- **Documento cambiato dopo l'invio**: rigenerando il PDF l'app propone di archiviarlo come **revisione** (`_r1`, `_r2`…). Una ristampa del documento non cambiato non chiede niente.
+- **Documento inviato prima di questa versione**: rigenerato, propone la sua prima copia.
+- **Mai sovrascrivere**: una copia emessa non si rimpiazza, e un nome già presente in cartella resta di chi l'ha (si usa il primo libero, `… (2).pdf`).
+- **Il download resta sempre.** Senza cartella su quel PC, con Firefox o Safari, o per chi non modifica i documenti, il PDF si scarica come prima e la scheda dice perché non è archiviato. L'Excel resta un file di lavoro.
+
+**Nella scheda**
+- **Copie in archivio**, sotto i pulsanti di generazione: le copie dalla più recente, con chi le ha emesse e il pulsante per aprirle; **Archivia il PDF** / **Archivia come nuova revisione** archivia senza scaricare.
+
+**Verifica archivio** (*Gestione → Backup*) controlla anche le copie emesse: quelle che non si trovano più e quelle diverse dall'impronta SHA-256 registrata, cioè sostituite o modificate fuori da Bomtrack. I PDF di `Documenti Bomtrack` non compaiono fra quelli da collegare a un codice.
+
+**Pronto per l'invio mail.** Ogni copia registra già quando è partita e come (`sent_at`, `sent_via`, `sent_to`): oggi `manuale`, domani la mail che parte dall'app allegherà esattamente il PDF archiviato.
+
+**Manuale** — cap. 28: «Le copie in archivio»; cap. 8: i documenti emessi nella cartella d'archivio; appendice: la collezione `generatedDocs` e `documenti.js`.
+
+**Verifica**
+- `test/documenti.test.js`: copia scritta al «segna come inviato» con percorso, revisione e impronta; nessuna copia su «resta in bozza»; ristampa senza domanda; revisione dopo una modifica senza toccare la prima; prima copia di un documento già inviato; «Archivia» senza download; nome già preso non sovrascritto; senza cartella, su browser senza cartelle e senza permessi il PDF resta un download; sezione in scheda; apertura; verifica di copie mancanti e alterate; cartella esclusa dagli allegati; migrazione della collezione.
+- `test/schema-sql.test.js` (anche in Postgres): la tabella `generated_docs` dice le stesse cose del codice e fa il giro completo.
+- Suite completa verde.
+
 ### 0.111.1 — 2026-10-23
 
 **Su GitHub solo il codice.** Il repository è pubblico, e il lavoro notturno `supabase-veglia` poteva salvare fra i suoi artifact una copia del database, utenti e hash delle password compresi: cifrata, ma scaricabile da chiunque avesse un account GitHub, e protetta soltanto dalla frase segreta. Ora l'archivio e gli utenti non passano più da GitHub. Nessun cambio a `supabase/schema.sql`.

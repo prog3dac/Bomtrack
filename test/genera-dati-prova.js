@@ -31,7 +31,7 @@ const app = loadApp({ silent: true });
 app.setDb({
   schemaVersion: 2,
   suppliers: [], customers: [], rfqs: [], orders: [], workOrders: [], users: [], families: [], jobs: [], plans: [],
-  attachments: [], attachmentDocs: [], productions: [], prodOrders: [], prodDecls: [], movements: [], receipts: [],
+  attachments: [], attachmentDocs: [], generatedDocs: [], productions: [], prodOrders: [], prodDecls: [], movements: [], receipts: [],
   reminders: [], revisions: [], trash: [], workCenters: [], items: [],
   settings: { overheadPct: 12, marginPct: 25, currency: '€', codeDigits: 3, partSourcingDefault: 'make',
     uoms: [], uomDefault: 'pz', concepts: [], mpFamiliesSeeded: true, partFamiliesSeeded: true },

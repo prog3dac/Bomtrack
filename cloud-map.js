@@ -242,7 +242,7 @@ const CLOUD_TYPES = (() => {
     'capacityHours', 'hoursPerDay', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size'].forEach(k => { t[k] = 'numeric'; });
   ['pos', 'runFrom', 'runTo', 'seq', 'opIndex', 'passata', 'page', 'incrDigitsN', 'incrDigitsS', 'gCodeLen'].forEach(k => { t[k] = 'int'; });
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'plannedStart', 'plannedEnd'].forEach(k => { t[k] = 'date'; });
-  ['createdAt', 'updatedAt', 'deletedAt', 'doneAt'].forEach(k => { t[k] = 'timestamptz'; });
+  ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt'].forEach(k => { t[k] = 'timestamptz'; });
   ['active', 'favorite', 'obsolete', 'done'].forEach(k => { t[k] = 'bool'; });
   ['snapshot', 'record', 'ecoImpact'].forEach(k => { t[k] = 'jsonb'; });
   ['createdBy', 'updatedBy', 'deletedBy'].forEach(k => { t[k] = 'uuid'; });
