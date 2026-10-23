@@ -1474,6 +1474,13 @@ begin
   for x in select * from jsonb_array_elements(coalesce(codici, '[]'::jsonb)) loop
     k := lower(btrim(coalesce(x->>'codice', '')));
     continue when k = '';
+    -- Un impegno per un articolo che sul server porta ormai un altro codice
+    -- (dalla 0.112.2) non vale più: l'articolo è stato rinominato, e il codice
+    -- vecchio restava bloccato per un'ora a tutti, anche a chi l'aveva lasciato.
+    delete from public.codici_impegnati c
+     where c.chiave = k and c.item is not null
+       and exists (select 1 from public.items i
+                    where i.id::text = c.item and lower(btrim(i.code)) <> k);
     preso := exists (select 1 from public.items i
                       where lower(btrim(i.code)) = k and (x->>'item' is null or i.id::text <> x->>'item'));
     if not preso then

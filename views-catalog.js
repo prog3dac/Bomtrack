@@ -2232,7 +2232,14 @@ function saveItemEdit(id) {
   // Solo un codice cambiato va impegnato: quello che l'articolo ha già è suo.
   const nuovo = val('it-code');
   if (!nuovo || itemCodeKey(nuovo) === itemCodeKey(it.code) || itemLockState(it).structLocked) return fare();
-  return conCodiceImpegnato({ id: it.id, code: nuovo }, null, fare);
+  // Il codice lasciato torna libero subito: impegnato da questo utente quando
+  // l'articolo è nato, bloccava per un'ora chiunque lo volesse riusare.
+  const vecchio = it.code;
+  return conCodiceImpegnato({ id: it.id, code: nuovo }, null, () => {
+    const fatto = fare();
+    cloudLiberaCodici([vecchio]);
+    return fatto;
+  });
 }
 function delItem(id) {
   if (!roleGuard('catalog')) return;
