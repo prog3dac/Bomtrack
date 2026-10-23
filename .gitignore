@@ -3,3 +3,10 @@ Thumbs.db
 desktop.ini
 *.bak
 node_modules/
+# Su GitHub solo il codice: i backup dell'archivio (export JSON, copie del
+# database di supabase/backup.sh) non si committano, nemmeno per sbaglio.
+bomtrack_backup_*.json
+bomtrack_prima_di_*.json
+*.sql.gz
+*.sql.gz.gpg
+*.gpg

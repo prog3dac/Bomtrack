@@ -2,6 +2,16 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.110.1 — 2026-10-23
+
+**Su GitHub solo il codice.** Il repository è pubblico, e il lavoro notturno `supabase-veglia` poteva salvare fra i suoi artifact una copia del database, utenti e hash delle password compresi: cifrata, ma scaricabile da chiunque avesse un account GitHub, e protetta soltanto dalla frase segreta. Ora l'archivio e gli utenti non passano più da GitHub. Nessun cambio a `supabase/schema.sql`.
+
+- **Il lavoro notturno tiene solo sveglio Supabase**: chiede se il servizio risponde, non legge dati e non salva niente. Non usa più i segreti `SUPABASE_DB_URL` e `BACKUP_PASSPHRASE`, che vanno **eliminati** da *Settings → Secrets and variables → Actions*: il primo porta la password del database.
+- **La copia intera del database** (`supabase/backup.sh`, utenti compresi) si fa dal proprio PC, e si tiene con gli altri backup. L'export JSON di *Gestione → Backup* resta la copia di ogni giorno.
+- **`.gitignore`** esclude i file di backup (`bomtrack_backup_*.json`, `bomtrack_prima_di_*.json`, `*.sql.gz`, `*.gpg`), così non finiscono nel repository per sbaglio.
+
+**Manuale** — cap. 31: «Supabase sveglio ogni notte» e «Una copia intera del database, dal tuo PC» al posto di «Supabase sveglio e una copia ogni notte».
+
 ### 0.110.0 — 2026-10-22
 
 **La settimana è di cinque giorni anche per fornitori e terzisti.** Il calendario di fabbrica (lunedì–venerdì, festivi nazionali, Pasquetta, chiusure) valeva per le fasi interne e i montaggi, ma i giorni dei fornitori si contavano di calendario: un listino a «10 gg» faceva arrivare il materiale dieci giorni dopo, sabati e domeniche compresi, e le date d'ordine risultavano più tarde del dovuto. Nessun cambio a `supabase/schema.sql`; i dati salvati restano come sono, cambia come si contano.
