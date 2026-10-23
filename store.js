@@ -1829,6 +1829,11 @@ const STORICO_BLOCCO = 50;
 const STORICO_ESCLUSE = new Set(['movements', 'receipts', 'prodDecls', 'revisions', 'trash']);
 const STORICO_TECNICI = new Set(['createdAt', 'createdBy', 'updatedAt', 'updatedBy']);
 const STORICO_NASCOSTI = new Set(['passwordHash', 'passwordSalt']);
+// I flag «*Seeded» dicono solo che una semina una-tantum è già stata fatta
+// (famiglie predefinite, prima quotazione del listino): non sono un dato di
+// chi lavora. Il server per giunta non li conserva, e ogni download li
+// faceva comparire nel registro come «true → (vuoto)».
+const storicoInterno = k => /Seeded$/.test(k);
 const STORICO_LUNG = 80;
 let _storicoBase = null;   // Map collezione → Map id → JSON; 'settings' → JSON
 function storicoFotografa() {
@@ -1854,6 +1859,21 @@ function _storicoValore(v) {
   const t = String(v);
   return t.length > STORICO_LUNG ? t.slice(0, STORICO_LUNG - 1) + '…' : t;
 }
+// Una quotazione del listino come la riconosce chi legge: fornitore, prezzo,
+// data. `activePriceId` è l'id della riga del listino in uso, e nel registro
+// un id non dice niente; la riga per giunta può sparire dal listino, quindi
+// l'etichetta si fissa al momento della modifica.
+function storicoQuotazione(it, id) {
+  if (!id) return '';
+  const r = ((it && it.priceList) || []).find(x => x && x.id === id);
+  if (!r) return '';
+  const s = r.supplierId ? (db.suppliers || []).find(x => x && x.id === r.supplierId) : null;
+  const prezzo = (Number(r.price) || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  const cur = (db.settings && db.settings.currency) || '€';
+  const data = r.date ? new Date(r.date).toLocaleDateString('it-IT') : '';
+  return [s ? s.name : (r.supplierId ? 'fornitore rimosso' : 'senza fornitore'),
+    prezzo + ' ' + cur + (r.priceUom ? '/' + r.priceUom : ''), data].filter(Boolean).join(' · ').slice(0, STORICO_LUNG);
+}
 // Le righe di un elenco annidato con un id proprio (righe dei documenti,
 // listino): quante aggiunte, tolte e cambiate. Senza id si dice solo che è
 // cambiato.
@@ -1876,7 +1896,7 @@ function storicoDiff(prima, dopo) {
   const out = [];
   const chiavi = new Set(Object.keys(prima || {}).concat(Object.keys(dopo || {})));
   chiavi.forEach(k => {
-    if (STORICO_TECNICI.has(k)) return;
+    if (STORICO_TECNICI.has(k) || storicoInterno(k)) return;
     const a = prima ? prima[k] : undefined, b = dopo ? dopo[k] : undefined;
     if (safeStringify(a) === safeStringify(b)) return;
     if ((a == null || a === '') && (b == null || b === '')) return;
@@ -1925,6 +1945,11 @@ function storicoRegistra() {
       const e = { t, u: _storicoDaRemoto ? (rec.updatedBy || null) : u, c, id: rec.id, op: v.op, n: storicoEtichetta(rec) };
       if (v.op === 'm') {
         e.d = storicoDiff(vecchio, v.r);
+        if (c === 'items') e.d.forEach(x => {
+          if (x.k !== 'activePriceId') return;
+          x.a = storicoQuotazione(vecchio, vecchio && vecchio.activePriceId) || x.a;
+          x.b = storicoQuotazione(v.r, v.r.activePriceId) || x.b;
+        });
         if (!e.d.length) return;   // solo date e autore: nessuna modifica vera
       }
       nuove.push(e);

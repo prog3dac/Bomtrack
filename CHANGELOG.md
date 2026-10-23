@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.112.1 — 2026-10-23
+
+**Lo storico delle modifiche si legge senza codici interni.** Cambiando il prezzo in uso di un articolo, lo storico mostrava «Prezzo in uso: 72eb3495-1803-…», cioè l'id della riga di listino, e accanto campi tecnici come «priceListSeeded: true → (vuoto)» o «unitCost». Nessun cambio a `supabase/schema.sql`.
+
+- **Prezzo in uso**: si legge come fornitore, prezzo e data della quotazione («TORNITORE SRL · 102,00 € · 22/10/2026»). L'etichetta si fissa al salvataggio, così resta leggibile anche se la riga viene tolta dal listino; le voci già registrate si risolvono nel listino di adesso, o dicono «quotazione non più a listino».
+- **Flag interni** (`priceListSeeded`, `mpFamiliesSeeded`, `partFamiliesSeeded`): non si annotano più, e nelle voci vecchie non si mostrano. Comparivano a ogni download dall'archivio condiviso, che non li conserva.
+- **Nomi in italiano** per i campi che uscivano col nome dei dati: costo unitario, prezzo d'acquisto, sottofamiglia, scorta di sicurezza, lotto, approvvigionamento, conferma fornitore, indirizzo dei fornitori, impostazioni e altri.
+- **Valori leggibili**: sì/no al posto di true/false, «produzione interna»/«acquisto», il tipo di lotto; sottofamiglia, concetto, macchina, gruppo, richiesta d'offerta, ordine di produzione e documento d'archivio col loro nome. Un riferimento a un record eliminato dice «(record eliminato)» invece dell'id.
+
+**Manuale** — cap. «Storico delle modifiche»: come si legge il prezzo in uso.
+
 ### 0.112.0 — 2026-10-23
 
 **I documenti emessi restano in archivio.** Il PDF di richieste d'offerta, ordini d'acquisto e ordini di lavoro si scaricava e da lì l'app lo perdeva di vista: ognuno lo teneva dove capitava, e nessun collega sapeva quale copia fosse partita. Ora, quando il documento si segna come inviato, il PDF viene scritto anche nella cartella d'archivio degli allegati, sotto `Documenti Bomtrack/<RFQ|ODA|ODL>/<anno>/`, e si ritrova dalla scheda del documento. I file non passano da Supabase: il database ne tiene il percorso, come per gli allegati. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge la tabella `generated_docs`, non tocca i dati).

@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.112.0</span>
+        <span class="chip">v0.112.1</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -1034,7 +1034,7 @@ prezzo vendita = costo totale × (1 + margine %)</code></pre>
 <h3 id="storico-delle-modifiche">Storico delle modifiche</h3>
 <p>A ogni salvataggio Bomtrack annota che cosa è cambiato: <strong>chi</strong>, <strong>quando</strong>, <strong>quale campo</strong>, <strong>da quale valore a quale</strong>. Vale per articoli, documenti (richieste, ordini, ODL, ODP, piani, commesse), anagrafiche, utenti e impostazioni.</p>
 <div class="tw"><table><thead><tr><th>Dove</th><th>Cosa mostra</th></tr></thead><tbody><tr><td>Pannello laterale di un articolo, scheda <strong>Storico</strong></td><td>Le modifiche di quell'articolo, dalla più recente</td></tr><tr><td><em>Gestione → Backup → Storico delle modifiche</em></td><td>Le ultime 200 modifiche di tutto l'archivio, con una ricerca per codice, numero, utente, campo o valore</td></tr></tbody></table></div>
-<ul><li>Le <strong>righe</strong> di un documento o del listino si contano: «3 righe → 4 righe (+1, 1 cambiata)».</li><li>I fornitori, i clienti, le famiglie e gli articoli citati si leggono <strong>col nome di oggi</strong>.</li><li>Un import da Excel o una generazione di documenti che tocca <strong>più di 50 record</strong> di un tipo diventa <strong>una voce sola</strong> («120 nuovi, 3 modificati»).</li><li>Non entrano i movimenti di magazzino, i ricevimenti, le dichiarazioni di produzione e le revisioni, che sono già un registro loro. Delle <strong>password</strong> si dice solo che sono cambiate.</li><li>Si tengono le <strong>ultime 5.000</strong> modifiche. Lo storico sta nell'archivio, quindi <strong>viaggia nel backup</strong> e torna con un ripristino.</li></ul>
+<ul><li>Le <strong>righe</strong> di un documento o del listino si contano: «3 righe → 4 righe (+1, 1 cambiata)».</li><li>I fornitori, i clienti, le famiglie e gli articoli citati si leggono <strong>col nome di oggi</strong>; un record che nel frattempo è stato eliminato si legge «(record eliminato)».</li><li>Il <strong>prezzo in uso</strong> si legge come la quotazione del listino: «TORNITORE SRL · 102,00 € · 22/10/2026». Se quella riga è stata tolta dal listino: «quotazione non più a listino».</li><li>Un import da Excel o una generazione di documenti che tocca <strong>più di 50 record</strong> di un tipo diventa <strong>una voce sola</strong> («120 nuovi, 3 modificati»).</li><li>Non entrano i movimenti di magazzino, i ricevimenti, le dichiarazioni di produzione e le revisioni, che sono già un registro loro. Delle <strong>password</strong> si dice solo che sono cambiate.</li><li>Si tengono le <strong>ultime 5.000</strong> modifiche. Lo storico sta nell'archivio, quindi <strong>viaggia nel backup</strong> e torna con un ripristino.</li></ul>
 <blockquote><p>💡 Lo storico conta <strong>dalla 0.95.0</strong>: di quello che è successo prima non c'è traccia.</p></blockquote>
 <h3 id="codici-articolo-duplicati">Codici articolo duplicati</h3>
 <p>Un controllo dati che elenca i codici assegnati a più di un articolo — di solito il residuo di un import fatto male. Lo stesso controllo alimenta un segnale del Riepilogo.</p>
