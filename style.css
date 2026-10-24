@@ -1238,12 +1238,19 @@ tr.agenda-day td{border-top:1px solid var(--hairline)}
 .avz-table{min-width:820px}
 .avz-table td{vertical-align:middle}
 .avz-table th.avz-bar,.avz-table td.avz-bar{width:42%;min-width:240px;padding-left:4px;padding-right:4px}
-.avz-svg{display:block;width:100%;height:20px}
+.avz-svg{display:block;width:100%;height:28px}
 .avz-asse{position:relative;height:16px;font-size:10.5px;font-weight:400;color:var(--text-dim)}
 .avz-asse span{position:absolute;top:0;white-space:nowrap;border-left:1px solid var(--hairline);padding-left:2px}
 .avz-docs{font-size:12px;line-height:1.5;min-width:180px}
 .avz-stato{font-weight:600;font-size:12px}
-.avz-crit td:first-child a,.avz-crit td:first-child{color:var(--red)}
+.avz-crit-ico{width:13px;height:13px;vertical-align:-2px;color:var(--orange)}
+#avz-tip{position:fixed;z-index:1500;max-width:min(420px,calc(100vw - 16px));padding:8px 12px;border-radius:8px;background:var(--card);color:var(--text);border:1px solid var(--border);box-shadow:0 8px 24px var(--shadow-soft);font-size:14px;line-height:1.45;white-space:pre-line;pointer-events:none}
+#avz-tip[hidden]{display:none}
+@media print{#avz-tip{display:none}}
+.avz-rosso{color:var(--red);font-weight:600;font-size:12px;white-space:nowrap}
+.avz-testa td:first-child{font-weight:600}
+.avz-fase td:first-child{color:var(--text-dim)}
+.avz-fase td{border-top-color:transparent}
 .avz-chips{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-dim);margin:0 0 8px}
 .avz-chip{display:inline-flex;align-items:center;gap:5px}
 .avz-chip i{display:inline-block;width:10px;height:10px;border-radius:50%}

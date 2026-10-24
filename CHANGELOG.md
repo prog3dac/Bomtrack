@@ -2,6 +2,20 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.113.0 — 2026-10-24
+
+**Il Gantt dell'Avanzamento si legge meglio.** Nessun cambio a `supabase/schema.sql`.
+
+- **Il codice con le fasi sotto**: una parte con ciclo ha una riga di testa (codice, barra di tutto il ciclo, stato complessivo) e sotto, rientrate, le sue fasi: «fase 10», «fase 20»… al posto del codice ripetuto. Nella colonna *Tappa* la lavorazione e chi la fa («Tornitura · interna», «Zincatura · Beta Srl»).
+- **Stati con le parole di ogni riga**: montaggio *programmato / in corso / fatto*; acquisto *da ordinare / ordinato / arrivato / da magazzino*; fase *da programmare / programmato / in lavorazione / fatto*; codice con ciclo *da fare / in lavorazione / in attesa / fatto*. I colori dicono il punto a cui si è: giallo da cominciare, viola programmato o ordinato, blu in lavorazione, verde finito.
+- **Il ritardo a parte**: non è più uno stato, ma una nota rossa **+N gg** accanto, con la barra rossa fino a oggi o all'arrivo atteso. Una tappa chiusa con meno pezzi è *fatto* con la nota rossa **-N pz**.
+- **Barre più alte** (28 px la riga, 20 il programma, 10 l'avanzamento) e la linea di oggi scura, per non confonderla col blu di «in lavorazione».
+- **Il riquadro sulle barre** è più grande (14 px) e dice anche stato, quantità e ritardo; prima era il suggerimento del browser, che non si può ingrandire.
+- **Percorso critico con l'orologio** accanto al codice, invece del codice in rosso: il rosso ora è solo del ritardo.
+- **Export**: la riga di testa di ogni codice con ciclo, e due colonne nuove, *Ritardo (gg)* e *Pezzi mancanti*.
+
+**Manuale** — cap. «L'avanzamento»: il codice con le fasi, i nuovi stati e i loro colori, il ritardo.
+
 ### 0.112.2 — 2026-10-23
 
 **Un codice lasciato da un articolo rinominato si può riusare subito.** Con l'archivio condiviso, dare un codice a un articolo lo impegna sul server per un'ora, il tempo che l'articolo arrivi. Se nel frattempo l'articolo veniva rinominato, l'impegno sul codice vecchio restava: per un'ora nessuno poteva darlo a un altro articolo, nemmeno chi l'aveva appena lasciato, e l'app diceva «l'ha appena preso un collega» per un codice che non aveva più nessuno. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (cambia solo la funzione `impegna_codici`, non tocca i dati).
