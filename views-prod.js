@@ -209,6 +209,16 @@ function opStatoFase(odp, fase) {
   return opAvviabile(odp, fase).ok ? 'avviabile' : 'attesa';
 }
 const ODP_FASE_LABELS = { attesa: 'In attesa', avviabile: 'Avviabile', corso: 'In corso', chiusa: 'Chiusa' };
+// Una tratta dal terzista sull'ordine di produzione (dalla 0.113.0): partita
+// con l'**avvio** della sua prima fase, che è quando il materiale esce; fatta
+// quando l'ultima è **dichiarata** e chiusa, cioè i pezzi sono tornati.
+//   '' · 'lavorazione' · 'fatto'
+function odpAvanzamentoTratta(odp, fase) {
+  const fasi = opRunFasi(odp, fase);
+  if (!fasi.length) return '';
+  if (opChiusa(odp, fasi[fasi.length - 1])) return 'fatto';
+  return fasi.some(f => opAvviata(odp, f)) ? 'lavorazione' : '';
+}
 
 // ═══════════════════════════════════════════════════════════
 //  LA SUCCESSIONE
@@ -1538,7 +1548,7 @@ function opGeneraOdl(id, faseId) {
     return null;
   }
   const r = opRunDocRow(o, f); if (!r) return null;
-  const linea = Object.assign(planPhaseDocLine(r, true), { received: 0, odpId: o.id, odpPhaseId: f.id });
+  const linea = Object.assign(planOdlLine(r), { odpId: o.id, odpPhaseId: f.id });
   const odl = stampNew(Object.assign({ id: gid(), number: nextOdlNumber() }, opDocHead(o, f.supplierId), { lines: [linea] }));
   db.workOrders.push(odl);
   saveDB(); invalidateProd();

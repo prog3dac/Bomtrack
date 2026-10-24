@@ -17,10 +17,10 @@
 //   montaggio       → l'ODP dell'assieme, se c'è
 // Una riga del disegno per tappa: una parte con tre tappe sono tre righe,
 // perché ciascuna ha il suo documento e il suo stato, sotto una riga di testa
-// col codice della parte (dalla 0.113.0).
+// col codice della parte (dalla 0.114.0).
 
 const AVZ_MAX_RIGHE = 120;
-// Gli stati (dalla 0.113.0) hanno parole diverse per ogni tipo di riga, ma un
+// Gli stati (dalla 0.114.0) hanno parole diverse per ogni tipo di riga, ma un
 // colore solo per il punto a cui sono: giallo all'inizio, viola a metà, blu
 // quando ci si sta lavorando, verde alla fine. Il ritardo non è uno stato: è un'altra domanda — «sta rispettando
 // il programma?» — e si dice accanto, in rosso, con i giorni.
@@ -90,7 +90,7 @@ function avzModello(planId, lineId) {
   // (padre, poi figli) il materiale finiva sotto l'ultima fase. Un assieme
   // resta in testa ai suoi componenti, come nel Gantt del piano.
   // Una parte con ciclo ha una riga di testa e sotto il suo materiale e le sue
-  // fasi (dalla 0.113.0): il codice si legge una volta, il resto una riga per
+  // fasi (dalla 0.114.0): il codice si legge una volta, il resto una riga per
   // tappa.
   const righe = [];
   const visita = (n, livello) => {
@@ -235,7 +235,7 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   const base = { tipo, label, numero: avzFaseNumero(st), start: st.start, end: st.end, attesa, docs, meno: 0, nota: '' };
   const conclusa = (stato, ini) => avzRitardo(stato === 'fatto', ini, st.start, st.end, attesa, oggi);
   // Quando una fase è programmata lo dice il documento che la fa partire
-  // (dalla 0.113.0): per una fase interna l'ODP, per una tratta dal terzista
+  // (dalla 0.114.0): per una fase interna l'ODP, per una tratta dal terzista
   // l'ordine di lavoro — l'ODP da solo non manda niente fuori. In lavorazione
   // solo quando la fase è «In corso» sull'ODP (un ODL inviato non basta),
   // fatta quando è dichiarata: sull'ODP se c'è, se no dai rientri dell'ODL.
@@ -456,7 +456,7 @@ function renderAvanzamento() {
   // Le fasi di una parte con ciclo stanno sotto il suo codice: nella prima
   // colonna il numero di fase, rientrato di un livello.
   // Il percorso critico si segna con un'icona, non col rosso: il rosso è del
-  // ritardo (dalla 0.113.0).
+  // ritardo (dalla 0.114.0).
   const corpo = righe.map(r => `<tr class="${[r.critico ? 'avz-crit' : '', r.fase ? 'avz-fase' : '', r.tipo === 'ciclo' ? 'avz-testa' : ''].filter(Boolean).join(' ')}">
       <td style="font-family:var(--mono);white-space:nowrap;padding-left:${8 + r.livello * 12}px">${r.fase ? esc(r.numero) : codeLink(r.item.id, r.item.code)}${r.critico ? ' ' + ico('clock', 'tinted avz-crit-ico', 'Sul percorso critico: se slitta, slitta la consegna') : ''}</td>
       <td>${esc(r.label)}</td>

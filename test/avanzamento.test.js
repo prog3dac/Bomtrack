@@ -4,7 +4,7 @@
 //   1. il programma è quello del Gantt: stesse date, nodo per nodo;
 //   2. l'avanzamento si legge dai documenti del piano — ricevuto sugli ordini,
 //      pezzi dichiarati sulle fasi dell'ODP, rientri sugli ODL — e lo stato ne
-//      segue, con le parole del suo tipo di riga (dalla 0.113.0): un acquisto
+//      segue, con le parole del suo tipo di riga (dalla 0.114.0): un acquisto
 //      è da ordinare, ordinato, arrivato o da magazzino; una fase da
 //      programmare, programmata, in lavorazione o fatta. Il ritardo si conta
 //      a parte, in giorni;
@@ -73,7 +73,7 @@ describe('Avanzamento: il programma è quello del Gantt', () => {
 });
 
 describe('Avanzamento: la sequenza delle righe', () => {
-  it('il materiale del ciclo sta sotto il codice, prima delle sue fasi (0.111.0, 0.113.0)', () => {
+  it('il materiale del ciclo sta sotto il codice, prima delle sue fasi (0.111.0, 0.114.0)', () => {
     const a = app(60);
     a.eval(`getItem('p1').cycle.unshift({ kind: 'item', itemId: 'tondo', qty: 1 });
       db.items.push(Object.assign(${JSON.stringify({})}, getItem('c1'), { id: 'tondo', code: 'TONDO', name: 'tondo' }));
@@ -82,7 +82,7 @@ describe('Avanzamento: la sequenza delle righe', () => {
     assert.deepEqual(m.righe.map(r => r.code + ':' + r.tipo), ['MAC:asm', 'C1:buy', 'P1:ciclo', 'TONDO:buy', 'P1:int', 'P1:est']);
   });
 
-  it('il codice con ciclo ha le fasi sotto, col numero di fase e chi le fa (0.113.0)', () => {
+  it('il codice con ciclo ha le fasi sotto, col numero di fase e chi le fa (0.114.0)', () => {
     const a = app(60);
     const m = modello(a);
     const testa = riga(m, 'P1', 'ciclo');
@@ -172,7 +172,7 @@ describe('Avanzamento: le fasi dell\'ordine di produzione', () => {
     assert.equal(riga(m, 'P1', 'ciclo').stato, 'fatto');
   });
 
-  it('la tratta dal terzista: con il solo ODP è da programmare, con l\'ODL programmata (0.113.0)', () => {
+  it('la tratta dal terzista: con il solo ODP è da programmare, con l\'ODL programmata (0.114.0)', () => {
     const a = app(60);
     lanciaOdp(a);
     assert.equal(riga(modello(a), 'P1', 'est').stato, 'da programmare');

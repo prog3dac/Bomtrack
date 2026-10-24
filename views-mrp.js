@@ -1695,7 +1695,7 @@ function planDocumentedKeys(planId) {
     if (!chiavi.length) return;                  // riga manuale: non viene dal fabbisogno
     chiavi.forEach(k => {
       const l2 = map.get(k) || [];
-      l2.push({ kind, number: d.number, id: d.id, qty: Number(l.qty) || 0, uom: l.uom || '' });
+      l2.push({ kind, number: d.number, id: d.id, lineId: l.id, qty: Number(l.qty) || 0, uom: l.uom || '' });
       map.set(k, l2);
     });
   });
@@ -2122,6 +2122,13 @@ function planNewRfq(p, supplierId, righe) {
   db.rfqs.push(r);
   return r;
 }
+// La riga di un ordine di lavoro: la riga di fase col prezzo, i pezzi tornati a
+// zero e l'**inizio lavoro** — il giorno in cui consegniamo il materiale, che è
+// la data d'invio della tratta (dalla 0.113.0). Una fabbrica sola per le tre
+// strade (piano, ordine di produzione, a mano dal ciclo).
+function planOdlLine(r) {
+  return Object.assign(planPhaseDocLine(r, true), { received: 0, startDate: r.orderBy || '' });
+}
 // Un ordine di lavoro: stessa testata, righe di sola lavorazione. Il tipo di
 // documento decide già quali righe arrivano fin qui (PLAN_DOC_FILTER), e la
 // fabbrica di riga è quella delle fasi — non lo smistatore, perché qui non c'è
@@ -2129,7 +2136,7 @@ function planNewRfq(p, supplierId, righe) {
 function planNewOdl(p, supplierId, righe) {
   const o = stampNew(Object.assign({ id: gid(), number: nextOdlNumber() }, planDocHead(p, supplierId),
     { rfqId: null, supplierConfirmation: '',
-      lines: righe.map(x => Object.assign(planPhaseDocLine(x, true), { received: 0 })) }));
+      lines: righe.map(planOdlLine) }));
   db.workOrders.push(o);
   return o;
 }
@@ -2491,7 +2498,40 @@ const AGENDA_TIPI = {
   arrivo: { label: 'Arrivo dal fornitore', icona: 'package' },
   consegna: { label: 'Consegna', icona: 'clipboard' },
 };
-const AGENDA_STATI = { fatto: 'fatto', richiesto: 'richiesto', ritardo: 'in ritardo', 'da fare': 'da fare', previsto: 'previsto' };
+const AGENDA_STATI = { fatto: 'fatto', lavorazione: 'in lavorazione', emesso: 'ODL emesso', richiesto: 'richiesto', ritardo: 'in ritardo',
+  'da fare': 'da fare', previsto: 'previsto' };
+// A che punto è una tratta dal terzista, dai documenti che la coprono (dalla
+// 0.113.0). L'ordine di lavoro **non è l'invio**: si emette prima, per avvisare
+// il terzista che a quella data prenderà in carico la lavorazione. L'invio è il
+// materiale che parte — l'avvio della fase sull'ordine di produzione, o
+// l'uscita registrata dalla riga dell'ODL — e la tratta è fatta quando i pezzi
+// sono rientrati: le fasi dichiarate e chiuse, o i pezzi della riga tornati.
+//   '' (non partita) · 'lavorazione' · 'fatto'
+function planTrattaAvanzamento(refs) {
+  const stati = [];
+  (refs || []).forEach(x => {
+    if (x.kind === 'odl') {
+      const o = getOdl(x.id), l = o && (o.lines || []).find(r => r.id === x.lineId);
+      if (l) stati.push(odlAvanzamentoRiga(o, l));
+    } else if (x.kind === 'odp' && x.faseId && typeof getOdp === 'function') {
+      const o = getOdp(x.id), f = o && (o.phases || []).find(p => p.id === x.faseId);
+      if (f) stati.push(odpAvanzamentoTratta(o, f));
+    }
+  });
+  if (!stati.some(Boolean)) return '';
+  return stati.every(s => s === 'fatto') ? 'fatto' : 'lavorazione';
+}
+// Il giorno d'invio concordato col terzista, se l'ordine di lavoro lo porta:
+// vince sulla data calcolata, perché è quella che gli abbiamo scritto.
+function planTrattaInizio(refs) {
+  const date = [];
+  (refs || []).forEach(x => {
+    if (x.kind !== 'odl') return;
+    const o = getOdl(x.id), l = o && (o.lines || []).find(r => r.id === x.lineId);
+    if (l && l.startDate) date.push(String(l.startDate).slice(0, 10));
+  });
+  return date.sort()[0] || '';
+}
 function planAgenda(plan) {
   const oggi = oggiISO();
   const exp = mrpExplodePlan(plan);
@@ -2536,12 +2576,19 @@ function planAgenda(plan) {
     }));
   mrpPhaseRuns(mrpPhaseRowsNette(plan.id, exp.phases)).forEach(r => {
     const refs = [].concat(...(r.phaseKeys || [r.phaseKey]).map(k => gia.get(k) || []));
-    const st = stato(r.orderBy, refs, ['odl', 'odp']);
+    // L'invio è fatto quando il materiale parte, non quando esce l'ordine di
+    // lavoro: con l'ODL emesso la voce resta da fare, col numero accanto.
+    const av = planTrattaAvanzamento(refs);
+    const invio = planTrattaInizio(refs) || r.orderBy;
+    const emesso = refs.some(x => x.kind === 'odl' || x.kind === 'odp');
+    const st = av ? (av === 'fatto' ? 'fatto' : 'lavorazione')
+      : emesso ? (invio && invio < oggi ? 'ritardo' : 'emesso') : stato(invio, refs, []);
     const fasi = mrpRunFasiLabel(r);
-    if (r.orderBy) ev({ data: r.orderBy, tipo: 'invia', item: r.item, qty: r.qty, dove: supplierName(r.supplierId) || '',
+    if (invio) ev({ data: invio, tipo: 'invia', item: r.item, qty: r.qty, dove: supplierName(r.supplierId) || '',
       testo: `${fasi} ${r.wcName}, rientro il ${fmtDateIt(r.due)}`, stato: st, docs: refs });
     if (r.due) ev({ data: r.due, tipo: 'rientro', item: r.item, qty: r.qty, dove: supplierName(r.supplierId) || '',
-      testo: `${fasi} ${r.wcName}`, stato: stato(r.due), docs: refs });
+      testo: `${fasi} ${r.wcName}`,
+      stato: av === 'fatto' ? 'fatto' : (av && r.due >= oggi ? 'lavorazione' : stato(r.due)), docs: refs });
   });
   exp.make.map(e => mrpMakeRow(e, plan.id)).forEach(r => {
     if (!(r.qtyOrder > 0) || !r.orderBy) return;
@@ -2576,16 +2623,18 @@ function agendaStatoHtml(st) {
   if (st === 'fatto') return `<span class="price-best">${ico('check', 'tinted', '')} fatto</span>`;
   if (st === 'ritardo') return `<span class="mrp-warn">${ico('warning', 'tinted', '')} in ritardo</span>`;
   if (st === 'richiesto') return `<span class="empty-text" style="padding:0">${ico('mail', 'tinted', '')} richiesto</span>`;
+  if (st === 'emesso') return `<span class="empty-text" style="padding:0">${ico('mail', 'tinted', '')} ODL emesso</span>`;
+  if (st === 'lavorazione') return `<span class="empty-text" style="padding:0">${ico('truck', 'tinted', '')} in lavorazione</span>`;
   return `<span class="empty-text" style="padding:0">${esc(AGENDA_STATI[st] || st)}</span>`;
 }
 function planAgendaHtml(plan) {
   const tutti = planAgenda(plan);
-  const ev = agendaSoloDaFare ? tutti.filter(e => e.stato !== 'fatto' && e.stato !== 'previsto') : tutti;
+  const ev = agendaSoloDaFare ? tutti.filter(e => !['fatto', 'previsto', 'lavorazione'].includes(e.stato)) : tutti;
   const ritardi = tutti.filter(e => e.stato === 'ritardo').length;
   const testa = `<div class="cycle-section-head"><h3>${ico('clock', 'tinted pill', '')} Programma</h3>
       <button class="btn-outline${agendaSoloDaFare ? ' active' : ''}" onclick="toggleAgendaDaFare()" title="Solo ciò che va ancora emesso: ordini, invii, lanci">${agendaSoloDaFare ? '☑' : '☐'} Solo da fare</button>
       ${menuEsporta('exportListXlsx(planAgendaExportSpec())', 'exportListPdf(planAgendaExportSpec())', { cls: 'dd-export dd-push' })}</div>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Tutto quello che deve succedere perché le consegne reggano, <strong>in ordine di data</strong>: le date vengono dalla programmazione a ritroso sul calendario di fabbrica. «Fatto» vuol dire che il documento è stato emesso da questo piano.${ritardi ? ` <span class="mrp-warn">${ico('warning', 'tinted', '')} ${ritardi} ${ritardi === 1 ? 'voce è' : 'voci sono'} già oltre la data.</span>` : ''}</p>`;
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Tutto quello che deve succedere perché le consegne reggano, <strong>in ordine di data</strong>: le date vengono dalla programmazione a ritroso sul calendario di fabbrica. «Fatto» vuol dire che il documento è stato emesso da questo piano; per le tratte dal terzista l'ordine di lavoro emesso non basta: l'invio è <strong>in lavorazione</strong> quando il materiale è partito (fase avviata, o uscita registrata dall'ordine di lavoro) ed è <strong>fatto</strong> quando i pezzi sono rientrati.${ritardi ? ` <span class="mrp-warn">${ico('warning', 'tinted', '')} ${ritardi} ${ritardi === 1 ? 'voce è' : 'voci sono'} già oltre la data.</span>` : ''}</p>`;
   if (!ev.length) return `${testa}<div class="empty-text">${tutti.length ? 'Niente da fare: è tutto emesso.' : 'Nessuna data: le righe di piano non hanno una consegna.'}</div>`;
   let giorno = '';
   const corpo = ev.map(e => {

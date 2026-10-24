@@ -241,7 +241,7 @@ const CLOUD_TYPES = (() => {
     'unitCost', 'purchasePrice', 'altFactor', 'overheadPctOverride', 'marginPctOverride', 'hourlyRate',
     'capacityHours', 'hoursPerDay', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size'].forEach(k => { t[k] = 'numeric'; });
   ['pos', 'runFrom', 'runTo', 'seq', 'opIndex', 'passata', 'page', 'incrDigitsN', 'incrDigitsS', 'gCodeLen'].forEach(k => { t[k] = 'int'; });
-  ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'plannedStart', 'plannedEnd'].forEach(k => { t[k] = 'date'; });
+  ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'plannedStart', 'plannedEnd'].forEach(k => { t[k] = 'date'; });
   ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt'].forEach(k => { t[k] = 'timestamptz'; });
   ['active', 'favorite', 'obsolete', 'done'].forEach(k => { t[k] = 'bool'; });
   ['snapshot', 'record', 'ecoImpact'].forEach(k => { t[k] = 'jsonb'; });
@@ -263,7 +263,7 @@ function cloudType(table, campo) {
 // Al ritorno, NULL torna `''` dove il modello locale scrive `''` per «vuoto»:
 // sono le normalizzazioni di migrateDB(), e un `null` lì farebbe risultare
 // modificato ogni record al primo confronto. Altrove NULL resta null.
-const VUOTO_STRINGA = ['price', 'minQty', 'leadDays', 'deliveryDate', 'dueDate', 'confirmedDate'];
+const VUOTO_STRINGA = ['price', 'minQty', 'leadDays', 'deliveryDate', 'dueDate', 'confirmedDate', 'startDate'];
 const VUOTO_STRINGA_TABELLA = {
   items: ['familyId', 'subFamilyId', 'groupItemId', 'machineItemId'],
   reminders: ['jobId'],

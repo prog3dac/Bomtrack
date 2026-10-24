@@ -389,6 +389,56 @@ describe('Programma: l agenda del piano', () => {
   });
 });
 
+// ─── 0.113.0: l'ordine di lavoro non è l'invio ───
+// L'ODL si emette prima, per avvisare il terzista. L'invio è il materiale che
+// parte (in lavorazione), e la tratta è fatta quando i pezzi rientrano.
+describe('Programma: quando è fatto l invio al terzista', () => {
+  const tratta = app => ev(app, "planAgenda(getPlan('pl1')).filter(e => e.tipo === 'invia' || e.tipo === 'rientro').map(e => [e.data, e.tipo, e.stato])");
+  const conOdl = app => {
+    app.eval(`(() => { const p = getPlan('pl1');
+      const g = planDocGroups(planDocRows(p, 'odl'), 'odl')[0];
+      const o = planNewOdl(p, 'beta', g.rows); o.id = 'w1'; invalidateCaches(); })()`);
+    return app;
+  };
+  const riepilogo = app => ev(app, "homeEventi().filter(x => x.tipo === 'programma').map(x => x.testo)");
+
+  it("l'ordine di lavoro porta l'inizio lavoro, che è la data d'invio della tratta", () => {
+    const app = conOdl(oggi(conDb(), '2026-09-21'));
+    assert.equal(ev(app, "getOdl('w1').lines[0].startDate"), '2026-10-06');
+  });
+
+  it("con l'ODL emesso, anche in bozza, l'invio resta da fare", () => {
+    const app = conOdl(oggi(conDb(), '2026-09-21'));
+    assert.deepEqual(tratta(app), [['2026-10-06', 'invia', 'emesso'], ['2026-10-12', 'rientro', 'previsto']]);
+    assert.ok(riepilogo(app).includes('Inviare al terzista PERNO'));
+  });
+
+  it("oltre la data, con l'ODL emesso ma il materiale fermo, è in ritardo", () => {
+    const app = conOdl(oggi(conDb(), '2026-10-07'));
+    assert.deepEqual(tratta(app)[0], ['2026-10-06', 'invia', 'ritardo']);
+  });
+
+  it("l'inizio lavoro scritto sull'ODL sposta l'invio", () => {
+    const app = conOdl(oggi(conDb(), '2026-09-21'));
+    app.eval("getOdl('w1').lines[0].startDate = '2026-10-02'; invalidateCaches();");
+    assert.deepEqual(tratta(app)[0], ['2026-10-02', 'invia', 'emesso']);
+  });
+
+  it("con l'uscita registrata dalla riga è in lavorazione, e il Riepilogo non lo chiede più", () => {
+    const app = conOdl(oggi(conDb(), '2026-09-21'));
+    app.eval(`addMovement('tondo', 'clOut', -16, '', { supplierId: 'beta', orderId: 'w1', lineId: getOdl('w1').lines[0].id }); invalidateCaches();`);
+    assert.deepEqual(tratta(app), [['2026-10-06', 'invia', 'lavorazione'], ['2026-10-12', 'rientro', 'lavorazione']]);
+    assert.ok(!riepilogo(app).includes('Inviare al terzista PERNO'));
+    assert.equal(ev(app, "odlAvanzamentoRiga(getOdl('w1'), getOdl('w1').lines[0])"), 'lavorazione');
+  });
+
+  it('con i pezzi rientrati la tratta è fatta', () => {
+    const app = conOdl(oggi(conDb(), '2026-09-21'));
+    app.eval("const l = getOdl('w1').lines[0]; l.received = l.qty; invalidateCaches();");
+    assert.deepEqual(tratta(app), [['2026-10-06', 'invia', 'fatto'], ['2026-10-12', 'rientro', 'fatto']]);
+  });
+});
+
 // ─── 0.90.0: il Gantt e le date congelate sugli ordini di produzione ───
 describe('Programma: il Gantt del piano', () => {
   it('disegna una riga per nodo, con il percorso critico e le date nel suggerimento', () => {

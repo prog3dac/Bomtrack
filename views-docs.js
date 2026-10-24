@@ -198,12 +198,12 @@ const DOC_KINDS = {
     opsFields: ['status', 'notes', 'notesInternal', 'supplierConfirmation'],
     lineLock: field => (field === 'received' || field === 'confirmedDate') ? 'reception' : 'contract',
     numLineFields: ['qty', 'price', 'received'],
-    newLineExtra: () => ({ received: 0, phaseKey: null, phaseKeys: null, odpId: null, odpPhaseId: null }),
+    newLineExtra: () => ({ received: 0, startDate: '', phaseKey: null, phaseKeys: null, odpId: null, odpPhaseId: null }),
     // Non si aggiungono righe da catalogo a un ordine di lavoro: un articolo non
     // è una lavorazione. La voce non compare nell'interfaccia; se qualcuno ci
     // arrivasse lo stesso, qui non succede niente invece di nascere una riga che
     // caricherebbe il magazzino da un documento che non deve caricarlo.
-    catalogLine: riga => Object.assign(riga, { received: 0, itemId: null, phaseKey: null, phaseKeys: null, odpId: null, odpPhaseId: null }),
+    catalogLine: riga => Object.assign(riga, { received: 0, startDate: '', itemId: null, phaseKey: null, phaseKeys: null, odpId: null, odpPhaseId: null }),
     catalogToast: n => n + ' righe aggiunte',
     afterSetField: (o, field, value) => {
       if (field === 'supplierConfirmation' && value && o.status === 'inviato') o.status = 'confermato';
@@ -220,6 +220,28 @@ const DOC_KINDS = {
 // a mano è il modo di vederli divergere. Il campo resta quello di sempre, con
 // gli stessi lettori — cambia solo chi lo scrive.
 function odlRigaDaOdp(l) { return !!(l && l.odpId); }
+// A che punto è la lavorazione di una riga (dalla 0.113.0). Emettere l'ordine
+// di lavoro non è mandare il pezzo: la riga è **in lavorazione** quando il
+// materiale è partito e **fatta** quando i pezzi sono rientrati. Su una riga che
+// viene da un ordine di produzione lo dicono avvio e dichiarazione delle sue
+// fasi; sulle altre i movimenti di conto lavoro registrati dalla riga, o i
+// pezzi segnati come rientrati.
+//   '' · 'lavorazione' · 'fatto'
+function odlAvanzamentoRiga(o, l) {
+  if (odlRigaDaOdp(l) && typeof getOdp === 'function') {
+    const p = getOdp(l.odpId), f = p && (p.phases || []).find(x => x.id === l.odpPhaseId);
+    return f ? odpAvanzamentoTratta(p, f) : '';
+  }
+  const qty = Number(l.qty) || 0;
+  // Su un ordine di prima, una riga per fase, l'uscita sta sulla prima riga
+  // della tratta e il rientro sull'ultima.
+  const ruolo = clLineRole(o, l);
+  const somma = m => Array.from(m.values()).reduce((a, b) => a + b, 0);
+  const tornati = Math.max(Number(l.received) || 0, somma(clRegistrato(o, ruolo.ultima || l, 'in')));
+  if (qty > 0 && tornati >= qty - 0.000001) return 'fatto';
+  return somma(clRegistrato(o, ruolo.prima || l, 'out')) > 0 || tornati > 0 ? 'lavorazione' : '';
+}
+const ODL_AVANZAMENTO = { '': 'da inviare', lavorazione: 'in lavorazione', fatto: 'rientrata' };
 // Da quale ordine di produzione viene questo ordine di lavoro. Serve a
 // ritrovare, mesi dopo, *perché* si è commissionata una lavorazione — e a
 // sapere dove si registrano i suoi movimenti.
@@ -1741,7 +1763,7 @@ function orderFromRfqFatto(r) {
   });
   Array.from(perPassata.keys()).sort((a, b) => a - b).forEach(k => {
     const doc = stampNew(Object.assign({}, o, { id: gid(), number: nextOdlNumber(),
-      lines: perPassata.get(k).map(l => Object.assign(copia(l), { itemId: null })) }));
+      lines: perPassata.get(k).map(l => Object.assign(copia(l), { itemId: null, startDate: '' })) }));
     db.workOrders.push(doc); creati.push({ kind: 'odl', doc });
     if (!w) w = doc;
   });
@@ -2128,7 +2150,7 @@ function odlPhaseLines(scelte, pezziDi, due) {
     const t = clCycleRuns(it).find(x => x.from === from); if (!t) return;
     const r = clRunRow(it, t, pezzi, due || '');
     if (!r) return;
-    out.push(Object.assign(planPhaseDocLine(r, true), { received: 0 }));
+    out.push(planOdlLine(r));
   });
   return out;
 }
@@ -2163,13 +2185,15 @@ function renderOdlEdit(id) {
     esc(l.uom || ''))}
       ${cell2(`<input type="number" class="rfq-price-input lock-contract" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="Tariffa per pezzo" onchange="odlSetLine('${id}','${l.id}','price',this.value)">`,
     `<span class="ln-amount">${amount != null ? fmtN(amount) : '—'}</span>`)}
+      ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.startDate || '')}" title="Inizio lavoro: il giorno in cui consegniamo il materiale al terzista" onchange="odlSetLine('${id}','${l.id}','startDate',this.value)">`,
+    `<span class="empty-text" style="padding:0" title="Da inviare finché il materiale non parte; in lavorazione quando è uscito; rientrata quando i pezzi sono tornati">${esc(ODL_AVANZAMENTO[odlAvanzamentoRiga(o, l)])}</span>`)}
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="odlSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il terzista ha confermato" onchange="odlSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" ${odlRigaDaOdp(l) ? 'disabled' : ''} title="${odlRigaDaOdp(l) ? 'I pezzi rientrati li dichiara l&rsquo;ordine di produzione: qui si leggono, non si scrivono.' : 'Pezzi rientrati dal terzista: portano l&rsquo;ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.'}" onchange="odlSetLine('${id}','${l.id}','received',this.value)">`,
     `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Pezzi ancora dal terzista">${fmtQtyIt(residual)}</span>`)}
       ${docLineActionsCell('odl', id, l)}
     </tr>`;
-  }).join('') || `<tr><td colspan="7" class="empty-text">Nessuna lavorazione. Un ordine di lavoro si genera dal <strong>Fabbisogno</strong>, oppure si scrive qui con <em>+ Lavorazione da ciclo</em>: si sceglie la parte, le fasi da mandare fuori e i pezzi.</td></tr>`;
+  }).join('') || `<tr><td colspan="8" class="empty-text">Nessuna lavorazione. Un ordine di lavoro si genera dal <strong>Fabbisogno</strong>, oppure si scrive qui con <em>+ Lavorazione da ciclo</em>: si sceglie la parte, le fasi da mandare fuori e i pezzi.</td></tr>`;
   const total = odlTotal(o);
   const ritardo = orderWorstDelay(o);
   const lockBanner = docLockBanner(odlMode(o), 'Ordine di lavoro ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'odl', id);
@@ -2193,11 +2217,12 @@ function renderOdlEdit(id) {
         ${th2('Parte', 'Lavorazione')}
         ${th2('Pezzi', 'U.M.')}
         ${th2(`Tariffa (${esc(cur())}/pz)`, `Importo (${esc(cur())})`, 'Quanto costa lavorare un pezzo; sotto, quanto fa per i pezzi di riga')}
+        ${th2('Inizio lavoro', 'Stato', 'Sopra il giorno in cui consegniamo il materiale al terzista, sotto a che punto è la lavorazione')}
         ${th2('Richiesta', 'Confermata', 'Sopra la data che abbiamo chiesto, sotto quella che il terzista ha confermato')}
         ${th2('Rientrati', 'Ancora fuori', 'Sopra quanti pezzi sono tornati, sotto quanti restano dal terzista')}
         <th scope="col"></th></tr></thead>
       <tbody>${lines}</tbody>
-      <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
+      <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="4"></td></tr></tfoot>
     </table></div>
     ${docExportBarHtml({ etichetta: "Documento d'ordine di lavoro:", cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro", kind: 'workOrder', rec: o })}
   </div>`;
@@ -2216,16 +2241,17 @@ function exportOdlPDF(id, modo) {
   if (o.number) qrPdfDraw(doc, qrLink('odl', o.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
   const startY = docPdfTesta(doc, { titolo: 'Ordine di lavoro / Subcontract Order', rec: o,
     chi: 'COMMITTENTE / PRINCIPAL', controparte: 'TERZISTA / SUBCONTRACTOR', vuota: '(terzista non selezionato / not selected)' });
-  const head = ['#', 'Parte\nPart', 'Lavorazione\nOperation', 'Pezzi\nQty', 'Tariffa\nUnit rate', 'Importo\nAmount', 'Data consegna\nDelivery date'];
+  const head = ['#', 'Parte\nPart', 'Lavorazione\nOperation', 'Pezzi\nQty', 'Tariffa\nUnit rate', 'Importo\nAmount',
+    'Inizio lavoro\nWork start', 'Data consegna\nDelivery date'];
   const body = (o.lines || []).map((l, i) => {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
     return [i + 1, l.code || '', lineDescDoc(l), (fmtQtyIt(qty) + ' ' + (l.uom || '')).trim(),
       price != null ? fmtPrezzo(price) + (l.uom ? '/' + l.uom : '') : '',
-      price != null ? fmtN(importoRiga(l)) : '', fmtDateIt(l.deliveryDate)];
+      price != null ? fmtN(importoRiga(l)) : '', fmtDateIt(l.startDate), fmtDateIt(l.deliveryDate)];
   });
   const totLabel = { content: 'Totale / Total', styles: { halign: 'right', fontStyle: 'bold' } };
   const totVal = { content: fmtN(odlTotal(o)), styles: { fontStyle: 'bold' } };
-  doc.autoTable({ startY, head: [head], body, foot: [['', '', '', '', totLabel, totVal, '']],
+  doc.autoTable({ startY, head: [head], body, foot: [['', '', '', '', totLabel, totVal, '', '']],
     styles: { fontSize: 8 }, headStyles: { fillColor: [46, 164, 121] }, footStyles: { fillColor: [235, 242, 238], textColor: 20 } });
   doc.setTextColor(80); doc.setFontSize(9);
   // Solo o.notes: le note interne (notesInternal) non escono mai sul documento.
@@ -2245,12 +2271,12 @@ function exportOdlExcel(id) {
     ['Da richiesta', o.rfqId && getRfq(o.rfqId) ? getRfq(o.rfqId).number : ''],
     ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
     ['Conferma terzista / Order confirmation', o.supplierConfirmation]] });
-  data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', `Tariffa (${cur()}/pz)`, `Importo (${cur()})`, 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
+  data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', `Tariffa (${cur()}/pz)`, `Importo (${cur()})`, 'Inizio lavoro', 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
   (o.lines || []).forEach((l, i) => {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? '' : Number(l.price);
     const amount = price === '' ? '' : importoRiga(l);
     const rec = Number(l.received) || 0;
-    data.push([i + 1, l.code || '', l.description, qty, l.uom || '', price, amount, fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '']);
+    data.push([i + 1, l.code || '', l.description, qty, l.uom || '', price, amount, fmtDateIt(l.startDate), fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '']);
   });
   data.push([]);
   data.push(['', 'TOTALE IMPONIBILE / TOTAL', odlTotal(o)]);
