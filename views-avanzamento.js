@@ -16,20 +16,37 @@
 //   tratta esterna  → pezzi dichiarati sull'ODP, o rientrati sull'ODL
 //   montaggio       → l'ODP dell'assieme, se c'è
 // Una riga del disegno per tappa: una parte con tre tappe sono tre righe,
-// perché ciascuna ha il suo documento e il suo stato.
+// perché ciascuna ha il suo documento e il suo stato, sotto una riga di testa
+// col codice della parte (dalla 0.114.0).
 
 const AVZ_MAX_RIGHE = 120;
-// Gli stati, nell'ordine in cui si contano in testa.
+// Gli stati (dalla 0.114.0) hanno parole diverse per ogni tipo di riga, ma un
+// colore solo per il punto a cui sono: giallo all'inizio, viola a metà, blu
+// quando ci si sta lavorando, verde alla fine. Il ritardo non è uno stato: è un'altra domanda — «sta rispettando
+// il programma?» — e si dice accanto, in rosso, con i giorni.
+//   montaggio       programmato · in corso · fatto
+//   acquisto        da ordinare · ordinato · arrivato · da magazzino
+//   fase            da programmare · programmato · in lavorazione · fatto
+//   codice con ciclo da fare · in lavorazione · in attesa · fatto
+// `chip` è l'etichetta nei conteggi in testa, dove due «programmato» di colore
+// diverso si confonderebbero.
 const AVZ_STATI = {
-  ritardo: { label: 'in ritardo', colore: 'var(--red)' },
-  corso: { label: 'in corso', colore: 'var(--purple)' },
-  'da fare': { label: 'da fare', colore: 'var(--orange)' },
-  fatto: { label: 'fatto', colore: 'var(--green)' },
-  // Finito, ma con meno pezzi buoni di quelli lanciati (scarti, chiusura corta).
-  corto: { label: 'finito con meno pezzi', colore: 'var(--red)' },
-  coperto: { label: 'da magazzino', colore: 'var(--green)' },
-  previsto: { label: 'previsto', colore: 'var(--text-dim)' },
+  'da ordinare': { label: 'da ordinare', fase: 'inizio' },
+  'da programmare': { label: 'da programmare', fase: 'inizio' },
+  'da fare': { label: 'da fare', fase: 'inizio' },
+  'asm-programmato': { label: 'programmato', chip: 'programmato (montaggio)', fase: 'inizio' },
+  ordinato: { label: 'ordinato', fase: 'mezzo' },
+  programmato: { label: 'programmato', chip: 'programmato (fase)', fase: 'mezzo' },
+  lavorazione: { label: 'in lavorazione', fase: 'mezzo', colore: 'lavoro' },
+  attesa: { label: 'in attesa', fase: 'mezzo' },
+  corso: { label: 'in corso', fase: 'mezzo', colore: 'lavoro' },
+  arrivato: { label: 'arrivato', fase: 'fine' },
+  fatto: { label: 'fatto', fase: 'fine' },
+  coperto: { label: 'da magazzino', fase: 'fine' },
 };
+const AVZ_COLORE = { inizio: 'var(--yellow)', mezzo: 'var(--purple)', lavoro: 'var(--accent)', fine: 'var(--green)' };
+const avzColore = stato => { const s = AVZ_STATI[stato] || AVZ_STATI['da fare']; return AVZ_COLORE[s.colore || s.fase]; };
+const avzFinito = stato => (AVZ_STATI[stato] || {}).fase === 'fine';
 let avzPiano = '';
 let avzRiga = '';
 function avzSetPiano(id) { avzPiano = id || ''; avzRiga = ''; renderAvanzamento(); }
@@ -72,6 +89,9 @@ function avzModello(planId, lineId) {
   // vera — il tondo arriva, poi si tornisce — e nell'ordine dell'albero
   // (padre, poi figli) il materiale finiva sotto l'ultima fase. Un assieme
   // resta in testa ai suoi componenti, come nel Gantt del piano.
+  // Una parte con ciclo ha una riga di testa e sotto il suo materiale e le sue
+  // fasi (dalla 0.114.0): il codice si legge una volta, il resto una riga per
+  // tappa.
   const righe = [];
   const visita = (n, livello) => {
     const base = { node: n, item: n.item, livello, critico: critici.has(n) };
@@ -80,37 +100,45 @@ function avzModello(planId, lineId) {
       righe.push(Object.assign(base, avzMontaggio(n, odp, oggi, plan.id)));
       n.children.forEach(c => visita(c, livello + 1));
     } else {
+      const da = righe.length;
       n.children.forEach(c => visita(c, livello + 1));
       const suoi = odp.filter(o => o.itemId === n.item.id);
-      if (!n.steps.length) righe.push(Object.assign(base, avzSenzaTappe(n, suoi, daFabbricare, oggi)));
-      n.steps.forEach(st => righe.push(Object.assign({}, base, avzTappa(n, st, suoi, odl, daFabbricare, oggi))));
+      if (!n.steps.length) { righe.push(Object.assign(base, avzSenzaTappe(n, suoi, daFabbricare, oggi))); return; }
+      // Con la riga di testa il materiale va sotto di essa, prima delle fasi:
+      // sopra il codice sembrava di un altro.
+      const materiale = righe.splice(da);
+      const fasi = n.steps.map(st => Object.assign({}, base, { livello: livello + 1, fase: true },
+        avzTappa(n, st, suoi, odl, daFabbricare, oggi)));
+      righe.push(Object.assign(base, avzCiclo(n, fasi, suoi, oggi)), ...materiale, ...fasi);
     }
   };
   visita(f.tree, 0);
 
   const conteggi = {};
   Object.keys(AVZ_STATI).forEach(k => { conteggi[k] = 0; });
-  righe.forEach(r => { conteggi[r.stato] = (conteggi[r.stato] || 0) + 1; });
+  // La testa di un ciclo riassume le sue fasi: nei conteggi peserebbe due volte.
+  const contate = righe.filter(r => r.tipo !== 'ciclo');
+  contate.forEach(r => { conteggi[r.stato] = (conteggi[r.stato] || 0) + 1; });
   return {
     plan, feas, f, oggi, righe, conteggi,
+    inRitardo: contate.filter(r => r.ritardo > 0).length,
     // Quello che pesa sulla consegna: i ritardi sul percorso critico.
-    criticiInRitardo: righe.filter(r => r.critico && r.stato === 'ritardo'),
+    criticiInRitardo: contate.filter(r => r.critico && r.ritardo > 0),
   };
 }
 
-// Lo stato di una tappa che ha un documento, dai suoi numeri e dalle sue date.
-function avzStato(fatto, totale, iniziato, emesso, start, end, attesa, oggi) {
-  if (totale > 0 && fatto >= totale - 0.000001) return 'fatto';
-  if ((end && oggi > end) || (attesa && end && attesa > end)) return 'ritardo';
-  if (iniziato) return 'corso';
-  if (start && oggi > start) return 'ritardo';
-  return emesso ? 'corso' : 'da fare';
+// Di quanti giorni una riga non ancora finita è in ritardo sul programma.
+// Oltre la fine (o con un arrivo atteso che cade dopo) conta da lì; se non è
+// cominciata e la data d'inizio è passata, conta da quella. 0 = in tempo.
+function avzRitardo(finito, iniziato, start, end, attesa, oggi) {
+  if (finito) return 0;
+  const oltre = [oggi, attesa].filter(Boolean).reduce((a, d) => d > a ? d : a, '');
+  if (end && oltre > end) return ganttGiorni(end, oltre);
+  if (!iniziato && start && oggi > start) return ganttGiorni(start, oggi);
+  return 0;
 }
-// Lo stato di una tappa senza documento.
-function avzStatoSenzaDoc(serve, start, oggi) {
-  if (!serve) return 'coperto';
-  return start && oggi > start ? 'ritardo' : 'da fare';
-}
+// I pezzi che mancano a una tappa chiusa con meno pezzi del richiesto.
+const avzMeno = (fatto, totale, qty) => Math.max(0, Math.min(totale, Number(qty) || totale) - fatto);
 
 function avzAcquisto(n, ordini, richieste, daComprare, oggi) {
   const docs = [];
@@ -131,13 +159,17 @@ function avzAcquisto(n, ordini, richieste, daComprare, oggi) {
     });
   }
   const label = schedNodeLabel(n);
+  const base = { tipo: 'buy', label, start: n.start, end: n.end, attesa, docs, meno: 0 };
   if (!qty) {
-    const stato = avzStatoSenzaDoc(daComprare.has(n.item.id), n.start, oggi);
-    return { tipo: 'buy', label, start: n.start, end: n.end, attesa: '', fatto: 0, totale: 0, pct: stato === 'coperto' ? 1 : 0, stato, docs,
-      nota: stato === 'coperto' ? 'Esistente e in arrivo bastano: non serve un ordine' : (docs.length ? 'Richiesta d\'offerta, nessun ordine' : 'Nessun ordine emesso') };
+    const coperto = !daComprare.has(n.item.id);
+    return Object.assign(base, { fatto: 0, totale: 0, pct: coperto ? 1 : 0, stato: coperto ? 'coperto' : 'da ordinare',
+      ritardo: coperto ? 0 : avzRitardo(false, false, n.start, n.end, '', oggi),
+      nota: coperto ? 'Esistente e in arrivo bastano: non serve un ordine' : (docs.length ? 'Richiesta d\'offerta, nessun ordine' : 'Nessun ordine emesso') });
   }
-  const stato = avzStato(ricevuto, qty, ricevuto > 0, emesso, n.start, n.end, attesa, oggi);
-  return { tipo: 'buy', label, start: n.start, end: n.end, attesa, fatto: ricevuto, totale: qty, pct: Math.min(1, ricevuto / qty), stato, docs, nota: '' };
+  // Un ordine ancora in bozza non è partito: l'acquisto resta da ordinare.
+  const stato = ricevuto >= qty - 0.000001 ? 'arrivato' : emesso ? 'ordinato' : 'da ordinare';
+  return Object.assign(base, { fatto: ricevuto, totale: qty, pct: Math.min(1, ricevuto / qty), stato,
+    ritardo: avzRitardo(stato === 'arrivato', emesso, n.start, n.end, attesa, oggi), nota: '' });
 }
 
 // Le fasi dell'ODP che cadono in una tappa del programma. Le fasi senza
@@ -148,11 +180,22 @@ function avzFasiDi(o, st) {
     return k >= st.from && k <= st.to;
   });
 }
+// Il numero della fase e quello che vi si fa: il centro di lavoro (o i centri,
+// se la tratta dal terzista ne raggruppa più d'uno) e chi la fa.
+function avzFaseNumero(st) {
+  return st.from === st.to ? `fase ${cyclePhaseNumber(st.from)}` : `fasi ${cyclePhaseNumber(st.from)}-${cyclePhaseNumber(st.to)}`;
+}
+function avzFaseLavoro(n, st) {
+  const ops = ((n.item && n.item.cycle) || []).filter(r => r.kind === 'op').slice(st.from, st.to + 1);
+  const centri = [...new Set(ops.map(r => (getWorkCenter(r.workCenterId) || {}).name).filter(Boolean))];
+  const chi = st.esterna ? (supplierName(st.supplierId) || 'terzista') : 'interna';
+  return `${centri.join(', ') || 'lavorazione'} · ${chi}`;
+}
 function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
-  const label = schedStepLabel(n, st);
+  const label = avzFaseLavoro(n, st);
   const tipo = st.esterna ? 'est' : 'int';
   const docs = [];
-  let totale = 0, fatto = 0, iniziato = false, emesso = false, tutteChiuse = true, conFasi = 0;
+  let totale = 0, fatto = 0, iniziato = false, tutteChiuse = true, conFasi = 0;
   suoi.forEach(o => {
     const fasi = avzFasiDi(o, st);
     if (!fasi.length) return;
@@ -161,7 +204,8 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
     const q = Number(o.qty) || 0;
     const fattiQui = opFatti(o, ultima);
     totale += q; fatto += fattiQui;
-    if (fasi.some(ph => opAvviata(o, ph) || opProcessati(o, ph) > 0)) iniziato = true;
+    // In lavorazione solo con la fase «In corso» sull'ODP: avviata e non chiusa.
+    if (fasi.some(ph => opStatoFase(o, ph) === 'corso')) iniziato = true;
     if (!fasi.every(ph => opChiusa(o, ph))) tutteChiuse = false;
     const corrente = opFaseCorrente(o);
     const qui = corrente && fasi.some(ph => ph.id === corrente.id);
@@ -181,28 +225,65 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
       if (!chiavi.length) return;
       const q = Number(l.qty) || 0, r = Number(l.received) || 0;
       odlQty += q; odlRientro += r;
-      if (o.status !== 'bozza') emesso = true;
       const data = l.confirmedDate || l.deliveryDate || '';
       if (r < q && data && data > attesa) attesa = data;
-      const fuori = o.status !== 'bozza' && o.status !== 'evaso' && r < q;
+      const presso = o.status !== 'bozza' && o.status !== 'evaso' && r < q;
       docs.push({ kind: 'odl', id: o.id, number: o.number,
-        testo: `${ORDER_STATUS[o.status] || o.status}${fuori ? ' · presso ' + (supplierName(o.supplierId) || 'terzista') : ''} · rientrati ${fmtQtyIt(r)}/${fmtQtyIt(q)}${r < q && data ? ' · rientro ' + fmtDateIt(data) : ''}` });
+        testo: `${ORDER_STATUS[o.status] || o.status}${presso ? ' · presso ' + (supplierName(o.supplierId) || 'terzista') : ''} · rientrati ${fmtQtyIt(r)}/${fmtQtyIt(q)}${r < q && data ? ' · rientro ' + fmtDateIt(data) : ''}` });
     }));
   }
-  const base = { tipo, label, start: st.start, end: st.end, attesa, docs };
-  if (conFasi) {
-    const stato = tutteChiuse ? (fatto < Math.min(totale, Number(n.qty) || totale) - 0.000001 ? 'corto' : 'fatto') : avzStato(fatto, totale, iniziato, emesso, st.start, st.end, attesa, oggi);
-    return Object.assign(base, { fatto, totale, pct: stato === 'fatto' ? 1 : (totale ? Math.min(1, fatto / totale) : 0), stato, nota: '' });
+  const base = { tipo, label, numero: avzFaseNumero(st), start: st.start, end: st.end, attesa, docs, meno: 0, nota: '' };
+  const conclusa = (stato, ini) => avzRitardo(stato === 'fatto', ini, st.start, st.end, attesa, oggi);
+  // Quando una fase è programmata lo dice il documento che la fa partire
+  // (dalla 0.114.0): per una fase interna l'ODP, per una tratta dal terzista
+  // l'ordine di lavoro — l'ODP da solo non manda niente fuori. In lavorazione
+  // solo quando la fase è «In corso» sull'ODP (un ODL inviato non basta),
+  // fatta quando è dichiarata: sull'ODP se c'è, se no dai rientri dell'ODL.
+  const conOdl = docs.some(d => d.kind === 'odl');
+  if (conFasi || conOdl) {
+    const chiusa = conFasi ? (tutteChiuse || (totale > 0 && fatto >= totale - 0.000001)) : odlRientro >= odlQty - 0.000001;
+    const ini = iniziato;
+    const programmata = st.esterna ? conOdl : conFasi > 0;
+    const stato = chiusa ? 'fatto' : ini ? 'lavorazione' : programmata ? 'programmato' : 'da programmare';
+    const [f, tot] = conFasi ? [fatto, totale] : [odlRientro, odlQty];
+    return Object.assign(base, { fatto: f, totale: tot, stato, ritardo: conclusa(stato, ini),
+      meno: chiusa && conFasi ? avzMeno(fatto, totale, n.qty) : 0,
+      pct: stato === 'fatto' ? 1 : (tot ? Math.min(1, f / tot) : 0),
+      nota: stato === 'da programmare' ? 'Nessun ordine di lavoro al terzista' : '' });
   }
-  if (odlQty) {
-    const stato = avzStato(odlRientro, odlQty, odlRientro > 0, emesso, st.start, st.end, attesa, oggi);
-    return Object.assign(base, { fatto: odlRientro, totale: odlQty, pct: Math.min(1, odlRientro / odlQty), stato, nota: '' });
-  }
-  const stato = avzStatoSenzaDoc(daFabbricare.has(n.item.id), st.start, oggi);
-  return Object.assign(base, { fatto: 0, totale: 0, pct: 0, stato,
-    nota: stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione' });
+  const coperto = !daFabbricare.has(n.item.id);
+  return Object.assign(base, { fatto: 0, totale: 0, pct: coperto ? 1 : 0, stato: coperto ? 'coperto' : 'da programmare',
+    ritardo: coperto ? 0 : conclusa('', false),
+    nota: coperto ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione' });
 }
-// Una parte senza ciclo: una riga sola, con il suo ODP se c'è.
+// La riga di testa di una parte con ciclo: riassume le sue fasi. «In attesa»
+// quando una fase è finita e la successiva non è ancora partita: i pezzi
+// aspettano fra una lavorazione e l'altra.
+function avzCiclo(n, fasi, suoi, oggi) {
+  const stati = fasi.map(r => r.stato);
+  // Fatto quando l'ultima fase è dichiarata **e** la parte è caricata a
+  // magazzino: finché il versamento non c'è, i pezzi aspettano ancora.
+  const versato = suoi.reduce((t, o) => t + opVersato(o), 0);
+  const daVersare = suoi.reduce((t, o) => t + (Number(o.qty) || 0), 0);
+  const caricata = !suoi.length || suoi.every(o => ['completato', 'chiuso'].includes(o.status))
+    || versato >= Math.min(daVersare, Number(n.qty) || daVersare) - 0.000001;
+  let stato;
+  if (stati.every(s => s === 'coperto')) stato = 'coperto';
+  else if (stati.every(avzFinito)) stato = caricata ? 'fatto' : 'attesa';
+  else if (stati.includes('lavorazione')) stato = 'lavorazione';
+  else if (stati.some(avzFinito)) stato = 'attesa';
+  else stato = 'da fare';
+  const docs = suoi.map(o => ({ kind: 'odp', id: o.id, number: o.number,
+    testo: `${ODP_STATUS[o.status] || o.status} · ${fmtQtyIt(opVersato(o))}/${fmtQtyIt(Number(o.qty) || 0)}` }));
+  const ops = ((n.item && n.item.cycle) || []).filter(r => r.kind === 'op').length;
+  return { tipo: 'ciclo', label: `ciclo di ${ops} ${ops === 1 ? 'fase' : 'fasi'}`, start: n.start, end: n.end, attesa: '',
+    fatto: stati.filter(avzFinito).length, totale: fasi.length, pct: stati.filter(avzFinito).length / fasi.length, stato,
+    ritardo: Math.max(0, ...fasi.map(r => r.ritardo || 0)), meno: Math.max(0, ...fasi.map(r => r.meno || 0)), docs,
+    nota: suoi.length ? (stato === 'attesa' && stati.every(avzFinito) ? 'Fasi finite, da caricare a magazzino' : '')
+      : (stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione') };
+}
+// Una parte senza ciclo: una riga sola, con il suo ODP se c'è. Si legge come
+// una fase.
 function avzSenzaTappe(n, suoi, daFabbricare, oggi) {
   return avzDaOdp(n, suoi, 'int', 'fabbricazione', daFabbricare.has(n.item.id), oggi);
 }
@@ -214,19 +295,21 @@ function avzMontaggio(n, odp, oggi, planId) {
   const suoi = odp.filter(o => o.itemId === n.item.id);
   if (suoi.length) return avzDaOdp(n, suoi, 'asm', schedNodeLabel(n), true, oggi);
   const montati = planId ? Math.min(prodottiDi(planId, n.item.id), n.qty) : 0;
+  const base = { tipo: 'asm', label: schedNodeLabel(n), start: n.start, end: n.end, attesa: '', docs: [], meno: 0 };
   if (montati > 0) {
-    const stato = avzStato(montati, n.qty, true, false, n.start, n.end, '', oggi);
-    return { tipo: 'asm', label: schedNodeLabel(n), start: n.start, end: n.end, attesa: '', fatto: montati, totale: n.qty,
-      pct: n.qty ? Math.min(1, montati / n.qty) : 0, stato, docs: [], nota: `Montati ${fmtQtyIt(montati)} di ${fmtQtyIt(n.qty)}` };
+    const stato = montati >= n.qty - 0.000001 ? 'fatto' : 'corso';
+    return Object.assign(base, { fatto: montati, totale: n.qty, pct: n.qty ? Math.min(1, montati / n.qty) : 0, stato,
+      ritardo: avzRitardo(stato === 'fatto', true, n.start, n.end, '', oggi), nota: `Montati ${fmtQtyIt(montati)} di ${fmtQtyIt(n.qty)}` });
   }
-  return { tipo: 'asm', label: schedNodeLabel(n), start: n.start, end: n.end, attesa: '', fatto: 0, totale: 0, pct: 0,
-    stato: 'previsto', docs: [], nota: n.end && oggi > n.end ? 'Data passata: nessun montaggio dichiarato' : 'Nessun montaggio dichiarato: si dichiara nel piano, scheda «Da montare»' };
+  return Object.assign(base, { fatto: 0, totale: 0, pct: 0, stato: 'asm-programmato',
+    ritardo: avzRitardo(false, false, n.start, n.end, '', oggi),
+    nota: n.end && oggi > n.end ? 'Data passata: nessun montaggio dichiarato' : 'Nessun montaggio dichiarato: si dichiara nel piano, scheda «Da montare»' });
 }
 function avzDaOdp(n, suoi, tipo, label, serve, oggi) {
   const docs = [];
-  // Un ODP lanciato ma non avviato è ancora da fare: il documento c'è, il
-  // lavoro no. Per un ordine a fornitore invece «inviato» vuol dire che
-  // qualcun altro ci sta lavorando, e conta come in corso.
+  const asm = tipo === 'asm';
+  // Un ODP lanciato ma non avviato è programmato: il documento c'è, il
+  // lavoro no.
   let totale = 0, fatto = 0, iniziato = false, finito = suoi.length > 0;
   suoi.forEach(o => {
     const q = Number(o.qty) || 0;
@@ -237,14 +320,18 @@ function avzDaOdp(n, suoi, tipo, label, serve, oggi) {
     docs.push({ kind: 'odp', id: o.id, number: o.number,
       testo: `${ODP_STATUS[o.status] || o.status} · ${fmtQtyIt(v)}/${fmtQtyIt(q)}` });
   });
+  const base = { tipo, label, start: n.start, end: n.end, attesa: '', docs, meno: 0 };
   if (!suoi.length) {
-    const stato = avzStatoSenzaDoc(serve, n.start, oggi);
-    return { tipo, label, start: n.start, end: n.end, attesa: '', fatto: 0, totale: 0, pct: 0, stato, docs,
-      nota: stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione' };
+    const stato = !serve ? 'coperto' : asm ? 'asm-programmato' : 'da programmare';
+    return Object.assign(base, { fatto: 0, totale: 0, pct: stato === 'coperto' ? 1 : 0, stato,
+      ritardo: stato === 'coperto' ? 0 : avzRitardo(false, false, n.start, n.end, '', oggi),
+      nota: stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione' });
   }
-  const stato = finito ? (fatto < Math.min(totale, Number(n.qty) || totale) - 0.000001 ? 'corto' : 'fatto') : avzStato(fatto, totale, iniziato, false, n.start, n.end, '', oggi);
-  return { tipo, label, start: n.start, end: n.end, attesa: '', fatto, totale,
-    pct: stato === 'fatto' ? 1 : (totale ? Math.min(1, fatto / totale) : 0), stato, docs, nota: '' };
+  const chiuso = finito || (totale > 0 && fatto >= totale - 0.000001);
+  const stato = chiuso ? 'fatto' : iniziato ? (asm ? 'corso' : 'lavorazione') : asm ? 'asm-programmato' : 'programmato';
+  return Object.assign(base, { fatto, totale, stato, meno: chiuso ? avzMeno(fatto, totale, n.qty) : 0,
+    ritardo: avzRitardo(chiuso, iniziato, n.start, n.end, '', oggi),
+    pct: stato === 'fatto' ? 1 : (totale ? Math.min(1, fatto / totale) : 0), nota: '' });
 }
 
 // ─── Disegno ───
@@ -255,10 +342,14 @@ function avzApriDoc(kind, id) {
   else if (kind === 'rfq') openRfqFromPlan(id);
 }
 const AVZ_DOC_ICONA = { order: 'receipt', odl: 'wrench', odp: 'factory', rfq: 'mail' };
+// Lo stato, e accanto in rosso quello che non va: i giorni di ritardo sul
+// programma e i pezzi che una tappa chiusa non ha dato.
 function avzStatoHtml(r) {
-  const s = AVZ_STATI[r.stato] || AVZ_STATI.previsto;
-  const pct = r.totale > 0 && r.stato !== 'fatto' ? ` ${Math.round(r.pct * 100)}%` : '';
-  return `<span class="avz-stato" style="color:${s.colore}">${esc(s.label)}${pct}</span>`;
+  const s = AVZ_STATI[r.stato] || AVZ_STATI['da fare'];
+  const pct = r.totale > 0 && !avzFinito(r.stato) && r.tipo !== 'ciclo' && r.pct > 0 ? ` ${Math.round(r.pct * 100)}%` : '';
+  const rit = r.ritardo > 0 ? ` <span class="avz-rosso" title="${esc(r.ritardo + ' giorni oltre il programma')}">+${r.ritardo} gg</span>` : '';
+  const meno = r.meno > 0 ? ` <span class="avz-rosso" title="Chiusa con meno pezzi del richiesto">-${esc(fmtQtyIt(r.meno))} pz</span>` : '';
+  return `<span class="avz-stato" style="color:${avzColore(r.stato)}">${esc(s.label)}${pct}</span>${rit}${meno}`;
 }
 // L'asse è comune a tutte le righe: ogni riga è un piccolo SVG largo 1000
 // unità, stirato sulla colonna. Le linee non si deformano grazie a
@@ -272,25 +363,43 @@ function avzAsse(m) {
 }
 function avzBarraHtml(r, asse, m) {
   const x = asse.x;
-  const linea = (d, colore) => d ? `<line x1="${x(d).toFixed(1)}" y1="0" x2="${x(d).toFixed(1)}" y2="20" stroke="${colore}" stroke-width="1.5" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/>` : '';
+  const linea = (d, colore) => d ? `<line x1="${x(d).toFixed(1)}" y1="0" x2="${x(d).toFixed(1)}" y2="28" stroke="${colore}" stroke-width="1.5" stroke-dasharray="3 2" vector-effect="non-scaling-stroke"/>` : '';
   let prog = '', piano = '';
   if (r.start && r.end) {
     const x1 = x(r.start), x2 = Math.max(x(r.end), x1 + 3);
-    const tratt = r.stato === 'da fare' ? ` stroke="var(--orange)" stroke-width="1.5" vector-effect="non-scaling-stroke"` : '';
-    piano = `<rect x="${x1.toFixed(1)}" y="3" width="${(x2 - x1).toFixed(1)}" height="14" rx="2" fill="var(--text-dim)" fill-opacity="0.28"${tratt}/>`;
-    const colore = (AVZ_STATI[r.stato] || AVZ_STATI.previsto).colore;
+    const fase = (AVZ_STATI[r.stato] || AVZ_STATI['da fare']).fase;
+    // Finché non c'è avanzamento da disegnare, il colore dello stato sta sul
+    // bordo della barra del programma: giallo da cominciare, viola programmato.
+    const vuota = fase === 'inizio' || (fase === 'mezzo' && !(r.pct > 0));
+    const tratt = vuota ? ` stroke="${avzColore(r.stato)}" stroke-width="1.5" vector-effect="non-scaling-stroke"` : '';
+    piano = `<rect x="${x1.toFixed(1)}" y="4" width="${(x2 - x1).toFixed(1)}" height="20" rx="3" fill="var(--text-dim)" fill-opacity="0.28"${tratt}/>`;
     let fine = x1;
-    if (r.stato === 'fatto' || r.stato === 'coperto') fine = x2;
-    else if (r.stato === 'ritardo') {
-      // Il ritardo si vede per quanto è lungo: fino all'arrivo atteso, o a oggi.
-      const oltre = [m.oggi, r.attesa].filter(Boolean).reduce((a, d) => d > a ? d : a, r.end);
-      fine = Math.max(x1 + (x2 - x1) * r.pct, x(oltre));
-    } else if (r.stato === 'corso') fine = x1 + Math.max(3, (x2 - x1) * r.pct);
-    if (fine > x1) prog = `<rect x="${x1.toFixed(1)}" y="7" width="${(fine - x1).toFixed(1)}" height="6" rx="2" fill="${colore}"${r.stato === 'coperto' ? ' fill-opacity="0.5"' : ''}/>`;
+    if (fase === 'fine') fine = x2;
+    else if (!vuota) fine = x1 + Math.max(3, (x2 - x1) * r.pct);
+    if (fine > x1) prog = `<rect x="${x1.toFixed(1)}" y="9" width="${(fine - x1).toFixed(1)}" height="10" rx="2" fill="${avzColore(r.stato)}"${r.stato === 'coperto' ? ' fill-opacity="0.5"' : ''}/>`;
+    if (r.ritardo > 0) {
+      // Il ritardo si vede per quanto è lungo: da dove l'avanzamento è
+      // arrivato fino a oggi, o all'arrivo atteso se cade dopo.
+      const oltre = [m.oggi, r.attesa].filter(Boolean).reduce((a, d) => d > a ? d : a, '');
+      const a = Math.max(x(oltre), fine + 3);
+      prog += `<rect x="${fine.toFixed(1)}" y="9" width="${(a - fine).toFixed(1)}" height="10" rx="2" fill="var(--red)"/>`;
+    }
   }
-  const titolo = `${r.item.code || ''} — ${r.label}: programma dal ${fmtDateIt(r.start) || '—'} al ${fmtDateIt(r.end) || '—'}${r.attesa ? ', atteso il ' + fmtDateIt(r.attesa) : ''}`;
-  return `<svg class="avz-svg" viewBox="0 0 1000 20" preserveAspectRatio="none" role="img" aria-label="${esc(titolo)}"><title>${esc(titolo)}</title>
-    ${piano}${prog}${linea(m.oggi, 'var(--accent)')}${linea(m.f.richiesta, 'var(--red)')}</svg>`;
+  const titolo = `${r.item.code || ''} — ${r.fase ? r.numero + ' ' : ''}${r.label}: programma dal ${fmtDateIt(r.start) || '—'} al ${fmtDateIt(r.end) || '—'}${r.attesa ? ', atteso il ' + fmtDateIt(r.attesa) : ''}`;
+  // Il riquadro che appare sostando sulla barra è nostro (avzTip), non il
+  // <title> del browser: quello ha il carattere del sistema, piccolo, e non si
+  // può ingrandire.
+  const s = AVZ_STATI[r.stato] || AVZ_STATI['da fare'];
+  const tip = [
+    `${r.item.code || ''} — ${r.fase ? r.numero + ' · ' : ''}${r.label}`,
+    `Programma: dal ${fmtDateIt(r.start) || '—'} al ${fmtDateIt(r.end) || '—'}`,
+    r.attesa ? `Atteso il ${fmtDateIt(r.attesa)}` : '',
+    `Stato: ${s.label}${r.totale > 0 && r.tipo !== 'ciclo' ? ` (${fmtQtyIt(r.fatto)}/${fmtQtyIt(r.totale)})` : ''}`,
+    r.ritardo > 0 ? `In ritardo di ${r.ritardo} gg` : '',
+    r.meno > 0 ? `Chiusa con ${fmtQtyIt(r.meno)} pz in meno` : '',
+  ].filter(Boolean).join('\n');
+  return `<svg class="avz-svg" viewBox="0 0 1000 28" preserveAspectRatio="none" role="img" aria-label="${esc(titolo)}" data-tip="${esc(tip)}">
+    ${piano}${prog}${linea(m.oggi, 'var(--text)')}${linea(m.f.richiesta, 'var(--red)')}</svg>`;
 }
 function avzTestaAsseHtml(asse) {
   // Un lunedì ogni tante settimane: al massimo sette date, perché stiano.
@@ -306,6 +415,20 @@ function avzDocsHtml(r) {
   if (!r.docs.length) return `<span class="empty-text" style="padding:0">${esc(r.nota || '—')}</span>`;
   return r.docs.map(d => `<div><span class="plandoc-link plandoc-link-sm" ${clickAttrs(`avzApriDoc('${d.kind}','${d.id}')`, 'Apri ' + d.number)}>${ico(AVZ_DOC_ICONA[d.kind] || 'file', 'tinted', '')} ${esc(d.number)}</span>
     <span class="empty-text" style="padding:0">${esc(d.testo)}</span></div>`).join('');
+}
+// Il riquadro sulle barre: uno solo, sul body, seguito dal puntatore.
+function avzTip(e) {
+  let tip = document.getElementById('avz-tip');
+  const svg = e.target && e.target.closest ? e.target.closest('.avz-svg') : null;
+  if (!svg || e.type === 'pointerleave') { if (tip) tip.hidden = true; return; }
+  if (!tip) { tip = document.createElement('div'); tip.id = 'avz-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); }
+  tip.textContent = svg.getAttribute('data-tip') || '';
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  const x = Math.min(e.clientX + 14, window.innerWidth - w - 8);
+  const y = e.clientY + 18 + h > window.innerHeight ? e.clientY - h - 10 : e.clientY + 18;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = Math.max(8, y) + 'px';
 }
 function renderAvanzamento() {
   const host = document.getElementById('view-avz'); if (!host) return;
@@ -325,12 +448,17 @@ function renderAvanzamento() {
   const asse = avzAsse(m);
   const righe = m.righe.slice(0, AVZ_MAX_RIGHE);
   const neg = m.f.margine != null && m.f.margine < 0;
-  const chips = Object.keys(AVZ_STATI).filter(k => m.conteggi[k]).map(k =>
-    `<span class="avz-chip"><i style="background:${AVZ_STATI[k].colore}"></i>${m.conteggi[k]} ${esc(AVZ_STATI[k].label)}</span>`).join('');
+  const chips = (m.inRitardo ? `<span class="avz-chip"><i style="background:var(--red)"></i>${m.inRitardo} in ritardo</span>` : '')
+    + Object.keys(AVZ_STATI).filter(k => m.conteggi[k]).map(k =>
+      `<span class="avz-chip"><i style="background:${avzColore(k)}"></i>${m.conteggi[k]} ${esc(AVZ_STATI[k].chip || AVZ_STATI[k].label)}</span>`).join('');
   const pesano = m.criticiInRitardo.length
     ? `<p class="mrp-warn" style="margin:0 0 8px">${ico('warning', 'tinted', '')} Sul percorso critico, quindi pesa sulla consegna: ${m.criticiInRitardo.map(r => esc((r.item.code || '') + ' ' + r.label)).join(' · ')}.</p>` : '';
-  const corpo = righe.map(r => `<tr class="${r.critico ? 'avz-crit' : ''}">
-      <td style="font-family:var(--mono);white-space:nowrap;padding-left:${8 + r.livello * 12}px">${codeLink(r.item.id, r.item.code)}</td>
+  // Le fasi di una parte con ciclo stanno sotto il suo codice: nella prima
+  // colonna il numero di fase, rientrato di un livello.
+  // Il percorso critico si segna con un'icona, non col rosso: il rosso è del
+  // ritardo (dalla 0.114.0).
+  const corpo = righe.map(r => `<tr class="${[r.critico ? 'avz-crit' : '', r.fase ? 'avz-fase' : '', r.tipo === 'ciclo' ? 'avz-testa' : ''].filter(Boolean).join(' ')}">
+      <td style="font-family:var(--mono);white-space:nowrap;padding-left:${8 + r.livello * 12}px">${r.fase ? esc(r.numero) : codeLink(r.item.id, r.item.code)}${r.critico ? ' ' + ico('clock', 'tinted avz-crit-ico', 'Sul percorso critico: se slitta, slitta la consegna') : ''}</td>
       <td>${esc(r.label)}</td>
       <td class="avz-bar">${avzBarraHtml(r, asse, m)}</td>
       <td class="avz-docs">${avzDocsHtml(r)}</td>
@@ -343,12 +471,12 @@ function renderAvanzamento() {
       ${m.feas.length > 1 ? `<select id="avz-line" onchange="avzSetRiga(this.value)" title="Quale riga di piano">
         ${m.feas.map(f => `<option value="${esc(f.lineId)}" ${f.lineId === m.f.lineId ? 'selected' : ''}>${esc(f.tree.item.code || '')} — ${esc(fmtDateIt(f.richiesta))}</option>`).join('')}</select>` : ''}
     </div>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">La barra grigia è il programma del Gantt: entro quando deve succedere ogni cosa. Sopra, quello che è successo davvero, letto dai documenti del piano: il ricevuto sugli ordini, i rientri sugli ordini di lavoro, i pezzi dichiarati sugli ordini di produzione. La linea blu è oggi, quella rossa la consegna richiesta.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">La barra grigia è il programma del Gantt: entro quando deve succedere ogni cosa. Sopra, quello che è successo davvero, letto dai documenti del piano: il ricevuto sugli ordini, i rientri sugli ordini di lavoro, i pezzi dichiarati sugli ordini di produzione. Giallo da cominciare, viola programmato o ordinato, blu in lavorazione, verde finito; in rosso il ritardo sul programma. La linea scura tratteggiata è oggi, quella rossa la consegna richiesta. L'orologio accanto al codice segna il percorso critico: se quella tappa slitta, slitta la consegna.</p>
     <p style="margin:0 0 8px"><strong>${esc(m.f.tree.item.code || '')}</strong> ${esc(m.f.tree.item.name || '')} · consegna richiesta <strong>${esc(fmtDateIt(m.f.richiesta))}</strong>, fattibile <strong>${esc(fmtDateIt(m.f.fattibile) || '—')}</strong>${m.f.margine == null ? '' : neg
       ? ` · <span class="mrp-warn">${-m.f.margine} gg lavorativi di ritardo</span>` : ` · ${m.f.margine} gg lavorativi di margine`}</p>
     <div class="avz-chips">${chips}</div>
     ${pesano}
-    <div class="table-wrap"><table class="avz-table">
+    <div class="table-wrap" onpointermove="avzTip(event)" onpointerleave="avzTip(event)"><table class="avz-table">
       <thead><tr><th scope="col">Codice</th><th scope="col">Tappa</th><th scope="col" class="avz-bar">${avzTestaAsseHtml(asse)}<span class="sr-only">Programma e avanzamento</span></th><th scope="col">Documenti</th><th scope="col">Stato</th></tr></thead>
       <tbody>${corpo}</tbody></table></div>
     ${m.righe.length > righe.length ? `<p class="empty-text" style="text-align:left">${ico('warning', 'tinted', '')} Mostrate le prime ${righe.length} tappe su ${m.righe.length}. L'export le contiene tutte.</p>` : ''}</div>`;
@@ -367,10 +495,11 @@ function avzExportSpec() {
       colonne: [
         { h: 'Codice', w: 18 }, { h: 'Articolo', w: 28 }, { h: 'Tappa', w: 30 }, { h: 'Inizio', w: 12, data: true },
         { h: 'Fine', w: 12, data: true }, { h: 'Fatto', w: 10, num: true }, { h: 'Totale', w: 10, num: true },
-        { h: 'Stato', w: 12 }, { h: 'Documenti', w: 40 },
+        { h: 'Stato', w: 14 }, { h: 'Ritardo (gg)', w: 10, num: true }, { h: 'Pezzi mancanti', w: 10, num: true }, { h: 'Documenti', w: 40 },
       ],
-      righe: righe.map(r => [r.item.code || '', r.item.name || '', r.label, r.start || '', r.end || '',
+      righe: righe.map(r => [r.item.code || '', r.item.name || '', r.fase ? r.numero + ' — ' + r.label : r.label, r.start || '', r.end || '',
         +(r.fatto || 0).toFixed(3), +(r.totale || 0).toFixed(3), (AVZ_STATI[r.stato] || {}).label || r.stato,
+        r.ritardo || 0, +(r.meno || 0).toFixed(3),
         r.docs.length ? r.docs.map(d => d.number + ' (' + d.testo + ')').join('; ') : (r.nota || '')]),
       totali: null,
     }],

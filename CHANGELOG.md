@@ -2,6 +2,19 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.114.0 — 2026-10-24
+
+**Il Gantt dell'Avanzamento si legge meglio.** Nessun cambio a `supabase/schema.sql`.
+
+- **Il codice con le fasi sotto**: una parte con ciclo ha una riga di testa (codice, barra di tutto il ciclo, stato complessivo) e sotto, rientrati, il materiale del ciclo e le sue fasi: «fase 10», «fase 20»… al posto del codice ripetuto. Nella colonna *Tappa* la lavorazione e chi la fa («Tornitura · interna», «Zincatura · Beta Srl»).
+- **Stati con le parole di ogni riga**: montaggio *programmato / in corso / fatto*; acquisto *da ordinare / ordinato / arrivato / da magazzino*; fase *da programmare / programmato / in lavorazione / fatto* (programmata quando c'è l'ODP per una fase interna, l'ordine di lavoro per una dal terzista); codice con ciclo *da fare / in lavorazione / in attesa / fatto* (fatto quando l'ultima fase è dichiarata e la parte è a magazzino). I colori dicono il punto a cui si è: giallo da cominciare, viola programmato o ordinato, blu in lavorazione, verde finito.
+- **Il ritardo a parte**: non è più uno stato, ma una nota rossa **+N gg** accanto, con la barra rossa fino a oggi o all'arrivo atteso. Una tappa chiusa con meno pezzi è *fatto* con la nota rossa **-N pz**.
+- **Barre più alte** (28 px la riga, 20 il programma, 10 l'avanzamento) e la linea di oggi scura, per non confonderla col blu di «in lavorazione».
+- **Il riquadro sulle barre** è più grande (14 px) e dice anche stato, quantità e ritardo; prima era il suggerimento del browser, che non si può ingrandire.
+- **Percorso critico con l'orologio** accanto al codice, invece del codice in rosso: il rosso ora è solo del ritardo.
+- **Export**: la riga di testa di ogni codice con ciclo, e due colonne nuove, *Ritardo (gg)* e *Pezzi mancanti*.
+
+**Manuale** — cap. «L'avanzamento»: il codice con le fasi, i nuovi stati e i loro colori, il ritardo.
 ### 0.113.0 — 2026-10-23
 
 **L'invio al terzista è fatto quando parte il materiale, non quando esce l'ordine di lavoro.** L'ODL si emette prima, per avvisare il terzista in tempo, ma il programma del piano segnava «fatto» l'invio appena esisteva un ODL, anche in bozza: la voce spariva dal calendario del Riepilogo e una scadenza mancata non avvisava più. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge la colonna `start_date` a `work_order_lines`, non tocca i dati).

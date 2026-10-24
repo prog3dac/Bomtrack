@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.113.0**
+**Versione dell'app documentata: 0.114.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1936,13 +1936,26 @@ la riga da consegnare. Non si modifica niente da qui: è una lettura.
 
 **Una riga per tappa**: un acquisto, ogni fase interna o tratta dal terzista di una parte, un
 montaggio. Le righe seguono la sequenza del lavoro: il **materiale del ciclo** di una parte viene
-**prima** delle sue fasi (dalla 0.111.0), un assieme sta in testa ai suoi componenti. Su ogni riga:
+**prima** delle sue fasi (dalla 0.111.0), un assieme sta in testa ai suoi componenti.
+
+**Il codice con le sue fasi sotto** (dalla 0.114.0). Una parte con ciclo ha una riga di testa col
+codice, la barra dall'inizio della prima fase alla fine dell'ultima e lo stato complessivo; sotto,
+rientrati, prima il materiale del ciclo e poi le sue fasi: nella colonna *Codice* «fase 10», «fase 20»… (o «fasi 30-40» se una tratta
+dal terzista ne raggruppa più d'una), nella colonna *Tappa* la lavorazione e chi la fa
+(«Tornitura · interna», «Zincatura · Beta Srl»).
+
+Su ogni riga:
 
 - la **barra grigia** è il programma, la stessa del Gantt;
-- sopra, una **barra colorata** dice quanto è stato fatto: *verde* fatto, *viola* in corso, *rossa*
-  in ritardo (lunga fino a oggi o all'arrivo atteso, se cade dopo la data del programma); una barra
-  grigia **bordata d'arancio** è da fare e ancora in tempo;
+- sopra, una **barra colorata** dice quanto è stato fatto, col colore dello stato. Finché non c'è
+  avanzamento, il colore sta sul **bordo** della barra grigia;
+- in **rosso** il ritardo: la barra arriva fino a oggi, o all'arrivo atteso se cade dopo la data
+  del programma;
 - a destra i **documenti collegati**, con il loro stato, cliccabili per aprirli.
+
+Sostando sulla barra si apre un riquadro con codice, tappa, date del programma, stato e ritardo.
+Il **percorso critico** si riconosce dall'**orologio** accanto al codice: se quella tappa slitta,
+slitta la consegna.
 
 **Da dove viene l'avanzamento.** Dai documenti generati dal piano:
 
@@ -1953,18 +1966,40 @@ montaggio. Le righe seguono la sequenza del lavoro: il **materiale del ciclo** d
 | Tratta dal terzista | fasi dell'ODP, e rientrati dell'ordine di lavoro | la fase è chiusa, o tutto è rientrato |
 | Montaggio | l'ordine di produzione dell'assieme, se c'è; se no i montaggi dichiarati nel piano | l'ordine è completato, o i montati coprono la quantità |
 
-**Gli stati.** *In ritardo* se la data del programma è passata, o se l'arrivo atteso cade dopo; *in
-corso* se il lavoro è cominciato (o l'ordine al fornitore è inviato); *da fare* se non è cominciato
-ed è ancora in tempo; *da magazzino* se non serve un documento perché esistente e in arrivo bastano;
-*previsto* quando non c'è niente che lo registri, come un montaggio non ancora dichiarato. Un
-ODP lanciato ma non avviato è *da fare*: il documento c'è, il lavoro no. *Finito con meno pezzi*
-(dalla 0.105.5) quando la tappa è chiusa ma ha dato meno pezzi di quelli richiesti: il piano li
-mostra da rilanciare.
+**Gli stati** (dalla 0.114.0) hanno parole diverse per ogni tipo di riga e un colore per il punto a
+cui sono: **giallo** da cominciare, **viola** programmato o ordinato, **blu** in lavorazione,
+**verde** finito.
+
+| Riga | Giallo | Viola | Blu | Verde |
+|---|---|---|---|---|
+| Montaggio | programmato | | in corso | fatto |
+| Acquisto | da ordinare | ordinato | | arrivato · da magazzino |
+| Fase | da programmare | programmato | in lavorazione | fatto · da magazzino |
+| Codice con ciclo | da fare | in attesa | in lavorazione | fatto |
+
+- **Acquisto**: *da ordinare* finché non c'è un ordine inviato (una richiesta d'offerta o un ordine
+  in bozza non bastano); *ordinato* con la percentuale ricevuta; *da magazzino* se esistente e in
+  arrivo bastano e non serve un ordine.
+- **Fase interna**: *da programmare* finché non c'è un ODP; *programmato* quando c'è l'ODP;
+  *in lavorazione* quando la fase è *In corso* sull'ODP; *fatto* quando è dichiarata.
+- **Fase dal terzista**: *da programmare* finché non c'è niente o c'è solo l'ODP; *programmato*
+  quando c'è l'ordine di lavoro; *in lavorazione* quando la fase è *In corso* sull'ODP (l'ordine di
+  lavoro inviato da solo non basta); *fatto* quando è dichiarata (o, senza ODP, quando tutto è rientrato).
+- Una fase è *da magazzino* se per il piano non serve fabbricare la parte.
+- **Codice con ciclo**: *da fare* fino all'avvio della prima fase; *in lavorazione* mentre una fase
+  è avviata; *in attesa* fra la dichiarazione di una fase e l'avvio della successiva; *fatto*
+  quando l'ultima fase è dichiarata e la parte è caricata a magazzino.
+- **Montaggio**: *programmato* finché non c'è niente di dichiarato, sull'ODP dell'assieme o nel piano.
+
+**Il ritardo non è uno stato**: accanto allo stato compare in rosso **+N gg**, i giorni oltre la
+fine del programma (o, se la tappa non è cominciata, oltre la sua data d'inizio). Una tappa chiusa
+con meno pezzi di quelli richiesti è *fatto*, con accanto in rosso **-N pz**: il piano li mostra da
+rilanciare.
 
 **In testa** la consegna richiesta, la data fattibile e il margine, i conteggi per stato e, se ci
 sono, le tappe in ritardo **sul percorso critico**: quelle che spostano la consegna. **Apri il
-piano** porta alla scheda del piano; **Esporta Excel / PDF** danno una riga per tappa, con date,
-quantità, stato e documenti.
+piano** porta alla scheda del piano; **Esporta Excel / PDF** danno una riga per tappa (più la testa
+di ogni codice con ciclo), con date, quantità, stato, giorni di ritardo, pezzi mancanti e documenti.
 
 ### Il fabbisogno netto
 
