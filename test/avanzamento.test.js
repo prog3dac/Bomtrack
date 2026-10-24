@@ -163,17 +163,27 @@ describe('Avanzamento: le fasi dell\'ordine di produzione', () => {
     assert.equal(riga(m, 'P1', 'ciclo').stato, 'attesa');
     assert.equal(riga(m, 'P1', 'int').fatto, 2);
     assert.match(riga(m, 'P1', 'est').docs[0], /fase 20 · 0\/2 · ferma qui/);
+    // Dichiarata l'ultima fase, i pezzi entrano a magazzino (opDichiara) e il
+    // codice è fatto.
+    a.eval("(function(){ const o = getOdp('odp1'); opAvvia('odp1', o.phases[1].id, {}); opDichiara('odp1', o.phases[1].id, { qty: 2 }); })()");
+    m = modello(a);
+    assert.equal(riga(m, 'P1', 'est').stato, 'fatto');
+    assert.equal(a.eval("opVersato(getOdp('odp1'))"), 2);
+    assert.equal(riga(m, 'P1', 'ciclo').stato, 'fatto');
   });
 
-  it('la tratta dal terzista mostra anche il suo ordine di lavoro', () => {
+  it('la tratta dal terzista: con il solo ODP è da programmare, con l\'ODL programmata (0.113.0)', () => {
     const a = app(60);
     lanciaOdp(a);
+    assert.equal(riga(modello(a), 'P1', 'est').stato, 'da programmare');
     a.eval(`(function(){ const o = getOdp('odp1');
       opAvvia('odp1', o.phases[0].id, {}); opDichiara('odp1', o.phases[0].id, { qty: 2 });
       opGeneraOdl('odp1', o.phases[1].id); })()`);
-    const docs = riga(modello(a), 'P1', 'est').docs;
+    const r = riga(modello(a), 'P1', 'est');
+    const docs = r.docs;
     assert.equal(docs.length, 2);
     assert.match(docs[1], /^ODL-\d{4}-\d+ Bozza · rientrati 0\/2/);
+    assert.equal(r.stato, 'programmato');
   });
 
   it('senza ordine di produzione la tappa lo dice', () => {

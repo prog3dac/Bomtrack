@@ -1976,10 +1976,15 @@ cui sono: **giallo** da cominciare, **viola** programmato o ordinato, **blu** in
 - **Acquisto**: *da ordinare* finché non c'è un ordine inviato (una richiesta d'offerta o un ordine
   in bozza non bastano); *ordinato* con la percentuale ricevuta; *da magazzino* se esistente e in
   arrivo bastano e non serve un ordine.
-- **Fase**: *da programmare* senza un ODP lanciato o un ODL emesso che la copra; *programmato* col
-  documento ma senza pezzi lavorati; *in lavorazione* con pezzi dichiarati, o con l'ODL presso il
-  terzista; *da magazzino* se per il piano non serve fabbricare la parte.
-- **Codice con ciclo**: *in attesa* quando una fase è finita e la successiva non è ancora partita.
+- **Fase interna**: *da programmare* finché non c'è un ODP; *programmato* quando c'è l'ODP;
+  *in lavorazione* quando la fase è avviata; *fatto* quando è dichiarata.
+- **Fase dal terzista**: *da programmare* finché non c'è niente o c'è solo l'ODP; *programmato*
+  quando c'è l'ordine di lavoro; *in lavorazione* quando la fase è avviata, o i pezzi sono presso
+  il terzista; *fatto* quando è dichiarata (o, senza ODP, quando tutto è rientrato).
+- Una fase è *da magazzino* se per il piano non serve fabbricare la parte.
+- **Codice con ciclo**: *da fare* fino all'avvio della prima fase; *in lavorazione* mentre una fase
+  è avviata; *in attesa* fra la dichiarazione di una fase e l'avvio della successiva; *fatto*
+  quando l'ultima fase è dichiarata e la parte è caricata a magazzino.
 - **Montaggio**: *programmato* finché non c'è niente di dichiarato, sull'ODP dell'assieme o nel piano.
 
 **Il ritardo non è uno stato**: accanto allo stato compare in rosso **+N gg**, i giorni oltre la

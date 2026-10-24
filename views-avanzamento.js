@@ -195,7 +195,7 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   const label = avzFaseLavoro(n, st);
   const tipo = st.esterna ? 'est' : 'int';
   const docs = [];
-  let totale = 0, fatto = 0, iniziato = false, emesso = false, tutteChiuse = true, conFasi = 0;
+  let totale = 0, fatto = 0, iniziato = false, tutteChiuse = true, conFasi = 0;
   suoi.forEach(o => {
     const fasi = avzFasiDi(o, st);
     if (!fasi.length) return;
@@ -204,7 +204,6 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
     const q = Number(o.qty) || 0;
     const fattiQui = opFatti(o, ultima);
     totale += q; fatto += fattiQui;
-    if (o.status !== 'bozza') emesso = true;
     if (fasi.some(ph => opAvviata(o, ph) || opProcessati(o, ph) > 0)) iniziato = true;
     if (!fasi.every(ph => opChiusa(o, ph))) tutteChiuse = false;
     const corrente = opFaseCorrente(o);
@@ -226,7 +225,6 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
       if (!chiavi.length) return;
       const q = Number(l.qty) || 0, r = Number(l.received) || 0;
       odlQty += q; odlRientro += r;
-      if (o.status !== 'bozza') emesso = true;
       const data = l.confirmedDate || l.deliveryDate || '';
       if (r < q && data && data > attesa) attesa = data;
       const presso = o.status !== 'bozza' && o.status !== 'evaso' && r < q;
@@ -237,17 +235,22 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   }
   const base = { tipo, label, numero: avzFaseNumero(st), start: st.start, end: st.end, attesa, docs, meno: 0, nota: '' };
   const conclusa = (stato, ini) => avzRitardo(stato === 'fatto', ini, st.start, st.end, attesa, oggi);
-  if (conFasi) {
-    const chiusa = tutteChiuse || (totale > 0 && fatto >= totale - 0.000001);
+  // Quando una fase è programmata lo dice il documento che la fa partire
+  // (dalla 0.113.0): per una fase interna l'ODP, per una tratta dal terzista
+  // l'ordine di lavoro — l'ODP da solo non manda niente fuori. In lavorazione
+  // quando la fase è avviata (o i pezzi sono dal terzista), fatta quando è
+  // dichiarata: sull'ODP se c'è, se no dai rientri dell'ordine di lavoro.
+  const conOdl = docs.some(d => d.kind === 'odl');
+  if (conFasi || conOdl) {
+    const chiusa = conFasi ? (tutteChiuse || (totale > 0 && fatto >= totale - 0.000001)) : odlRientro >= odlQty - 0.000001;
     const ini = iniziato || fuori;
-    const stato = chiusa ? 'fatto' : ini ? 'lavorazione' : emesso ? 'programmato' : 'da programmare';
-    return Object.assign(base, { fatto, totale, stato, ritardo: conclusa(stato, ini),
-      meno: chiusa ? avzMeno(fatto, totale, n.qty) : 0,
-      pct: stato === 'fatto' ? 1 : (totale ? Math.min(1, fatto / totale) : 0) });
-  }
-  if (odlQty) {
-    const stato = odlRientro >= odlQty - 0.000001 ? 'fatto' : fuori ? 'lavorazione' : emesso ? 'programmato' : 'da programmare';
-    return Object.assign(base, { fatto: odlRientro, totale: odlQty, pct: Math.min(1, odlRientro / odlQty), stato, ritardo: conclusa(stato, fuori) });
+    const programmata = st.esterna ? conOdl : conFasi > 0;
+    const stato = chiusa ? 'fatto' : ini ? 'lavorazione' : programmata ? 'programmato' : 'da programmare';
+    const [f, tot] = conFasi ? [fatto, totale] : [odlRientro, odlQty];
+    return Object.assign(base, { fatto: f, totale: tot, stato, ritardo: conclusa(stato, ini),
+      meno: chiusa && conFasi ? avzMeno(fatto, totale, n.qty) : 0,
+      pct: stato === 'fatto' ? 1 : (tot ? Math.min(1, f / tot) : 0),
+      nota: stato === 'da programmare' ? 'Nessun ordine di lavoro al terzista' : '' });
   }
   const coperto = !daFabbricare.has(n.item.id);
   return Object.assign(base, { fatto: 0, totale: 0, pct: coperto ? 1 : 0, stato: coperto ? 'coperto' : 'da programmare',
@@ -259,9 +262,15 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
 // aspettano fra una lavorazione e l'altra.
 function avzCiclo(n, fasi, suoi, oggi) {
   const stati = fasi.map(r => r.stato);
+  // Fatto quando l'ultima fase è dichiarata **e** la parte è caricata a
+  // magazzino: finché il versamento non c'è, i pezzi aspettano ancora.
+  const versato = suoi.reduce((t, o) => t + opVersato(o), 0);
+  const daVersare = suoi.reduce((t, o) => t + (Number(o.qty) || 0), 0);
+  const caricata = !suoi.length || suoi.every(o => ['completato', 'chiuso'].includes(o.status))
+    || versato >= Math.min(daVersare, Number(n.qty) || daVersare) - 0.000001;
   let stato;
   if (stati.every(s => s === 'coperto')) stato = 'coperto';
-  else if (stati.every(avzFinito)) stato = 'fatto';
+  else if (stati.every(avzFinito)) stato = caricata ? 'fatto' : 'attesa';
   else if (stati.includes('lavorazione')) stato = 'lavorazione';
   else if (stati.some(avzFinito)) stato = 'attesa';
   else stato = 'da fare';
@@ -271,7 +280,8 @@ function avzCiclo(n, fasi, suoi, oggi) {
   return { tipo: 'ciclo', label: `ciclo di ${ops} ${ops === 1 ? 'fase' : 'fasi'}`, start: n.start, end: n.end, attesa: '',
     fatto: stati.filter(avzFinito).length, totale: fasi.length, pct: stati.filter(avzFinito).length / fasi.length, stato,
     ritardo: Math.max(0, ...fasi.map(r => r.ritardo || 0)), meno: Math.max(0, ...fasi.map(r => r.meno || 0)), docs,
-    nota: suoi.length ? '' : (stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione') };
+    nota: suoi.length ? (stato === 'attesa' && stati.every(avzFinito) ? 'Fasi finite, da caricare a magazzino' : '')
+      : (stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione') };
 }
 // Una parte senza ciclo: una riga sola, con il suo ODP se c'è. Si legge come
 // una fase.
@@ -301,12 +311,11 @@ function avzDaOdp(n, suoi, tipo, label, serve, oggi) {
   const asm = tipo === 'asm';
   // Un ODP lanciato ma non avviato è programmato: il documento c'è, il
   // lavoro no.
-  let totale = 0, fatto = 0, iniziato = false, emesso = false, finito = suoi.length > 0;
+  let totale = 0, fatto = 0, iniziato = false, finito = suoi.length > 0;
   suoi.forEach(o => {
     const q = Number(o.qty) || 0;
     const v = opVersato(o);
     totale += q; fatto += v;
-    if (o.status !== 'bozza') emesso = true;
     if (o.status === 'corso' || v > 0) iniziato = true;
     if (!['completato', 'chiuso'].includes(o.status)) finito = false;
     docs.push({ kind: 'odp', id: o.id, number: o.number,
@@ -320,7 +329,7 @@ function avzDaOdp(n, suoi, tipo, label, serve, oggi) {
       nota: stato === 'coperto' ? 'Niente da fabbricare per questo piano' : 'Nessun ordine di produzione' });
   }
   const chiuso = finito || (totale > 0 && fatto >= totale - 0.000001);
-  const stato = chiuso ? 'fatto' : iniziato ? (asm ? 'corso' : 'lavorazione') : asm ? 'asm-programmato' : emesso ? 'programmato' : 'da programmare';
+  const stato = chiuso ? 'fatto' : iniziato ? (asm ? 'corso' : 'lavorazione') : asm ? 'asm-programmato' : 'programmato';
   return Object.assign(base, { fatto, totale, stato, meno: chiuso ? avzMeno(fatto, totale, n.qty) : 0,
     ritardo: avzRitardo(chiuso, iniziato, n.start, n.end, '', oggi),
     pct: stato === 'fatto' ? 1 : (totale ? Math.min(1, fatto / totale) : 0), nota: '' });
