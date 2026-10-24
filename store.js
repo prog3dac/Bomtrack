@@ -907,6 +907,10 @@ function migrateDB() {
     (o.lines || []).forEach(l => {
       if (l.odpId === undefined) l.odpId = null;
       if (l.odpPhaseId === undefined) l.odpPhaseId = null;
+      // Il giorno in cui consegniamo il materiale al terzista (dalla 0.113.0):
+      // l'ordine di lavoro si emette prima, per avvisarlo in tempo. Vuoto sugli
+      // ordini di prima, che si comportano come prima.
+      if (l.startDate == null) l.startDate = '';
     });
   });
   // Piani di produzione. L'unico stato è aperto/chiuso, e decide se il piano

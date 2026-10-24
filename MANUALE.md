@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.112.2**
+**Versione dell'app documentata: 0.113.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -667,7 +667,10 @@ segnale sparisce quando sparisce la sua causa.
 **Il calendario delle scadenze** mette in fila le date di tutti i documenti aperti: consegne delle
 commesse, articoli da ordinare, consegne attese da fornitori e terzisti, fine produzione,
 promemoria. Dalla 0.89.0 ci sono anche gli **invii al terzista** e i **lanci in produzione** dei
-piani aperti, presi dal loro *Programma* (→ [cap. 19](#19-fabbisogno-materiali)).
+piani aperti, presi dal loro *Programma* (→ [cap. 19](#19-fabbisogno-materiali)). Dalla 0.113.0 un
+invio al terzista resta in calendario **finché il materiale non parte**: un ODL emesso, anche
+inviato, non basta. Sparisce con l'uscita registrata dall'ODL o con l'avvio della fase
+sull'ordine di produzione (→ [cap. 23](#23-ordini-di-lavoro-odl-e-conto-lavoro)).
 
 Dalla 0.98.0 compare anche l'**avvio delle fasi** degli ordini di produzione lanciati o in corso:
 alla data d'inizio programmata di ogni fase non ancora avviata, «Avviare fase 10 di ODP-…». Le fasi
@@ -1886,10 +1889,11 @@ La sezione **Programma** mette in fila tutte le date del piano, giorno per giorn
 | Voce | Data | Quando è «fatto» |
 |---|---|---|
 | **Ordinare** | ordinare entro | c'è un ordine a fornitore emesso dal piano (una sola richiesta d'offerta lo segna «richiesto») |
-| **Inviare al terzista** | invio della tratta | c'è un ordine di lavoro o un ordine di produzione |
+| **Inviare al terzista** | invio della tratta, o l'**inizio lavoro** scritto sull'ODL | il materiale è partito: **in lavorazione** con l'uscita registrata dall'ODL o con *Avvia* sulla fase dell'ordine di produzione, **fatto** quando i pezzi sono rientrati (*Dichiara*). Con l'ODL emesso e il materiale ancora qui la voce resta da fare, con il numero accanto («ODL emesso»), e oltre la data è in ritardo (dalla 0.113.0) |
 | **Lanciare in produzione** | inizio della prima fase | c'è un ordine di produzione |
 | **Montaggio** | la sua data | i montaggi dichiarati nella scheda *Da montare* coprono la quantità |
-| **Rientro dal terzista** · **Fase interna** · **Consegna** | la loro data | non hanno un documento: sono «previsti» |
+| **Rientro dal terzista** | la sua data | «in lavorazione» mentre il pezzo è fuori, «fatto» quando è rientrato; altrimenti «previsto» |
+| **Fase interna** · **Consegna** | la loro data | non hanno un documento: sono «previsti» |
 | **Arrivo dal fornitore** | data confermata dell'ordine, o quella chiesta | è «previsto»; **in ritardo** se viene dopo il giorno in cui il materiale serve, o se è passata senza che la merce sia arrivata (dalla 0.111.0) |
 
 Spostare la data di un ordine emesso dal piano non sposta le altre voci: sono il programma a
@@ -2388,7 +2392,25 @@ La riga porta il **codice della parte** (è il pezzo che il terzista riceve e ri
 **Righe — «Lavorazioni»**: **+ Lavorazione da ciclo** · **+ Riga manuale** ·
 **✓ Segna tutto rientrato**.
 Tabella a due piani: # · **Parte/Lavorazione** · **Pezzi/U.M.** · **Tariffa (€/pz)/Importo** ·
-**Richiesta/Confermata** · **Rientrati/Ancora fuori**.
+**Inizio lavoro/Stato** · **Richiesta/Confermata** · **Rientrati/Ancora fuori**.
+
+### Emettere l'ODL non è inviare
+
+*(dalla 0.113.0)* L'ODL si genera **prima** dell'invio, per avvisare il terzista che a quella data
+prenderà in carico la lavorazione. Per questo ogni riga porta l'**Inizio lavoro**: il giorno in cui
+gli consegniamo il materiale. Si compila da solo con la data d'invio della tratta (dal programma del
+piano, o dall'inizio pianificato della fase sull'ordine di produzione), si può correggere ed esce
+nel PDF e nell'Excel accanto alla data di consegna. Se c'è, il programma del piano usa quella.
+
+Sotto la data, lo **stato** della lavorazione:
+
+| Stato | Quando | Sull'ordine di produzione |
+|---|---|---|
+| **Da inviare** | il materiale non è ancora partito, anche con l'ODL inviato | fase non avviata |
+| **In lavorazione** | è registrata l'uscita (o il passaggio) dalla riga dell'ODL | **Avvia** sulla fase |
+| **Rientrata** | i pezzi sono tutti tornati (rientro registrato, o *Rientrati* pari ai pezzi) | **Dichiara**: la tratta è chiusa |
+
+Lo stato *Inviato* del documento dice che il terzista ha ricevuto l'**ordine**, non il materiale.
 
 **Scrivere un ODL a mano.** *+ Lavorazione da ciclo* fa scegliere la parte fra quelle che un ciclo
 ce l'hanno, poi la tratta, poi i pezzi. Si vedono **tutte** le fasi — anche quelle di un altro
