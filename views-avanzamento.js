@@ -204,7 +204,8 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
     const q = Number(o.qty) || 0;
     const fattiQui = opFatti(o, ultima);
     totale += q; fatto += fattiQui;
-    if (fasi.some(ph => opAvviata(o, ph) || opProcessati(o, ph) > 0)) iniziato = true;
+    // In lavorazione solo con la fase «In corso» sull'ODP: avviata e non chiusa.
+    if (fasi.some(ph => opStatoFase(o, ph) === 'corso')) iniziato = true;
     if (!fasi.every(ph => opChiusa(o, ph))) tutteChiuse = false;
     const corrente = opFaseCorrente(o);
     const qui = corrente && fasi.some(ph => ph.id === corrente.id);
@@ -213,8 +214,7 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   });
   // Gli ordini di lavoro della tratta: quelli del piano, o generati dai suoi
   // ODP (che portano anch'essi il piano). La riga nomina le sue fasi per chiave.
-  // Un ODL inviato vuol dire che i pezzi sono dal terzista: è in lavorazione.
-  let odlQty = 0, odlRientro = 0, attesa = '', fuori = false;
+  let odlQty = 0, odlRientro = 0, attesa = '';
   if (st.esterna) {
     odl.forEach(o => (o.lines || []).forEach(l => {
       const chiavi = clPhaseKeys(l).filter(k => {
@@ -228,7 +228,6 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
       const data = l.confirmedDate || l.deliveryDate || '';
       if (r < q && data && data > attesa) attesa = data;
       const presso = o.status !== 'bozza' && o.status !== 'evaso' && r < q;
-      if (presso || r > 0) fuori = true;
       docs.push({ kind: 'odl', id: o.id, number: o.number,
         testo: `${ORDER_STATUS[o.status] || o.status}${presso ? ' · presso ' + (supplierName(o.supplierId) || 'terzista') : ''} · rientrati ${fmtQtyIt(r)}/${fmtQtyIt(q)}${r < q && data ? ' · rientro ' + fmtDateIt(data) : ''}` });
     }));
@@ -238,12 +237,12 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   // Quando una fase è programmata lo dice il documento che la fa partire
   // (dalla 0.113.0): per una fase interna l'ODP, per una tratta dal terzista
   // l'ordine di lavoro — l'ODP da solo non manda niente fuori. In lavorazione
-  // quando la fase è avviata (o i pezzi sono dal terzista), fatta quando è
-  // dichiarata: sull'ODP se c'è, se no dai rientri dell'ordine di lavoro.
+  // solo quando la fase è «In corso» sull'ODP (un ODL inviato non basta),
+  // fatta quando è dichiarata: sull'ODP se c'è, se no dai rientri dell'ODL.
   const conOdl = docs.some(d => d.kind === 'odl');
   if (conFasi || conOdl) {
     const chiusa = conFasi ? (tutteChiuse || (totale > 0 && fatto >= totale - 0.000001)) : odlRientro >= odlQty - 0.000001;
-    const ini = iniziato || fuori;
+    const ini = iniziato;
     const programmata = st.esterna ? conOdl : conFasi > 0;
     const stato = chiusa ? 'fatto' : ini ? 'lavorazione' : programmata ? 'programmato' : 'da programmare';
     const [f, tot] = conFasi ? [fatto, totale] : [odlRientro, odlQty];

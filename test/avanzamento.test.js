@@ -184,6 +184,11 @@ describe('Avanzamento: le fasi dell\'ordine di produzione', () => {
     assert.equal(docs.length, 2);
     assert.match(docs[1], /^ODL-\d{4}-\d+ Bozza · rientrati 0\/2/);
     assert.equal(r.stato, 'programmato');
+    // Un ODL inviato non basta: in lavorazione solo con la fase In corso sull'ODP.
+    a.eval("(function(){ const o = db.workOrders.find(w => w.active !== false); o.status = 'inviato'; saveDB(); })()");
+    assert.equal(riga(modello(a), 'P1', 'est').stato, 'programmato');
+    a.eval("(function(){ const o = getOdp('odp1'); opAvvia('odp1', o.phases[1].id, {}); })()");
+    assert.equal(riga(modello(a), 'P1', 'est').stato, 'lavorazione');
   });
 
   it('senza ordine di produzione la tappa lo dice', () => {

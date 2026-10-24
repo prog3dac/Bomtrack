@@ -1977,10 +1977,10 @@ cui sono: **giallo** da cominciare, **viola** programmato o ordinato, **blu** in
   in bozza non bastano); *ordinato* con la percentuale ricevuta; *da magazzino* se esistente e in
   arrivo bastano e non serve un ordine.
 - **Fase interna**: *da programmare* finché non c'è un ODP; *programmato* quando c'è l'ODP;
-  *in lavorazione* quando la fase è avviata; *fatto* quando è dichiarata.
+  *in lavorazione* quando la fase è *In corso* sull'ODP; *fatto* quando è dichiarata.
 - **Fase dal terzista**: *da programmare* finché non c'è niente o c'è solo l'ODP; *programmato*
-  quando c'è l'ordine di lavoro; *in lavorazione* quando la fase è avviata, o i pezzi sono presso
-  il terzista; *fatto* quando è dichiarata (o, senza ODP, quando tutto è rientrato).
+  quando c'è l'ordine di lavoro; *in lavorazione* quando la fase è *In corso* sull'ODP (l'ordine di
+  lavoro inviato da solo non basta); *fatto* quando è dichiarata (o, senza ODP, quando tutto è rientrato).
 - Una fase è *da magazzino* se per il piano non serve fabbricare la parte.
 - **Codice con ciclo**: *da fare* fino all'avvio della prima fase; *in lavorazione* mentre una fase
   è avviata; *in attesa* fra la dichiarazione di una fase e l'avvio della successiva; *fatto*
