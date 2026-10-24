@@ -1936,7 +1936,7 @@ montaggio. Le righe seguono la sequenza del lavoro: il **materiale del ciclo** d
 
 **Il codice con le sue fasi sotto** (dalla 0.113.0). Una parte con ciclo ha una riga di testa col
 codice, la barra dall'inizio della prima fase alla fine dell'ultima e lo stato complessivo; sotto,
-rientrate, le sue fasi: nella colonna *Codice* «fase 10», «fase 20»… (o «fasi 30-40» se una tratta
+rientrati, prima il materiale del ciclo e poi le sue fasi: nella colonna *Codice* «fase 10», «fase 20»… (o «fasi 30-40» se una tratta
 dal terzista ne raggruppa più d'una), nella colonna *Tappa* la lavorazione e chi la fa
 («Tornitura · interna», «Zincatura · Beta Srl»).
 

@@ -73,13 +73,13 @@ describe('Avanzamento: il programma è quello del Gantt', () => {
 });
 
 describe('Avanzamento: la sequenza delle righe', () => {
-  it('il materiale del ciclo viene prima delle fasi della sua parte (0.111.0)', () => {
+  it('il materiale del ciclo sta sotto il codice, prima delle sue fasi (0.111.0, 0.113.0)', () => {
     const a = app(60);
     a.eval(`getItem('p1').cycle.unshift({ kind: 'item', itemId: 'tondo', qty: 1 });
       db.items.push(Object.assign(${JSON.stringify({})}, getItem('c1'), { id: 'tondo', code: 'TONDO', name: 'tondo' }));
       invalidateCaches();`);
     const m = modello(a);
-    assert.deepEqual(m.righe.map(r => r.code + ':' + r.tipo), ['MAC:asm', 'C1:buy', 'TONDO:buy', 'P1:ciclo', 'P1:int', 'P1:est']);
+    assert.deepEqual(m.righe.map(r => r.code + ':' + r.tipo), ['MAC:asm', 'C1:buy', 'P1:ciclo', 'TONDO:buy', 'P1:int', 'P1:est']);
   });
 
   it('il codice con ciclo ha le fasi sotto, col numero di fase e chi le fa (0.113.0)', () => {

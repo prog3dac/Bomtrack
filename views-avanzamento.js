@@ -89,8 +89,9 @@ function avzModello(planId, lineId) {
   // vera — il tondo arriva, poi si tornisce — e nell'ordine dell'albero
   // (padre, poi figli) il materiale finiva sotto l'ultima fase. Un assieme
   // resta in testa ai suoi componenti, come nel Gantt del piano.
-  // Una parte con ciclo ha una riga di testa e sotto le sue fasi (dalla
-  // 0.113.0): il codice si legge una volta, le fasi una per riga.
+  // Una parte con ciclo ha una riga di testa e sotto il suo materiale e le sue
+  // fasi (dalla 0.113.0): il codice si legge una volta, il resto una riga per
+  // tappa.
   const righe = [];
   const visita = (n, livello) => {
     const base = { node: n, item: n.item, livello, critico: critici.has(n) };
@@ -99,12 +100,16 @@ function avzModello(planId, lineId) {
       righe.push(Object.assign(base, avzMontaggio(n, odp, oggi, plan.id)));
       n.children.forEach(c => visita(c, livello + 1));
     } else {
+      const da = righe.length;
       n.children.forEach(c => visita(c, livello + 1));
       const suoi = odp.filter(o => o.itemId === n.item.id);
       if (!n.steps.length) { righe.push(Object.assign(base, avzSenzaTappe(n, suoi, daFabbricare, oggi))); return; }
+      // Con la riga di testa il materiale va sotto di essa, prima delle fasi:
+      // sopra il codice sembrava di un altro.
+      const materiale = righe.splice(da);
       const fasi = n.steps.map(st => Object.assign({}, base, { livello: livello + 1, fase: true },
         avzTappa(n, st, suoi, odl, daFabbricare, oggi)));
-      righe.push(Object.assign(base, avzCiclo(n, fasi, suoi, oggi)), ...fasi);
+      righe.push(Object.assign(base, avzCiclo(n, fasi, suoi, oggi)), ...materiale, ...fasi);
     }
   };
   visita(f.tree, 0);

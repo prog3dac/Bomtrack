@@ -6,7 +6,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **Il Gantt dell'Avanzamento si legge meglio.** Nessun cambio a `supabase/schema.sql`.
 
-- **Il codice con le fasi sotto**: una parte con ciclo ha una riga di testa (codice, barra di tutto il ciclo, stato complessivo) e sotto, rientrate, le sue fasi: «fase 10», «fase 20»… al posto del codice ripetuto. Nella colonna *Tappa* la lavorazione e chi la fa («Tornitura · interna», «Zincatura · Beta Srl»).
+- **Il codice con le fasi sotto**: una parte con ciclo ha una riga di testa (codice, barra di tutto il ciclo, stato complessivo) e sotto, rientrati, il materiale del ciclo e le sue fasi: «fase 10», «fase 20»… al posto del codice ripetuto. Nella colonna *Tappa* la lavorazione e chi la fa («Tornitura · interna», «Zincatura · Beta Srl»).
 - **Stati con le parole di ogni riga**: montaggio *programmato / in corso / fatto*; acquisto *da ordinare / ordinato / arrivato / da magazzino*; fase *da programmare / programmato / in lavorazione / fatto*; codice con ciclo *da fare / in lavorazione / in attesa / fatto*. I colori dicono il punto a cui si è: giallo da cominciare, viola programmato o ordinato, blu in lavorazione, verde finito.
 - **Il ritardo a parte**: non è più uno stato, ma una nota rossa **+N gg** accanto, con la barra rossa fino a oggi o all'arrivo atteso. Una tappa chiusa con meno pezzi è *fatto* con la nota rossa **-N pz**.
 - **Barre più alte** (28 px la riga, 20 il programma, 10 l'avanzamento) e la linea di oggi scura, per non confonderla col blu di «in lavorazione».
