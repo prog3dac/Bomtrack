@@ -188,14 +188,23 @@ function opForzata(odp, fase) { return opDecls(odp.id, fase.id).some(d => d.kind
 // e l'ordine restava «in corso» — col suo materiale nel lavoro in corso — finché
 // qualcuno non avviava e chiudeva a mano ogni fase vuota. La prima fase non
 // cade qui: senza precedente, zero da fare è un ordine a zero, non un esito.
+//
+// Coperta dai pezzi non basta se la precedente è ancora aperta (dalla 0.115.0):
+// le fasi di una stessa tratta dal terzista lavorano insieme, e 6 pezzi su 10
+// tornati dalla 20 coprono i 6 usciti finora dalla 10, non la fase. Gli altri 4
+// arriveranno, e la fase li deve ancora aspettare.
 function opChiusa(odp, fase) {
   if (opDecls(odp.id, fase.id).some(d => d.kind === 'chiusura')) return true;
+  const prec = opPrecedente(odp, fase);
   const daFare = opDaFare(odp, fase);
-  if (!(daFare > 0.000001)) {
-    const prec = opPrecedente(odp, fase);
-    return !!prec && opChiusa(odp, prec);
-  }
+  if (!(daFare > 0.000001)) return !!prec && opChiusa(odp, prec);
+  if (prec && !opChiusa(odp, prec)) return false;
   return opProcessati(odp, fase) >= daFare - 0.000001;
+}
+// Due fasi della stessa tratta: consecutive, dallo stesso terzista. Il pezzo
+// non torna da noi fra l'una e l'altra.
+function opStessaTratta(a, b) {
+  return !!a && !!b && !!a.supplierId && a.supplierId === b.supplierId && a.runFrom === b.runFrom;
 }
 function opTutteChiuse(odp) { return (odp.phases || []).length > 0 && odp.phases.every(f => opChiusa(odp, f)); }
 // La fase su cui il lavoro è fermo adesso: la prima non chiusa. Quando non ce
@@ -216,7 +225,7 @@ const ODP_FASE_LABELS = { attesa: 'In attesa', avviabile: 'Avviabile', corso: 'I
 function odpAvanzamentoTratta(odp, fase) {
   const fasi = opRunFasi(odp, fase);
   if (!fasi.length) return '';
-  if (opChiusa(odp, fasi[fasi.length - 1])) return 'fatto';
+  if (fasi.every(f => opChiusa(odp, f))) return 'fatto';
   return fasi.some(f => opAvviata(odp, f)) ? 'lavorazione' : '';
 }
 
@@ -239,7 +248,12 @@ function opAvviabile(odp, fase) {
   if (odp.status === 'annullato' || odp.status === 'chiuso') return { ok: false, motivo: `l'ordine è ${(ODP_STATUS[odp.status] || '').toLowerCase()}` };
   if (opChiusa(odp, fase)) return { ok: false, motivo: 'la fase è già chiusa' };
   const prec = opPrecedente(odp, fase);
-  if (prec && !opChiusa(odp, prec)) return { ok: false, motivo: opMotivoBlocco(odp, fase), fase: prec };
+  // Dentro una tratta dal terzista la fase dopo parte appena è partita quella
+  // prima (dalla 0.115.0): i pezzi passano dall'una all'altra presso di lui, e
+  // i primi tornano finiti prima che arrivino gli ultimi.
+  if (prec && !opChiusa(odp, prec) && !(opStessaTratta(prec, fase) && opAvviata(odp, prec))) {
+    return { ok: false, motivo: opMotivoBlocco(odp, fase), fase: prec };
+  }
   return { ok: true };
 }
 
@@ -394,7 +408,7 @@ function opGuard(id, lockKind) {
 }
 function opDecl(odp, fase, kind, extra) {
   return Store.insert('prodDecls', Object.assign({
-    id: gid(), odpId: odp.id, phaseId: fase ? fase.id : null, kind,
+    id: gid(), odpId: odp.id, phaseId: fase ? fase.id : null, odlId: null, odlLineId: null, kind,
     date: nowISO(), qty: 0, scrap: 0, note: '', motivo: '',
   }, extra || {}));
 }
@@ -405,7 +419,9 @@ function opLancia(id) {
   const o = getOdp(id); if (!o) return false;
   if (!(o.phases || []).length) { showToast('Questo ordine non ha fasi: il ciclo della parte è vuoto', 'error'); return false; }
   if (!(Number(o.qty) > 0)) { showToast('Quantità a zero: non c\'è niente da produrre', 'error'); return false; }
-  o.status = 'lanciato'; touch(o); saveDB();
+  o.status = 'lanciato';
+  opRilevaOdl(o);
+  odpAutoStatus(o); touch(o); saveDB();
   return true;
 }
 
@@ -420,6 +436,9 @@ function opAvvia(id, faseId, opz) {
   const o = getOdp(id); if (!o) return false;
   const fase = (o.phases || []).find(f => f.id === faseId); if (!fase) return false;
   const opzioni = opz || {};
+  // Un ordine di lavoro del piano partito da solo, prima di questo ordine, ha
+  // già fatto uscire il materiale: si prende in carico prima di guardare.
+  if (opRilevaOdl(o)) { odpAutoStatus(o); touch(o); saveDB(); }
   const ok = opAvviabile(o, fase);
   if (!ok.ok) {
     if (!opzioni.forza || !ok.fase) { showToast(`Non si può avviare la fase ${fase.seq}: ${ok.motivo}`, 'error'); return false; }
@@ -609,13 +628,18 @@ function opOdlDi(fase) { return fase ? (opOdlIndex().get(fase.id) || null) : nul
 // tratta: un secondo ordine allo stesso terzista per gli stessi pezzi.
 // Una riga così copre la tratta del **primo** ordine di produzione del piano
 // che ha quella fase (non annullato): un ODP rilanciato dopo, per i pezzi che
-// mancano, resta libero di commissionare i suoi. Il legame vale per dire «già
-// commissionata» e per aprire l'ordine, non per scriverne il ricevuto: quei
-// pezzi li registra l'ordine di lavoro stesso, che è nato senza padrone.
+// mancano, resta libero di commissionare i suoi.
+//
+// Dalla 0.115.0 il legame non serve più solo a dire «già commissionata»: una
+// volta lanciato l'ordine di produzione, è lui il padrone di quella tratta. Sulla
+// riga dell'ordine di lavoro avvia e dichiara chiamano le sue fasi, e i pezzi
+// rientrati li scrive lui (opSyncOdlReceived) — prima ciascuno dei due poteva
+// far uscire lo stesso materiale.
 let _opOdlPianoIdx = null;
-function opOdlPianoIndex() {
-  if (_opOdlPianoIdx && _opOdlPianoIdx.db === db) return _opOdlPianoIdx.map;
+function opOdlPianoCostruisci() {
+  if (_opOdlPianoIdx && _opOdlPianoIdx.db === db) return _opOdlPianoIdx;
   const map = new Map();
+  const perRiga = new Map();
   const odpPerChiave = new Map();
   (db.prodOrders || []).filter(o => o.planId && o.status !== 'annullato')
     .slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))
@@ -630,14 +654,39 @@ function opOdlPianoIndex() {
     chiavi.forEach(c => {
       const k = w.planId + '|' + c;
       const odpId = odpPerChiave.get(k);
-      if (odpId && !map.has(odpId + '|' + c)) map.set(odpId + '|' + c, { odl: w, line: l, dalPiano: true });
+      if (odpId && !map.has(odpId + '|' + c)) {
+        map.set(odpId + '|' + c, { odl: w, line: l, dalPiano: true });
+        if (!perRiga.has(l.id)) perRiga.set(l.id, odpId);
+      }
     });
   }));
-  _opOdlPianoIdx = { db, map };
-  return map;
+  _opOdlPianoIdx = { db, map, perRiga };
+  return _opOdlPianoIdx;
 }
+function opOdlPianoIndex() { return opOdlPianoCostruisci().map; }
 function opOdlDalPiano(odp, fase) {
   return (odp && fase && fase.phaseKey) ? (opOdlPianoIndex().get(odp.id + '|' + fase.phaseKey) || null) : null;
+}
+// ── Il verso opposto: dalla riga dell'ordine di lavoro alle fasi dell'ODP ──
+// → { odp, fasi, dalPiano } oppure null. `fasi` sono le fasi della tratta che la
+// riga commissiona, in ordine di ciclo: avviare la riga è avviare la prima,
+// dichiararla è far avanzare tutte.
+function opLegameRigaOdl(odl, l) {
+  if (!odl || !l) return null;
+  if (l.odpId) {
+    const odp = getOdp(l.odpId);
+    const f = odp && (odp.phases || []).find(x => x.id === l.odpPhaseId);
+    return f ? { odp, fasi: opRunFasi(odp, f), dalPiano: false } : null;
+  }
+  if (!odl.planId || odl.status === 'annullato') return null;
+  const odpId = opOdlPianoCostruisci().perRiga.get(l.id);
+  const odp = odpId ? getOdp(odpId) : null;
+  if (!odp) return null;
+  const fasi = (odp.phases || []).filter(f => {
+    const legame = opOdlDalPiano(odp, f);
+    return !!legame && legame.line === l;
+  });
+  return fasi.length ? { odp, fasi, dalPiano: true } : null;
 }
 // Tutte le fasi della **tratta** cui la fase appartiene: è la tratta che diventa
 // una riga di ordine di lavoro, non la singola fase. Fasi consecutive dello
@@ -658,18 +707,81 @@ function opGenerabile(odp, fase) {
 // quando esiste l'ordine di produzione quel fatto lo dichiara lui. Il campo
 // resta quello di sempre, con gli stessi lettori — orderReception,
 // ordAutoStatus, l'elenco, gli export: cambia solo chi lo scrive.
+//
+// Tornati sono i buoni dell'ultima fase **più gli scarti** di tutta la tratta
+// (dalla 0.115.0): 8 buoni e 2 scarti su 10 sono 10 pezzi che il terzista non
+// ha più, e l'ordine di lavoro è evaso, non parziale per sempre.
+// La riga generata dal piano (`dalPiano`) non ha `odpId`: il suo ricevuto è
+// una somma di eventi, e si cambia passando di lì (registraRicevuto).
 function opSyncOdlReceived(odp, fase) {
-  const legame = opOdlDi(fase); if (!legame) return;
-  const tutte = opRunFasi(odp, fase);
+  // Il legame sta sulla prima fase della tratta (`odpPhaseId`), ma i pezzi
+  // tornano dall'ultima: si cerca su tutta la tratta.
+  const legame = opRunFasi(odp, fase).map(f => opOdlDi(f) || opOdlDalPiano(odp, f)).find(Boolean); if (!legame) return;
+  const leg = opLegameRigaOdl(legame.odl, legame.line);
+  const tutte = leg ? leg.fasi : opRunFasi(odp, fase);
   // La riga copre la tratta intera: i pezzi tornati sono quelli usciti
   // dall'**ultima** fase della tratta, non la somma delle fasi — sono
   // lavorazioni sullo stesso pezzo, non pezzi diversi.
   const ultima = tutte[tutte.length - 1] || fase;
-  const n = Math.min(opFatti(odp, ultima), Number(legame.line.qty) || 0);
+  const scarti = tutte.reduce((t, f) => t + opScarti(odp, f), 0);
+  const n = Math.min(opFatti(odp, ultima) + scarti, Number(legame.line.qty) || 0);
   if (legame.line.received === n) return;
-  legame.line.received = n;
+  if (legame.dalPiano) registraRicevuto('workOrders', legame.odl, legame.line, n);
+  else legame.line.received = n;
   if (typeof ordAutoStatus === 'function') ordAutoStatus(legame.odl);
   touch(legame.odl);
+}
+// ── La presa in carico (dalla 0.115.0) ──
+// Un ordine di lavoro del piano può partire **prima** che nasca, o che si
+// lanci, l'ordine di produzione dello stesso piano: il materiale è uscito con
+// l'avvio della riga, e magari qualche pezzo è già tornato. Quando l'ODP entra
+// in gioco, quegli eventi diventano suoi — non si riscrivono, si spostano: la
+// stessa dichiarazione e gli stessi movimenti, intestati alle sue fasi. Così il
+// materiale non esce una seconda volta e l'avanzamento non riparte da zero.
+// Torna true se ha preso in carico qualcosa.
+function opRilevaOdl(o) {
+  if (!o || o.status === 'bozza' || o.status === 'annullato' || typeof odlEventiRiga !== 'function') return false;
+  let fatto = false;
+  const viste = new Set();
+  (o.phases || []).forEach(f => {
+    const legame = opOdlDalPiano(o, f);
+    if (!legame || viste.has(legame.line.id)) return;
+    viste.add(legame.line.id);
+    const { odl, line } = legame;
+    const leg = opLegameRigaOdl(odl, line);
+    if (!leg || leg.odp !== o || !leg.fasi.length || !odlHaEventiPropri(odl, line)) return;
+    const eventi = odlEventiRiga(odl, line, { conVecchi: true });
+    const fasi = leg.fasi, prima = fasi[0], ultima = fasi[fasi.length - 1];
+    eventi.forEach(e => {
+      if (e.kind === 'avvio') {
+        if (opAvviata(o, prima)) return;
+        const prec = opPrecedente(o, prima);
+        if (prec && !opChiusa(o, prec) && !(opStessaTratta(prec, prima) && opAvviata(o, prec))) {
+          opDecl(o, prima, 'forzatura', { motivo: `Avviata dall'ordine di lavoro ${odl.number || ''} prima del lancio`, note: opMotivoBlocco(o, prima) });
+        }
+        const avvio = e.vecchio ? opDecl(o, prima, 'avvio', { note: e.note || '' })
+          : Store.update('prodDecls', e.id, { odpId: o.id, phaseId: prima.id, odlId: null, odlLineId: null });
+        // Il materiale del ciclo conta come prelevato dalla **prima fase**
+        // dell'ordine, che è dove opMaterialeResiduo lo cerca.
+        const primaOdp = opPrima(o);
+        (db.movements || []).filter(m => m.orderId === odl.id && m.lineId === line.id
+          && (e.vecchio ? !m.declId : m.declId === e.id) && (m.kind === 'clOut' || (m.kind === 'clStep' && !m.fromSupplierId)))
+          .forEach(m => Store.update('movements', m.id, { orderId: o.id, lineId: m.kind === 'clOut' ? primaOdp.id : prima.id, declId: avvio.id }));
+        fasi.slice(1).forEach(x => { if (!opAvviata(o, x)) opDecl(o, x, 'avvio', { note: `Tratta avviata dall'ordine di lavoro ${odl.number || ''}` }); });
+      } else {
+        const qty = Number(e.qty) || 0, scrap = Number(e.scrap) || 0;
+        fasi.slice(0, -1).forEach(x => opDecl(o, x, 'avanzamento', { qty: qty + scrap, note: e.note || '' }));
+        const decl = e.vecchio ? opDecl(o, ultima, 'avanzamento', { qty, scrap, note: e.note || '' })
+          : Store.update('prodDecls', e.id, { odpId: o.id, phaseId: ultima.id, odlId: null, odlLineId: null });
+        (db.movements || []).filter(m => m.orderId === odl.id && m.lineId === line.id
+          && (e.vecchio ? !m.declId : m.declId === e.id) && (m.kind === 'clIn' || (m.kind === 'clStep' && m.fromSupplierId)))
+          .forEach(m => Store.update('movements', m.id, { orderId: o.id, lineId: ultima.id, declId: decl.id }));
+      }
+    });
+    opSyncOdlReceived(o, ultima);
+    fatto = true;
+  });
+  return fatto;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1150,6 +1262,13 @@ function odpAnnullaSave(id) {
 // registrare, si propone il **residuo**, e si spiega in chiaro se il gesto tocca
 // il magazzino oppure no. Un comando che sembra un carico e non carica è il modo
 // più rapido di far perdere fiducia in una giacenza.
+// Le schede di avvio e di dichiarazione si aprono anche dalla riga di un ordine
+// di lavoro (dalla 0.115.0): finito il gesto si ridisegna la vista da cui si è
+// partiti, non sempre quella degli ordini di produzione.
+function opRidisegna() {
+  if (typeof activeView !== 'undefined' && activeView === 'odl' && typeof renderOdl === 'function') renderOdl();
+  else renderOdp();
+}
 function opFaseDi(id, faseId) {
   const o = getOdp(id); if (!o) return null;
   const f = (o.phases || []).find(x => x.id === faseId);
@@ -1163,6 +1282,10 @@ function opAvviaModal(id, faseId) {
   const x = opFaseDi(id, faseId); if (!x) return;
   const { o, f } = x;
   if (!roleGuardShop('docs')) return;
+  // Prima di proporre il materiale: se un ordine di lavoro del piano l'ha già
+  // fatto uscire, la proposta deve saperlo.
+  if (opRilevaOdl(o)) { odpAutoStatus(o); touch(o); saveDB(); }
+  if (opAvviata(o, f)) { showToast(`La fase ${f.seq} è già avviata`, 'error'); opRidisegna(); return; }
   const prima = opEPrima(o, f);
   const righe = prima ? opMaterialeResiduo(o).filter(m => m.residuo > 0.000001) : [];
   window.__opAvviaMat = righe.map(m => m.itemId);
@@ -1195,7 +1318,7 @@ function opAvviaSave(id, faseId) {
   const materiali = opAvviaRighe();
   const sotto = avvisoSottoZero(materiali);
   if (!opAvvia(id, faseId, { materiali, note: val('op-note') })) return;
-  closeModal(); renderOdp();
+  closeModal(); opRidisegna();
   if (sotto.length) showToast('Fase avviata, ma l\'esistente va sotto zero: ' + sotto.join('; '), 'error');
   else showToast('Fase avviata');
 }
@@ -1250,7 +1373,71 @@ function opDichiaraModal(id, faseId) {
 }
 function opDichiaraSave(id, faseId) {
   if (!opDichiara(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note') })) return;
-  closeModal(); renderOdp(); showToast('Avanzamento registrato');
+  closeModal(); opRidisegna(); showToast('Avanzamento registrato');
+}
+// ─── La tratta dal terzista, dichiarata in un colpo (dalla 0.115.0) ───
+// Dalla riga dell'ordine di lavoro si dice quel che è tornato dal terzista, non
+// fase per fase: lui le fasi le fa una dopo l'altra sullo stesso pezzo. I pezzi
+// tornati sono passati da tutte, quindi le fasi prima dell'ultima li dichiarano
+// buoni tutti (scarti compresi, che si sono rivelati dopo); l'ultima dice quanti
+// sono buoni e quanti scarti. Le fasi della tratta non ancora avviate partono
+// qui: dentro una tratta la successiva parte appena è partita la precedente.
+function opDichiaraTratta(id, faseId, dati) {
+  const x = opFaseDi(id, faseId); if (!x) return false;
+  const { o, f } = x;
+  const fasi = opRunFasi(o, f);
+  if (fasi.length < 2) return opDichiara(id, faseId, dati);
+  if (!opGuard(id, 'reception')) return false;
+  if (!opAvviata(o, fasi[0])) { showToast(`La fase ${fasi[0].seq} non è stata avviata`, 'error'); return false; }
+  const d = dati || {};
+  const qty = Math.max(0, Number(d.qty) || 0);
+  const scrap = Math.max(0, Number(d.scrap) || 0);
+  if (!(qty > 0) && !(scrap > 0)) { showToast('Niente da dichiarare: pezzi e scarti sono a zero', 'error'); return false; }
+  for (const g of fasi.slice(1)) if (!opAvviata(o, g) && !opAvvia(id, g.id)) return false;
+  const ultima = fasi[fasi.length - 1];
+  for (const g of fasi) {
+    const fine = g.id === ultima.id;
+    if (!opDichiara(id, g.id, { qty: fine ? qty : qty + scrap, scrap: fine ? scrap : 0, note: d.note })) return false;
+  }
+  return true;
+}
+// Quanto è entrato nella tratta e quanto ne è tornato: i buoni dell'ultima fase
+// più gli scarti di tutte.
+function opContoTratta(o, f) {
+  const fasi = opRunFasi(o, f);
+  const ultima = fasi[fasi.length - 1] || f;
+  const entrati = opDaFare(o, fasi[0] || f);
+  const tornati = opFatti(o, ultima) + fasi.reduce((t, g) => t + opScarti(o, g), 0);
+  return { fasi, ultima, entrati, tornati, resta: Math.max(0, entrati - tornati) };
+}
+function opDichiaraTrattaModal(id, faseId) {
+  const x = opFaseDi(id, faseId); if (!x) return;
+  const { o, f } = x;
+  const c = opContoTratta(o, f);
+  if (c.fasi.length < 2) { opDichiaraModal(id, faseId); return; }
+  if (!roleGuardShop('docs')) return;
+  const ultimaDelCiclo = opEUltima(o, c.ultima);
+  const nomi = c.fasi.map(g => g.seq).join('-');
+  openModal(`${opTestaModal(o, f, 'Dichiara il rientro dal terzista')}
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Fasi <strong>${esc(nomi)}</strong>, una tratta sola presso lo stesso terzista. Entrati: <strong>${fmtQtyIt(c.entrati)}</strong> · già tornati: <strong>${fmtQtyIt(c.tornati)}</strong> · restano <strong>${fmtQtyIt(c.resta)}</strong>.</p>
+    <div class="modal-grid">
+      <div class="modal-field"><label>Pezzi buoni</label>
+        <input class="num" type="number" id="op-d-qty" min="0" step="any" value="${esc(String(+c.resta.toFixed(4)))}"></div>
+      <div class="modal-field"><label>Scarti</label>
+        <input class="num" type="number" id="op-d-scrap" min="0" step="any" value="0"></div>
+    </div>
+    <p class="empty-text" style="text-align:left;padding:8px 0">I pezzi tornati sono passati da tutte le fasi della tratta: si dichiarano su ciascuna, e gli scarti sull'ultima. ${ultimaDelCiclo
+    ? `È la <strong>fine del ciclo</strong>: i pezzi buoni <strong>entrano a magazzino</strong> col codice <strong>${esc(o.code || '')}</strong>.`
+    : 'Il magazzino <strong>non si muove</strong>: il codice della parte si carica alla fine del ciclo.'}</p>
+    <div class="modal-field"><label>Nota</label><input id="op-d-note" placeholder="es. bolla 412" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="opDichiaraTrattaSave('${esc(id)}','${esc(faseId)}')">Registra</button>
+    </div>`, false, 'form');
+}
+function opDichiaraTrattaSave(id, faseId) {
+  if (!opDichiaraTratta(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note') })) { opRidisegna(); return; }
+  closeModal(); opRidisegna(); showToast('Rientro registrato');
 }
 // La forzatura chiede il motivo, e il testo del blocco è **lo stesso** che il
 // mutatore userebbe per rifiutare: due frasi scritte a mano divergerebbero, e
@@ -1274,7 +1461,7 @@ function opForzaSave(id, faseId) {
   const motivo = requireVal('op-forza-motivo', 'Per forzare l\'avvio serve il motivo');
   if (!motivo) return;
   if (!opAvvia(id, faseId, { forza: true, motivo })) return;
-  closeModal(); renderOdp(); showToast('Fase avviata forzando la successione');
+  closeModal(); opRidisegna(); showToast('Fase avviata forzando la successione');
 }
 function opChiudiModal(id, faseId) {
   const x = opFaseDi(id, faseId); if (!x) return;
@@ -1283,7 +1470,7 @@ function opChiudiModal(id, faseId) {
   askConfirm(`Chiudere la fase ${f.seq} ${f.wcName}?` + (mancano > 0.000001
     ? `\n\nMancano ${fmtQtyIt(mancano)} pezzi: non proseguiranno alla fase successiva.` : ''), () => {
     if (!opChiudiFase(id, faseId)) return;
-    renderOdp(); showToast('Fase chiusa');
+    opRidisegna(); showToast('Fase chiusa');
   }, { title: 'Chiudi la fase', ok: 'Chiudi', safe: mancano <= 0.000001 });
 }
 function opRiapriFaseAsk(id, faseId) {
@@ -1300,7 +1487,7 @@ function opAnnullaDichiarazioneAsk(declId) {
     : `Annullare questa dichiarazione di ${fmtQtyIt(d.qty)} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lei.`;
   askConfirm(domanda, () => {
     if (!opAnnullaDichiarazione(declId)) return;
-    renderOdp(); showToast('Dichiarazione annullata');
+    opRidisegna(); showToast('Dichiarazione annullata');
   }, { title: 'Annulla la dichiarazione', ok: 'Annulla' });
 }
 

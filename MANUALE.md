@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.114.0**
+**Versione dell'app documentata: 0.115.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -669,8 +669,8 @@ commesse, articoli da ordinare, consegne attese da fornitori e terzisti, fine pr
 promemoria. Dalla 0.89.0 ci sono anche gli **invii al terzista** e i **lanci in produzione** dei
 piani aperti, presi dal loro *Programma* (→ [cap. 19](#19-fabbisogno-materiali)). Dalla 0.113.0 un
 invio al terzista resta in calendario **finché il materiale non parte**: un ODL emesso, anche
-inviato, non basta. Sparisce con l'uscita registrata dall'ODL o con l'avvio della fase
-sull'ordine di produzione (→ [cap. 23](#23-ordini-di-lavoro-odl-e-conto-lavoro)).
+inviato, non basta. Sparisce con **Avvia** sulla riga dell'ODL o sulla fase dell'ordine di
+produzione (→ [cap. 23](#23-ordini-di-lavoro-odl-e-conto-lavoro)).
 
 Dalla 0.98.0 compare anche l'**avvio delle fasi** degli ordini di produzione lanciati o in corso:
 alla data d'inizio programmata di ogni fase non ancora avviata, «Avviare fase 10 di ODP-…». Le fasi
@@ -1889,7 +1889,7 @@ La sezione **Programma** mette in fila tutte le date del piano, giorno per giorn
 | Voce | Data | Quando è «fatto» |
 |---|---|---|
 | **Ordinare** | ordinare entro | c'è un ordine a fornitore emesso dal piano (una sola richiesta d'offerta lo segna «richiesto») |
-| **Inviare al terzista** | invio della tratta, o l'**inizio lavoro** scritto sull'ODL | il materiale è partito: **in lavorazione** con l'uscita registrata dall'ODL o con *Avvia* sulla fase dell'ordine di produzione, **fatto** quando i pezzi sono rientrati (*Dichiara*). Con l'ODL emesso e il materiale ancora qui la voce resta da fare, con il numero accanto («ODL emesso»), e oltre la data è in ritardo (dalla 0.113.0) |
+| **Inviare al terzista** | invio della tratta, o l'**inizio lavoro** scritto sull'ODL | il materiale è partito: **in lavorazione** con *Avvia* sulla riga dell'ODL o sulla fase dell'ordine di produzione, **fatto** quando i pezzi sono rientrati (*Dichiara*). Con l'ODL emesso e il materiale ancora qui la voce resta da fare, con il numero accanto («ODL emesso»), e oltre la data è in ritardo (dalla 0.113.0) |
 | **Lanciare in produzione** | inizio della prima fase | c'è un ordine di produzione |
 | **Montaggio** | la sua data | i montaggi dichiarati nella scheda *Da montare* coprono la quantità |
 | **Rientro dal terzista** | la sua data | «in lavorazione» mentre il pezzo è fuori, «fatto» quando è rientrato; altrimenti «previsto» |
@@ -1983,8 +1983,9 @@ cui sono: **giallo** da cominciare, **viola** programmato o ordinato, **blu** in
 - **Fase interna**: *da programmare* finché non c'è un ODP; *programmato* quando c'è l'ODP;
   *in lavorazione* quando la fase è *In corso* sull'ODP; *fatto* quando è dichiarata.
 - **Fase dal terzista**: *da programmare* finché non c'è niente o c'è solo l'ODP; *programmato*
-  quando c'è l'ordine di lavoro; *in lavorazione* quando la fase è *In corso* sull'ODP (l'ordine di
-  lavoro inviato da solo non basta); *fatto* quando è dichiarata (o, senza ODP, quando tutto è rientrato).
+  quando c'è l'ordine di lavoro; *in lavorazione* quando la fase è *In corso* sull'ODP o, dalla
+  0.115.0, quando la riga dell'ordine di lavoro è **avviata** (l'ordine inviato da solo non basta);
+  *fatto* quando è dichiarata (o, senza ODP, quando tutto è rientrato).
 - Una fase è *da magazzino* se per il piano non serve fabbricare la parte.
 - **Codice con ciclo**: *da fare* fino all'avvio della prima fase; *in lavorazione* mentre una fase
   è avviata; *in attesa* fra la dichiarazione di una fase e l'avvio della successiva; *fatto*
@@ -2348,16 +2349,28 @@ tratta è stato generato dal piano prima dell'ODP, l'ODP non offre più **genera
 al suo posto mostra il numero di quell'ordine, che si apre con un clic. Vale per il primo ODP del
 piano che ha quella fase; un ODP rilanciato dopo, per i pezzi mancanti, commissiona i suoi. Al
 contrario, una tratta commissionata dall'ODP esce già dalla generazione degli ordini di lavoro del
-piano. Su un ordine di lavoro nato dal piano i rientri si registrano sull'ordine di lavoro stesso.
+piano. Dalla 0.115.0, una volta **lanciato** l'ODP, è lui il padrone anche di quella tratta: avvio e
+rientri si registrano sulle sue fasi, da qualunque dei due documenti, e i **rientrati** dell'ordine
+di lavoro li scrive lui. Se la riga del piano era già partita da sola prima del lancio, al lancio i
+suoi avvii e rientri **passano all'ODP** così come sono: il materiale non esce una seconda volta e i
+pezzi già tornati restano dichiarati.
 
 **Chi genera l'ordine di lavoro** (dalla 0.105.6): chi scrive gli ordini, cioè l'*Ufficio
 acquisti* e l'amministratore. Un ordine di lavoro è un documento con un prezzo e un fornitore, e
 il ruolo *Officina e magazzino* non lo genera più da un ODP: avvia, dichiara e riceve, ma il
 documento per il terzista lo emette l'ufficio.
 
-> Su quella riga i comandi di conto lavoro dell'ODL diventano un **rimando** all'ordine di
-> produzione. Il magazzino ha **un padrone solo**: due strade per lo stesso gesto sarebbero due
-> registrazioni. Anche i **pezzi rientrati** dell'ODL li scrive la dichiarazione fatta qui.
+> Su quella riga **avvia** e **dichiara** dell'ODL aprono le schede di questo ordine, accanto al
+> rimando «ODP-… › fase 20-30». Il magazzino ha **un padrone solo**: il gesto è uno, in qualunque
+> dei due documenti lo si faccia. Anche i **pezzi rientrati** dell'ODL li scrive la dichiarazione
+> fatta qui: i buoni dell'ultima fase della tratta più gli scarti di tutta la tratta.
+
+**Le fasi di una tratta dal terzista** (dalla 0.115.0). Dentro una tratta — fasi consecutive dallo
+stesso terzista — la fase dopo si avvia appena è avviata quella prima, senza aspettare che sia
+chiusa: i pezzi passano dall'una all'altra presso di lui, e i primi tornano finiti prima che
+arrivino gli ultimi. Per lo stesso motivo una fase non è mai chiusa mentre la precedente aspetta
+ancora dei pezzi. Dall'ordine di lavoro la tratta si **dichiara in un colpo**: si dice quanto è
+tornato, buoni e scarti, e ogni fase della tratta avanza di conseguenza.
 
 ### Nel fabbisogno
 
@@ -2372,9 +2385,10 @@ documento per il terzista lo emette l'ufficio.
 
 - **Il fabbisogno netto non si applica** a un ordine di produzione: lanciare un pezzo è una
   decisione di produzione, non di acquisto.
-- Un ordine di lavoro **senza** un ordine di produzione dietro si comporta esattamente come prima,
-  movimenti compresi. Chi usa entrambe le strade sullo stesso codice vede due letture del *Presso
-  terzi*, ed è per questo che il prospetto le tiene separate invece di fonderle.
+- Un ordine di lavoro **senza** un ordine di produzione dietro ha **avvia** e **dichiara** suoi, con
+  gli stessi movimenti (→ [cap. 23](#23-ordini-di-lavoro-odl-e-conto-lavoro)). Chi usa entrambe le
+  strade sullo stesso codice vede due letture del *Presso terzi*, ed è per questo che il prospetto
+  le tiene separate invece di fonderle.
 - **Annullare non è eliminare**: un ordine annullato smette di coprire la parte nel fabbisogno, ma
   i movimenti già registrati restano. Eliminarlo invece toglie anche quelli, e la scheda lo avvisa.
 - **Annullare con il reso** (dalla 0.100.0): se l'ordine aveva già fatto uscire il materiale,
@@ -2425,7 +2439,9 @@ La riga porta il **codice della parte** (è il pezzo che il terzista riceve e ri
 **N° conferma del terzista** · Note · 🔒 Note interne.
 
 **Righe — «Lavorazioni»**: **+ Lavorazione da ciclo** · **+ Riga manuale** ·
-**✓ Segna tutto rientrato**.
+**✓ Dichiara tutto rientrato** (il residuo di ogni riga avviata, come pezzi buoni).
+Sotto ogni riga i suoi comandi, **avvia** e **dichiara**; sotto la tabella lo storico **Avvii e
+rientri**, dove un gesto sbagliato si annulla.
 Tabella a due piani: # · **Parte/Lavorazione** · **Pezzi/U.M.** · **Tariffa (€/pz)/Importo** ·
 **Inizio lavoro/Stato** · **Richiesta/Confermata** · **Rientrati/Ancora fuori**.
 
@@ -2441,9 +2457,9 @@ Sotto la data, lo **stato** della lavorazione:
 
 | Stato | Quando | Sull'ordine di produzione |
 |---|---|---|
-| **Da inviare** | il materiale non è ancora partito, anche con l'ODL inviato | fase non avviata |
-| **In lavorazione** | è registrata l'uscita (o il passaggio) dalla riga dell'ODL | **Avvia** sulla fase |
-| **Rientrata** | i pezzi sono tutti tornati (rientro registrato, o *Rientrati* pari ai pezzi) | **Dichiara**: la tratta è chiusa |
+| **Da inviare** | la riga non è ancora avviata, anche con l'ODL inviato | fase non avviata |
+| **In lavorazione** | **Avvia** sulla riga | **Avvia** sulla fase |
+| **Rientrata** | i pezzi sono tutti tornati: dichiarati, buoni e scarti | **Dichiara**: la tratta è chiusa |
 
 Lo stato *Inviato* del documento dice che il terzista ha ricevuto l'**ordine**, non il materiale.
 
@@ -2455,6 +2471,41 @@ casa è un caso vero. La riga che ne esce è identica a quella generata dal fabb
 
 Le fasi **senza** fornitore sono interne e restano fuori dagli ODL: non si comprano, si vedono nel
 Carico centri.
+
+### Avvia e dichiara
+
+*(dalla 0.115.0)* Sono gli stessi due gesti dell'ordine di produzione (→
+[cap. 22](#22-ordini-di-produzione-odp)), e prendono il posto di *spedisci materiale*, *manda al
+terzista*, *ritira dal terzista* e *registra rientro*.
+
+- **Avvia** quando il materiale parte. Propone quel che esce — il materiale del ciclo all'inizio
+  della prima tratta, i pezzi stessi sulle tratte dopo — al netto di quanto è già uscito. Una riga
+  si avvia una volta sola; in **bozza** non si avvia, perché l'ordine non è ancora arrivato al
+  terzista.
+- **Dichiara** quando i pezzi tornano: **buoni** e **scarti**. Entrambi contano come
+  **rientrati** e portano l'ordine a *Parziale* e poi a *Evaso*; solo i buoni, alla fine del ciclo,
+  entrano a magazzino.
+
+**Chi è il padrone della riga** — cioè dove si registra il gesto:
+
+| La riga viene… | Avvia e dichiara scrivono… |
+|---|---|
+| da un **ordine di produzione** | sulle fasi dell'ODP: la scheda che si apre è la sua |
+| dal **fabbisogno**, e il piano ha un ODP **lanciato** per quella parte | sulle fasi dell'ODP, come sopra |
+| dal **fabbisogno**, senza ODP (o con l'ODP ancora in bozza) | sulla riga stessa |
+| da **+ Lavorazione da ciclo** o **+ Riga manuale** | sulla riga stessa (la riga manuale non muove il magazzino) |
+
+Sugli ordini di lavoro di prima, con una riga per fase, la tratta si avvia dalla riga della prima
+fase e si dichiara da quella dell'ultima; le righe in mezzo lo dicono. I movimenti registrati con i
+comandi di prima continuano a contare: una riga da cui era già uscito il materiale risulta avviata.
+
+**Annullare.** Nello storico *Avvii e rientri* ogni evento ha il suo cestino: annullare un rientro
+toglie i suoi movimenti e i suoi pezzi dai rientrati; un avvio si annulla quando la riga non ha
+rientri, e il materiale uscito con lui torna a scaffale. Una riga avviata non si elimina, e
+nemmeno l'ordine: si annulla prima l'evento.
+
+**Dal telefono** (*Ricevi tutto*, *Ricevi una parte*) un ODL si riceve dichiarando: compaiono solo
+le righe avviate, e il rientro muove il magazzino come dalla scrivania.
 
 ### Il magazzino si muove in due punti soli
 
@@ -2485,15 +2536,14 @@ quantità proposte in automatico: *q.tà del ciclo × pezzi dell'ordine*.
 **I pezzi rientrano una volta**, all'ultima fase. Le fasi in mezzo **non muovono il magazzino e lo
 dicono**, invece di offrire un comando che farebbe uscire la stessa merce due volte.
 
-La scheda propone sempre il **residuo** — quanto resta da spedire o da far rientrare — e a residuo
-zero lo dice, invece di riproporre il modulo come se niente fosse.
+Le schede propongono sempre il **residuo** — quanto resta da spedire o da far rientrare.
 
 ### Rientrati ≠ caricato
 
-> Il campo **Rientrati** sull'ODL significa **pezzi tornati**: porta l'ordine a *Parziale* e poi a
-> *Evaso*, ma **non carica il magazzino**. Quello lo fanno i movimenti di conto lavoro.
-> Sono due domande diverse — «l'ordine è finito?» e «il pezzo è a scaffale?» — e hanno due
-> risposte diverse.
+> Il campo **Rientrati** sull'ODL significa **pezzi tornati**, buoni e scarti: porta l'ordine a
+> *Parziale* e poi a *Evaso*. Non si scrive a mano: lo scrive **Dichiara**, che nello stesso gesto
+> carica il magazzino quando tocca. Sono due domande diverse — «l'ordine è finito?» e «il pezzo è a
+> scaffale?» — e hanno due risposte diverse, ma un gesto solo.
 
 ---
 

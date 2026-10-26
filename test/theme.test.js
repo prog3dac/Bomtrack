@@ -397,8 +397,10 @@ describe('Nessun riquadro inline sborda sulle righe vicine', () => {
     // .line-note e' un blocco di testo, e ci finivano dentro due riquadri. La
     // riga delle azioni ha una classe sua, che le dispone in flex.
     const s = fs.readFileSync(path.join(__dirname, '..', 'views-docs.js'), 'utf8');
-    assert.equal((s.match(/line-cl-actions/g) || []).length, 2,
-      'le due righe di comandi (ordine di lavoro e ordine d\'acquisto legacy)');
+    const tutte = (s.match(/line-cl-actions/g) || []).length;
+    assert.ok(tutte >= 2, 'le righe di comandi (ordine di lavoro e ordine d\'acquisto legacy)');
+    assert.equal((s.match(/<div class="line-cl-actions">/g) || []).length, tutte,
+      'ogni riga di comandi e\' un blocco suo');
     assert.ok(!/line-note[^`]*plandoc-link/.test(s),
       'un comando a riquadro e\' tornato dentro una nota di riga');
     assert.match(CSS, /\.line-cl-actions\{[^}]*display:flex/);

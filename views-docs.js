@@ -221,25 +221,19 @@ const DOC_KINDS = {
 // gli stessi lettori — cambia solo chi lo scrive.
 function odlRigaDaOdp(l) { return !!(l && l.odpId); }
 // A che punto è la lavorazione di una riga (dalla 0.113.0). Emettere l'ordine
-// di lavoro non è mandare il pezzo: la riga è **in lavorazione** quando il
-// materiale è partito e **fatta** quando i pezzi sono rientrati. Su una riga che
-// viene da un ordine di produzione lo dicono avvio e dichiarazione delle sue
-// fasi; sulle altre i movimenti di conto lavoro registrati dalla riga, o i
-// pezzi segnati come rientrati.
+// di lavoro non è mandare il pezzo: la riga è **in lavorazione** quando è
+// avviata e **fatta** quando i pezzi sono rientrati. Se il padrone è un ordine
+// di produzione lo dicono avvio e dichiarazione delle sue fasi; sulle altre gli
+// eventi della riga (o i movimenti dei comandi di prima), e i rientrati.
 //   '' · 'lavorazione' · 'fatto'
 function odlAvanzamentoRiga(o, l) {
-  if (odlRigaDaOdp(l) && typeof getOdp === 'function') {
-    const p = getOdp(l.odpId), f = p && (p.phases || []).find(x => x.id === l.odpPhaseId);
-    return f ? odpAvanzamentoTratta(p, f) : '';
-  }
+  const leg = odlLegameAttivo(o, l);
+  if (leg) return odpAvanzamentoTratta(leg.odp, leg.fasi[0]);
   const qty = Number(l.qty) || 0;
-  // Su un ordine di prima, una riga per fase, l'uscita sta sulla prima riga
-  // della tratta e il rientro sull'ultima.
-  const ruolo = clLineRole(o, l);
   const somma = m => Array.from(m.values()).reduce((a, b) => a + b, 0);
-  const tornati = Math.max(Number(l.received) || 0, somma(clRegistrato(o, ruolo.ultima || l, 'in')));
+  const tornati = Math.max(Number(l.received) || 0, l.phaseKey ? somma(clRegistrato(o, odlAncore(o, l).ultima, 'in')) : 0);
   if (qty > 0 && tornati >= qty - 0.000001) return 'fatto';
-  return somma(clRegistrato(o, ruolo.prima || l, 'out')) > 0 || tornati > 0 ? 'lavorazione' : '';
+  return odlRigaAvviata(o, l) || tornati > 0 ? 'lavorazione' : '';
 }
 const ODL_AVANZAMENTO = { '': 'da inviare', lavorazione: 'in lavorazione', fatto: 'rientrata' };
 // Da quale ordine di produzione viene questo ordine di lavoro. Serve a
@@ -944,8 +938,8 @@ function docNextStep(k, d) {
     if (st === 'bozza') return { azione: `docAdvance('${k}','${id}','inviato')`, etichetta: 'Segna come inviato', icona: 'mail' };
     if (st === 'inviato') return { suggerimento: 'Quando il fornitore conferma, scrivi il n° di conferma d’ordine: lo stato passa da solo a «Confermato».' };
     if (st === 'confermato' || st === 'parziale') {
-      if (k === 'odl' && (d.lines || []).some(odlRigaDaOdp)) return { suggerimento: 'I pezzi rientrati si dichiarano sull’ordine di produzione collegato.' };
-      return { azione: k === 'odl' ? `odlMarkAllReceived('${id}')` : `ordMarkAllReceived('${id}')`, etichetta: 'Segna tutto ricevuto', icona: 'check' };
+      if (k === 'odl' && (d.lines || []).some(l => odlLegameAttivo(d, l))) return { suggerimento: 'I pezzi rientrati si dichiarano sull’ordine di produzione collegato.' };
+      return { azione: k === 'odl' ? `odlMarkAllReceived('${id}')` : `ordMarkAllReceived('${id}')`, etichetta: k === 'odl' ? 'Dichiara tutto rientrato' : 'Segna tutto ricevuto', icona: 'check' };
     }
     return null;
   }
@@ -2043,24 +2037,429 @@ function odlSave(id) { docSave('odl', id); }
 function odlSetField(id, field, value) { docSetField('odl', id, field, value); }
 function odlSetSupplier(id, sid) { docSetSupplier('odl', id, sid); }
 function odlSetLine(id, lineId, field, value) { docSetLine('odl', id, lineId, field, value); }
-function odlDelLine(id, lineId) { docDelLine('odl', id, lineId); }
+// Una riga avviata o con dei rientri ha mosso il magazzino: toglierla
+// lascerebbe i suoi movimenti senza un documento che li spieghi.
+function odlDelLine(id, lineId) {
+  const o = getOdl(id), l = o && (o.lines || []).find(x => x.id === lineId);
+  if (l && odlEventiRiga(o, l).length) { showToast('Questa lavorazione è già avviata: annulla prima avvio e rientri, nello storico qui sotto', 'error'); return; }
+  docDelLine('odl', id, lineId);
+}
 function odlAddManualLineModal(id) { docAddManualLineModal('odl', id); }
 function odlAddManualLine(id) { docAddManualLine('odl', id); }
 function odlEditLineModal(id, lineId) { docEditLineModal('odl', id, lineId); }
 function odlSaveLineEdit(id, lineId) { docSaveLineEdit('odl', id, lineId); }
 function odlListExportSpec() { return docListExportSpec('odl'); }
-function delOdl(id) { docDel('odl', id); }
+function delOdl(id) {
+  if ((db.prodDecls || []).some(d => d.odlId === id)) { showToast('Su questo ordine di lavoro ci sono avvii o rientri: annullalo invece di eliminarlo, o annulla prima quelli', 'error'); return; }
+  docDel('odl', id);
+}
+// ═══════════════════════════════════════════════════════════
+//  AVVIA E DICHIARA SULLA RIGA (dalla 0.115.0)
+// ═══════════════════════════════════════════════════════════
+// Gli stessi due gesti dell'ordine di produzione, qualunque sia l'origine
+// della riga. Prima l'ordine di lavoro aveva quattro comandi suoi — spedisci
+// materiale, manda al terzista, ritira dal terzista, registra rientro — che
+// scrivevano movimenti e basta: niente scarti, niente stato, e i pezzi
+// rientrati da scrivere a mano una seconda volta.
+//
+// **Un solo padrone per tratta.** Se la riga viene da un ordine di produzione,
+// o dal fabbisogno di un piano che ne ha lanciato uno per quella parte, il
+// padrone è l'ODP: avvia e dichiara aprono le sue schede e scrivono le sue
+// dichiarazioni, e lo stesso gesto non si può registrare due volte da due
+// documenti. Altrimenti il padrone è la riga, che porta eventi propri nella
+// stessa collezione dell'ODP (`prodDecls`, con `odlId` e `odlLineId`).
+//
+// Il magazzino si muove come prima, ai due estremi del ciclo: l'avvio della
+// prima tratta esterna fa uscire il materiale (clOut), la dichiarazione
+// dell'ultima carica il codice della parte (clIn); in mezzo i pezzi passano e
+// basta (clStep). Una riga scritta a mano, senza ciclo, non muove niente.
+const ODL_EV_ETICHETTA = { avvio: 'Avvio', avanzamento: 'Rientro' };
+function odlEventiRiga(o, l, opz) {
+  const ev = (db.prodDecls || []).filter(d => d.odlId === o.id && d.odlLineId === l.id)
+    .slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  if (!(opz && opz.conVecchi)) return ev;
+  // I movimenti registrati con i comandi di prima non hanno una dichiarazione
+  // che li spieghi: valgono come un avvio e un rientro senza data, e nessun
+  // dato di prima va migrato per continuare a contare.
+  const vecchi = (db.movements || []).filter(m => m.orderId === o.id && m.lineId === l.id && !m.declId && isContoLavoroKind(m.kind));
+  const prima = [];
+  if (vecchi.some(odlMovUscita) && !ev.some(d => d.kind === 'avvio')) prima.push({ kind: 'avvio', vecchio: true, note: '' });
+  const dichiarati = ev.reduce((t, d) => t + (d.kind === 'avanzamento' ? (Number(d.qty) || 0) + (Number(d.scrap) || 0) : 0), 0);
+  const tornati = vecchi.filter(m => !odlMovUscita(m)).reduce((t, m) => t + Math.abs(Number(m.qty) || 0), 0);
+  const resto = Math.max(tornati, (Number(l.received) || 0) - dichiarati);
+  const dopo = resto > 0.000001 ? [{ kind: 'avanzamento', vecchio: true, qty: resto, scrap: 0, note: '' }] : [];
+  return prima.concat(ev, dopo);
+}
+function odlMovUscita(m) { return m.kind === 'clOut' || (m.kind === 'clStep' && !m.fromSupplierId); }
+// La riga ha mosso qualcosa da sé: eventi suoi, o movimenti dei comandi di
+// prima. I soli rientrati scritti a mano non contano — non hanno mosso niente,
+// e passata la tratta all'ODP resterebbero lì a sembrare eventi da prendere.
+function odlHaEventiPropri(o, l) {
+  return (db.prodDecls || []).some(d => d.odlId === o.id && d.odlLineId === l.id)
+    || (db.movements || []).some(m => m.orderId === o.id && m.lineId === l.id && !m.declId && isContoLavoroKind(m.kind));
+}
+// Dove sta la riga nella sua tratta. Un ordine di lavoro di prima delle tratte
+// ha una riga per fase: si avvia dalla prima e si dichiara dall'ultima, e i
+// rientrati valgono per tutte (`sorelle`). Una riga senza ciclo è libera: si
+// avvia e si dichiara lei, senza magazzino.
+function odlAncore(o, l) {
+  const ruolo = l.phaseKey ? clLineRole(o, l) : null;
+  if (!ruolo || !ruolo.prima) {
+    return { libera: true, prima: l, ultima: l, sorelle: [l], apre: true, chiude: true, outKind: '', inKind: '', part: null };
+  }
+  return { libera: false, prima: ruolo.prima, ultima: ruolo.ultima, sorelle: ruolo.sorelle.length ? ruolo.sorelle : [l],
+    apre: ruolo.out, chiude: ruolo.in, outKind: ruolo.outKind, inKind: ruolo.inKind, part: ruolo.part };
+}
+// Il legame che decide il padrone. Una riga del piano che è partita da sola
+// prima del lancio dell'ODP resta sua finché l'ODP è in bozza: al lancio i suoi
+// eventi passano all'ODP (opRilevaOdl).
+function odlLegameAttivo(o, l) {
+  if (typeof opLegameRigaOdl !== 'function') return null;
+  const leg = opLegameRigaOdl(o, l);
+  if (!leg) return null;
+  if (leg.dalPiano && leg.odp.status === 'bozza' && odlHaEventiPropri(o, l)) return null;
+  return leg;
+}
+function odlRigaAvviata(o, l) {
+  const p = odlAncore(o, l).prima;
+  return odlEventiRiga(o, p, { conVecchi: true }).some(d => d.kind === 'avvio');
+}
+function odlRigaResta(l) { return Math.max(0, (Number(l.qty) || 0) - (Number(l.received) || 0)); }
+// In bozza l'ordine non è ancora arrivato al terzista: il materiale non parte.
+function odlNonAvviabile(o) {
+  if (o.status === 'bozza') return "l'ordine è in bozza: segnalo come inviato prima di mandare il materiale";
+  if (o.status === 'annullato') return "l'ordine è annullato";
+  return '';
+}
+// Cosa esce all'avvio: il materiale del ciclo all'inizio della prima tratta
+// esterna, altrimenti i pezzi stessi. Al netto di quanto è già uscito.
+function odlMaterialeProposto(o, l) {
+  const a = odlAncore(o, l);
+  if (a.libera || !a.apre) return [];
+  const pezzi = Number(l.qty) || 0;
+  const righe = a.outKind === 'clStep'
+    ? (a.part && hasStock(a.part) ? [{ item: a.part, perPezzo: 1, qty: pezzi }] : [])
+    : clMaterialsOf(a.part, pezzi);
+  const gia = clRegistrato(o, l, 'out');
+  return righe.map(x => Object.assign({}, x, { gia: gia.get(x.item.id) || 0, residuo: Math.max(0, x.qty - (gia.get(x.item.id) || 0)) }));
+}
+function odlRigaDi(docId, lineId) {
+  const o = getOdl(docId); if (!o) return null;
+  const l = (o.lines || []).find(x => x.id === lineId);
+  return l ? { o, l } : null;
+}
+function odlNuovoEvento(o, l, kind, extra) {
+  return Store.insert('prodDecls', Object.assign({
+    id: gid(), odpId: null, phaseId: null, odlId: o.id, odlLineId: l.id, kind,
+    date: nowISO(), qty: 0, scrap: 0, note: '', motivo: '',
+  }, extra || {}));
+}
+// I rientrati si muovono insieme su tutte le righe della tratta, e passano da
+// registraRicevuto: nell'archivio condiviso sono una somma di eventi.
+function odlSpostaRientrati(o, righe, delta) {
+  righe.forEach(s => {
+    const qty = Number(s.qty) || 0;
+    registraRicevuto('workOrders', o, s, Math.min(qty, Math.max(0, (Number(s.received) || 0) + delta)));
+  });
+}
+
+// ─── I mutatori ───
+// `opz.materiali` [{ itemId, qty }]: senza, esce il residuo proposto.
+function odlAvvia(docId, lineId, opz) {
+  if (!odlGuard(docId, 'reception')) return false;
+  const x = odlRigaDi(docId, lineId); if (!x) return false;
+  const { o, l } = x;
+  if (odlLegameAttivo(o, l)) { showToast('Questa lavorazione si avvia dall\'ordine di produzione', 'error'); return false; }
+  const blocco = odlNonAvviabile(o);
+  if (blocco) { showToast('Non si può avviare: ' + blocco, 'error'); return false; }
+  const a = odlAncore(o, l);
+  if (!a.apre) { showToast(`Questa lavorazione si avvia dalla riga della fase ${cyclePhaseNumber(clPhaseIndex(a.prima))}`, 'error'); return false; }
+  if (odlRigaAvviata(o, l)) { showToast('La lavorazione è già avviata', 'error'); return false; }
+  const opzioni = opz || {};
+  const note = String(opzioni.note || '').trim();
+  // L'id nasce dall'ordine e dalla riga, come l'avvio di una fase: due colleghi
+  // che avviano la stessa riga prima di vedersi scrivono lo stesso avvio.
+  const avvio = odlNuovoEvento(o, l, 'avvio', { id: idDaChiaveLibero(`odlavvio|${o.id}|${l.id}`, 'prodDecls'), note });
+  const righe = opzioni.materiali || odlMaterialeProposto(o, l).map(m => ({ itemId: m.item.id, qty: m.residuo }));
+  righe.forEach((r, i) => {
+    const q = Number(r.qty) || 0;
+    if (!(q > 0) || !a.outKind) return;
+    const extra = { orderId: o.id, lineId: l.id, declId: avvio.id, supplierId: o.supplierId,
+      id: idDaChiaveLibero(`odlavvio|${avvio.id}|${i}|${r.itemId}`, 'movements') };
+    if (a.outKind === 'clStep') addMovement(r.itemId, 'clStep', q, note || `Pezzi al terzista per ${o.number}`, extra);
+    else addMovement(r.itemId, 'clOut', -q, note || `Materiale per ${o.number}`, extra);
+  });
+  touch(o); saveDB();
+  return true;
+}
+function odlDichiara(docId, lineId, dati) {
+  if (!odlGuard(docId, 'reception')) return false;
+  const x = odlRigaDi(docId, lineId); if (!x) return false;
+  const { o, l } = x;
+  if (odlLegameAttivo(o, l)) { showToast('I pezzi di questa lavorazione si dichiarano sull\'ordine di produzione', 'error'); return false; }
+  const a = odlAncore(o, l);
+  if (!a.chiude) { showToast(`Questa lavorazione si dichiara dalla riga della fase ${cyclePhaseNumber(clPhaseIndex(a.ultima))}`, 'error'); return false; }
+  if (!odlRigaAvviata(o, l)) { showToast('La lavorazione non è stata avviata', 'error'); return false; }
+  const d = dati || {};
+  const qty = Math.max(0, Number(d.qty) || 0);
+  const scrap = Math.max(0, Number(d.scrap) || 0);
+  if (!(qty > 0) && !(scrap > 0)) { showToast('Niente da dichiarare: pezzi e scarti sono a zero', 'error'); return false; }
+  const note = String(d.note || '').trim();
+  const decl = odlNuovoEvento(o, l, 'avanzamento', { qty, scrap, note });
+  if (qty > 0 && a.part && hasStock(a.part) && a.inKind) {
+    const extra = { orderId: o.id, lineId: l.id, declId: decl.id };
+    if (a.inKind === 'clStep') { extra.fromSupplierId = o.supplierId; addMovement(a.part.id, 'clStep', qty, note || `Pezzi dal terzista per ${o.number}`, extra); }
+    else { extra.supplierId = o.supplierId; addMovement(a.part.id, 'clIn', qty, note || `Rientro da ${o.number}`, extra); }
+  }
+  odlSpostaRientrati(o, a.sorelle, qty + scrap);
+  ordAutoStatus(o); touch(o); saveDB();
+  return true;
+}
+// Un avvio si annulla finché la riga non ha rientri; un rientro sempre. Con
+// l'evento se ne vanno **i suoi** movimenti, e i rientrati tornano indietro.
+function odlEventoAnnullabile(o, d) {
+  if (!o || !d || (d.kind !== 'avvio' && d.kind !== 'avanzamento')) return { ok: false, motivo: 'questo evento non si annulla' };
+  const l = (o.lines || []).find(x => x.id === d.odlLineId);
+  if (d.kind === 'avvio' && l && odlEventiRiga(o, odlAncore(o, l).ultima, { conVecchi: true }).some(x => x.kind === 'avanzamento')) {
+    return { ok: false, motivo: 'la lavorazione ha già dei rientri: annulla prima quelli' };
+  }
+  return { ok: true };
+}
+function odlAnnullaEvento(declId) {
+  const d = (db.prodDecls || []).find(x => x.id === declId); if (!d || !d.odlId) return false;
+  if (!odlGuard(d.odlId, 'reception')) return false;
+  const o = getOdl(d.odlId); if (!o) return false;
+  const ok = odlEventoAnnullabile(o, d);
+  if (!ok.ok) { showToast(`Non si può annullare: ${ok.motivo}`, 'error'); return false; }
+  (db.movements || []).filter(m => m.declId === declId).forEach(m => Store.remove('movements', m.id));
+  Store.remove('prodDecls', declId);
+  const l = (o.lines || []).find(x => x.id === d.odlLineId);
+  if (l && d.kind === 'avanzamento') odlSpostaRientrati(o, odlAncore(o, l).sorelle, -((Number(d.qty) || 0) + (Number(d.scrap) || 0)));
+  ordAutoStatus(o); touch(o); saveDB();
+  return true;
+}
+// «Dichiara tutto rientrato»: il residuo di ogni riga avviata, come pezzi
+// buoni. Prima segnava i rientrati senza movimenti, e il codice non si
+// caricava mai: era la strada che saltava il magazzino.
 function odlMarkAllReceived(id) {
   if (!odlGuard(id, 'reception')) return false;
   const o = getOdl(id); if (!o) return false;
-  let saltate = 0;
+  let fatte = 0, daOdp = 0, ferme = 0;
   (o.lines || []).forEach(l => {
-    if (odlRigaDaOdp(l)) { saltate++; return; }
-    registraRicevuto('workOrders', o, l, Number(l.qty) || 0);
+    if (odlLegameAttivo(o, l)) { daOdp++; return; }
+    const a = odlAncore(o, l);
+    if (!a.chiude) return;
+    const resta = odlRigaResta(l);
+    if (!(resta > 0.000001)) return;
+    if (!odlRigaAvviata(o, l)) { ferme++; return; }
+    if (odlDichiara(id, l.id, { qty: resta })) fatte++;
   });
-  ordAutoStatus(o); touch(o); odlMarkDirty(); renderOdl();
-  if (saltate) showToast(`${saltate} ${saltate === 1 ? 'riga viene' : 'righe vengono'} da un ordine di produzione: i pezzi rientrati si dichiarano lì`, 'error');
-  return true;
+  renderOdl();
+  const avvisi = [];
+  if (ferme) avvisi.push(`${ferme} ${ferme === 1 ? 'riga non è avviata' : 'righe non sono avviate'}`);
+  if (daOdp) avvisi.push(`${daOdp} ${daOdp === 1 ? 'riga si dichiara' : 'righe si dichiarano'} sull'ordine di produzione`);
+  if (avvisi.length) showToast(avvisi.join(' · '), 'error');
+  return fatte > 0;
+}
+
+// ─── I comandi sotto la riga ───
+function odlLink(azione, testo, titolo) {
+  return `<span class="plandoc-link plandoc-link-sm" ${clickAttrs(azione, titolo)}>${esc(testo)}</span>`;
+}
+function odlLineActions(o, l) {
+  const leg = odlLegameAttivo(o, l);
+  if (leg) return odlAzioniDaOdp(o, l, leg);
+  const a = odlAncore(o, l);
+  const fase = x => 'fase ' + cyclePhaseNumber(clPhaseIndex(x));
+  // Una riga in mezzo a una tratta di un ordine di prima non ha comandi: dice
+  // dove sono, invece di sembrare un difetto.
+  if (!a.apre && !a.chiude) {
+    return `<div class="line-cl-actions"><span title="Le fasi della stessa tratta si avviano dalla prima riga e si dichiarano dall'ultima.">${ico('factory', 'tinted', '')} si avvia alla ${esc(fase(a.prima))}, si dichiara alla ${esc(fase(a.ultima))}</span></div>`;
+  }
+  const avviata = odlRigaAvviata(o, l);
+  const cmd = [];
+  if (!avviata) {
+    if (a.apre) {
+      const blocco = odlNonAvviabile(o);
+      if (blocco) cmd.push(`<span class="empty-text" style="padding:0">${esc(blocco)}</span>`);
+      else cmd.push(odlLink(`odlAvviaModal('${o.id}','${l.id}')`, 'avvia', a.libera ? 'Avvia la lavorazione: il magazzino non si muove'
+        : a.outKind === 'clStep' ? 'Avvia la lavorazione e manda i pezzi al terzista: non tocca il magazzino'
+          : 'Avvia la lavorazione e manda il materiale del ciclo al terzista: esce dal magazzino'));
+    } else cmd.push(`<span class="empty-text" style="padding:0">si avvia alla ${esc(fase(a.prima))}</span>`);
+  } else if (a.chiude && odlRigaResta(l) > 0.000001) {
+    cmd.push(odlLink(`odlDichiaraModal('${o.id}','${l.id}')`, 'dichiara', a.libera ? 'Dichiara i pezzi tornati e gli scarti'
+      : a.inKind === 'clStep' ? 'Dichiara i pezzi tornati e gli scarti: restano in lavorazione, il magazzino non si muove'
+        : 'Dichiara i pezzi tornati e gli scarti: i buoni entrano a magazzino col codice della parte'));
+  }
+  if (!cmd.length) return '';
+  // Dove il gesto non tocca il magazzino si dice perché: un comando che sembra
+  // un carico e non carica fa perdere fiducia in una giacenza.
+  const note = [];
+  if (!a.libera) {
+    if (a.apre && !a.chiude) note.push('si dichiara alla ' + fase(a.ultima));
+    if (a.outKind === 'clStep' && a.inKind === 'clStep') note.push('passaggio di lavorazione: il magazzino non si muove');
+    else if (!avviata && a.outKind === 'clStep') note.push('il materiale era gi&agrave; uscito');
+    else if (avviata && a.inKind === 'clStep') note.push('il codice si carica alla fine del ciclo');
+  }
+  const nota = note.length ? ` <span class="empty-text" style="padding:0">· ${note.join(' · ')}</span>` : '';
+  return `<div class="line-cl-actions">${ico('factory', 'tinted', '')}${cmd.join('')}${nota}</div>`;
+}
+// La riga di un ODP: gli stessi comandi, che aprono le schede delle sue fasi.
+function odlAzioniDaOdp(o, l, leg) {
+  const { odp, fasi } = leg;
+  const prima = fasi[0];
+  const rimando = `<span class="plandoc-link plandoc-link-sm" ${clickAttrs(`openOdpFromOdl('${odp.id}')`,
+    'Apri l\'ordine di produzione: avvio e rientri di questa lavorazione sono suoi')}>${esc(odp.number)} › fase ${esc(fasi.map(f => f.seq).join('-'))}</span>`;
+  const cmd = [];
+  const stato = odpAvanzamentoTratta(odp, prima);
+  if (odp.status === 'bozza') cmd.push('<span class="empty-text" style="padding:0">l\'ordine di produzione è in bozza: va lanciato</span>');
+  else if (stato === 'fatto') cmd.push('<span class="empty-text" style="padding:0">rientrata</span>');
+  else if (!opAvviata(odp, prima)) {
+    const st = opStatoFase(odp, prima);
+    if (st === 'avviabile') {
+      cmd.push(odlLink(`odlAvviaModal('${o.id}','${l.id}')`, 'avvia', opEPrima(odp, prima)
+        ? 'Avvia la fase sull\'ordine di produzione e manda il materiale del ciclo al terzista: esce dal magazzino'
+        : 'Avvia la fase sull\'ordine di produzione. Il magazzino non si muove: i pezzi sono già fuori dallo scaffale'));
+    } else {
+      const blocco = opAvviabile(odp, prima);
+      cmd.push(`<span class="empty-text" style="padding:0">${esc(blocco.motivo || 'non avviabile')}</span>`);
+      if (blocco.fase) cmd.push(odlLink(`opForzaModal('${odp.id}','${prima.id}')`, 'forza avvio', 'Avvia comunque, dichiarando il motivo: resta scritto nello storico dell\'ordine di produzione'));
+    }
+  } else {
+    const ultima = fasi[fasi.length - 1];
+    cmd.push(odlLink(`odlDichiaraModal('${o.id}','${l.id}')`, 'dichiara', opEUltima(odp, ultima)
+      ? 'Dichiara i pezzi tornati e gli scarti sull\'ordine di produzione: i buoni entrano a magazzino col codice della parte'
+      : 'Dichiara i pezzi tornati e gli scarti sull\'ordine di produzione'));
+  }
+  return `<div class="line-cl-actions">${ico('factory', 'tinted', '')}${cmd.join('')} ${rimando}</div>`;
+}
+
+// ─── Le schede ───
+function odlTestaModal(o, l, titolo) {
+  return `<h3>${ico('factory', 'tinted pill', '')} ${esc(titolo)}</h3>
+    <p>${esc(o.number)} · <strong>${esc(supplierName(o.supplierId) || '')}</strong> — ${esc(((l.code || '') + ' ' + (l.description || '')).trim())}, ${fmtQtyIt(Number(l.qty) || 0)} ${esc(l.uom || 'pz')}</p>`;
+}
+function odlAvviaModal(docId, lineId) {
+  const x = odlRigaDi(docId, lineId); if (!x) return;
+  const { o, l } = x;
+  if (!roleGuardShop('docs')) return;
+  const leg = odlLegameAttivo(o, l);
+  if (leg) {
+    if (opRilevaOdl(leg.odp)) { odpAutoStatus(leg.odp); touch(leg.odp); saveDB(); }
+    if (opAvviata(leg.odp, leg.fasi[0])) { renderOdl(); return; }
+    opAvviaModal(leg.odp.id, leg.fasi[0].id);
+    return;
+  }
+  const a = odlAncore(o, l);
+  const righe = odlMaterialeProposto(o, l);
+  window.__odlAvviaMat = righe.map(m => m.item.id);
+  window.__odlAvviaKind = a.outKind;
+  const passo = a.outKind === 'clStep';
+  const corpo = righe.map((m, i) => `<div class="mgmt-item">
+      <span style="width:110px;font-family:var(--mono)">${esc(m.item.code || '')}</span>
+      <span style="flex:1">${esc(m.item.name || '')}${passo ? '' : ` <span class="empty-text" style="padding:0">${fmtQtyIt(m.perPezzo)} ${esc(itemUom(m.item))}/pz · a magazzino ${fmtQtyIt(onHandOf(m.item.id))}</span>`}${m.gia ? ` <span class="rfq-clavoro-tag">già ${fmtQtyIt(+m.gia.toFixed(4))}</span>` : ''}</span>
+      <input class="num" type="number" id="odl-a-q-${i}" min="0" step="any" value="${+m.residuo.toFixed(4)}" style="width:110px" oninput="odlAvviaAvviso()">
+      <span class="empty-text" style="padding:0;width:40px">${esc(itemUom(m.item))}</span>
+    </div>`).join('');
+  const spiega = a.libera
+    ? 'Questa riga non viene da un ciclo: l&rsquo;avvio dice che la lavorazione è partita, e il magazzino <strong>non si muove</strong>.'
+    : passo
+      ? 'È un <strong>passaggio di lavorazione</strong>: i pezzi tornati dalla fase precedente vanno al terzista e <strong>il magazzino non si muove</strong>. Il materiale era già uscito all&rsquo;inizio del ciclo.'
+      : righe.length
+        ? 'Il materiale del <strong>ciclo</strong>, per i pezzi della riga, <strong>esce dal magazzino</strong> e va dal terzista: il prospetto <em>presso terzi</em> dice da chi sta. Esce <strong>una volta sola</strong>, qui.'
+        : 'Il ciclo di questa parte non ha materiale a magazzino, o è già uscito tutto: l&rsquo;avvio dice solo che la lavorazione è partita.';
+  openModal(`${odlTestaModal(o, l, 'Avvia la lavorazione')}
+    ${corpo ? `<h4 class="settings-group-title">${passo ? 'Pezzi che vanno al terzista' : 'Materiale che esce, dal ciclo della parte'}</h4>
+      <div style="display:flex;flex-direction:column;gap:6px">${corpo}</div>
+      ${passo ? '' : `<div id="odl-a-avviso">${avvisoSottoZeroHtml(righe.map(m => ({ itemId: m.item.id, qty: m.residuo })))}</div>`}` : ''}
+    <p class="empty-text" style="text-align:left;padding:8px 0">${spiega}</p>
+    <div class="modal-field"><label>Nota</label><input id="odl-a-note" placeholder="es. bolla 412" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="odlAvviaSave('${esc(docId)}','${esc(lineId)}')">Avvia</button>
+    </div>`, !!corpo, 'form');
+}
+function odlAvviaRighe() { return (window.__odlAvviaMat || []).map((itemId, i) => ({ itemId, qty: rawNum('odl-a-q-' + i) })); }
+function odlAvviaAvviso() { const el = document.getElementById('odl-a-avviso'); if (el) el.innerHTML = avvisoSottoZeroHtml(odlAvviaRighe()); }
+function odlAvviaSave(docId, lineId) {
+  const materiali = odlAvviaRighe();
+  const sotto = window.__odlAvviaKind === 'clOut' ? avvisoSottoZero(materiali) : [];
+  if (!odlAvvia(docId, lineId, { materiali, note: val('odl-a-note') })) return;
+  closeModal(); renderOdl();
+  if (sotto.length) showToast('Lavorazione avviata, ma l\'esistente va sotto zero: ' + sotto.join('; '), 'error');
+  else showToast('Lavorazione avviata');
+}
+function odlDichiaraModal(docId, lineId) {
+  const x = odlRigaDi(docId, lineId); if (!x) return;
+  const { o, l } = x;
+  if (!roleGuardShop('docs')) return;
+  const leg = odlLegameAttivo(o, l);
+  if (leg) {
+    if (opRilevaOdl(leg.odp)) { odpAutoStatus(leg.odp); touch(leg.odp); saveDB(); }
+    opDichiaraTrattaModal(leg.odp.id, leg.fasi[0].id);
+    return;
+  }
+  const a = odlAncore(o, l);
+  const resta = odlRigaResta(l);
+  const spiega = a.libera
+    ? 'I pezzi tornati portano l&rsquo;ordine a parziale o evaso. Il magazzino <strong>non si muove</strong>: la riga non viene da un ciclo.'
+    : a.inKind === 'clStep'
+      ? 'I pezzi tornano da noi fra due tratte: <strong>non entrano a magazzino</strong>. Il codice della parte si carica una volta sola, alla fine del ciclo.'
+      : `I pezzi buoni <strong>entrano a magazzino</strong> col codice <strong>${esc((a.part && a.part.code) || l.code || '')}</strong>, ed è l&rsquo;unico punto in cui si carica. Gli scarti contano come tornati, ma non si caricano.`;
+  openModal(`${odlTestaModal(o, l, 'Dichiara il rientro dal terzista')}
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Pezzi della riga: <strong>${fmtQtyIt(Number(l.qty) || 0)}</strong> · già tornati: <strong>${fmtQtyIt(Number(l.received) || 0)}</strong> · restano <strong>${fmtQtyIt(resta)}</strong>.</p>
+    <div class="modal-grid">
+      <div class="modal-field"><label>Pezzi buoni</label>
+        <input class="num" type="number" id="odl-d-qty" min="0" step="any" value="${+resta.toFixed(4)}"></div>
+      <div class="modal-field"><label>Scarti</label>
+        <input class="num" type="number" id="odl-d-scrap" min="0" step="any" value="0"></div>
+    </div>
+    <p class="empty-text" style="text-align:left;padding:8px 0">${spiega}</p>
+    <div class="modal-field"><label>Nota</label><input id="odl-d-note" placeholder="es. bolla 412" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="odlDichiaraSave('${esc(docId)}','${esc(lineId)}')">Registra</button>
+    </div>`, false, 'form');
+}
+function odlDichiaraSave(docId, lineId) {
+  if (!odlDichiara(docId, lineId, { qty: rawNum('odl-d-qty'), scrap: rawNum('odl-d-scrap'), note: val('odl-d-note') })) return;
+  closeModal(); renderOdl(); showToast('Rientro registrato');
+}
+function odlAnnullaEventoAsk(declId) {
+  const d = (db.prodDecls || []).find(x => x.id === declId); if (!d) return;
+  const domanda = d.kind === 'avvio'
+    ? 'Annullare l\'avvio di questa lavorazione?\nIl materiale uscito con lui torna a magazzino, e la riga torna da avviare.'
+    : `Annullare questo rientro di ${fmtQtyIt((Number(d.qty) || 0) + (Number(d.scrap) || 0))} pezzi?\nI movimenti di magazzino che ha generato vengono tolti con lui.`;
+  askConfirm(domanda, () => {
+    if (!odlAnnullaEvento(declId)) return;
+    renderOdl(); showToast('Annullato');
+  }, { title: 'Annulla', ok: 'Annulla l\'evento' });
+}
+// Lo storico degli avvii e dei rientri dell'ordine, come quello dell'ODP: è il
+// posto dove si annulla un gesto sbagliato.
+function odlDeclBlock(o) {
+  const decls = (db.prodDecls || []).filter(d => d.odlId === o.id)
+    .slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  if (!decls.length) return '';
+  const riga = id => { const l = (o.lines || []).find(x => x.id === id); return l ? ((l.code || '') + ' ' + (l.description || '')).trim() : '—'; };
+  return `<div class="mrp-section">
+    <div class="cycle-section-head"><h3>${ico('clock', 'tinted pill', '')} Avvii e rientri</h3></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th scope="col" style="width:150px">Quando</th><th scope="col">Lavorazione</th><th scope="col" style="width:100px">Cosa</th>
+        <th scope="col" style="width:80px">Pezzi</th><th scope="col" style="width:80px">Scarti</th><th scope="col">Nota</th>
+        <th scope="col" style="width:60px"></th></tr></thead>
+      <tbody>${decls.map(d => `<tr>
+        <td>${esc(String(d.date || '').slice(0, 16).replace('T', ' '))}</td>
+        <td>${esc(riga(d.odlLineId))}</td>
+        <td>${esc(ODL_EV_ETICHETTA[d.kind] || d.kind)}</td>
+        <td class="num">${d.qty ? fmtQtyIt(d.qty) : '—'}</td>
+        <td class="num">${d.scrap ? fmtQtyIt(d.scrap) : '—'}</td>
+        <td>${esc(d.note || '')}</td>
+        <td>${odlEventoAnnullabile(o, d).ok
+    ? `<button class="mini-btn danger lock-reception" onclick="odlAnnullaEventoAsk('${d.id}')" title="${d.kind === 'avvio'
+      ? "Annulla l'avvio e rimette a magazzino il materiale uscito con lui" : 'Annulla questo rientro e i movimenti che ha generato'}">${ico('trash', 'tinted', 'Annulla')}</button>`
+    : ''}</td></tr>`).join('')}</tbody>
+    </table></div></div>`;
 }
 
 // ─── Una lavorazione scritta a mano, partendo dal ciclo ───
@@ -2174,9 +2573,9 @@ function renderOdlEdit(id) {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
     const amount = price != null ? importoRiga(l) : null;
     const rec = Number(l.received) || 0, residual = qty - rec;
-    // Le due azioni di conto lavoro stanno sotto la riga che le giustifica:
-    // terzista e ordine sono già decisi, resta da dire cosa esce e quanto.
-    const cl = docClActions(o, l);
+    // Avvia e dichiara stanno sotto la riga che li giustifica: terzista e
+    // ordine sono già decisi, resta da dire cosa esce e cosa torna.
+    const cl = odlLineActions(o, l);
     return `<tr>
       ${cell2(i + 1, '', 'ln-idx')}
       ${cell2(`<span class="ln-code">${esc(l.code || '')}</span>`,
@@ -2189,7 +2588,7 @@ function renderOdlEdit(id) {
     `<span class="empty-text" style="padding:0" title="Da inviare finché il materiale non parte; in lavorazione quando è uscito; rientrata quando i pezzi sono tornati">${esc(ODL_AVANZAMENTO[odlAvanzamentoRiga(o, l)])}</span>`)}
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="odlSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il terzista ha confermato" onchange="odlSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
-      ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" ${odlRigaDaOdp(l) ? 'disabled' : ''} title="${odlRigaDaOdp(l) ? 'I pezzi rientrati li dichiara l&rsquo;ordine di produzione: qui si leggono, non si scrivono.' : 'Pezzi rientrati dal terzista: portano l&rsquo;ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.'}" onchange="odlSetLine('${id}','${l.id}','received',this.value)">`,
+      ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" disabled title="${odlLegameAttivo(o, l) ? 'I pezzi rientrati li dichiara l&rsquo;ordine di produzione: qui si leggono, non si scrivono.' : 'Pezzi tornati dal terzista, buoni e scarti: si scrivono con «dichiara», che muove anche il magazzino.'}">`,
     `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Pezzi ancora dal terzista">${fmtQtyIt(residual)}</span>`)}
       ${docLineActionsCell('odl', id, l)}
     </tr>`;
@@ -2204,12 +2603,12 @@ function renderOdlEdit(id) {
     ${docCoWarnHtml()}${odlOdpRef(o)}${lockBanner}${stampLine(o)}
     ${docTestaHtml({ pfx: 'odl', rec: o, stati: ORDER_STATUS, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta.</div>` : ''}
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">I <strong>pezzi rientrati</strong> portano l'ordine a parziale o evaso ma <strong>non caricano il magazzino</strong>: il materiale che esce e i pezzi che tornano si registrano come movimenti. È la stessa regola per cui queste righe non hanno un articolo — altrimenti la stessa merce verrebbe contata due volte.<br>Il materiale <strong>esce una volta sola</strong>, alla prima fase di ogni parte, ed è quello scritto nel suo <strong>ciclo</strong>; i pezzi rientrano una volta, all'ultima. Le fasi in mezzo non muovono niente: più fasi dallo stesso terzista sono più lavorazioni sullo <em>stesso</em> pezzo, non più pezzi.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Ogni lavorazione si <strong>avvia</strong> quando il materiale parte e si <strong>dichiara</strong> quando i pezzi tornano, buoni e scarti: come sull'ordine di produzione. Il magazzino si muove ai due estremi del <strong>ciclo</strong> — il materiale esce all'avvio della prima tratta, il codice della parte si carica al rientro dell'ultima — e in mezzo i pezzi passano e basta. Se la lavorazione viene da un <strong>ordine di produzione</strong>, avvia e dichiara scrivono sulle sue fasi: il gesto è uno, in qualunque dei due documenti lo si faccia.</p>
     <h3 class="rfq-subhead">Lavorazioni
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="odlAddPhaseModal('${id}')" title="Scegli una parte col suo ciclo e le fasi da commissionare">+ Lavorazione da ciclo</button>
         <button class="btn-outline lock-contract" onclick="odlAddManualLineModal('${id}')">+ Riga manuale</button>
-        <button class="btn-outline lock-reception" onclick="odlMarkAllReceived('${id}')">✓ Segna tutto rientrato</button>
+        <button class="btn-outline lock-reception" onclick="odlMarkAllReceived('${id}')" title="Dichiara come pezzi buoni il residuo di ogni lavorazione avviata">✓ Dichiara tutto rientrato</button>
       </span></h3>
     <div class="table-wrap"><table class="rfq-table rfq-table-2">
       <thead><tr>
@@ -2224,6 +2623,7 @@ function renderOdlEdit(id) {
       <tbody>${lines}</tbody>
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="4"></td></tr></tfoot>
     </table></div>
+    ${odlDeclBlock(o)}
     ${docExportBarHtml({ etichetta: "Documento d'ordine di lavoro:", cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro", kind: 'workOrder', rec: o })}
   </div>`;
 }

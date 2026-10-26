@@ -373,10 +373,16 @@ create table if not exists public.production_declarations (
   id uuid primary key,
   odp_id uuid references public.production_orders(id) on delete cascade deferrable initially deferred,
   phase_id uuid references public.production_order_phases(id) on delete set null deferrable initially deferred,
+  -- 0.115.0: avvii e rientri di una riga d'ordine di lavoro senza ODP. Nessuna
+  -- chiave, come `order_id` sui movimenti: l'ODL si annulla, non si elimina.
+  odl_id uuid, odl_line_id uuid,
   kind text, date timestamptz, qty numeric, scrap numeric, note text, motivo text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.115.0: per i database già creati.
+alter table public.production_declarations add column if not exists odl_id uuid;
+alter table public.production_declarations add column if not exists odl_line_id uuid;
 
 create table if not exists public.stock_movements (
   id uuid primary key,

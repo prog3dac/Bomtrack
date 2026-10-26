@@ -386,7 +386,7 @@ function qrSchedaHtml(tipo, rec) {
       <span class="num">${fmtQtyIt(Number(l.received) || 0)} / ${fmtQtyIt(Number(l.qty) || 0)} ${esc(l.uom || '')}</span>
     </div>`).join('');
   const aperto = ['inviato', 'confermato', 'parziale'].includes(o.status);
-  const daRicevere = (o.lines || []).some(l => (Number(l.received) || 0) < (Number(l.qty) || 0));
+  const daRicevere = qrRigheDaRicevere(tipo, o).length > 0;
   const bottoni = [qrBtn("Apri l'ordine", 'file', `${odl ? 'openOdlFromPlan' : 'openOrderFromPlan'}('${o.id}')`, !(aperto && daRicevere))];
   if (aperto && daRicevere && canWriteShop('docs')) {
     bottoni.unshift(qrBtn('Ricevi tutto', 'truck', `qrRiceviTutto('${tipo}','${o.id}')`, true),
@@ -425,10 +425,12 @@ function qrRiceviTutto(tipo, id) {
 //
 // Il numero è **quanto arriva adesso**, non il totale ricevuto: è quello che
 // c'è sulla bolla in mano. Le righe di un ODL che vengono da un ordine di
-// produzione restano fuori, come in «Ricevi tutto»: si dichiarano lì.
+// produzione restano fuori, come in «Ricevi tutto»: si dichiarano lì. Dalla
+// 0.115.0 un ODL si riceve **dichiarando**: solo le righe avviate, e il
+// rientro muove il magazzino come dalla scrivania.
 function qrRigheDaRicevere(tipo, o) {
   return (o.lines || []).filter(l => (Number(l.received) || 0) < (Number(l.qty) || 0)
-    && !(tipo === 'odl' && odlRigaDaOdp(l)));
+    && !(tipo === 'odl' && (odlLegameAttivo(o, l) || !odlAncore(o, l).chiude || !odlRigaAvviata(o, l))));
 }
 function qrRiceviModal(tipo, id) {
   const o = tipo === 'odl' ? getOdl(id) : getOrder(id);
@@ -484,11 +486,12 @@ function qrRiceviRighe(tipo, id, quantita) {
   qrRigheDaRicevere(tipo, o).forEach(l => {
     const q = Number(quantita && quantita[l.id]) || 0;
     if (q <= 0) return;
+    if (k === 'odl') { if (odlDichiara(id, l.id, { qty: q })) n++; return; }
     registraRicevuto(coll, o, l, (Number(l.received) || 0) + q);
     n++;
   });
   if (!n) return false;
-  ordAutoStatus(o); touch(o); docMarkDirty(k);
+  if (k !== 'odl') { ordAutoStatus(o); touch(o); docMarkDirty(k); }
   docLeave(k);
   docKind(k).render();
   showToast(`Ricevimento registrato: ${n === 1 ? '1 riga' : n + ' righe'}`);

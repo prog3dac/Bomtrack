@@ -214,7 +214,7 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   });
   // Gli ordini di lavoro della tratta: quelli del piano, o generati dai suoi
   // ODP (che portano anch'essi il piano). La riga nomina le sue fasi per chiave.
-  let odlQty = 0, odlRientro = 0, attesa = '';
+  let odlQty = 0, odlRientro = 0, attesa = '', odlAvviato = false;
   if (st.esterna) {
     odl.forEach(o => (o.lines || []).forEach(l => {
       const chiavi = clPhaseKeys(l).filter(k => {
@@ -225,6 +225,7 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
       if (!chiavi.length) return;
       const q = Number(l.qty) || 0, r = Number(l.received) || 0;
       odlQty += q; odlRientro += r;
+      if (odlAvanzamentoRiga(o, l) !== '') odlAvviato = true;
       const data = l.confirmedDate || l.deliveryDate || '';
       if (r < q && data && data > attesa) attesa = data;
       const presso = o.status !== 'bozza' && o.status !== 'evaso' && r < q;
@@ -237,12 +238,14 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   // Quando una fase è programmata lo dice il documento che la fa partire
   // (dalla 0.114.0): per una fase interna l'ODP, per una tratta dal terzista
   // l'ordine di lavoro — l'ODP da solo non manda niente fuori. In lavorazione
-  // solo quando la fase è «In corso» sull'ODP (un ODL inviato non basta),
-  // fatta quando è dichiarata: sull'ODP se c'è, se no dai rientri dell'ODL.
+  // quando la fase è «In corso» sull'ODP o la riga dell'ODL è **avviata** (un
+  // ODL inviato non basta: dalla 0.115.0 l'avvio della riga vale come quello
+  // della fase), fatta quando è dichiarata: sull'ODP se c'è, se no dai rientri
+  // dell'ODL.
   const conOdl = docs.some(d => d.kind === 'odl');
   if (conFasi || conOdl) {
     const chiusa = conFasi ? (tutteChiuse || (totale > 0 && fatto >= totale - 0.000001)) : odlRientro >= odlQty - 0.000001;
-    const ini = iniziato;
+    const ini = iniziato || odlAvviato;
     const programmata = st.esterna ? conOdl : conFasi > 0;
     const stato = chiusa ? 'fatto' : ini ? 'lavorazione' : programmata ? 'programmato' : 'da programmare';
     const [f, tot] = conFasi ? [fatto, totale] : [odlRientro, odlQty];
