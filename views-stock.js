@@ -1056,7 +1056,7 @@ function clLastExternalRun(part) { const e = clExternalRuns(part); return e[e.le
 // ancoraggi di prima.
 // **Che cosa** muove: magazzino ai due estremi del ciclo, passaggio altrove.
 function clLineRole(o, l) {
-  const vuoto = { out: false, in: false, outKind: '', inKind: '', prima: null, ultima: null, part: null, run: null };
+  const vuoto = { out: false, in: false, outKind: '', inKind: '', prima: null, ultima: null, part: null, run: null, sorelle: [] };
   const partId = clPhaseItemId(l);
   if (!partId) return vuoto;
   const part = getItem(partId);
@@ -1089,7 +1089,7 @@ function clLineRole(o, l) {
   return {
     out: prima.id === l.id, in: ultima.id === l.id,
     outKind, inKind,
-    prima, ultima, part, run,
+    prima, ultima, part, run, sorelle,
   };
 }
 // Il materiale che esce è quello del **ciclo della parte**: le righe di distinta
@@ -1122,6 +1122,11 @@ function clRegistrato(o, l, verso) {
   return m;
 }
 
+// Dalla 0.116.0 queste schede servono solo alle righe di conto lavoro rimaste
+// negli ordini d'acquisto: sull'ordine di lavoro la stessa cosa la fanno avvia
+// e dichiara (odlAvvia, odlDichiara), che scrivono anche l'evento e i
+// rientrati. Due strade per lo stesso gesto sarebbero due registrazioni.
+function clDocEOdl(o) { return !!o && (db.workOrders || []).some(x => x.id === o.id); }
 function clFromOdlModal(docId, lineId, verso) {
   if (!roleGuardShop('catalog')) return;
   const o = clDocById(docId); if (!o) return;
@@ -1131,6 +1136,7 @@ function clFromOdlModal(docId, lineId, verso) {
   // rimasto in una pagina già aperta — registrerebbe un movimento che l'ordine
   // di produzione ha già raccontato.
   if (l.odpId) { showToast('I movimenti di questa lavorazione si registrano sull\'ordine di produzione', 'error'); return; }
+  if (clDocEOdl(o)) { showToast('Sull\'ordine di lavoro la lavorazione si avvia e si dichiara dalla sua riga', 'error'); return; }
   if (!o.supplierId) { showToast('Il documento non ha un fornitore: senza, non si sa da chi sta la merce', 'error'); return; }
   const uscita = verso === 'out';
   const ruolo = clLineRole(o, l);
@@ -1190,6 +1196,7 @@ function saveClFromOdl(docId, lineId, verso) {
   const o = clDocById(docId); if (!o || !o.supplierId) return;
   const riga = (o.lines || []).find(x => x.id === lineId);
   if (riga && riga.odpId) { showToast('I movimenti di questa lavorazione si registrano sull\'ordine di produzione', 'error'); return; }
+  if (clDocEOdl(o)) { showToast('Sull\'ordine di lavoro la lavorazione si avvia e si dichiara dalla sua riga', 'error'); return; }
   const uscita = verso === 'out';
   const kind = window.__clKind || (uscita ? 'clOut' : 'clIn');
   const passaggio = kind === 'clStep';

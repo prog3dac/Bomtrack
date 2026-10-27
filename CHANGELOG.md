@@ -2,6 +2,23 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.116.0 — 2026-10-27
+
+**Avvia e dichiara anche sull'ordine di lavoro.** Sulla riga dell'ODL ci sono gli stessi due gesti dell'ordine di produzione, al posto di *spedisci materiale*, *manda al terzista*, *ritira dal terzista* e *registra rientro*, che scrivevano movimenti e basta: niente scarti, niente stato, e i pezzi rientrati da scrivere a mano una seconda volta. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge le colonne `odl_id` e `odl_line_id` a `production_declarations`, non tocca i dati).
+
+- **Un solo padrone per tratta.** Se la riga viene da un ordine di produzione, o dal fabbisogno di un piano che ha un ODP lanciato per quella parte, avvia e dichiara aprono le schede dell'ODP e scrivono sulle sue fasi. Altrimenti la riga ha avvii e rientri suoi.
+- **Corretto: il materiale poteva uscire due volte.** Un ODL generato dal fabbisogno teneva i suoi comandi anche quando il piano aveva lanciato un ODP per la stessa parte: avviando la fase sull'ODP e spedendo dall'ODL, il materiale usciva due volte. Ora sulla riga comanda l'ODP, e i rientrati li scrive lui.
+- **Presa in carico.** Se la riga del piano era già partita da sola, al lancio dell'ODP i suoi avvii, rientri e movimenti passano all'ODP così come sono: il materiale non viene riproposto e i pezzi tornati restano dichiarati.
+- **Dichiara**: pezzi buoni e scarti. Entrambi contano come rientrati e portano l'ODL a *Parziale* ed *Evaso*; i buoni a fine ciclo entrano a magazzino. Il campo *Rientrati* non si scrive più a mano.
+- **Le fasi di una tratta dal terzista** partono insieme: la fase dopo si avvia appena è avviata quella prima, e non è chiusa finché la precedente aspetta pezzi. Dalla riga dell'ODL la tratta si dichiara in un colpo. Anche l'ODL generato dall'ODP ora vede i rientri dell'ultima fase della tratta, non solo della prima.
+- **Storico «Avvii e rientri»** sotto le righe dell'ODL, con l'annullamento. Una riga avviata non si elimina, e nemmeno l'ordine.
+- **In bozza non si avvia**: l'ordine non è ancora arrivato al terzista.
+- **«Dichiara tutto rientrato»** (prima «Segna tutto rientrato») e la ricezione dal telefono dichiarano il residuo delle righe avviate: prima segnavano i rientrati senza caricare il magazzino.
+- **Gantt dell'Avanzamento**: una fase dal terzista senza ODP è *in lavorazione* appena la riga dell'ODL è avviata.
+- I movimenti registrati con i comandi di prima continuano a contare: una riga da cui era già uscito il materiale risulta avviata. Le schede di prima restano solo per le righe di conto lavoro rimaste negli ordini d'acquisto.
+
+**Manuale** — cap. 22 (le fasi di una tratta, la presa in carico), cap. 23 «Avvia e dichiara», cap. 5 e 19.
+
 ### 0.115.1 — 2026-10-27
 
 **Eliminare una macchina con i suoi gruppi dice perché non si può.** Una macchina senza movimenti, ordini né documenti, ma con dei gruppi codificati sotto di lei, si fermava con «Articolo già movimentato (magazzino, cicli, documenti o piani)»: il blocco era giusto, perché i codici dei gruppi nascono dalla sigla della macchina, ma il motivo no, e mandava a cercarlo in magazzino. Ora il messaggio nomina i gruppi (e, per un gruppo, i sottogruppi) da eliminare o spostare prima. Nessun cambio a `supabase/schema.sql`.

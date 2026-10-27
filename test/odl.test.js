@@ -343,8 +343,10 @@ describe('ODL a mano: la lavorazione viene dal ciclo', () => {
     app.eval(`getOdl('wm').lines = odlPhaseLines(['perno#0'], () => 4, ''); invalidateCaches();`);
     app.eval("setView('odl')");
     const h = app.html('view-odl');
-    assert.match(h, /spedisci materiale/);
-    assert.match(h, /registra rientro/);
+    // In bozza la lavorazione non parte: lo dice, invece del comando.
+    assert.match(h, /segnalo come inviato/);
+    app.eval(`getOdl('wm').status = 'inviato'; renderOdl();`);
+    assert.match(app.html('view-odl'), /plandoc-link[^>]*>avvia</);
   });
 
   it('le fasi interne e quelle di un altro terzista si vedono, marcate', () => {

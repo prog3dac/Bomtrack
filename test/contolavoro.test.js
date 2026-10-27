@@ -247,10 +247,14 @@ describe('Conto lavoro: il materiale esce una volta sola', () => {
       currentOdlId = 'w1'; odlView = 'edit';`);
     app.eval("setView('odl')");
     const h = app.html('view-odl');
-    assert.equal((h.match(/spedisci materiale/g) || []).length, 1, 'un solo comando di uscita');
-    assert.equal((h.match(/registra rientro/g) || []).length, 1, 'un solo comando di rientro');
-    assert.match(h, /in uscita alla fase 10, rientro alla fase 30/,
+    assert.equal((h.match(/plandoc-link[^>]*>avvia</g) || []).length, 1, 'un solo comando di avvio');
+    assert.equal((h.match(/plandoc-link[^>]*>dichiara</g) || []).length, 0, 'prima dell avvio non si dichiara');
+    assert.match(h, /si avvia alla fase 10, si dichiara alla fase 30/,
       'la fase in mezzo deve dire dove sono i comandi, non restare muta');
+    app.eval("odlAvvia('w1', 'L1', { materiali: [] }); renderOdl();");
+    const dopo = app.html('view-odl');
+    assert.equal((dopo.match(/plandoc-link[^>]*>avvia</g) || []).length, 0, 'avviata una volta, non si riavvia');
+    assert.equal((dopo.match(/plandoc-link[^>]*>dichiara</g) || []).length, 1, 'un solo comando di rientro, sull ultima fase');
   });
 
   it('due parti nello stesso ODL hanno ciascuna i propri ancoraggi', () => {
@@ -296,8 +300,11 @@ describe('Conto lavoro: il materiale e quello del ciclo', () => {
   });
 });
 
+// Dalla 0.116.0 sull'ordine di lavoro questi gesti sono avvia e dichiara
+// (test/odl-avanzamento.test.js): le schede di prima restano per le righe di
+// conto lavoro rimaste negli ordini d'acquisto, e i casi qui sotto le provano lì.
 describe('Conto lavoro: il giro con due fasi, in numeri', () => {
-  const conOdlDueFasi = (app) => app.eval(`db.workOrders.push({ id: 'w1', number: 'ODL-2026-001',
+  const conOdlDueFasi = (app) => app.eval(`db.orders.push({ id: 'w1', number: 'ODL-2026-001',
     status: 'confermato', supplierId: 'beta', active: true, planId: null, jobId: null,
     lines: [
       { id: 'L1', itemId: null, phaseKey: 'perno#0#zin', code: 'PERNO', description: 'Fase 10', uom: 'pz', qty: 4, price: 25, received: 0 },
@@ -363,11 +370,11 @@ function conDueTratte(over) {
     ];
     const riga = (id, key, desc) => ({ id, itemId: null, phaseKey: key, phaseKeys: key, code: 'PERNO',
       description: desc, uom: 'pz', qty: 4, price: 3, received: 0, deliveryDate: '', note: '' });
-    db.workOrders.push({ id: 'w1', number: 'ODL-2026-001', title: '', date: '2026-07-01', status: 'confermato',
+    db.orders.push({ id: 'w1', number: 'ODL-2026-001', title: '', date: '2026-07-01', status: 'confermato',
       supplierId: 'beta', transport: '', payment: '', rfqId: null, planId: null, jobId: null,
       supplierConfirmation: '', notes: '', notesInternal: '', active: true,
       lines: [riga('L1', 'perno#1#zin', 'Zincatura')] });
-    db.workOrders.push({ id: 'w2', number: 'ODL-2026-002', title: '', date: '2026-07-10', status: 'confermato',
+    db.orders.push({ id: 'w2', number: 'ODL-2026-002', title: '', date: '2026-07-10', status: 'confermato',
       supplierId: 'beta', transport: '', payment: '', rfqId: null, planId: null, jobId: null,
       supplierConfirmation: '', notes: '', notesInternal: '', active: true,
       lines: [riga('L2', 'perno#3#zin', 'Zincatura finale')] });
@@ -424,7 +431,7 @@ describe('Conto lavoro: le tratte del ciclo', () => {
 
 describe('Conto lavoro: il magazzino si muove ai due estremi del ciclo', () => {
   const ruolo = (app, docId, lineId) => JSON.parse(app.eval(`(() => {
-    const o = getOdl(${JSON.stringify(docId)});
+    const o = clDocById(${JSON.stringify(docId)});
     const l = o.lines.find(x => x.id === ${JSON.stringify(lineId)});
     const r = clLineRole(o, l);
     return JSON.stringify({ out: r.out, dentro: r.in, outKind: r.outKind, inKind: r.inKind });
@@ -494,13 +501,13 @@ describe('Conto lavoro: il magazzino si muove ai due estremi del ciclo', () => {
       { kind: 'op', workCenterId: 'zin', supplierId: 'beta', costMode: 'fisso', cost: 3, hours: 0, rate: 0, days: 1, note: '' },
       { kind: 'op', workCenterId: 'zin', supplierId: 'beta', costMode: 'fisso', cost: 2, hours: 0, rate: 0, days: 1, note: '' },
     ];
-    db.workOrders.push({ id: 'w9', number: 'ODL-2026-009', status: 'confermato', supplierId: 'beta',
+    db.orders.push({ id: 'w9', number: 'ODL-2026-009', status: 'confermato', supplierId: 'beta',
       active: true, planId: null, jobId: null, lines: [
         { id: 'A', itemId: null, phaseKey: 'perno#0#zin', code: 'PERNO', description: 'f10', uom: 'pz', qty: 4, price: 3, received: 0 },
         { id: 'B', itemId: null, phaseKey: 'perno#1#zin', code: 'PERNO', description: 'f20', uom: 'pz', qty: 4, price: 2, received: 0 },
       ] });
     invalidateCaches();`);
-    const r = id => JSON.parse(app.eval(`(() => { const o = getOdl('w9');
+    const r = id => JSON.parse(app.eval(`(() => { const o = clDocById('w9');
       const x = clLineRole(o, o.lines.find(y => y.id === '${id}'));
       return JSON.stringify({ out: x.out, dentro: x.in, outKind: x.outKind, inKind: x.inKind }); })()`));
     assert.deepEqual(r('A'), { out: true, dentro: false, outKind: 'clOut', inKind: 'clIn' });
@@ -522,7 +529,7 @@ describe('Conto lavoro: mandare fuori apposta una fase che il ciclo fa in casa',
       { kind: 'item', itemId: 'tondo', qty: 2, costOverride: null },
       { kind: 'op', workCenterId: 'zin', supplierId: '', costMode: 'fisso', cost: 3, hours: 0.1, days: 0, note: '' },
     ];
-    db.workOrders.push({ id: 'w3', number: 'ODL-2026-003', title: '', date: '2026-07-01', status: 'confermato',
+    db.orders.push({ id: 'w3', number: 'ODL-2026-003', title: '', date: '2026-07-01', status: 'confermato',
       supplierId: 'beta', transport: '', payment: '', rfqId: null, planId: null, jobId: null,
       supplierConfirmation: '', notes: '', notesInternal: '', active: true,
       lines: [{ id: 'L3', itemId: null, phaseKey: 'perno#0#zin', phaseKeys: 'perno#0#zin', code: 'PERNO',
@@ -531,7 +538,7 @@ describe('Conto lavoro: mandare fuori apposta una fase che il ciclo fa in casa',
     return app;
   }
   const ruolo = (app, docId, lineId) => JSON.parse(app.eval(`(() => {
-    const o = getOdl(${JSON.stringify(docId)});
+    const o = clDocById(${JSON.stringify(docId)});
     const l = o.lines.find(x => x.id === ${JSON.stringify(lineId)});
     const r = clLineRole(o, l);
     return JSON.stringify({ out: r.out, dentro: r.in, outKind: r.outKind, inKind: r.inKind });
@@ -557,7 +564,7 @@ describe('Conto lavoro: mandare fuori apposta una fase che il ciclo fa in casa',
     // prima che l'ultima tratta, quindi carica e scarica già da prima di
     // questo fix — qui si conferma che non è cambiato.
     const app = conDb();
-    app.eval(`db.workOrders.push({ id: 'w4', number: 'ODL-2026-004', status: 'confermato', supplierId: 'beta',
+    app.eval(`db.orders.push({ id: 'w4', number: 'ODL-2026-004', status: 'confermato', supplierId: 'beta',
       active: true, planId: null, jobId: null,
       lines: [{ id: 'L4', itemId: null, phaseKey: 'perno#0#zin', code: 'PERNO', description: 'Zincatura',
         uom: 'pz', qty: 4, price: 3, received: 0 }] });
@@ -620,7 +627,7 @@ describe('Conto lavoro: una volta sola, per davvero', () => {
     const app = conDueTratte();
     app.eval("addMovement('tondo', 'carico', 20, ''); invalidateCaches();");
     gesto(app, 'w1', 'L1', 'out', [8]);
-    const g = JSON.parse(app.eval(`(() => { const o = getOdl('w1');
+    const g = JSON.parse(app.eval(`(() => { const o = clDocById('w1');
       const l = o.lines[0];
       return JSON.stringify({ usciti: Array.from(clRegistrato(o, l, 'out').values()),
         rientrati: Array.from(clRegistrato(o, l, 'in').values()) }); })()`));
