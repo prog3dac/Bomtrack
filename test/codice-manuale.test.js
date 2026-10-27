@@ -169,3 +169,49 @@ describe('La spunta «Manuale» nella scheda', () => {
     assert.equal(a.el('it-code').value, 'MAX-S04', 'rigenerare darebbe MAX-S08, non il suo');
   });
 });
+
+describe('Anteprima dei codici figli', () => {
+  const righe = (a, d, c) => ev(a, `anteprimaCodiciFigli(${JSON.stringify(d)}, ${JSON.stringify(c)})`);
+
+  it('macchina: lo schema dei figli con sigla e cifre scelte', () => {
+    const a = app();
+    const r = righe(a, { type: 'macchina', sigla: 'TRN', gCodeLen: 3, gCodeType: 'alpha', incrDigitsS: 2, incrDigitsN: 3 }, 'TRN-S00');
+    assert.deepEqual(r.righe.map(x => x.codice), ['TRN-S00', 'TRN-AAA-S00', 'TRN-AAA-001', 'TRN-AAA-999']);
+    assert.deepEqual(r.avvisi, []);
+    const n = righe(a, { type: 'macchina', sigla: 'TRN', gCodeLen: 2, gCodeType: 'num', incrDigitsS: 3, incrDigitsN: 4 }, '');
+    assert.deepEqual(n.righe.map(x => x.codice), ['TRN-S000', 'TRN-00-S000', 'TRN-00-0001', 'TRN-00-9999']);
+  });
+
+  it('macchina con codice manuale: avvisa che i figli seguono la sigla', () => {
+    const a = app();
+    const r = righe(a, { type: 'macchina', sigla: 'MAX' }, 'RTT-S00');
+    assert.equal(r.righe[1].codice, 'MAX-AAA-S00');
+    assert.match(r.avvisi[0], /seguono la sigla MAX/);
+  });
+
+  it('gruppo: i primi codici liberi, contando i figli che ci sono già', () => {
+    const a = app(makeDb({ items: [macchina('k1', 'TRN', 'TRN-S00'), gruppo('g1', 'k1', 'BAS', 'TRN-BAS-S00'),
+      { id: 'p1', code: 'TRN-BAS-001', name: 'P', type: 'parte', uom: 'pz', machineItemId: 'k1', groupItemId: 'g1', cycle: [], active: true }] }));
+    const nuovo = righe(a, { type: 'gruppo', machineItemId: 'k1', sigla: 'BAS' }, 'TRN-BAS-S01');
+    assert.deepEqual(nuovo.righe.map(x => x.codice), ['TRN-BAS-S01', 'TRN-BAS-002', 'TRN-BAS-999'],
+      'stessa sigla, stesso prefisso: la prima parte libera è la 002');
+    const altro = righe(a, { type: 'gruppo', machineItemId: 'k1', sigla: 'TEL' }, 'TRN-TEL-S00');
+    assert.equal(altro.righe[1].codice, 'TRN-TEL-001');
+  });
+
+  it('gruppo: sigla cambiata con figli già creati, e macchina dal codice manuale', () => {
+    const a = app(makeDb({ items: [macchina('k1', 'MAX', 'RTT-S00', { codeManual: true }), gruppo('g1', 'k1', 'BAS', 'MAX-BAS-S00'),
+      { id: 'p1', code: 'MAX-BAS-001', name: 'P', type: 'parte', uom: 'pz', machineItemId: 'k1', groupItemId: 'g1', cycle: [], active: true }] }));
+    const r = righe(a, { id: 'g1', type: 'gruppo', machineItemId: 'k1', sigla: 'TEL' }, 'MAX-TEL-S00');
+    assert.ok(r.avvisi.some(t => /RTT-S00 \(manuale\)/.test(t)));
+    assert.ok(r.avvisi.some(t => /1 codici figli già creati restano/.test(t)));
+  });
+
+  it('senza le scelte necessarie dice cosa manca, e per gli altri tipi non c\'è', () => {
+    const a = app(makeDb({ items: [macchina('k1', '', 'K1')] }));
+    assert.match(righe(a, { type: 'macchina', sigla: '' }, '').avvisi[0], /sigla macchina/);
+    assert.match(righe(a, { type: 'gruppo', machineItemId: '', sigla: 'BAS' }, '').avvisi[0], /Scegli la macchina/);
+    assert.match(righe(a, { type: 'gruppo', machineItemId: 'k1', sigla: 'BAS' }, '').avvisi[0], /non ha sigla/);
+    assert.equal(a.eval('anteprimaCodiciFigli({ type: "parte" }, "")'), null);
+  });
+});

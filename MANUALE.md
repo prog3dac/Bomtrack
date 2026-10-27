@@ -969,6 +969,19 @@ si distinguono.
 Le **sigle sono univoche** nel loro ambito: due gruppi della stessa macchina non possono chiamarsi
 entrambi `BAS`.
 
+**Anteprima codici** (dalla 0.115.0). Nella scheda di una macchina o di un gruppo, sotto la
+codifica, un riquadro mostra mentre si compila che codici avranno i figli:
+
+- per una **macchina**, lo schema con la sigla e le cifre scelte: `TRN-S00`, gruppo `TRN-AAA-S00`
+  (dove `AAA` sta per la sigla del gruppo, con il numero e il tipo di caratteri impostati), parte
+  `TRN-AAA-001`, sottogruppo `TRN-AAA-999`;
+- per un **gruppo**, i codici veri: la prima parte libera e il primo sottogruppo libero, contando
+  quelli che ci sono già sotto la stessa sigla; in modifica anche quanti figli ha già.
+
+Il riquadro avvisa quando il codice della macchina è manuale (i figli seguono la sigla, non il
+codice) e quando si cambia la sigla di un padre che ha già dei figli: i loro codici restano com'erano,
+solo i nuovi useranno la sigla nuova.
+
 ### Schema per famiglia — quello che si compra
 
 Si usa per materie prime, commerciali, e per le parti non legate a una macchina.

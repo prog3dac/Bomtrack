@@ -1030,23 +1030,79 @@ function genItemCode(it) {
     const grp = getItem(it.groupItemId);
     // La parte senza macchina/gruppo mantiene la codifica per famiglia
     if (!mac || !grp) return type === 'parte' ? genFamilyCode(type, it.familyId, it.subFamilyId) : '';
-    const sm = machineScheme(mac);
-    // Lo stesso **prefisso**, non lo stesso gruppo (dalla 0.105.5): due gruppi
-    // con la stessa sigla (TRN-BAS-S00, TRN-BAS-S01) scrivono i codici delle
-    // loro parti nello stesso TRN-BAS-###, e contando per gruppo il secondo
-    // ripartiva da 001, già preso.
-    const stessoGruppo = i => i.machineItemId === mac.id && i.id !== it.id
-      && (i.groupItemId === grp.id || itemSigla(i.groupItemId) === grp.sigla);
-    const siblings = (db.items || []).filter(i => i.type === type && stessoGruppo(i));
-    // L'altro blocco che abita lo stesso prefisso: le parti per un sottogruppo,
-    // i sottogruppi per una parte. Vedi il commento su nextCodeNumber.
-    const altroTipo = type === 'parte' ? 'sottogruppo' : 'parte';
-    const altri = (db.items || []).filter(i => i.type === altroTipo && stessoGruppo(i));
-    const n = nextCodeNumber(type, siblings, sm, altri, `${mac.sigla}-${grp.sigla}-`);
-    if (n == null) return codeFallito(`Numerazione ${type === 'parte' ? 'parti' : 'sottogruppi'} esaurita`);
-    return `${mac.sigla}-${grp.sigla}-${String(n).padStart(sm.incrN, '0')}`;
+    return codiceFiglio(type, mac, grp, it.id);
   }
   return '';
+}
+// Il prossimo codice di un sottogruppo o di una parte sotto `grp`. Il gruppo
+// può essere ancora una bozza ({ id: null, sigla }): l'anteprima della scheda
+// gruppo chiede così che codici avranno i figli prima che il gruppo esista.
+function codiceFiglio(type, mac, grp, exceptId) {
+  const sm = machineScheme(mac);
+  // Lo stesso **prefisso**, non lo stesso gruppo (dalla 0.105.5): due gruppi
+  // con la stessa sigla (TRN-BAS-S00, TRN-BAS-S01) scrivono i codici delle
+  // loro parti nello stesso TRN-BAS-###, e contando per gruppo il secondo
+  // ripartiva da 001, già preso.
+  const stessoGruppo = i => i.machineItemId === mac.id && i.id !== exceptId
+    && (i.groupItemId === grp.id || itemSigla(i.groupItemId) === grp.sigla);
+  const siblings = (db.items || []).filter(i => i.type === type && stessoGruppo(i));
+  // L'altro blocco che abita lo stesso prefisso: le parti per un sottogruppo,
+  // i sottogruppi per una parte. Vedi il commento su nextCodeNumber.
+  const altroTipo = type === 'parte' ? 'sottogruppo' : 'parte';
+  const altri = (db.items || []).filter(i => i.type === altroTipo && stessoGruppo(i));
+  const n = nextCodeNumber(type, siblings, sm, altri, `${mac.sigla}-${grp.sigla}-`);
+  if (n == null) return codeFallito(`Numerazione ${type === 'parte' ? 'parti' : 'sottogruppi'} esaurita`);
+  return `${mac.sigla}-${grp.sigla}-${String(n).padStart(sm.incrN, '0')}`;
+}
+// ─── Anteprima dei codici figli (dalla 0.115.0) ───
+// La scheda di una macchina o di un gruppo mostra, mentre si compila, i codici
+// che avranno i figli. `d` è la bozza della scheda (itemDraftFromForm), `codice`
+// il codice che il padre avrà. Restituisce { righe: [{ tipo, codice, nota }],
+// avvisi: [testo] }, o null per gli altri tipi.
+const SIGLA_ESEMPIO = { alpha: 'A', num: '0', alnum: 'X' };
+function anteprimaCodiciFigli(d, codice) {
+  if (!d || (d.type !== 'macchina' && d.type !== 'gruppo')) return null;
+  const righe = [], avvisi = [];
+  const salvato = d.id ? getItem(d.id) : null;
+  if (d.type === 'macchina') {
+    if (!d.sigla) return { righe, avvisi: ['Scrivi la sigla macchina per vedere i codici dei figli.'] };
+    const sm = machineScheme(d);
+    const g = (SIGLA_ESEMPIO[sm.gType] || 'A').repeat(sm.gLen);
+    const p = `${d.sigla}-${g}-`;
+    righe.push({ tipo: 'Macchina', codice: codice || `${d.sigla}-S${'0'.repeat(sm.incrS)}` });
+    righe.push({ tipo: 'Gruppo', codice: `${p}S${'0'.repeat(sm.incrS)}`, nota: `${g} = sigla del gruppo, ${typeHint(sm.gLen, sm.gType)}` });
+    righe.push({ tipo: 'Parte', codice: `${p}${'1'.padStart(sm.incrN, '0')}`, nota: 'a salire' });
+    righe.push({ tipo: 'Sottogruppo', codice: `${p}${'9'.repeat(sm.incrN)}`, nota: 'a scendere' });
+    if (codice && itemCodeKey(codice).indexOf(itemCodeKey(d.sigla + '-')) !== 0)
+      avvisi.push(`Il codice ${codice} non comincia con la sigla: i figli seguono la sigla ${d.sigla}, non il codice.`);
+    if (salvato && salvato.sigla && salvato.sigla !== d.sigla) {
+      const figli = (db.items || []).filter(i => i.machineItemId === salvato.id).length;
+      if (figli) avvisi.push(`Cambiando la sigla da ${salvato.sigla} a ${d.sigla}, i ${figli} codici figli già creati restano come sono: solo i nuovi useranno ${d.sigla}.`);
+    }
+    return { righe, avvisi };
+  }
+  const mac = getItem(d.machineItemId);
+  if (!mac) return { righe, avvisi: ['Scegli la macchina per vedere i codici dei figli.'] };
+  if (!mac.sigla) return { righe, avvisi: [`La macchina ${mac.code} non ha sigla: senza, i figli non hanno codice automatico.`] };
+  if (!d.sigla) return { righe, avvisi: ['Scrivi la sigla del gruppo per vedere i codici dei figli.'] };
+  const grp = { id: d.id || null, sigla: d.sigla };
+  const errore = codeGenError;
+  righe.push({ tipo: 'Gruppo', codice: codice || '' });
+  righe.push({ tipo: 'Prima parte libera', codice: codiceFiglio('parte', mac, grp, null) || '—', nota: 'a salire' });
+  righe.push({ tipo: 'Primo sottogruppo libero', codice: codiceFiglio('sottogruppo', mac, grp, null) || '—', nota: 'a scendere' });
+  codeGenError = errore;
+  if (mac.codeManual || codiceFuoriSchema(mac))
+    avvisi.push(`La macchina ha il codice ${mac.code}${mac.codeManual ? ' (manuale)' : ''}: i figli seguono la sua sigla ${mac.sigla}.`);
+  if (salvato) {
+    const figli = (db.items || []).filter(i => i.groupItemId === salvato.id);
+    if (salvato.sigla && salvato.sigla !== d.sigla && figli.length)
+      avvisi.push(`Cambiando la sigla da ${salvato.sigla} a ${d.sigla}, i ${figli.length} codici figli già creati restano come sono: solo i nuovi useranno ${d.sigla}.`);
+    else if (figli.length) {
+      const n = t => figli.filter(i => i.type === t).length;
+      righe.push({ tipo: 'Già creati', codice: '', nota: `${n('parte')} parti, ${n('sottogruppo')} sottogruppi` });
+    }
+  }
+  return { righe, avvisi };
 }
 // ─── Codice scritto a mano (dalla 0.115.0) ───
 // Il codice nasce dalle scelte (famiglia, macchina, gruppo, sigla) e di regola

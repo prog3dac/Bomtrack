@@ -1266,7 +1266,23 @@ function codingFieldsHtml(it, structLocked) {
           oninput="this.value=this.value.toUpperCase();refreshItemCode()" ${dis}></div>
       <div class="modal-field" id="fld-coding-group"><label>Gruppo</label>
         <select id="it-group" onchange="refreshItemCode()" ${dis}>${groupOptions(macId, grpId)}</select></div>
-    </div>`;
+    </div>
+    <div id="code-preview" class="code-preview" style="display:none" aria-live="polite"></div>`;
+}
+// Il riquadro «Anteprima codici» di macchine e gruppi: che codici avranno i
+// figli con le scelte di adesso. Si ridisegna a ogni cambio della codifica.
+function renderCodePreview() {
+  const box = document.getElementById('code-preview');
+  if (!box) return;
+  const a = anteprimaCodiciFigli(itemDraftFromForm(), val('it-code'));
+  if (!a) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const righe = a.righe.map(r => `<div class="code-preview-row">
+      <span class="code-preview-tipo">${esc(r.tipo)}</span>
+      <span class="code-preview-code">${esc(r.codice)}</span>
+      <span class="code-preview-nota">${esc(r.nota || '')}</span></div>`).join('');
+  const avvisi = a.avvisi.map(t => `<p class="code-preview-avviso">${ico('warning', 'tinted', '')} ${esc(t)}</p>`).join('');
+  box.innerHTML = `<div class="code-preview-title">${ico('eye', 'tinted', '')} Anteprima codici</div>${righe ? `<div class="code-preview-grid">${righe}</div>` : ''}${avvisi}`;
 }
 function onItemMachineChange() {
   const macId = val('it-machine');
@@ -1304,10 +1320,9 @@ function itemDraftFromForm() {
 // distingueva più da uno voluto.
 let itemCodeAuto = true;
 function refreshItemCode() {
-  if (!itemCodeAuto) return;
   const codeEl = document.getElementById('it-code');
-  if (!codeEl) return;
-  codeEl.value = itemCodeAutomatico();
+  if (codeEl && itemCodeAuto) codeEl.value = itemCodeAutomatico();
+  renderCodePreview();
 }
 // Il codice automatico della scheda. In modifica l'articolo tiene il suo,
 // finché è ancora coerente con le scelte: rigenerarlo darebbe il numero
@@ -1324,7 +1339,7 @@ function itemCodeFieldHtml(it, lock) {
   const ro = lock.structLocked ? 'disabled' : (man ? '' : 'readonly');
   return `<div class="modal-field"><label for="it-code">Codice</label>
       <div class="code-field">
-        <input id="it-code" value="${it ? esc(it.code) : ''}" ${ro} class="${man ? '' : 'code-auto'}">
+        <input id="it-code" value="${it ? esc(it.code) : ''}" ${ro} class="${man ? '' : 'code-auto'}" oninput="renderCodePreview()">
         <label class="flag-check code-manual-check" title="Scrivere il codice a mano invece di comporlo dalle scelte">
           <input type="checkbox" id="it-code-manual" ${man ? 'checked' : ''} ${lock.structLocked ? 'disabled' : ''} onclick="return codeManualClick(this)"> Manuale</label>
       </div></div>`;

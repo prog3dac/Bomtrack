@@ -11,7 +11,9 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - **In modifica il codice segue le scelte**: cambiando famiglia, macchina o gruppo di un articolo non ancora usato, il codice automatico si ricompone; prima restava quello vecchio.
 - **Codici fuori codifica**: in *Gestione → Backup → Controllo dati* l'elenco degli articoli il cui codice non segue la codifica e non è segnato manuale (scritti a mano prima di questa versione, o importati), con **È voluto** per confermarli e **Apri** per sistemarli.
 
-**Manuale** — cap. 8 il campo Codice, cap. 9 «Il codice scritto a mano».
+- **Anteprima codici nella scheda di macchine e gruppi**: un riquadro sotto la codifica mostra, mentre si compila, i codici dei figli. Per la macchina lo schema con sigla e cifre scelte (`TRN-AAA-S00`, `TRN-AAA-001`, `TRN-AAA-999`); per il gruppo la prima parte e il primo sottogruppo liberi, e quanti figli ha già. Avvisa se il codice del padre è manuale (i figli seguono la sigla) e se cambiando la sigla i figli già creati restano col codice vecchio.
+
+**Manuale** — cap. 8 il campo Codice, cap. 9 «Il codice scritto a mano» e «Anteprima codici».
 
 ### 0.114.0 — 2026-10-24
 

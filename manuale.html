@@ -525,6 +525,9 @@ Sottogruppo:   TRN-BAS-999    a SCENDERE da 999
 Parte:         TRN-BAS-001    a SALIRE da 001</code></pre>
 <p>Sottogruppi e parti condividono lo stesso spazio di numerazione ma partono dai due estremi: i sottogruppi scendono da 999, le parti salgono da 001. Così non si scontrano mai, e a colpo d'occhio si distinguono.</p>
 <p>Le <strong>sigle sono univoche</strong> nel loro ambito: due gruppi della stessa macchina non possono chiamarsi entrambi <code>BAS</code>.</p>
+<p><strong>Anteprima codici</strong> (dalla 0.115.0). Nella scheda di una macchina o di un gruppo, sotto la codifica, un riquadro mostra mentre si compila che codici avranno i figli:</p>
+<ul><li>per una <strong>macchina</strong>, lo schema con la sigla e le cifre scelte: <code>TRN-S00</code>, gruppo <code>TRN-AAA-S00</code> (dove <code>AAA</code> sta per la sigla del gruppo, con il numero e il tipo di caratteri impostati), parte <code>TRN-AAA-001</code>, sottogruppo <code>TRN-AAA-999</code>;</li><li>per un <strong>gruppo</strong>, i codici veri: la prima parte libera e il primo sottogruppo libero, contando quelli che ci sono già sotto la stessa sigla; in modifica anche quanti figli ha già.</li></ul>
+<p>Il riquadro avvisa quando il codice della macchina è manuale (i figli seguono la sigla, non il codice) e quando si cambia la sigla di un padre che ha già dei figli: i loro codici restano com'erano, solo i nuovi useranno la sigla nuova.</p>
 <h3 id="schema-per-famiglia--quello-che-si-compra">Schema per famiglia — quello che si compra</h3>
 <p>Si usa per materie prime, commerciali, e per le parti non legate a una macchina.</p>
 <pre><code>MAT-ACC-LAM-001     materia prima · famiglia ACC(iaio) · sottofamiglia LAM(iere)
