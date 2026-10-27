@@ -13,7 +13,13 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - I valori stanno nel foglio nascosto **Tendine**, che l'import ignora. Se le tendine non si riescono a scrivere, il file esce come prima.
 - **Famiglie con la sigla**: Macrofamiglia e Sottofamiglia escono come `Meccanico [MEC]`, così chi sceglie vede la sigla che finisce nel codice. Una famiglia nuova scritta così prende quella sigla, se libera; il solo nome vale ancora.
 
-**Niente più foglio Listino.** Sulla riga dell'articolo c'è una sola quotazione, quella in uso, anche quando l'articolo ne ha altre (prima in quel caso la riga restava vuota e tutto andava nel Listino). L'import legge il prezzo solo dalla riga: stesso fornitore e stessa data aggiornano la quotazione, altrimenti ne nasce una nuova che va in uso. Le altre quotazioni restano nell'app. Un file di prima con il foglio Listino si carica ancora, ma quel foglio viene ignorato con un avviso.
+**Niente più foglio Listino.** Sulla riga dell'articolo c'è una sola quotazione, quella in uso, anche quando l'articolo ne ha altre (prima in quel caso la riga restava vuota e tutto andava nel Listino). L'import legge il prezzo solo dalla riga. Le altre quotazioni restano nell'app. Un file di prima con il foglio Listino si carica ancora, ma quel foglio viene ignorato con un avviso.
+
+**Regole del prezzo all'import.**
+- **Solo date più recenti**: per lo stesso fornitore una quotazione entra solo se la sua data è più recente di tutte quelle già a listino; altrimenti non entra, con un avviso.
+- **Stessa data, stessa quotazione**: uguale non cambia niente; diversa non viene più sovrascritta (prima sì), con un avviso.
+- **Colonna «In uso»** (Sì/No, nuova): Sì mette in uso la quotazione della riga, vuoto o No la aggiunge soltanto. La prima quotazione di un articolo va comunque in uso; un file di prima senza la colonna si comporta come allora.
+- **Corretto: un prezzo non valido lasciava la riga a metà.** L'articolo veniva creato o aggiornato e il report segnava l'errore; ora la riga non entra.
 
 **Parti: Descrizione facoltativa.** Il Concetto resta obbligatorio (e non si può svuotare); la descrizione libera no, e la colonna si chiama ora *Descrizione* senza asterisco. I file di prima con *Descrizione \** si leggono uguale.
 

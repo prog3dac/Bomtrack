@@ -2904,10 +2904,31 @@ colleghi che esistono già: uno nuovo si invita da *Gestione → Utenti* (dalla 
 | **Una riga con un errore non applica niente** | E su un articolo già usato codice, famiglia, codifica e U.M. restano com'erano, con un avviso (dalla 0.105.5) |
 | **L'import è additivo** | Non cancella mai niente. Quello che non è nel file resta com'è |
 | **Fornitori e famiglie mancanti si creano al volo** | I **concetti no**: quelli si aggiungono a mano, perché la nomenclatura non deve crescere per distrazione |
-| **Fornitore + prezzo** | Sulla riga dell'articolo c'è **una quotazione sola, quella in uso**. All'import crea o aggiorna una **quotazione a listino**, che diventa il prezzo in uso. Stesso fornitore e stessa *Data prezzo* aggiornano quella che c'è; le altre quotazioni dell'articolo restano nell'app (dalla 0.117.0: il foglio `Listino` non c'è più, e in un file di prima viene ignorato con un avviso) |
+| **Fornitore + prezzo** | Sulla riga dell'articolo c'è **una quotazione sola, quella in uso**; all'import crea una **quotazione a listino**. Le altre quotazioni dell'articolo restano nell'app (dalla 0.117.0 il foglio `Listino` non c'è più, e in un file di prima viene ignorato con un avviso). Le regole sono nel riquadro qui sotto |
 | **Famiglie con la sigla** | *Macrofamiglia* e *Sottofamiglia* si scrivono col nome e la sigla del codice fra quadre, `Meccanico [MEC]`. Una famiglia nuova prende la sigla scritta, se è libera. Il solo nome vale ancora (dalla 0.117.0) |
 | **U.M. sconosciute** | Vengono registrate automaticamente nell'elenco |
 | **CSV** | I `.csv` in UTF-8 nudo vengono riconosciuti da soli |
+
+### Il prezzo sulla riga dell'articolo *(dalla 0.117.0)*
+
+| Caso | Cosa succede |
+|---|---|
+| **Stesso fornitore, data più recente** | Entra come quotazione nuova |
+| **Stesso fornitore, data più vecchia** dell'ultima a listino | **Non entra**, con un avviso |
+| **Stesso fornitore, stessa data** | È la stessa quotazione: uguale, non succede niente (è il file esportato e ricaricato); diversa, **non viene sovrascritta** e lo si dice. Un prezzo nuovo vuole una data nuova |
+| **Un altro fornitore** | Entra, qualunque sia la data |
+| **In uso = Sì** | La quotazione della riga diventa quella in uso (prezzo, fornitore e costo dell'articolo). Se non è entrata, resta quella di prima, con un avviso |
+| **In uso vuoto o No** | Si aggiunge al listino e basta. Eccezione: la **prima** quotazione di un articolo va comunque in uso |
+| **Colonna In uso assente** (file di prima) | La riga va in uso, come allora |
+| **Prezzo vuoto** | Nessuna quotazione: le altre colonne del prezzo non contano |
+| **Prezzo non valido** (testo, negativo) | Errore, e la riga non entra per niente |
+| **Fornitore vuoto** | Quotazione senza fornitore; se va in uso, l'articolo resta senza fornitore |
+| **Fornitore nuovo** | Viene creato |
+| **Colonna Fornitore assente** | Vale il fornitore della quotazione in uso |
+| **Data prezzo vuota** | Oggi. Attenzione: la stessa riga senza data, ricaricata un altro giorno, fa una quotazione nuova |
+| **UM prezzo** diversa da UM e da UM acquisto | Ignorata, con un avviso |
+| **Parte a produzione interna** | La quotazione entra ma non diventa costo: il costo viene dal ciclo |
+| **L'import non cancella** | Nessuna quotazione viene mai eliminata |
 
 ### 🔍 Verifica un file
 

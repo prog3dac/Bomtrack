@@ -424,22 +424,67 @@ describe('Prezzi: la riga crea una quotazione, e la quotazione decide il costo',
     assert.equal(a.snapshot().items[0].priceList[0].priceUom, undefined);
     assert.match(rep.warnings[0], /non è l'unità di acquisto/);
   });
-  it('reimportando, stesso fornitore e stessa data aggiornano la quotazione in uso', () => {
+  // Le regole della quotazione sulla riga (0.117.0)
+  const rigaC = o => ({ 'Commerciali': [Object.assign({ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz', Fornitore: 'SKF' }, o)] });
+  const conQuota = () => {
     const a = conCommerciale();
-    const riga = p => ({ 'Commerciali': [{ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz', Fornitore: 'SKF', Prezzo: p, 'Data prezzo': '2026-03-01' }] });
-    importa(a, riga(12.5), 'buy');
-    importa(a, riga(13), 'buy');
+    importa(a, rigaC({ Prezzo: 12.5, 'Data prezzo': '2026-03-01', 'In uso': 'Sì' }), 'buy');
+    return a;
+  };
+  it('la stessa quotazione ricaricata uguale non cambia niente e non avvisa', () => {
+    const a = conQuota();
+    const rep = importa(a, rigaC({ Prezzo: 12.5, 'Data prezzo': '2026-03-01', 'In uso': 'Sì' }), 'buy');
+    assert.deepEqual(rep.warnings, []);
+    assert.equal(a.snapshot().items[0].priceList.length, 1);
+  });
+  it('stessa data con un prezzo diverso non sovrascrive: serve una data più recente', () => {
+    const a = conQuota();
+    const rep = importa(a, rigaC({ Prezzo: 13, 'Data prezzo': '2026-03-01', 'In uso': 'Sì' }), 'buy');
     const it = a.snapshot().items[0];
     assert.equal(it.priceList.length, 1);
-    assert.equal(it.priceList[0].price, 13);
+    assert.equal(it.priceList[0].price, 12.5);
+    assert.match(rep.warnings.join(' '), /già una quotazione di SKF del 2026-03-01, diversa: non aggiornata/);
   });
-  it('un fornitore o una data diversi fanno una quotazione nuova, che va in uso; le altre restano', () => {
-    const a = conCommerciale();
-    importa(a, { 'Commerciali': [{ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz', Fornitore: 'SKF', Prezzo: 12.5, 'Data prezzo': '2026-03-01' }] }, 'buy');
-    importa(a, { 'Commerciali': [{ Codice: 'C1', Fornitore: 'Rossi', Prezzo: 9, 'Data prezzo': '2026-04-01' }] }, 'buy');
+  it('a parità di fornitore una data più vecchia non entra', () => {
+    const a = conQuota();
+    const rep = importa(a, rigaC({ Prezzo: 11, 'Data prezzo': '2026-02-01', 'In uso': 'Sì' }), 'buy');
+    const it = a.snapshot().items[0];
+    assert.equal(it.priceList.length, 1);
+    approx(it.purchasePrice, 12.5);
+    assert.match(rep.warnings.join(' '), /non importata, a listino ce n'è una più recente \(2026-03-01\)/);
+    assert.match(rep.warnings.join(' '), /«In uso» è Sì, ma la quotazione non è entrata/);
+  });
+  it('una data più recente entra; con In uso vuoto si aggiunge soltanto', () => {
+    const a = conQuota();
+    importa(a, rigaC({ Prezzo: 14, 'Data prezzo': '2026-05-01', 'In uso': '' }), 'buy');
+    const it = a.snapshot().items[0];
+    assert.equal(it.priceList.length, 2);
+    approx(it.purchasePrice, 12.5, 'il prezzo in uso resta quello di prima');
+    assert.equal(it.priceList.find(r => r.id === it.activePriceId).date, '2026-03-01');
+  });
+  it('con In uso = Sì la quotazione nuova diventa quella in uso', () => {
+    const a = conQuota();
+    importa(a, rigaC({ Prezzo: 14, 'Data prezzo': '2026-05-01', 'In uso': 'Sì' }), 'buy');
+    const it = a.snapshot().items[0];
+    approx(it.purchasePrice, 14);
+  });
+  it('un altro fornitore non ha vincoli di data, ed entra anche con una data più vecchia', () => {
+    const a = conQuota();
+    importa(a, rigaC({ Fornitore: 'Rossi', Prezzo: 9, 'Data prezzo': '2026-01-01', 'In uso': 'No' }), 'buy');
     const it = a.snapshot().items[0];
     assert.equal(it.priceList.length, 2, 'l\'import non cancella quotazioni');
-    approx(it.purchasePrice, 9);
+    approx(it.purchasePrice, 12.5);
+  });
+  it('un prezzo non valido scarta tutta la riga, articolo compreso', () => {
+    const a = conCommerciale();
+    const rep = importa(a, rigaC({ Prezzo: 'dodici', 'Data prezzo': '2026-03-01' }), 'buy');
+    assert.match(rep.errors[0], /prezzo non valido/);
+    assert.equal(a.snapshot().items.length, 0);
+  });
+  it('la prima quotazione di un articolo va in uso anche con In uso vuoto', () => {
+    const a = conCommerciale();
+    importa(a, rigaC({ Prezzo: 5, 'Data prezzo': '2026-03-01', 'In uso': '' }), 'buy');
+    approx(a.snapshot().items[0].purchasePrice, 5);
   });
   it('il foglio Listino di un file di prima non si legge più, e lo si dice', () => {
     const a = conCommerciale();

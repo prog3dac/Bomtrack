@@ -55,6 +55,7 @@ const CAT_ALIAS = {
   'Codice fornitore': ['CodiceFornitore', 'SupplierCode'],
   'Descrizione fornitore': ['DescrizioneFornitore', 'SupplierDesc'],
   'Data prezzo': ['DataPrezzo'],
+  'In uso': ['InUso', 'Prezzo in uso'],
   'Scorta minima': ['ScortaMinima', 'SafetyStock'],
   'Lotto riordino': ['LottoRiordino', 'LotSize', 'Lotto'],
   'Preferito': ['Favorite'],
@@ -176,6 +177,9 @@ const CAT_COL_PRICE = [
   // quotazione si esporta in linea, e senza questa colonna la sua nota non
   // finiva in nessuna cella del file — persa al primo giro su una postazione nuova.
   ['Note prezzo', (it, q) => q ? (q.note || '') : ''],
+  // Sì = la quotazione della riga va in uso; vuoto o No = si aggiunge al
+  // listino e basta. In export è sempre Sì: sulla riga c'è quella in uso.
+  ['In uso', (it, q) => q ? 'Sì' : ''],
 ];
 const CAT_COL_STOCK = [
   ['Scorta minima', it => catNumOut(it.safetyStock)],
@@ -387,6 +391,7 @@ function catTendine(scope) {
   const prezzo = foglio => {
     r(foglio, 'Fornitore', 'Fornitori', avviso);
     r(foglio, 'UM prezzo', 'UM', avviso);
+    r(foglio, 'In uso', 'Sì / No');
   };
   CATALOG_SHEET_DEFS[scope].forEach(def => {
     const f = def.name;
@@ -451,7 +456,10 @@ function catInfoAoa(scope) {
     ['', 'Prezzo e fornitore sulla riga articolo creano una QUOTAZIONE nel listino e diventano il prezzo in uso.'],
     ['', 'Il prezzo è per una unità: nell\'UM prezzo se valorizzata, altrimenti nell\'UM dell\'articolo.'],
     ['', 'Sulla riga c\'è una quotazione sola: quella in uso. Le altre restano nell\'app (Listino fornitori) e l\'import non le tocca.'],
-    ['', 'Stesso fornitore e stessa data prezzo = la stessa quotazione, che viene aggiornata; fornitore o data diversi ne creano una nuova, che diventa quella in uso.'],
+    ['', 'Per lo stesso fornitore entra solo una Data prezzo PIÙ RECENTE di quelle già a listino: una data più vecchia non entra (avviso nel report).'],
+    ['', 'Stessa data e stesso fornitore = la stessa quotazione: se è uguale non succede niente, se è diversa non viene sovrascritta (avviso). Un prezzo nuovo vuole una data nuova.'],
+    ['', 'In uso = Sì: la quotazione della riga diventa quella in uso. Vuoto o No: si aggiunge al listino e basta (ma la prima quotazione di un articolo va comunque in uso).'],
+    ['', 'Data prezzo vuota = oggi.'],
     ['', 'Una quotazione senza fornitore azzera il fornitore dell\'articolo.'],
     ['', 'UM prezzo vale solo se coincide con UM acquisto dell\'articolo; qualunque altro valore viene ignorato.'],
   ];
@@ -822,6 +830,11 @@ function catApplyItemRow(row, def, ctx, ln, st) {
     ctx.seen.set(itemCodeKey(auto), ln);
   }
 
+  // Il prezzo si controlla qui, prima che la riga entri: un prezzo sbagliato
+  // scoperto dopo lasciava l'articolo già scritto, con un errore nel report.
+  const prezzo = hasPriceList(it) ? catNum(row, 'Prezzo') : null;
+  if (prezzo !== null && prezzo !== '' && (isNaN(prezzo) || prezzo < 0)) { err('prezzo non valido'); return; }
+
   if (!isNew) {
     const bloccati = [];
     const tieni = (campi, etichetta) => {
@@ -860,13 +873,17 @@ function catApplyItemRow(row, def, ctx, ln, st) {
 
   // ── Quotazione sulla riga articolo ──
   if (hasPriceList(it)) {
-    const prezzo = catNum(row, 'Prezzo');
     if (prezzo !== null && prezzo !== '') {
-      if (isNaN(prezzo) || prezzo < 0) { err('prezzo non valido'); return; }
       // Lo stato si fotografa PRIMA di toccare il listino: catStage registra
       // se l'articolo aveva già quotazioni, e dopo la creazione sarebbe tardi.
       const s = catStage(ctx, it);
-      s.inline = catUpsertQuote(it, row, ctx, foglio, ln, prezzo);
+      const q = catUpsertQuote(it, row, ctx, foglio, ln, prezzo);
+      // «In uso» = Sì la mette in uso; vuoto o No la aggiunge soltanto. Senza
+      // la colonna (i file di prima della 0.117.0) la riga era per definizione
+      // la quotazione in uso, e tale resta.
+      const inUso = catBool(row, 'In uso');
+      if (q && (inUso === true || (inUso === null && catCell(row, 'In uso') === null))) s.inline = q;
+      else if (inUso === true) avviso(`${esc(it.code)}: «In uso» è Sì, ma la quotazione non è entrata: resta in uso quella di prima`);
     }
   }
 }
@@ -883,11 +900,19 @@ function catStage(ctx, it) {
   if (!s) { s = { it, inline: null, aveva: priceRows(it).length > 0 }; ctx.touched.set(it.id, s); }
   return s;
 }
-// Crea o aggiorna la quotazione. Identità = (articolo, fornitore, data): l'id
-// non sta nel foglio — un uuid fra le mani di chi compila è solo rumore, e
-// cambiare la data *è* una quotazione nuova.
+// La quotazione della riga (dalla 0.117.0). Identità = (articolo, fornitore,
+// data): l'id non sta nel foglio — un uuid fra le mani di chi compila è solo
+// rumore. Le regole:
+//   · per lo stesso fornitore entra solo una data PIÙ RECENTE di tutte le sue
+//     quotazioni già a listino; una data più vecchia non entra, e lo si dice;
+//   · la stessa data è la stessa quotazione: uguale, non succede niente (è il
+//     file esportato e ricaricato); diversa, non si sovrascrive — un prezzo
+//     cambiato è una quotazione nuova, con la sua data;
+//   · non si cancella mai niente.
+// Restituisce la quotazione della riga (nuova o già presente), o null.
 function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
   const rep = ctx.rep;
+  const avviso = m => rep.warnings.push(`${foglio}, riga ${ln}: ${m}`);
   const supName = catCell(row, 'Fornitore');
   const supplierId = supName ? findOrCreateSupplier(supName, rep) : (supName === '' ? null : undefined);
   const dataCella = catCell(row, 'Data prezzo');
@@ -896,56 +921,56 @@ function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
   // male: la data è l'identità della quotazione, e sostituirla di nascosto
   // significa creare una riga nuova al posto di aggiornarne una.
   if (dataCella && !catDate(row, 'Data prezzo')) {
-    rep.warnings.push(`${foglio}, riga ${ln}: data "${esc(String(dataCella))}" non riconosciuta, si usa oggi (${data})`);
+    avviso(`data "${esc(String(dataCella))}" non riconosciuta, si usa oggi (${data})`);
   }
   if (!Array.isArray(it.priceList)) it.priceList = [];
-  const sid = supplierId === undefined ? null : supplierId;
-  let r = null;
-  if (supplierId === undefined) {
-    // La colonna non c'è: il foglio non dice niente sul fornitore, e «una colonna
-    // cancellata lascia il campo com'è» è la regola dichiarata nei template.
-    // Prima si cercava una quotazione *senza* fornitore e, non trovandola, se ne
-    // creava una nuova: un doppione a ogni ricarica dello stesso file.
-    // Si cerca per data soltanto: se quella data individua una quotazione sola,
-    // è quella. Se ne individua più d'una, l'identità è ambigua e si ricade sul
-    // caso normale, che almeno è prevedibile.
-    const perData = it.priceList.filter(x => (x.date || '') === data);
-    if (perData.length === 1) r = perData[0];
-  }
-  if (!r) r = it.priceList.find(x => (x.supplierId || null) === sid && (x.date || '') === data);
-  const nuova = !r;
-  if (nuova) {
-    r = stampNew({ id: gid(), supplierId: sid, price: '', minQty: '', leadDays: '',
-      code: '', desc: '', date: data, rfqId: null, note: '' });
-    it.priceList.push(r);
-  }
-  r.price = prezzo;
+  // Colonna Fornitore assente: il foglio non dice niente sul fornitore, e «una
+  // colonna cancellata lascia il campo com'è». Si prende quello della
+  // quotazione in uso, o nessuno.
+  const sid = supplierId === undefined ? ((activePriceRow(it) || {}).supplierId || null) : supplierId;
+  const suoi = it.priceList.filter(x => (x.supplierId || null) === sid);
+  const chi = sid ? `di ${esc(catSupplierName(sid))}` : 'senza fornitore';
+
+  // La quotazione come la vuole la riga, su una copia.
+  const r = { supplierId: sid, price: prezzo, priceUom: undefined, minQty: '', leadDays: '', code: '', desc: '', note: '' };
   const pu = catCell(row, 'UM prezzo');
   if (pu) {
     // Solo l'unità di acquisto dell'articolo converte davvero (priceUomOf):
     // qualunque altra verrebbe ignorata in silenzio, e il silenzio qui è un
-    // prezzo giusto nell'unità sbagliata.
+    // prezzo giusto nell'unità sbagliata. L'unità di gestione vuol dire
+    // «prezzo nella mia unità».
     if (pu === altUomOf(it)) r.priceUom = pu;
-    // L'unità di gestione vuol dire «prezzo nella mia unità»: un'unità
-    // d'acquisto rimasta da prima moltiplicherebbe il prezzo per il fattore.
-    else if (pu === it.uom) delete r.priceUom;
-    else rep.warnings.push(`${foglio}, riga ${ln}: "UM prezzo" ${esc(pu)} non è l'unità di acquisto di ${esc(it.code)}: ignorata`);
-  } else if (pu === '') {
-    // Colonna presente e vuota: come per gli altri campi, si svuota (0.105.3).
-    delete r.priceUom;
+    else if (pu !== it.uom) avviso(`"UM prezzo" ${esc(pu)} non è l'unità di acquisto di ${esc(it.code)}: ignorata`);
   }
   for (const [h, campo] of [['Q.tà min', 'minQty'], ['GG consegna', 'leadDays']]) {
     const v = catNum(row, h);
-    if (v === null) continue;
-    r[campo] = v === '' || isNaN(v) ? '' : v;
+    if (v !== null) r[campo] = v === '' || isNaN(v) ? '' : v;
   }
   const sc = catCell(row, 'Codice fornitore'); if (sc !== null) r.code = sc;
   const sd = catCell(row, 'Descrizione fornitore'); if (sd !== null) r.desc = sd;
   // «Note» è già la nota dell'articolo: quella della quotazione è «Note prezzo».
-  const nt = catCell(row, 'Note prezzo');
-  if (nt !== null) r.note = nt;
-  if (!nuova) touch(r);
-  return r;
+  const nt = catCell(row, 'Note prezzo'); if (nt !== null) r.note = nt;
+
+  const stessa = suoi.find(x => (x.date || '') === data);
+  if (stessa) {
+    const n = v => (v === '' || v == null ? '' : String(v));
+    const uguale = Number(stessa.price) === Number(prezzo) && n(stessa.priceUom) === n(r.priceUom) &&
+      n(stessa.minQty) === n(r.minQty) && n(stessa.leadDays) === n(r.leadDays) &&
+      (sc === null || n(stessa.code) === n(r.code)) && (sd === null || n(stessa.desc) === n(r.desc)) &&
+      (nt === null || n(stessa.note) === n(r.note));
+    if (!uguale) avviso(`${esc(it.code)}: c'è già una quotazione ${chi} del ${data}, diversa: non aggiornata. Per un prezzo nuovo serve una data più recente.`);
+    return stessa;
+  }
+  const ultima = suoi.reduce((m, x) => ((x.date || '') > m ? x.date : m), '');
+  if (ultima && data < ultima) {
+    avviso(`${esc(it.code)}: quotazione ${chi} del ${data} non importata, a listino ce n'è una più recente (${ultima})`);
+    return null;
+  }
+  const nuova = stampNew({ id: gid(), supplierId: sid, price: prezzo, minQty: r.minQty, leadDays: r.leadDays,
+    code: r.code, desc: r.desc, date: data, rfqId: null, note: r.note });
+  if (r.priceUom) nuova.priceUom = r.priceUom;
+  it.priceList.push(nuova);
+  return nuova;
 }
 // ─── Fase C: quale quotazione va in uso ───
 function catFinalizePrices(ctx) {
