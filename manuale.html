@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.116.0</span>
+        <span class="chip">v0.117.0</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -993,6 +993,8 @@ prezzo vendita = costo totale × (1 + margine %)</code></pre>
 <h2 id="27-import-ed-export-da-excel">27. Import ed export da Excel</h2>
 <p><strong>Come ci si arriva.</strong> ⚙️ <em>Gestione → Import</em>.</p>
 <p>Quattro blocchi. <strong>In tutti, l'export è anche il template</strong>: si esporta quello che c'è, si modifica il file, lo si ricarica. Ogni file porta un foglio <strong>Istruzioni</strong> e un foglio <strong>Liste</strong> con i valori ammessi.</p>
+<p><strong>Menu a tendina</strong> <em>(dalla 0.117.0)</em>. Nei file Articoli e Impostazioni le colonne che accettano solo certi valori hanno un menu a tendina, preso dagli elenchi dell'app al momento dell'export:</p>
+<ul><li><strong>Articoli</strong>: UM e UM acquisto/prezzo, Macrofamiglia e Sottofamiglia, Fornitore, Concetto, Approvvigionamento, Tipo sigla gruppo, Preferito / Obsoleto / In uso (Sì/No). <em>Codice macchina</em> e <em>Codice gruppo</em> propongono i codici dei fogli <code>Macchine</code> e <code>Gruppi</code> dello stesso file, quindi anche una macchina appena aggiunta in fondo.</li><li><strong>Sottofamiglia</strong> propone solo quelle della <em>Macrofamiglia</em> scelta sulla stessa riga.</li><li><strong>Impostazioni</strong>: Attivo, Ruolo, Tipo delle condizioni offerta, Predefinita.</li><li>Dove l'import <strong>crea ciò che manca</strong> (fornitori, famiglie, unità di misura) la tendina avvisa ma lascia scrivere un valore nuovo. Dove non lo crea (concetti, Sì/No, valori fissi) lo rifiuta.</li><li>I valori stanno in un foglio nascosto <strong>Tendine</strong>: non va modificato, e l'import lo ignora. Per avere elenchi aggiornati basta esportare di nuovo.</li></ul>
 <h3 id="i-quattro-blocchi">I quattro blocchi</h3>
 <p><strong>1. Articoli — Acquisti</strong> Fogli: <code>Commerciali</code> · <code>Materie prime</code> · <code>Listino</code>. Pulsanti: <em>Esporta Acquisti</em> · <em>🔍 Verifica un file</em> · <em>Carica Acquisti</em>.</p>
 <p><strong>2. Articoli — Progetto</strong> Fogli: <code>Macchine</code> · <code>Gruppi</code> · <code>Sottogruppi</code> · <code>Parti</code> · <code>Listino</code>. <strong>Il tipo è il foglio</strong>: non c'è una colonna «tipo». I fogli si applicano in quest'ordine, così i padri esistono prima dei figli. <strong>La distinta non è in questi file</strong> — sta nel blocco 3.</p>

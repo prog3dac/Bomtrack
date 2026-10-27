@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.116.0**
+**Versione dell'app documentata: 0.117.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2854,6 +2854,20 @@ il record e chi l'ha aggiornato per ultimo**, con data e ora.
 Quattro blocchi. **In tutti, l'export è anche il template**: si esporta quello che c'è, si
 modifica il file, lo si ricarica. Ogni file porta un foglio **Istruzioni** e un foglio **Liste**
 con i valori ammessi.
+
+**Menu a tendina** *(dalla 0.117.0)*. Nei file Articoli e Impostazioni le colonne che accettano
+solo certi valori hanno un menu a tendina, preso dagli elenchi dell'app al momento dell'export:
+
+- **Articoli**: UM e UM acquisto/prezzo, Macrofamiglia e Sottofamiglia, Fornitore, Concetto,
+  Approvvigionamento, Tipo sigla gruppo, Preferito / Obsoleto / In uso (Sì/No). *Codice macchina*
+  e *Codice gruppo* propongono i codici dei fogli `Macchine` e `Gruppi` dello stesso file, quindi
+  anche una macchina appena aggiunta in fondo.
+- **Sottofamiglia** propone solo quelle della *Macrofamiglia* scelta sulla stessa riga.
+- **Impostazioni**: Attivo, Ruolo, Tipo delle condizioni offerta, Predefinita.
+- Dove l'import **crea ciò che manca** (fornitori, famiglie, unità di misura) la tendina avvisa ma
+  lascia scrivere un valore nuovo. Dove non lo crea (concetti, Sì/No, valori fissi) lo rifiuta.
+- I valori stanno in un foglio nascosto **Tendine**: non va modificato, e l'import lo ignora. Per
+  avere elenchi aggiornati basta esportare di nuovo.
 
 ### I quattro blocchi
 

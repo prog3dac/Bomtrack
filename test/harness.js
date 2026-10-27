@@ -92,6 +92,7 @@ function loadApp(opts) {
     // Globale della piattaforma, presente in ogni browser ma non nei contesti
     // vm: lo usa sha256Hex() per convertire la stringa in byte UTF-8.
     TextEncoder,
+    TextDecoder,
     localStorage: storage,
     // Volutamente assenti: `document` e `window`. La guardia in fondo a import-export.js
     // (`if (typeof document !== 'undefined') init()`) impedisce l'avvio dell'app.

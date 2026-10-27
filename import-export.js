@@ -529,6 +529,16 @@ function settingsInfoAoa() {
   ];
 }
 
+// Menu a tendina sulle colonne a valori fissi (dalla 0.117.0). Tutte bloccano:
+// qui un valore fuori elenco non crea niente, viene solo scartato.
+function settingsTendine() {
+  const liste = [['Sì / No', ['Sì', 'No']], ['Ruoli', Object.values(ROLES)], ['Tipi condizione', Object.values(TERMS_KIND_LABELS)]];
+  const regole = [['Utenti', 'Attivo'], ['Fornitori', 'Attivo'], ['Clienti', 'Attivo'], ['Centri di lavoro', 'Attivo'],
+    ['Condizioni offerta', 'Predefinita'], ['Unità di misura', 'Predefinita']]
+    .map(([foglio, colonna]) => ({ foglio, colonna, lista: 'Sì / No' }))
+    .concat([{ foglio: 'Utenti', colonna: 'Ruolo', lista: 'Ruoli' }, { foglio: 'Condizioni offerta', colonna: 'Tipo', lista: 'Tipi condizione' }]);
+  return { liste, regole };
+}
 // ─── Esporta ───
 function exportSettingsXlsx() {
   // Il foglio Utenti elenca nomi, email e ruoli: come il backup, solo agli amministratori
@@ -543,7 +553,7 @@ function exportSettingsXlsx() {
   const info = XLSX.utils.aoa_to_sheet(settingsInfoAoa());
   info['!cols'] = [{ wch: 22 }, { wch: 96 }];
   XLSX.utils.book_append_sheet(wb, info, 'Istruzioni');
-  XLSX.writeFile(wb, `bomtrack_impostazioni_${oggiISO()}.xlsx`);
+  scriviXlsxConTendine(wb, `bomtrack_impostazioni_${oggiISO()}.xlsx`, settingsTendine());
   showToast('Impostazioni esportate');
 }
 

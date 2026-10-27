@@ -152,7 +152,7 @@ describe('Export articoli — due file, un foglio per tipo', () => {
   });
 });
 
-describe('Foglio Liste — i valori ammessi, visto che le tendine non si possono scrivere', () => {
+describe('Foglio Liste — i valori ammessi, da leggere', () => {
   it('Acquisti: unità, fornitori attivi e le coppie famiglia/sottofamiglia appaiate', () => {
     const a = app(dbAcquisti());
     const liste = aoaToRows(JSON.parse(a.eval('JSON.stringify(catListeAoa("buy"))')).length

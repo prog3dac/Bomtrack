@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.116.0';
+const APP_VERSION = '0.117.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -379,6 +379,149 @@ function requireXlsx() {
   if (typeof XLSX !== 'undefined' && XLSX) return XLSX;
   showToast('Libreria Excel non disponibile: manca vendor/xlsx.full.min.js', 'error');
   return null;
+}
+// ─── Menu a tendina nei file da importare (dalla 0.117.0) ───
+// SheetJS community non scrive le convalide dati: il file si scrive com'è, poi
+// si riapre lo zip (CFB, che sta nella stessa libreria) e in ogni foglio si
+// infila un blocco <dataValidations>. I valori stanno in un foglio nascosto
+// «Tendine», una colonna per elenco: una convalida «Elenco» vuole un intervallo
+// contiguo, e il foglio Liste — appaiato, con le macrofamiglie ripetute — non lo è.
+//
+// `tendine.liste`: [[nome, valori]] oppure [nome, valori, chiavi] per un elenco
+// che dipende da un'altra colonna (le sottofamiglie della macrofamiglia scelta).
+// `tendine.regole`: { foglio, colonna, lista | rif: { foglio, colonna }, dipendeDa,
+// avviso, messaggio }. Con `avviso` il valore fuori elenco si può tenere: serve
+// dove l'import crea ciò che manca (fornitori, famiglie, unità).
+const TENDINE_FOGLIO = 'Tendine';
+function xlsxColonna(n) { let s = ''; for (n++; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; }
+function xlsxFoglioRif(nome) { return /^[A-Za-z_][A-Za-z0-9_]*$/.test(nome) ? nome : `'${String(nome).replace(/'/g, "''")}'`; }
+function xlsxXml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+// Le colonne di un foglio per intestazione: le regole parlano per nome, come l'import.
+function xlsxIntestazioni(ws) {
+  const out = {};
+  if (!ws || !ws['!ref']) return out;
+  const r = XLSX.utils.decode_range(ws['!ref']);
+  for (let c = r.s.c; c <= r.e.c; c++) {
+    const v = ws[XLSX.utils.encode_cell({ r: 0, c })];
+    if (v && v.v !== '' && v.v != null) out[String(v.v)] = c;
+  }
+  return out;
+}
+// Aggiunge il foglio Tendine al libro e restituisce, per foglio, i
+// <dataValidation> da scrivere. Nessuna regola applicabile: oggetto vuoto.
+function xlsxPreparaTendine(wb, tendine) {
+  const liste = {};
+  const aoa = [];
+  let col = 0;
+  const metti = (c, valori) => valori.forEach((v, i) => { (aoa[i] = aoa[i] || [])[c] = v; });
+  (tendine.liste || []).forEach(([nome, valori, chiavi]) => {
+    const n = (valori || []).length;
+    if (!n) return;
+    if (chiavi) {
+      metti(col, [nome + ' (chiave)'].concat(chiavi));
+      metti(col + 1, [nome].concat(valori));
+      liste[nome] = { chiavi: xlsxColonna(col), valori: xlsxColonna(col + 1), n };
+      col += 2;
+    } else {
+      metti(col, [nome].concat(valori));
+      liste[nome] = { valori: xlsxColonna(col), n };
+      col++;
+    }
+  });
+  const T = TENDINE_FOGLIO;
+  const perFoglio = {};
+  (tendine.regole || []).forEach(rg => {
+    const ws = wb.Sheets[rg.foglio];
+    if (!ws) return;
+    const head = xlsxIntestazioni(ws);
+    const c = head[rg.colonna];
+    if (c === undefined) return;
+    const fine = Math.max(1000, XLSX.utils.decode_range(ws['!ref']).e.r + 500);
+    let f;
+    if (rg.rif) {
+      const src = wb.Sheets[rg.rif.foglio];
+      const sc = src && xlsxIntestazioni(src)[rg.rif.colonna];
+      if (sc === undefined) return;
+      const L = xlsxColonna(sc);
+      f = `${xlsxFoglioRif(rg.rif.foglio)}!$${L}$2:$${L}$${Math.max(1000, XLSX.utils.decode_range(src['!ref']).e.r + 500)}`;
+    } else {
+      const l = liste[rg.lista];
+      if (!l) return;
+      const ultima = l.n + 1;
+      if (l.chiavi && rg.dipendeDa !== undefined) {
+        const d = head[rg.dipendeDa];
+        if (d === undefined) return;
+        // Il tratto di righe della chiave scelta: le coppie stanno raggruppate
+        // per chiave, quindi bastano la prima posizione e quante sono.
+        const k = `${T}!$${l.chiavi}$2:$${l.chiavi}$${ultima}`;
+        const sel = `$${xlsxColonna(d)}2`;
+        f = `OFFSET(${T}!$${l.valori}$1,MATCH(${sel},${k},0),0,COUNTIF(${k},${sel}),1)`;
+      } else {
+        f = `${T}!$${l.valori}$2:$${l.valori}$${ultima}`;
+      }
+    }
+    const L = xlsxColonna(c);
+    const msg = rg.messaggio || (rg.avviso ? 'Valore non in elenco: confermando, l\'import lo crea.' : 'Scegli un valore dall\'elenco.');
+    (perFoglio[rg.foglio] = perFoglio[rg.foglio] || []).push(
+      `<dataValidation type="list" errorStyle="${rg.avviso ? 'warning' : 'stop'}" allowBlank="1" showErrorMessage="1"` +
+      ` errorTitle="Bomtrack" error="${xlsxXml(msg)}" sqref="${L}2:${L}${fine}"><formula1>${xlsxXml(f)}</formula1></dataValidation>`);
+  });
+  if (!Object.keys(perFoglio).length) return perFoglio;
+  const ws = XLSX.utils.aoa_to_sheet(aoa.map(r => Array.from(r, v => (v === undefined ? '' : v))));
+  XLSX.utils.book_append_sheet(wb, ws, T);
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Sheets = wb.SheetNames.map((n, i) => Object.assign({}, (wb.Workbook.Sheets || [])[i], n === T ? { Hidden: 1 } : {}));
+  return perFoglio;
+}
+// <dataValidations> va in un punto preciso del foglio: dopo sheetData,
+// protezione, filtro e celle unite, prima di link, margini e il resto.
+function xlsxInserisciConvalide(xml, voci) {
+  const blocco = `<dataValidations count="${voci.length}">${voci.join('')}</dataValidations>`;
+  const dopo = /<(hyperlinks|printOptions|pageMargins|pageSetup|headerFooter|rowBreaks|colBreaks|customProperties|cellWatches|ignoredErrors|smartTags|drawing|legacyDrawing|legacyDrawingHF|picture|oleObjects|controls|webPublishItems|tableParts|extLst)[\s>/]/.exec(xml);
+  const i = dopo ? dopo.index : xml.lastIndexOf('</worksheet>');
+  return xml.slice(0, i) + blocco + xml.slice(i);
+}
+// I byte del file .xlsx, con le tendine. SheetJS scrive i fogli come
+// xl/worksheets/sheetN.xml nell'ordine di SheetNames.
+function xlsxConTendine(wb, tendine) {
+  const perFoglio = xlsxPreparaTendine(wb, tendine || {});
+  const dati = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  if (!Object.keys(perFoglio).length) return new Uint8Array(dati);
+  const zip = XLSX.CFB.read(new Uint8Array(dati), { type: 'array' });
+  wb.SheetNames.forEach((nome, i) => {
+    if (!perFoglio[nome]) return;
+    const p = zip.FullPaths.findIndex(x => x.endsWith(`xl/worksheets/sheet${i + 1}.xml`));
+    if (p < 0) return;
+    const e = zip.FileIndex[p];
+    const xml = xlsxInserisciConvalide(new TextDecoder().decode(e.content), perFoglio[nome]);
+    e.content = new TextEncoder().encode(xml);
+    e.size = e.content.length;
+  });
+  return new Uint8Array(XLSX.CFB.write(zip, { fileType: 'zip', type: 'array' }));
+}
+function scriviXlsxConTendine(wb, nomeFile, tendine) {
+  let dati;
+  try {
+    dati = xlsxConTendine(wb, tendine);
+  } catch (e) {
+    // Le tendine sono un aiuto: se non si riesce a scriverle, il file senza
+    // resta meglio di nessun file.
+    console.error(e);
+    if (wb.SheetNames.indexOf(TENDINE_FOGLIO) >= 0) {
+      delete wb.Sheets[TENDINE_FOGLIO];
+      wb.SheetNames = wb.SheetNames.filter(n => n !== TENDINE_FOGLIO);
+      if (wb.Workbook) delete wb.Workbook.Sheets;
+    }
+    XLSX.writeFile(wb, nomeFile);
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([dati], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = nomeFile;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 // ─── Nome di un file da scaricare ───
 // Codici articolo e ragioni sociali finiscono nel nome dei PDF e degli Excel

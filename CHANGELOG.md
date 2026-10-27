@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.117.0 — 2026-10-27
+
+**Menu a tendina nei file Excel da importare.** Nei file Articoli (Acquisti e Progetto) e Impostazioni le colonne a valori ammessi hanno un menu a tendina vero, collegato agli elenchi dell'app: prima c'era solo il foglio Liste da cui copiare, o la convalida da impostare a mano. Nessun cambio a `supabase/schema.sql`.
+
+- **Articoli**: UM, UM acquisto e UM prezzo, Macrofamiglia, Sottofamiglia, Fornitore, Concetto, Approvvigionamento, Tipo sigla gruppo, Preferito, Obsoleto e In uso. *Codice macchina* e *Codice gruppo* propongono i codici dei fogli Macchine e Gruppi dello stesso file.
+- **Sottofamiglia dipendente**: propone solo le sottofamiglie della macrofamiglia scelta sulla riga.
+- **Avvisa o blocca come l'import**: un fornitore, una famiglia o un'unità nuovi si possono scrivere (l'import li crea) con un avviso; un concetto o un Sì/No fuori elenco vengono rifiutati.
+- **Impostazioni**: Attivo, Ruolo, Tipo delle condizioni offerta, Predefinita.
+- I valori stanno nel foglio nascosto **Tendine**, che l'import ignora. Se le tendine non si riescono a scrivere, il file esce come prima.
+
+**Manuale** — cap. 27 «Menu a tendina».
+
 ### 0.116.0 — 2026-10-27
 
 **Avvia e dichiara anche sull'ordine di lavoro.** Sulla riga dell'ODL ci sono gli stessi due gesti dell'ordine di produzione, al posto di *spedisci materiale*, *manda al terzista*, *ritira dal terzista* e *registra rientro*, che scrivevano movimenti e basta: niente scarti, niente stato, e i pezzi rientrati da scrivere a mano una seconda volta. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge le colonne `odl_id` e `odl_line_id` a `production_declarations`, non tocca i dati).

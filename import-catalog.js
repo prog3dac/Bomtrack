@@ -330,11 +330,9 @@ function catWidth(h) {
   return 13;
 }
 // ─── Foglio Liste ───
-// Non è decorazione: SheetJS (edizione community) non sa scrivere le convalide
-// dati, quindi menu a tendina veri non ce ne sono. Un elenco contiguo su un
-// foglio a parte è però esattamente ciò che serve per farsela da sé in due clic
-// (Dati → Convalida → Elenco → =Liste!$B$2:$B$40), ed è anche il vocabolario a
-// cui rimandano i messaggi d'errore dell'import.
+// Il vocabolario a cui rimandano i messaggi d'errore dell'import, da leggere.
+// Le tendine vere (dalla 0.117.0) prendono gli stessi valori dal foglio
+// nascosto Tendine: vedi catTendine e scriviXlsxConTendine in core.js.
 function catListeAoa(scope) {
   const colonne = [];
   const push = (titolo, valori) => colonne.push([titolo].concat(valori));
@@ -379,6 +377,76 @@ function catListeAoa(scope) {
   for (let r = 0; r < righe; r++) aoa.push(colonne.map(c => (c[r] === undefined ? '' : c[r])));
   return aoa;
 }
+// ─── Menu a tendina (dalla 0.117.0) ───
+// Le stesse liste del foglio Liste, agganciate alle colonne da compilare. Dove
+// l'import crea ciò che manca (fornitori, famiglie, unità) la tendina avvisa e
+// lascia scrivere; dove non lo crea (concetti, Sì/No, valori fissi) blocca.
+// Macchine e gruppi puntano alle colonne Codice dei fogli dello stesso file,
+// così vale anche una macchina appena aggiunta in fondo al foglio Macchine.
+function catCoppieFamiglia(kind) {
+  const chiavi = [], valori = [];
+  (db.families || []).filter(f => (f.kind || 'acquistato') === kind).forEach(f => {
+    (f.subs || []).forEach(s => { chiavi.push(f.name); valori.push(s.name); });
+  });
+  return [chiavi, valori];
+}
+function catMacro(kind) { return (db.families || []).filter(f => (f.kind || 'acquistato') === kind).map(f => f.name); }
+function catTendine(scope) {
+  scope = catScopeOf(scope);
+  const liste = [['UM', uomList().map(u => u.code)],
+    ['Fornitori', (db.suppliers || []).filter(s => s.active !== false).map(s => s.name)],
+    ['Sì / No', ['Sì', 'No']]];
+  const regole = [];
+  const r = (foglio, colonna, lista, o) => regole.push(Object.assign({ foglio, colonna, lista }, o));
+  const avviso = { avviso: true };
+  const famiglie = (foglio, kind) => {
+    const [chiavi, valori] = catCoppieFamiglia(kind);
+    liste.push(['Macrofamiglie ' + kind, catMacro(kind)], ['Sottofamiglie ' + kind, valori, chiavi]);
+    r(foglio, 'Macrofamiglia', 'Macrofamiglie ' + kind, avviso);
+    r(foglio, 'Sottofamiglia', 'Sottofamiglie ' + kind, Object.assign({ dipendeDa: 'Macrofamiglia' }, avviso));
+  };
+  const prezzo = foglio => {
+    r(foglio, 'Fornitore', 'Fornitori', avviso);
+    r(foglio, 'UM prezzo', 'UM', avviso);
+  };
+  CATALOG_SHEET_DEFS[scope].forEach(def => {
+    const f = def.name;
+    r(f, 'UM *', 'UM', avviso);
+    if (def.type === 'acquistato' || def.type === 'materiale') {
+      r(f, 'UM acquisto', 'UM', avviso);
+      famiglie(f, def.type);
+      prezzo(f);
+      r(f, 'Preferito', 'Sì / No');
+      r(f, 'Obsoleto', 'Sì / No');
+    } else if (def.type === 'macchina') {
+      r(f, 'Tipo sigla gruppo', 'Tipo sigla gruppo');
+    } else if (def.type === 'gruppo') {
+      r(f, 'Codice macchina *', null, { rif: { foglio: 'Macchine', colonna: 'Codice' }, avviso: true,
+        messaggio: 'Codice non presente nel foglio Macchine: l\'import lo cerca comunque in catalogo.' });
+    } else {
+      r(f, 'Codice macchina', null, { rif: { foglio: 'Macchine', colonna: 'Codice' }, avviso: true,
+        messaggio: 'Codice non presente nel foglio Macchine: l\'import lo cerca comunque in catalogo.' });
+      r(f, 'Codice gruppo', null, { rif: { foglio: 'Gruppi', colonna: 'Codice' }, avviso: true,
+        messaggio: 'Codice non presente nel foglio Gruppi: l\'import lo cerca comunque in catalogo.' });
+    }
+    if (def.type === 'parte') {
+      r(f, 'Concetto *', 'Concetti', { messaggio: 'Il concetto deve esistere già (Gestione → Concetti): l\'import non lo crea.' });
+      r(f, 'Approvvigionamento', 'Approvvigionamento');
+      r(f, 'UM acquisto', 'UM', avviso);
+      famiglie(f, 'parte');
+      prezzo(f);
+      r(f, 'Obsoleto', 'Sì / No');
+    }
+  });
+  if (scope === 'design') {
+    liste.push(['Concetti', conceptList().map(c => c.name)],
+      ['Approvvigionamento', Object.values(PART_SOURCING)],
+      ['Tipo sigla gruppo', Object.values(CODE_TYPES)]);
+  }
+  prezzo(CAT_PRICE_SHEET);
+  r(CAT_PRICE_SHEET, 'In uso', 'Sì / No');
+  return { liste, regole };
+}
 function catInfoAoa(scope) {
   const comune = [
     [],
@@ -390,7 +458,8 @@ function catInfoAoa(scope) {
     ['', 'Il Codice è la chiave: se esiste, l\'articolo viene aggiornato; se è vuoto, viene generato.'],
     ['', 'Una colonna cancellata lascia il campo com\'è; una colonna presente ma vuota lo svuota.'],
     ['', 'L\'import non elimina mai articoli né quotazioni: si eliminano dall\'app.'],
-    ['', 'Il foglio Liste contiene tutti i valori ammessi. Menu a tendina: Dati → Convalida → Elenco → =Liste!$A$2:$A$50'],
+    ['', 'Le colonne con valori ammessi (UM, famiglie, fornitori, concetti, macchine, gruppi, Sì/No…) hanno un menu a tendina; il foglio Liste li elenca tutti.'],
+    ['', 'Sottofamiglia propone solo quelle della Macrofamiglia scelta. Dove l\'import crea ciò che manca (fornitori, famiglie, unità) si può anche scrivere un valore nuovo.'],
     ['', 'Decimali con la virgola o con il punto: vanno bene entrambi. Le date come 2025-01-31 o 31/01/2025.'],
     [],
     ['Unità di misura', ''],
@@ -450,6 +519,11 @@ function catInfoAoa(scope) {
 function exportCatalogXlsx(scope) {
   scope = catScopeOf(scope);
   if (!requireXlsx()) return;
+  scriviXlsxConTendine(catalogWorkbook(scope), `bomtrack_${scope === 'buy' ? 'acquisti' : 'progetto'}_${catToday()}.xlsx`, catTendine(scope));
+  showToast('Articoli esportati');
+}
+function catalogWorkbook(scope) {
+  scope = catScopeOf(scope);
   const wb = XLSX.utils.book_new();
   catalogSheets(scope).forEach(sh => {
     const ws = XLSX.utils.aoa_to_sheet(sh.aoa);
@@ -466,8 +540,7 @@ function exportCatalogXlsx(scope) {
   info['!cols'] = [{ wch: 30 }, { wch: 110 }];
   info['!protect'] = { password: '' };
   XLSX.utils.book_append_sheet(wb, info, 'Istruzioni');
-  XLSX.writeFile(wb, `bomtrack_${scope === 'buy' ? 'acquisti' : 'progetto'}_${catToday()}.xlsx`);
-  showToast('Articoli esportati');
+  return wb;
 }
 
 // ═══════════════════════════════════════════════════════════

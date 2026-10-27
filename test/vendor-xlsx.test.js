@@ -195,9 +195,11 @@ function conXlsx(db) {
 function workbookDi(a, chiamata) {
   const wb = a.eval(`(() => {
     let visto = null;
-    const vero = XLSX.writeFile;
+    const vero = XLSX.writeFile, veroTendine = scriviXlsxConTendine;
+    // Dalla 0.117.0 i file da ricompilare escono con le tendine, da qui.
     XLSX.writeFile = (w) => { visto = w; };
-    try { ${chiamata}; } finally { XLSX.writeFile = vero; }
+    scriviXlsxConTendine = (w) => { visto = w; };
+    try { ${chiamata}; } finally { XLSX.writeFile = vero; scriviXlsxConTendine = veroTendine; }
     return visto;
   })()`);
   return {
