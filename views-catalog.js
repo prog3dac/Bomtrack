@@ -2253,6 +2253,14 @@ function delItem(id) {
   // rende "genitore" di niente (usedBy non lo vede), ma cancellarlo perderebbe
   // comunque quello storico. Qui non c'è eccezione di ruolo: l'unica via per
   // ritirare un codice sbagliato è marcarlo Obsoleto.
+  const dip = codificaDipendenti(id);
+  if (dip.length) {
+    const quali = it.type === 'macchina' ? (dip.length === 1 ? 'del gruppo' : 'dei ' + dip.length + ' gruppi')
+      : (dip.length === 1 ? 'del sottogruppo' : 'dei ' + dip.length + ' sottogruppi');
+    const codici = dip.slice(0, 5).map(i => i.code).join(', ') + (dip.length > 5 ? '…' : '');
+    showToast(`"${it.code}" è nella codifica ${quali} ${codici}: eliminali o spostali prima, oppure segnalo come obsoleto.`, 'error');
+    return;
+  }
   if (isItemUsedAnywhere(id)) {
     showToast('Articolo già movimentato (magazzino, cicli, documenti o piani): non può essere eliminato. Segnalo come obsoleto per impedirne il riuso.', 'error');
     return;

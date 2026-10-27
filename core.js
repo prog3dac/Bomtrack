@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.114.0';
+const APP_VERSION = '0.114.1';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -294,6 +294,15 @@ function parentIndex() {
 // scritta per la migrazione v2 e mantenuta apposta perché aggiungerne una
 // fosse una riga sola in un posto solo. La si legge qui, in sola lettura,
 // con lo stesso giro che fa migrateV2() per riscriverli.
+// Gli articoli la cui codifica dipende da questo: i gruppi di una macchina
+// (`machineItemId`) e i sottogruppi di un gruppo (`groupItemId`). Per
+// isItemUsedAnywhere sono riferimenti come gli altri, ma all'utente vanno detti
+// per nome: «già movimentato» davanti a una macchina con tre gruppi e nessun
+// movimento mandava a cercare in magazzino un motivo che stava in catalogo.
+function codificaDipendenti(id) {
+  if (!id) return [];
+  return (db.items || []).filter(i => i.id !== id && (i.machineItemId === id || i.groupItemId === id));
+}
 function isItemUsedAnywhere(id) {
   if (!id) return false;
   const puntaAllItem = campi => Object.keys(campi).some(k => campi[k] === 'item');

@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.114.1 — 2026-10-27
+
+**Eliminare una macchina con i suoi gruppi dice perché non si può.** Una macchina senza movimenti, ordini né documenti, ma con dei gruppi codificati sotto di lei, si fermava con «Articolo già movimentato (magazzino, cicli, documenti o piani)»: il blocco era giusto, perché i codici dei gruppi nascono dalla sigla della macchina, ma il motivo no, e mandava a cercarlo in magazzino. Ora il messaggio nomina i gruppi (e, per un gruppo, i sottogruppi) da eliminare o spostare prima. Nessun cambio a `supabase/schema.sql`.
+
 ### 0.114.0 — 2026-10-24
 
 **Il Gantt dell'Avanzamento si legge meglio.** Nessun cambio a `supabase/schema.sql`.
