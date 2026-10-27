@@ -294,6 +294,15 @@ function parentIndex() {
 // scritta per la migrazione v2 e mantenuta apposta perché aggiungerne una
 // fosse una riga sola in un posto solo. La si legge qui, in sola lettura,
 // con lo stesso giro che fa migrateV2() per riscriverli.
+// Gli articoli la cui codifica dipende da questo: i gruppi di una macchina
+// (`machineItemId`) e i sottogruppi di un gruppo (`groupItemId`). Per
+// isItemUsedAnywhere sono riferimenti come gli altri, ma all'utente vanno detti
+// per nome: «già movimentato» davanti a una macchina con tre gruppi e nessun
+// movimento mandava a cercare in magazzino un motivo che stava in catalogo.
+function codificaDipendenti(id) {
+  if (!id) return [];
+  return (db.items || []).filter(i => i.id !== id && (i.machineItemId === id || i.groupItemId === id));
+}
 function isItemUsedAnywhere(id) {
   if (!id) return false;
   const puntaAllItem = campi => Object.keys(campi).some(k => campi[k] === 'item');
