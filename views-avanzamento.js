@@ -239,7 +239,7 @@ function avzTappa(n, st, suoi, odl, daFabbricare, oggi) {
   // (dalla 0.114.0): per una fase interna l'ODP, per una tratta dal terzista
   // l'ordine di lavoro — l'ODP da solo non manda niente fuori. In lavorazione
   // quando la fase è «In corso» sull'ODP o la riga dell'ODL è **avviata** (un
-  // ODL inviato non basta: dalla 0.115.0 l'avvio della riga vale come quello
+  // ODL inviato non basta: dalla 0.116.0 l'avvio della riga vale come quello
   // della fase), fatta quando è dichiarata: sull'ODP se c'è, se no dai rientri
   // dell'ODL.
   const conOdl = docs.some(d => d.kind === 'odl');

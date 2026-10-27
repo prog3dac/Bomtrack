@@ -1370,6 +1370,7 @@ function renderBackup() {
   ${renderTrash()}
   ${renderStorico()}
   ${renderDuplicateCodes()}
+  ${renderCodiciFuoriSchema()}
   ${renderSerieDocumenti()}
   <div class="cloud-section" style="margin-top:16px">
     <div style="flex:1">
@@ -1477,6 +1478,40 @@ function renderDuplicateCodes() {
       <p>Vanno sciolti a mano: apri ciascun articolo e dagli un codice suo. L'app non li rinomina da sola — quel codice sta su disegni e ordini già emessi, e sceglierne uno al posto tuo sarebbe peggio del problema.</p>
       <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">${righe}</div>
     </div></div>`;
+}
+
+// ─── Controllo dati: codici fuori schema (dalla 0.115.0) ───
+// Codici che non sono quelli che famiglia, macchina, gruppo e sigla
+// comporrebbero, e che nessuno ha dichiarato manuali: scritti a mano prima che
+// la scheda lo chiedesse con la spunta, o arrivati da un import. Non sono
+// errori per forza — RTT-S00 su una macchina di sigla MAX è voluto — ma deve
+// dirlo una persona: qui li conferma come eccezione o apre l'articolo.
+function renderCodiciFuoriSchema() {
+  const elenco = codiciFuoriSchema();
+  if (!elenco.length) return '';
+  const scrive = canWrite('catalog');
+  const righe = elenco.map(i => `<div class="mgmt-item" style="display:flex;align-items:center;gap:8px">
+      <span class="picker-type">${typeLabel(i.type)}</span>
+      <span style="font-family:var(--mono);font-weight:700">${esc(i.code)}</span>
+      <span style="flex:1;color:var(--text-dim)">${esc(i.name || '(senza nome)')} — la codifica darebbe ${esc(codiceAtteso(i))}…</span>
+      ${scrive ? `<button class="btn-ghost" onclick="confermaCodiceManuale('${i.id}')">${ico('check', 'tinted', '')} È voluto</button>` : ''}
+      <button class="btn-ghost" onclick="editItemModal('${i.id}')">${ico('edit', 'tinted', '')} Apri</button>
+    </div>`).join('');
+  return `<div class="cloud-section" style="margin-top:16px">
+    <div style="flex:1">
+      <strong>${ico('search', 'tinted', '')} Controllo dati — ${elenco.length} ${elenco.length === 1 ? 'codice fuori codifica' : 'codici fuori codifica'}</strong>
+      <p>Il codice di questi articoli non è quello che le loro scelte comporrebbero, e nessuno l'ha segnato come manuale: probabilmente sono stati scritti a mano prima che la scheda chiedesse conferma. Se è voluto, <strong>È voluto</strong> lo segna come codice manuale; se è un errore, apri l'articolo e usa il codice automatico (finché l'articolo non è usato).</p>
+      <div class="mgmt-list" style="margin-top:10px">${righe}</div>
+    </div></div>`;
+}
+function confermaCodiceManuale(id) {
+  if (!roleGuard('catalog')) return;
+  const it = getItem(id); if (!it) return;
+  askConfirm(`Il codice ${it.code} è voluto?\nResterà com'è, segnato come codice manuale.`, () => {
+    it.codeManual = true; it.codeManualAt = nowISO(); it.codeManualBy = actorId || null;
+    touch(it);
+    saveDB(); renderManage(); savedToast('Segnato come codice manuale');
+  }, { title: 'Codice manuale', ok: 'Sì', cancel: 'No', safe: true });
 }
 
 // Lo stesso controllo per i numeri dei documenti (dalla 0.105.6): doppioni e

@@ -426,7 +426,7 @@ function qrRiceviTutto(tipo, id) {
 // Il numero è **quanto arriva adesso**, non il totale ricevuto: è quello che
 // c'è sulla bolla in mano. Le righe di un ODL che vengono da un ordine di
 // produzione restano fuori, come in «Ricevi tutto»: si dichiarano lì. Dalla
-// 0.115.0 un ODL si riceve **dichiarando**: solo le righe avviate, e il
+// 0.116.0 un ODL si riceve **dichiarando**: solo le righe avviate, e il
 // rientro muove il magazzino come dalla scrivania.
 function qrRigheDaRicevere(tipo, o) {
   return (o.lines || []).filter(l => (Number(l.received) || 0) < (Number(l.qty) || 0)

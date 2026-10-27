@@ -461,7 +461,7 @@ const SCHEMA = {
   // Le dichiarazioni di avanzamento sono **eventi**, e stanno piatte come i
   // movimenti: l'avanzamento di una fase si calcola da qui, esattamente come
   // l'esistente si calcola da ricevimenti e movimenti. Nessun campo di saldo
-  // sulla fase, quindi niente che possa divergere. Dalla 0.115.0 ci stanno
+  // sulla fase, quindi niente che possa divergere. Dalla 0.116.0 ci stanno
   // anche avvii e rientri delle righe d'ordine di lavoro senza un ODP che le
   // guidi: `odlId` e `odlLineId` invece di `odpId` e `phaseId`.
   prodDecls: { table: 'production_declarations' },
@@ -966,7 +966,7 @@ function migrateDB() {
     if (d.scrap == null) d.scrap = 0;
     if (d.note == null) d.note = '';
     if (d.motivo == null) d.motivo = '';
-    // Dalla 0.115.0 anche la riga di un ordine di lavoro senza ODP ha avvii e
+    // Dalla 0.116.0 anche la riga di un ordine di lavoro senza ODP ha avvii e
     // rientri suoi: stanno qui, con `odlId` e `odlLineId` al posto della fase.
     if (d.odlId === undefined) d.odlId = null;
     if (d.odlLineId === undefined) d.odlLineId = null;

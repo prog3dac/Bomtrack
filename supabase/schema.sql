@@ -158,6 +158,7 @@ create table if not exists public.items (
   concept_id text, name_free text, g_code_len int, g_code_type text, incr_digits_n int, incr_digits_s int,
   rev text, lot_size numeric, lot_mode text, safety_stock numeric, assembly_days numeric,
   location text,
+  code_manual boolean, code_manual_by uuid, code_manual_at timestamptz, code_note text,
   child_sets text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
@@ -171,6 +172,11 @@ alter table public.suppliers add column if not exists transit_days numeric;
 alter table public.items add column if not exists assembly_days numeric;
 -- 0.101.0: l'ubicazione a scaffale dell'articolo.
 alter table public.items add column if not exists location text;
+-- 0.115.0: il codice scritto a mano, con chi l'ha deciso, quando e perché.
+alter table public.items add column if not exists code_manual boolean;
+alter table public.items add column if not exists code_manual_by uuid;
+alter table public.items add column if not exists code_manual_at timestamptz;
+alter table public.items add column if not exists code_note text;
 -- A6: `unique (code)` va aggiunto dopo la bonifica dei duplicati storici
 -- (Gestione › Backup › codici duplicati). Prima, rifiuterebbe dati veri.
 
@@ -373,14 +379,14 @@ create table if not exists public.production_declarations (
   id uuid primary key,
   odp_id uuid references public.production_orders(id) on delete cascade deferrable initially deferred,
   phase_id uuid references public.production_order_phases(id) on delete set null deferrable initially deferred,
-  -- 0.115.0: avvii e rientri di una riga d'ordine di lavoro senza ODP. Nessuna
+  -- 0.116.0: avvii e rientri di una riga d'ordine di lavoro senza ODP. Nessuna
   -- chiave, come `order_id` sui movimenti: l'ODL si annulla, non si elimina.
   odl_id uuid, odl_line_id uuid,
   kind text, date timestamptz, qty numeric, scrap numeric, note text, motivo text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
--- 0.115.0: per i database già creati.
+-- 0.116.0: per i database già creati.
 alter table public.production_declarations add column if not exists odl_id uuid;
 alter table public.production_declarations add column if not exists odl_line_id uuid;
 

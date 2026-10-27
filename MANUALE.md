@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.115.0**
+**Versione dell'app documentata: 0.116.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -810,7 +810,7 @@ un costo che non c'è.
 |---|---|---|
 | **Parti da** | solo in creazione | Ricerca live: si sceglie un articolo esistente e la scheda si precompila con i suoi dati. Facoltativo. |
 | **Tipo** | sempre | **Bloccato in modifica**: un commerciale non diventa una parte. |
-| **Codice** | sempre | Proposto automaticamente (→ [cap. 9](#9-i-codici-automatici)). **Appena lo si edita a mano, l'app smette di rigenerarlo.** |
+| **Codice** | sempre | Composto automaticamente e in sola lettura (→ [cap. 9](#9-i-codici-automatici)). Per scriverlo a mano si spunta **Manuale** e si conferma con **Sì**; il **motivo** è facoltativo. |
 | **Descrizione** | tutti i tipi tranne le parti | Testo libero. |
 | **Concetto** + **Descrizione** | **solo parti** | Il nome di una parte è composto: `ALBERO` + `motore 20×100` → `ALBERO motore 20×100`. Il concetto è **obbligatorio** e si sceglie dall'elenco di *Gestione → Concetti*. Sotto i due campi c'è l'anteprima del nome che ne esce. |
 | **Unità di misura** | sempre | Dall'elenco di *Gestione → Unità di misura*. |
@@ -920,9 +920,33 @@ allegato che sul suo PC non c'è legge che **il file è stato caricato su un alt
 
 ## 9. I codici automatici
 
-Bomtrack propone il codice di ogni nuovo articolo. Il codice proposto **resta modificabile**: si
-può scrivere il proprio, e appena lo si tocca l'app smette di rigenerarlo mentre si compila il
-resto della scheda.
+Bomtrack compone il codice di ogni nuovo articolo dalle scelte della scheda: famiglia, macchina,
+gruppo, sigla. Di regola il codice resta quello.
+
+### Il codice scritto a mano (dalla 0.115.0)
+
+Il campo **Codice** si legge soltanto, e cambia da solo man mano che si compilano le scelte. Per
+scriverlo a mano si spunta **Manuale** accanto al campo: l'app chiede *«Vuoi modificare
+manualmente il codice?»* e il campo si apre solo con **Sì**. Con **No** non cambia niente: un
+codice non si modifica più per un tasto premuto per sbaglio.
+
+Quando la spunta è attiva compare il campo **Motivo del codice manuale**, facoltativo (es. «sigla
+commerciale della macchina»). L'articolo ricorda la scelta, con chi l'ha fatta e quando. In
+catalogo, accanto al codice, c'è l'etichetta **MANUALE** (il motivo si legge passandoci sopra), e la
+scheda di sola lettura lo riporta per esteso.
+
+Togliendo la spunta l'app chiede *«Ripristinare il codice automatico?»*: con **Sì** il codice torna
+quello composto dalle scelte. Su un articolo già usato in una distinta, in un ciclo o in un
+documento il codice è bloccato, spunta compresa, come prima.
+
+I **codici figli nascono dalla sigla**, non dal codice del padre: una macchina di sigla `MAX` con
+codice manuale `RTT-S00` ha i gruppi `MAX-…-S00`.
+
+**I codici fuori codifica già in archivio.** In *Gestione → Backup → Controllo dati* l'elenco
+*codici fuori codifica* mostra gli articoli il cui codice non è quello che le scelte comporrebbero
+e che nessuno ha segnato come manuale: scritti a mano prima della 0.115.0, o arrivati da un import.
+Per ciascuno **È voluto** lo segna come codice manuale; **Apri** porta alla scheda, dove, se
+l'articolo non è ancora usato, **Usa il codice automatico** lo rimette in codifica.
 
 Gli schemi sono due.
 
@@ -944,6 +968,19 @@ si distinguono.
 
 Le **sigle sono univoche** nel loro ambito: due gruppi della stessa macchina non possono chiamarsi
 entrambi `BAS`.
+
+**Anteprima codici** (dalla 0.115.0). Nella scheda di una macchina o di un gruppo, sotto la
+codifica, un riquadro mostra mentre si compila che codici avranno i figli:
+
+- per una **macchina**, lo schema con la sigla e le cifre scelte: `TRN-S00`, gruppo `TRN-AAA-S00`
+  (dove `AAA` sta per la sigla del gruppo, con il numero e il tipo di caratteri impostati), parte
+  `TRN-AAA-001`, sottogruppo `TRN-AAA-999`;
+- per un **gruppo**, i codici veri: la prima parte libera e il primo sottogruppo libero, contando
+  quelli che ci sono già sotto la stessa sigla; in modifica anche quanti figli ha già.
+
+Il riquadro avvisa quando il codice della macchina è manuale (i figli seguono la sigla, non il
+codice) e quando si cambia la sigla di un padre che ha già dei figli: i loro codici restano com'erano,
+solo i nuovi useranno la sigla nuova.
 
 ### Schema per famiglia — quello che si compra
 
@@ -1984,7 +2021,7 @@ cui sono: **giallo** da cominciare, **viola** programmato o ordinato, **blu** in
   *in lavorazione* quando la fase è *In corso* sull'ODP; *fatto* quando è dichiarata.
 - **Fase dal terzista**: *da programmare* finché non c'è niente o c'è solo l'ODP; *programmato*
   quando c'è l'ordine di lavoro; *in lavorazione* quando la fase è *In corso* sull'ODP o, dalla
-  0.115.0, quando la riga dell'ordine di lavoro è **avviata** (l'ordine inviato da solo non basta);
+  0.116.0, quando la riga dell'ordine di lavoro è **avviata** (l'ordine inviato da solo non basta);
   *fatto* quando è dichiarata (o, senza ODP, quando tutto è rientrato).
 - Una fase è *da magazzino* se per il piano non serve fabbricare la parte.
 - **Codice con ciclo**: *da fare* fino all'avvio della prima fase; *in lavorazione* mentre una fase
@@ -2349,7 +2386,7 @@ tratta è stato generato dal piano prima dell'ODP, l'ODP non offre più **genera
 al suo posto mostra il numero di quell'ordine, che si apre con un clic. Vale per il primo ODP del
 piano che ha quella fase; un ODP rilanciato dopo, per i pezzi mancanti, commissiona i suoi. Al
 contrario, una tratta commissionata dall'ODP esce già dalla generazione degli ordini di lavoro del
-piano. Dalla 0.115.0, una volta **lanciato** l'ODP, è lui il padrone anche di quella tratta: avvio e
+piano. Dalla 0.116.0, una volta **lanciato** l'ODP, è lui il padrone anche di quella tratta: avvio e
 rientri si registrano sulle sue fasi, da qualunque dei due documenti, e i **rientrati** dell'ordine
 di lavoro li scrive lui. Se la riga del piano era già partita da sola prima del lancio, al lancio i
 suoi avvii e rientri **passano all'ODP** così come sono: il materiale non esce una seconda volta e i
@@ -2365,7 +2402,7 @@ documento per il terzista lo emette l'ufficio.
 > dei due documenti lo si faccia. Anche i **pezzi rientrati** dell'ODL li scrive la dichiarazione
 > fatta qui: i buoni dell'ultima fase della tratta più gli scarti di tutta la tratta.
 
-**Le fasi di una tratta dal terzista** (dalla 0.115.0). Dentro una tratta — fasi consecutive dallo
+**Le fasi di una tratta dal terzista** (dalla 0.116.0). Dentro una tratta — fasi consecutive dallo
 stesso terzista — la fase dopo si avvia appena è avviata quella prima, senza aspettare che sia
 chiusa: i pezzi passano dall'una all'altra presso di lui, e i primi tornano finiti prima che
 arrivino gli ultimi. Per lo stesso motivo una fase non è mai chiusa mentre la precedente aspetta
@@ -2474,7 +2511,7 @@ Carico centri.
 
 ### Avvia e dichiara
 
-*(dalla 0.115.0)* Sono gli stessi due gesti dell'ordine di produzione (→
+*(dalla 0.116.0)* Sono gli stessi due gesti dell'ordine di produzione (→
 [cap. 22](#22-ordini-di-produzione-odp)), e prendono il posto di *spedisci materiale*, *manda al
 terzista*, *ritira dal terzista* e *registra rientro*.
 

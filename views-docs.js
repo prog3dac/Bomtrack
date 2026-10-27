@@ -2054,7 +2054,7 @@ function delOdl(id) {
   docDel('odl', id);
 }
 // ═══════════════════════════════════════════════════════════
-//  AVVIA E DICHIARA SULLA RIGA (dalla 0.115.0)
+//  AVVIA E DICHIARA SULLA RIGA (dalla 0.116.0)
 // ═══════════════════════════════════════════════════════════
 // Gli stessi due gesti dell'ordine di produzione, qualunque sia l'origine
 // della riga. Prima l'ordine di lavoro aveva quattro comandi suoi — spedisci

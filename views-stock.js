@@ -1122,7 +1122,7 @@ function clRegistrato(o, l, verso) {
   return m;
 }
 
-// Dalla 0.115.0 queste schede servono solo alle righe di conto lavoro rimaste
+// Dalla 0.116.0 queste schede servono solo alle righe di conto lavoro rimaste
 // negli ordini d'acquisto: sull'ordine di lavoro la stessa cosa la fanno avvia
 // e dichiara (odlAvvia, odlDichiara), che scrivono anche l'evento e i
 // rientrati. Due strade per lo stesso gesto sarebbero due registrazioni.

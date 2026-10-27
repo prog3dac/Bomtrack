@@ -654,6 +654,22 @@ body.filt-open .filt-summary{display:none}
 .obs-mark{font-size:12px;margin-left:2px}
 /* Parte comprata da fornitore invece che prodotta in casa */
 .buy-mark{font-size:12px;margin-left:2px}
+/* Codice articolo: composto dalle scelte, scritto a mano solo con la spunta (0.115.0) */
+.code-field{display:flex;align-items:center;gap:10px}
+.code-field > input{flex:1;min-width:0}
+.modal-field input.code-auto{color:var(--text-dim);cursor:default}
+.code-manual-check{padding:0;white-space:nowrap}
+.code-warn{text-align:left;padding:0 0 10px;color:var(--text)}
+.code-preview{border:1px dashed var(--border);border-radius:8px;padding:10px 12px;margin:4px 0 14px;font-size:13px}
+.code-preview-title{font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.code-preview-grid{display:grid;grid-template-columns:max-content max-content 1fr;gap:4px 16px;align-items:baseline}
+.code-preview-row{display:contents}
+.code-preview-tipo{color:var(--text-dim)}
+.code-preview-code{font-family:var(--mono);font-weight:700}
+.code-preview-nota{color:var(--text-dim);font-size:12px}
+.code-preview-avviso{margin:6px 0 0;color:var(--text);font-size:12px}
+@media (max-width:600px){.code-preview-grid{grid-template-columns:max-content 1fr}.code-preview-nota{grid-column:1/-1;margin-top:-4px}}
+.code-man-mark{display:inline-block;font-family:var(--font);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;margin-left:6px;border-radius:6px;border:1px solid var(--accent);color:var(--accent);vertical-align:middle}
 .pick-fav{color:var(--orange);font-size:12px}
 .row-obsolete td{opacity:.55}
 .flag-check{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--text);text-transform:none;letter-spacing:normal;cursor:pointer;padding:9px 0}

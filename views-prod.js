@@ -189,7 +189,7 @@ function opForzata(odp, fase) { return opDecls(odp.id, fase.id).some(d => d.kind
 // qualcuno non avviava e chiudeva a mano ogni fase vuota. La prima fase non
 // cade qui: senza precedente, zero da fare è un ordine a zero, non un esito.
 //
-// Coperta dai pezzi non basta se la precedente è ancora aperta (dalla 0.115.0):
+// Coperta dai pezzi non basta se la precedente è ancora aperta (dalla 0.116.0):
 // le fasi di una stessa tratta dal terzista lavorano insieme, e 6 pezzi su 10
 // tornati dalla 20 coprono i 6 usciti finora dalla 10, non la fase. Gli altri 4
 // arriveranno, e la fase li deve ancora aspettare.
@@ -249,7 +249,7 @@ function opAvviabile(odp, fase) {
   if (opChiusa(odp, fase)) return { ok: false, motivo: 'la fase è già chiusa' };
   const prec = opPrecedente(odp, fase);
   // Dentro una tratta dal terzista la fase dopo parte appena è partita quella
-  // prima (dalla 0.115.0): i pezzi passano dall'una all'altra presso di lui, e
+  // prima (dalla 0.116.0): i pezzi passano dall'una all'altra presso di lui, e
   // i primi tornano finiti prima che arrivino gli ultimi.
   if (prec && !opChiusa(odp, prec) && !(opStessaTratta(prec, fase) && opAvviata(odp, prec))) {
     return { ok: false, motivo: opMotivoBlocco(odp, fase), fase: prec };
@@ -630,7 +630,7 @@ function opOdlDi(fase) { return fase ? (opOdlIndex().get(fase.id) || null) : nul
 // che ha quella fase (non annullato): un ODP rilanciato dopo, per i pezzi che
 // mancano, resta libero di commissionare i suoi.
 //
-// Dalla 0.115.0 il legame non serve più solo a dire «già commissionata»: una
+// Dalla 0.116.0 il legame non serve più solo a dire «già commissionata»: una
 // volta lanciato l'ordine di produzione, è lui il padrone di quella tratta. Sulla
 // riga dell'ordine di lavoro avvia e dichiara chiamano le sue fasi, e i pezzi
 // rientrati li scrive lui (opSyncOdlReceived) — prima ciascuno dei due poteva
@@ -709,7 +709,7 @@ function opGenerabile(odp, fase) {
 // ordAutoStatus, l'elenco, gli export: cambia solo chi lo scrive.
 //
 // Tornati sono i buoni dell'ultima fase **più gli scarti** di tutta la tratta
-// (dalla 0.115.0): 8 buoni e 2 scarti su 10 sono 10 pezzi che il terzista non
+// (dalla 0.116.0): 8 buoni e 2 scarti su 10 sono 10 pezzi che il terzista non
 // ha più, e l'ordine di lavoro è evaso, non parziale per sempre.
 // La riga generata dal piano (`dalPiano`) non ha `odpId`: il suo ricevuto è
 // una somma di eventi, e si cambia passando di lì (registraRicevuto).
@@ -731,7 +731,7 @@ function opSyncOdlReceived(odp, fase) {
   if (typeof ordAutoStatus === 'function') ordAutoStatus(legame.odl);
   touch(legame.odl);
 }
-// ── La presa in carico (dalla 0.115.0) ──
+// ── La presa in carico (dalla 0.116.0) ──
 // Un ordine di lavoro del piano può partire **prima** che nasca, o che si
 // lanci, l'ordine di produzione dello stesso piano: il materiale è uscito con
 // l'avvio della riga, e magari qualche pezzo è già tornato. Quando l'ODP entra
@@ -1263,7 +1263,7 @@ function odpAnnullaSave(id) {
 // il magazzino oppure no. Un comando che sembra un carico e non carica è il modo
 // più rapido di far perdere fiducia in una giacenza.
 // Le schede di avvio e di dichiarazione si aprono anche dalla riga di un ordine
-// di lavoro (dalla 0.115.0): finito il gesto si ridisegna la vista da cui si è
+// di lavoro (dalla 0.116.0): finito il gesto si ridisegna la vista da cui si è
 // partiti, non sempre quella degli ordini di produzione.
 function opRidisegna() {
   if (typeof activeView !== 'undefined' && activeView === 'odl' && typeof renderOdl === 'function') renderOdl();
@@ -1375,7 +1375,7 @@ function opDichiaraSave(id, faseId) {
   if (!opDichiara(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note') })) return;
   closeModal(); opRidisegna(); showToast('Avanzamento registrato');
 }
-// ─── La tratta dal terzista, dichiarata in un colpo (dalla 0.115.0) ───
+// ─── La tratta dal terzista, dichiarata in un colpo (dalla 0.116.0) ───
 // Dalla riga dell'ordine di lavoro si dice quel che è tornato dal terzista, non
 // fase per fase: lui le fasi le fa una dopo l'altra sullo stesso pezzo. I pezzi
 // tornati sono passati da tutte, quindi le fasi prima dell'ultima li dichiarano

@@ -1,4 +1,4 @@
-// Avvia e dichiara sulla riga dell'ordine di lavoro (dalla 0.115.0).
+// Avvia e dichiara sulla riga dell'ordine di lavoro (dalla 0.116.0).
 //
 // Gli stessi due gesti dell'ordine di produzione, qualunque sia l'origine della
 // riga. Tre cose vanno provate, e sono quelle che a occhio non si vedono.

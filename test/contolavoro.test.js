@@ -300,7 +300,7 @@ describe('Conto lavoro: il materiale e quello del ciclo', () => {
   });
 });
 
-// Dalla 0.115.0 sull'ordine di lavoro questi gesti sono avvia e dichiara
+// Dalla 0.116.0 sull'ordine di lavoro questi gesti sono avvia e dichiara
 // (test/odl-avanzamento.test.js): le schede di prima restano per le righe di
 // conto lavoro rimaste negli ordini d'acquisto, e i casi qui sotto le provano lì.
 describe('Conto lavoro: il giro con due fasi, in numeri', () => {
