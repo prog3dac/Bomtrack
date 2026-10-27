@@ -16,7 +16,7 @@ function catalogImportBlock(scope) {
   return `<div>
       <strong>${buy ? ico('cart', 'tinted', '') + ' Articoli — Acquisti' : ico('tree', 'tinted', '') + ' Articoli — Progetto'}</strong>
       <p>${buy
-    ? 'Commerciali e materie prime, <b>un foglio per tipo</b>: <span style="font-family:var(--mono)">Commerciali, Materie prime, Listino</span>. Fornitore e prezzo entrano come <b>quotazione nel listino</b> dell\'articolo e diventano il prezzo in uso.'
+    ? 'Commerciali e materie prime, <b>un foglio per tipo</b>: <span style="font-family:var(--mono)">Commerciali, Materie prime</span>. Sulla riga c\'è <b>la quotazione in uso</b>: fornitore e prezzo entrano nel listino dell\'articolo e diventano il prezzo in uso.'
     : 'Macchine, gruppi, sottogruppi e parti, <b>un foglio per tipo</b>. I fogli si applicano in ordine, così un gruppo può puntare a una macchina definita nello stesso file: si caricano sigle, appartenenze e schema di codifica. <b>La distinta base non è in questo file</b>: si carica qui sotto.'}</p>
       <p>Il file esportato <b>è anche il template</b>. Contiene un foglio <b>Liste</b> con tutti i valori ammessi e un foglio <b>Istruzioni</b>. Il <b>Codice</b> è la chiave: se esiste l'articolo viene aggiornato, se è vuoto viene generato. L'import non elimina mai niente.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
@@ -219,7 +219,9 @@ function siglaImport(nome, proposta, prese, avvisa, cosa) {
   return sigla;
 }
 // Trova (o crea) famiglia e sottofamiglia per nome, coerenti col tipo
-function findOrCreateFamily(famName, subName, type, report) {
+// `siglaFam`/`siglaSub`: la sigla proposta per una famiglia da creare (dai file
+// Articoli, che la scrivono fra quadre accanto al nome); vuota = dal nome.
+function findOrCreateFamily(famName, subName, type, report, siglaFam, siglaSub) {
   const fn = String(famName).trim();
   const result = { familyId: '', subFamilyId: '' };
   if (!fn) return result;
@@ -228,7 +230,7 @@ function findOrCreateFamily(famName, subName, type, report) {
   if (!db.families) db.families = [];
   let f = indiceNomi(_famNomeIdx, db.families, chiaveFamiglia).get(chiaveFamiglia({ name: fn, kind }));
   if (!f) {
-    const sigla = siglaImport(fn, '', sigleFamiglia(kind), avvisa, 'Macrofamiglia');
+    const sigla = siglaImport(fn, siglaFam || '', sigleFamiglia(kind), avvisa, 'Macrofamiglia');
     f = stampNew({ id: gid(), name: fn, kind, sigla, subs: [] }); db.families.push(f); report.createdFamilies++;
     aggiungiANomi(_famNomeIdx, db.families, chiaveFamiglia, f);
   }
@@ -237,7 +239,7 @@ function findOrCreateFamily(famName, subName, type, report) {
   if (sn) {
     let s = (f.subs || []).find(x => x.name.toLowerCase() === sn.toLowerCase());
     if (!s) {
-      const sigla = siglaImport(sn, '', sigleSottofamiglia(f), avvisa, 'Sottofamiglia');
+      const sigla = siglaImport(sn, siglaSub || '', sigleSottofamiglia(f), avvisa, 'Sottofamiglia');
       s = stampNew({ id: gid(), name: sn, sigla }); (f.subs = f.subs || []).push(s); report.createdSubFamilies++;
     }
     result.subFamilyId = s.id;

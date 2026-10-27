@@ -6,13 +6,18 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **Menu a tendina nei file Excel da importare.** Nei file Articoli (Acquisti e Progetto) e Impostazioni le colonne a valori ammessi hanno un menu a tendina vero, collegato agli elenchi dell'app: prima c'era solo il foglio Liste da cui copiare, o la convalida da impostare a mano. Nessun cambio a `supabase/schema.sql`.
 
-- **Articoli**: UM, UM acquisto e UM prezzo, Macrofamiglia, Sottofamiglia, Fornitore, Concetto, Approvvigionamento, Tipo sigla gruppo, Preferito, Obsoleto e In uso. *Codice macchina* e *Codice gruppo* propongono i codici dei fogli Macchine e Gruppi dello stesso file.
+- **Articoli**: UM, UM acquisto e UM prezzo, Macrofamiglia, Sottofamiglia, Fornitore, Concetto, Approvvigionamento, Tipo sigla gruppo, Preferito e Obsoleto. *Codice macchina* e *Codice gruppo* propongono i codici dei fogli Macchine e Gruppi dello stesso file.
 - **Sottofamiglia dipendente**: propone solo le sottofamiglie della macrofamiglia scelta sulla riga.
 - **Avvisa o blocca come l'import**: un fornitore, una famiglia o un'unità nuovi si possono scrivere (l'import li crea) con un avviso; un concetto o un Sì/No fuori elenco vengono rifiutati.
 - **Impostazioni**: Attivo, Ruolo, Tipo delle condizioni offerta, Predefinita.
 - I valori stanno nel foglio nascosto **Tendine**, che l'import ignora. Se le tendine non si riescono a scrivere, il file esce come prima.
+- **Famiglie con la sigla**: Macrofamiglia e Sottofamiglia escono come `Meccanico [MEC]`, così chi sceglie vede la sigla che finisce nel codice. Una famiglia nuova scritta così prende quella sigla, se libera; il solo nome vale ancora.
 
-**Manuale** — cap. 27 «Menu a tendina».
+**Niente più foglio Listino.** Sulla riga dell'articolo c'è una sola quotazione, quella in uso, anche quando l'articolo ne ha altre (prima in quel caso la riga restava vuota e tutto andava nel Listino). L'import legge il prezzo solo dalla riga: stesso fornitore e stessa data aggiornano la quotazione, altrimenti ne nasce una nuova che va in uso. Le altre quotazioni restano nell'app. Un file di prima con il foglio Listino si carica ancora, ma quel foglio viene ignorato con un avviso.
+
+**Parti: Descrizione facoltativa.** Il Concetto resta obbligatorio (e non si può svuotare); la descrizione libera no, e la colonna si chiama ora *Descrizione* senza asterisco. I file di prima con *Descrizione \** si leggono uguale.
+
+**Manuale** — cap. 27 «Menu a tendina», i blocchi Articoli e le regole comuni.
 
 ### 0.116.0 — 2026-10-27
 

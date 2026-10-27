@@ -2858,8 +2858,8 @@ con i valori ammessi.
 **Menu a tendina** *(dalla 0.117.0)*. Nei file Articoli e Impostazioni le colonne che accettano
 solo certi valori hanno un menu a tendina, preso dagli elenchi dell'app al momento dell'export:
 
-- **Articoli**: UM e UM acquisto/prezzo, Macrofamiglia e Sottofamiglia, Fornitore, Concetto,
-  Approvvigionamento, Tipo sigla gruppo, Preferito / Obsoleto / In uso (Sì/No). *Codice macchina*
+- **Articoli**: UM e UM acquisto/prezzo, Macrofamiglia e Sottofamiglia (con la sigla), Fornitore, Concetto,
+  Approvvigionamento, Tipo sigla gruppo, Preferito / Obsoleto (Sì/No). *Codice macchina*
   e *Codice gruppo* propongono i codici dei fogli `Macchine` e `Gruppi` dello stesso file, quindi
   anche una macchina appena aggiunta in fondo.
 - **Sottofamiglia** propone solo quelle della *Macrofamiglia* scelta sulla stessa riga.
@@ -2872,11 +2872,12 @@ solo certi valori hanno un menu a tendina, preso dagli elenchi dell'app al momen
 ### I quattro blocchi
 
 **1. Articoli — Acquisti**
-Fogli: `Commerciali` · `Materie prime` · `Listino`.
+Fogli: `Commerciali` · `Materie prime`.
 Pulsanti: *Esporta Acquisti* · *🔍 Verifica un file* · *Carica Acquisti*.
 
 **2. Articoli — Progetto**
-Fogli: `Macchine` · `Gruppi` · `Sottogruppi` · `Parti` · `Listino`.
+Fogli: `Macchine` · `Gruppi` · `Sottogruppi` · `Parti`. Nelle parti il **Concetto** è
+obbligatorio, la **Descrizione** no: il nome della parte può essere il solo concetto.
 **Il tipo è il foglio**: non c'è una colonna «tipo». I fogli si applicano in quest'ordine, così i
 padri esistono prima dei figli.
 **La distinta non è in questi file** — sta nel blocco 3.
@@ -2903,7 +2904,8 @@ colleghi che esistono già: uno nuovo si invita da *Gestione → Utenti* (dalla 
 | **Una riga con un errore non applica niente** | E su un articolo già usato codice, famiglia, codifica e U.M. restano com'erano, con un avviso (dalla 0.105.5) |
 | **L'import è additivo** | Non cancella mai niente. Quello che non è nel file resta com'è |
 | **Fornitori e famiglie mancanti si creano al volo** | I **concetti no**: quelli si aggiungono a mano, perché la nomenclatura non deve crescere per distrazione |
-| **Fornitore + prezzo** | Creano una **quotazione a listino**, che diventa il prezzo in uso |
+| **Fornitore + prezzo** | Sulla riga dell'articolo c'è **una quotazione sola, quella in uso**. All'import crea o aggiorna una **quotazione a listino**, che diventa il prezzo in uso. Stesso fornitore e stessa *Data prezzo* aggiornano quella che c'è; le altre quotazioni dell'articolo restano nell'app (dalla 0.117.0: il foglio `Listino` non c'è più, e in un file di prima viene ignorato con un avviso) |
+| **Famiglie con la sigla** | *Macrofamiglia* e *Sottofamiglia* si scrivono col nome e la sigla del codice fra quadre, `Meccanico [MEC]`. Una famiglia nuova prende la sigla scritta, se è libera. Il solo nome vale ancora (dalla 0.117.0) |
 | **U.M. sconosciute** | Vengono registrate automaticamente nell'elenco |
 | **CSV** | I `.csv` in UTF-8 nudo vengono riconosciuti da soli |
 

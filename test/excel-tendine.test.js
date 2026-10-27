@@ -82,7 +82,8 @@ describe('File Acquisti — le tendine', () => {
     assert.equal(wb.Workbook.Sheets[i].Hidden, 1);
     assert.ok(!wb.Workbook.Sheets.some((s, j) => j !== i && s.Hidden), 'gli altri fogli restano in vista');
     assert.deepEqual(colonna(wb, 'Tendine', 'Fornitori'), ['SKF'], 'i fornitori sospesi non si propongono');
-    assert.deepEqual(colonna(wb, 'Tendine', 'Macrofamiglie acquistato'), ['Meccanico', 'Elettrico'], 'una volta sola, senza ripetizioni');
+    assert.deepEqual(colonna(wb, 'Tendine', 'Macrofamiglie acquistato'), ['Meccanico [MEC]', 'Elettrico [ELE]'],
+      'una volta sola, con la sigla del codice');
   });
   it('UM, famiglie, fornitore e Sì/No hanno la loro tendina', () => {
     // Codice, Descrizione, UM, UM acquisto, Fattore, Macro, Sotto, Fornitore, …
@@ -99,7 +100,8 @@ describe('File Acquisti — le tendine', () => {
   it('la sottofamiglia propone solo quelle della macrofamiglia della riga', () => {
     assert.match(dv.G2.formula, /^OFFSET\(Tendine!\$\w+\$1,MATCH\(\$F2,Tendine!\$(\w+)\$2:\$\1\$4,0\),0,COUNTIF\(Tendine!\$\1\$2:\$\1\$4,\$F2\),1\)$/);
     // Le coppie restano raggruppate per macrofamiglia: è ciò su cui conta OFFSET
-    assert.deepEqual(colonna(wb, 'Tendine', 'Sottofamiglie acquistato (chiave)'), ['Meccanico', 'Meccanico', 'Elettrico']);
+    assert.deepEqual(colonna(wb, 'Tendine', 'Sottofamiglie acquistato (chiave)'), ['Meccanico [MEC]', 'Meccanico [MEC]', 'Elettrico [ELE]']);
+    assert.deepEqual(colonna(wb, 'Tendine', 'Sottofamiglie acquistato'), ['Cuscinetti [CUS]', 'Viti [VIT]', 'Cavi [CAV]']);
   });
   it('le materie prime hanno le loro famiglie, non quelle dei commerciali', () => {
     const m = convalide(xml['Materie prime']);
@@ -107,12 +109,12 @@ describe('File Acquisti — le tendine', () => {
     assert.notEqual(m.F2.formula, dv.F2.formula);
     assert.ok(!m.G2, 'una macrofamiglia senza sottofamiglie non ha una lista da proporre');
   });
-  it('il listino ha fornitore e In uso', () => {
-    const l = convalide(xml['Listino']);
-    assert.ok(Object.keys(l).length >= 3);
+  it('non c\'è più il foglio Listino', () => {
+    assert.ok(!wb.SheetNames.includes('Listino'));
   });
   it('Liste e Istruzioni restano senza tendine, e il blocco sta prima di ignoredErrors', () => {
     assert.ok(!/dataValidations/.test(xml['Liste']));
+    assert.ok(xml['Liste']);
     assert.ok(!/dataValidations/.test(xml['Istruzioni']));
     const x = xml['Commerciali'];
     assert.ok(x.indexOf('<dataValidations') > x.indexOf('</sheetData>'));

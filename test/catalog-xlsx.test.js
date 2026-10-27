@@ -99,13 +99,13 @@ describe('Export articoli — due file, un foglio per tipo', () => {
   const a = app(dbAcquisti());
   const p = app(dbProgetto());
 
-  it('il file Acquisti ha i fogli dei suoi due tipi, più il listino', () => {
-    assert.deepEqual(sheets(a, 'buy').map(s => s.name), ['Commerciali', 'Materie prime', 'Listino']);
+  it('il file Acquisti ha i fogli dei suoi due tipi, senza più il Listino', () => {
+    assert.deepEqual(sheets(a, 'buy').map(s => s.name), ['Commerciali', 'Materie prime']);
   });
   it('il file Progetto applica i fogli in ordine: macchine, gruppi, sottogruppi, parti', () => {
     // L'ordine è il contratto: un gruppo può puntare a una macchina dello stesso file
     assert.deepEqual(sheets(p, 'design').map(s => s.name),
-      ['Macchine', 'Gruppi', 'Sottogruppi', 'Parti', 'Listino']);
+      ['Macchine', 'Gruppi', 'Sottogruppi', 'Parti']);
   });
   it('ogni foglio ha solo le colonne del suo tipo', () => {
     const mac = sheetByName(p, 'design', 'Macchine').aoa[0];
@@ -130,18 +130,26 @@ describe('Export articoli — due file, un foglio per tipo', () => {
     assert.equal(r['Q.tà min'], 10);
     assert.equal(r['Data prezzo'], '2026-01-10');
   });
-  it('con più quotazioni la riga articolo resta vuota e parla il foglio Listino', () => {
+  it('con più quotazioni sulla riga va quella in uso, e solo quella', () => {
     const r = rowsOf(a, 'buy', 'Materie prime')[0];
-    assert.equal(r['Prezzo'], '', 'due quotazioni non stanno in una riga sola');
-    const l = rowsOf(a, 'buy', 'Listino');
-    assert.equal(l.length, 2);
-    assert.deepEqual(l.map(x => x['Codice articolo *']), ['MAT-ACC-BAR-001', 'MAT-ACC-BAR-001']);
-    assert.deepEqual(l.map(x => x['In uso']), ['Sì', '']);
+    assert.equal(r['Fornitore'], 'Rossi Acciai');
+    assert.equal(r['Prezzo'], 2);
+    assert.equal(r['Data prezzo'], '2026-02-01');
+  });
+  it('senza quotazione in uso la riga resta senza prezzo', () => {
+    const d = dbAcquisti();
+    d.items[1].activePriceId = null;
+    assert.equal(rowsOf(app(d), 'buy', 'Materie prime')[0]['Prezzo'], '');
+  });
+  it('famiglia e sottofamiglia escono col nome e la sigla del codice', () => {
+    const r = rowsOf(a, 'buy', 'Commerciali')[0];
+    assert.equal(r['Macrofamiglia'], 'Meccanico [MEC]');
+    assert.equal(r['Sottofamiglia'], 'Cuscinetti [CUS]');
   });
   it('le parti escono con concetto e descrizione separati, e il nome è di sola lettura', () => {
     const r = rowsOf(p, 'design', 'Parti')[0];
     assert.equal(r['Concetto *'], 'ALBERO');
-    assert.equal(r['Descrizione *'], 'motore 20x100');
+    assert.equal(r['Descrizione'], 'motore 20x100', 'facoltativa: niente asterisco');
     assert.equal(r['Descrizione composta (calcolato)'], 'ALBERO motore 20x100');
     assert.equal(r['Approvvigionamento'], 'Produzione interna');
   });
@@ -160,8 +168,8 @@ describe('Foglio Liste — i valori ammessi, da leggere', () => {
     const col = (n) => liste.map(r => r[n]).filter(v => v !== '');
     assert.deepEqual(col('UM'), ['pz', 'kg', 'm']);
     assert.deepEqual(col('Fornitori'), ['SKF', 'Rossi Acciai']);
-    assert.deepEqual(col('Macrofamiglia commerciali'), ['Meccanico']);
-    assert.deepEqual(col('Sottofamiglia commerciali'), ['Cuscinetti']);
+    assert.deepEqual(col('Macrofamiglia commerciali'), ['Meccanico [MEC]']);
+    assert.deepEqual(col('Sottofamiglia commerciali'), ['Cuscinetti [CUS]']);
   });
   it('Progetto: macchine e gruppi col codice in una colonna sua, concetti e approvvigionamento', () => {
     const p = app(dbProgetto());
@@ -221,7 +229,7 @@ describe('Round-trip Acquisti — il file esportato ricostruisce il catalogo', (
     const m = dopo.items.find(i => i.code === 'MAT-ACC-BAR-001');
     assert.equal(m.altUom, 'kg');
     approx(m.altFactor, 5.55);
-    assert.equal(m.priceList.length, 2, 'le due quotazioni tornano dal foglio Listino');
+    assert.equal(m.priceList.length, 1, 'sul file viaggia solo la quotazione in uso');
     const attiva = m.priceList.find(r => r.id === m.activePriceId);
     assert.equal(attiva.price, 2);
     assert.equal(attiva.priceUom, 'kg');
@@ -231,7 +239,7 @@ describe('Round-trip Acquisti — il file esportato ricostruisce il catalogo', (
     const rep2 = importa(nuova, file, 'buy');
     const d2 = nuova.snapshot();
     assert.equal(d2.items.length, 2);
-    assert.equal(d2.items.find(i => i.code === 'MAT-ACC-BAR-001').priceList.length, 2);
+    assert.equal(d2.items.find(i => i.code === 'MAT-ACC-BAR-001').priceList.length, 1);
     assert.equal(d2.suppliers.length, 2);
     assert.equal(d2.families.length, 2);
     assert.equal(rep2.sheets.reduce((n, s) => n + s.created, 0), 0);
@@ -240,7 +248,13 @@ describe('Round-trip Acquisti — il file esportato ricostruisce il catalogo', (
     const rifatto = workbook(nuova, 'buy');
     const senzaDate = o => JSON.stringify(o);
     assert.equal(senzaDate(rifatto['Commerciali']), senzaDate(file['Commerciali']));
-    assert.equal(senzaDate(rifatto['Listino']), senzaDate(file['Listino']));
+    assert.equal(senzaDate(rifatto['Materie prime']), senzaDate(file['Materie prime']));
+  });
+  it('le famiglie nuove prendono la sigla scritta fra quadre', () => {
+    const fam = dopo.families.find(f => f.name === 'Meccanico');
+    assert.equal(fam.sigla, 'MEC');
+    assert.equal(fam.subs[0].name, 'Cuscinetti', 'la sigla non entra nel nome');
+    assert.equal(fam.subs[0].sigla, 'CUS');
   });
 });
 
@@ -410,31 +424,52 @@ describe('Prezzi: la riga crea una quotazione, e la quotazione decide il costo',
     assert.equal(a.snapshot().items[0].priceList[0].priceUom, undefined);
     assert.match(rep.warnings[0], /non è l'unità di acquisto/);
   });
-  it('inline e foglio Listino con la stessa chiave sono la stessa quotazione', () => {
+  it('reimportando, stesso fornitore e stessa data aggiornano la quotazione in uso', () => {
     const a = conCommerciale();
-    importa(a, {
-      'Commerciali': [{ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz', Fornitore: 'SKF', Prezzo: 12.5, 'Data prezzo': '2026-03-01' }],
-      'Listino': [{ 'Codice articolo *': 'C1', Fornitore: 'SKF', 'Prezzo *': 13, 'Data *': '2026-03-01' }],
-    }, 'buy');
+    const riga = p => ({ 'Commerciali': [{ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz', Fornitore: 'SKF', Prezzo: p, 'Data prezzo': '2026-03-01' }] });
+    importa(a, riga(12.5), 'buy');
+    importa(a, riga(13), 'buy');
     const it = a.snapshot().items[0];
-    assert.equal(it.priceList.length, 1, 'stessa data e stesso fornitore: è la stessa quotazione, aggiornata');
+    assert.equal(it.priceList.length, 1);
     assert.equal(it.priceList[0].price, 13);
   });
-  it('"In uso" nel foglio Listino vince sulla quotazione della riga articolo', () => {
+  it('un fornitore o una data diversi fanno una quotazione nuova, che va in uso; le altre restano', () => {
     const a = conCommerciale();
-    importa(a, {
-      'Commerciali': [{ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz', Fornitore: 'SKF', Prezzo: 12.5, 'Data prezzo': '2026-03-01' }],
-      'Listino': [{ 'Codice articolo *': 'C1', Fornitore: 'Rossi', 'Prezzo *': 9, 'Data *': '2026-04-01', 'In uso': 'Sì' }],
-    }, 'buy');
+    importa(a, { 'Commerciali': [{ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz', Fornitore: 'SKF', Prezzo: 12.5, 'Data prezzo': '2026-03-01' }] }, 'buy');
+    importa(a, { 'Commerciali': [{ Codice: 'C1', Fornitore: 'Rossi', Prezzo: 9, 'Data prezzo': '2026-04-01' }] }, 'buy');
     const it = a.snapshot().items[0];
-    assert.equal(it.priceList.length, 2);
+    assert.equal(it.priceList.length, 2, 'l\'import non cancella quotazioni');
     approx(it.purchasePrice, 9);
-    assert.equal(it.priceList.find(r => r.id === it.activePriceId).price, 9);
   });
-  it('una quotazione del foglio Listino su un articolo inesistente si segnala', () => {
+  it('il foglio Listino di un file di prima non si legge più, e lo si dice', () => {
     const a = conCommerciale();
-    const rep = importa(a, { 'Listino': [{ 'Codice articolo *': 'ZZZ', Fornitore: 'SKF', 'Prezzo *': 3, 'Data *': '2026-01-01' }] }, 'buy');
-    assert.match(rep.errors[0], /^Listino, riga 2: articolo "ZZZ" non trovato/);
+    const rep = importa(a, {
+      'Commerciali': [{ Codice: 'C1', Nome: 'Cuscinetto', UM: 'pz' }],
+      'Listino': [{ 'Codice articolo *': 'C1', Fornitore: 'SKF', 'Prezzo *': 3, 'Data *': '2026-01-01' }],
+    }, 'buy');
+    assert.equal((a.snapshot().items[0].priceList || []).length, 0);
+    assert.match(rep.warnings.join(' '), /foglio Listino ignorato/);
+    assert.deepEqual(rep.errors, []);
+  });
+  it('una parte senza descrizione entra col solo concetto; senza concetto no', () => {
+    const a = app(dbProgetto());
+    const rep = importa(a, { 'Parti': [
+      { Codice: '', 'Codice macchina': 'TRN-S00', 'Codice gruppo': 'TRN-BAS-S00', 'Concetto *': 'ALBERO', 'Descrizione': '', 'UM *': 'pz' },
+      { Codice: '', 'Codice macchina': 'TRN-S00', 'Codice gruppo': 'TRN-BAS-S00', 'Concetto *': '', 'Descrizione': 'senza concetto', 'UM *': 'pz' },
+    ] }, 'design');
+    assert.equal(rep.errors.length, 1);
+    assert.match(rep.errors[0], /riga 3: concetto mancante/);
+    assert.ok(a.snapshot().items.some(i => i.type === 'parte' && i.name === 'ALBERO' && i.id !== 'prt'));
+  });
+  it('famiglia scritta col solo nome, come nei file di prima, vale ancora', () => {
+    const a = conCommerciale();
+    const rep = importa(a, { 'Commerciali': [{ Codice: 'C1', Nome: 'Vite', UM: 'pz', Macrofamiglia: 'Viteria', Sottofamiglia: 'TCEI [TCE]' }] }, 'buy');
+    assert.deepEqual(rep.errors, []);
+    const f = a.snapshot().families[0];
+    assert.equal(f.name, 'Viteria');
+    assert.equal(f.sigla, 'VIT');
+    assert.equal(f.subs[0].name, 'TCEI');
+    assert.equal(f.subs[0].sigla, 'TCE');
   });
   it('su una parte a produzione interna il prezzo entra a listino ma non diventa costo, e lo dice', () => {
     const a = app(dbProgetto());
@@ -618,7 +653,7 @@ describe('File sbagliato, file vecchio', () => {
   it('i fogli assenti si dichiarano invece di essere trattati come vuoti', () => {
     const a = app(dbAcquisti());
     const rep = importa(a, { 'Commerciali': [] }, 'buy');
-    assert.deepEqual(rep.missing, ['Materie prime', 'Listino']);
+    assert.deepEqual(rep.missing, ['Materie prime']);
     assert.equal(a.snapshot().items.length, 2);
   });
   it('i messaggi d\'errore sono escapati: in un foglio ci può stare qualunque cosa', () => {
