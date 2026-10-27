@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.115.1 — 2026-10-27
+
+**Eliminare una macchina con i suoi gruppi dice perché non si può.** Una macchina senza movimenti, ordini né documenti, ma con dei gruppi codificati sotto di lei, si fermava con «Articolo già movimentato (magazzino, cicli, documenti o piani)»: il blocco era giusto, perché i codici dei gruppi nascono dalla sigla della macchina, ma il motivo no, e mandava a cercarlo in magazzino. Ora il messaggio nomina i gruppi (e, per un gruppo, i sottogruppi) da eliminare o spostare prima. Nessun cambio a `supabase/schema.sql`.
+
 ### 0.115.0 — 2026-10-27
 
 **Il codice articolo si scrive a mano solo per scelta.** Il codice nasce dalle scelte della scheda e di regola resta quello; prima bastava digitare nel campo perché l'app smettesse di generarlo, senza traccia, e un codice cambiato per sbaglio non si distingueva più da un'eccezione voluta (come `RTT-S00` per una macchina di sigla `MAX`). **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge a `items` le colonne `code_manual`, `code_manual_by`, `code_manual_at`, `code_note`, non tocca i dati).

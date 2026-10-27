@@ -355,3 +355,28 @@ describe('Controllo dati: i numeri dei documenti', () => {
     assert.match(a.eval('renderSerieDocumenti()'), /Nessun numero doppio/);
   });
 });
+
+// Una macchina con dei gruppi codificati sotto di lei non si elimina, ma il
+// motivo è la codifica, non il magazzino (0.114.1).
+describe('Eliminare una macchina che ha dei gruppi', () => {
+  const conGruppi = () => app(makeDb({ items: [
+    Object.assign(asm('m', 'macchina', { components: [] }), { code: 'RTT-S00' }),
+    Object.assign(asm('g1', 'gruppo', { components: [] }), { code: 'MAX-0050-S00', machineItemId: 'm' }),
+    Object.assign(asm('g2', 'gruppo', { components: [] }), { code: 'MAX-0100-S00', machineItemId: 'm' }),
+  ] }));
+
+  it('si ferma e nomina i gruppi, non i movimenti', () => {
+    const a = conGruppi();
+    a.eval('delItem("m")');
+    assert.ok(a.eval('!!getItem("m")'));
+    const msg = avvisi(a).join(' | ');
+    assert.match(msg, /MAX-0050-S00, MAX-0100-S00/);
+    assert.doesNotMatch(msg, /movimentato/);
+  });
+
+  it('il gruppo, senza sottogruppi, non ha dipendenti nella codifica', () => {
+    const a = conGruppi();
+    assert.equal(a.eval('codificaDipendenti("g1").length'), 0);
+    assert.equal(a.eval('codificaDipendenti("m").length'), 2);
+  });
+});
