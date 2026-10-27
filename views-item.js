@@ -131,7 +131,9 @@ function itemInfoAnagrafica(it) {
   const mac = getItem(it.machineItemId);
   const grp = getItem(it.groupItemId);
   return itemInfoSection('Anagrafica', itemInfoRows([
-    ['Codice', rawHtml(_mono(it.code))],
+    ['Codice', rawHtml(_mono(it.code) + codeManualMark(it))],
+    it.codeManual ? ['Codice manuale', [it.codeNote || 'senza motivo scritto',
+      it.codeManualAt ? `deciso${it.codeManualBy ? ' da ' + actorName(it.codeManualBy) : ''} il ${fmtStamp(it.codeManualAt)}` : ''].filter(Boolean).join(' — ')] : null,
     ['Descrizione', it.name],
     it.type === 'parte' && it.conceptId ? ['Concetto', conceptName(it.conceptId)] : null,
     ['Tipo', typeLabel(it.type)],

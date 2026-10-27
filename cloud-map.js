@@ -242,10 +242,10 @@ const CLOUD_TYPES = (() => {
     'capacityHours', 'hoursPerDay', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size'].forEach(k => { t[k] = 'numeric'; });
   ['pos', 'runFrom', 'runTo', 'seq', 'opIndex', 'passata', 'page', 'incrDigitsN', 'incrDigitsS', 'gCodeLen'].forEach(k => { t[k] = 'int'; });
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'plannedStart', 'plannedEnd'].forEach(k => { t[k] = 'date'; });
-  ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt'].forEach(k => { t[k] = 'timestamptz'; });
-  ['active', 'favorite', 'obsolete', 'done'].forEach(k => { t[k] = 'bool'; });
+  ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt'].forEach(k => { t[k] = 'timestamptz'; });
+  ['active', 'favorite', 'obsolete', 'done', 'codeManual'].forEach(k => { t[k] = 'bool'; });
   ['snapshot', 'record', 'ecoImpact'].forEach(k => { t[k] = 'jsonb'; });
-  ['createdBy', 'updatedBy', 'deletedBy'].forEach(k => { t[k] = 'uuid'; });
+  ['createdBy', 'updatedBy', 'deletedBy', 'codeManualBy'].forEach(k => { t[k] = 'uuid'; });
   return t;
 })();
 // Campi che finiscono in `Id` ma non puntano a un record con chiave uuid: i

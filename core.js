@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.114.1';
+const APP_VERSION = '0.115.1';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -905,6 +905,11 @@ function eliminaSeAncoraUltimo(guardia, fn) {
 const ARTICOLO_NON_ULTIMO = c => `Il codice ${c} non è l'ultimo della sua serie: eliminandolo resterebbe un buco nella codifica. Segnalo come obsoleto invece di eliminarlo.`;
 // Codice per famiglia: materie prime, commerciali e parti non legate a una macchina
 function genFamilyCode(type, familyId, subFamilyId) {
+  const prefix = familyCodePrefix(type, familyId, subFamilyId);
+  return prefix ? nextCodeForPrefix(prefix) : '';
+}
+// Il prefisso, senza il numero: MAT-ACC-LAM-. '' per i tipi che non lo hanno.
+function familyCodePrefix(type, familyId, subFamilyId) {
   let base = '';
   if (type === 'materiale') base = (db.settings.codePrefixMateriale || 'MAT') + '-';
   else if (type === 'acquistato') base = (db.settings.codePrefixAcquistato || 'CMM') + '-';
@@ -915,7 +920,7 @@ function genFamilyCode(type, familyId, subFamilyId) {
     prefix += familySigla(familyId) + '-';
     if (subFamilyId) prefix += subFamilySigla(familyId, subFamilyId) + '-';
   }
-  return nextCodeForPrefix(prefix);
+  return prefix;
 }
 
 // ─── Codifica gerarchica macchina › gruppo › sottogruppo/parte ───
@@ -1034,23 +1039,116 @@ function genItemCode(it) {
     const grp = getItem(it.groupItemId);
     // La parte senza macchina/gruppo mantiene la codifica per famiglia
     if (!mac || !grp) return type === 'parte' ? genFamilyCode(type, it.familyId, it.subFamilyId) : '';
-    const sm = machineScheme(mac);
-    // Lo stesso **prefisso**, non lo stesso gruppo (dalla 0.105.5): due gruppi
-    // con la stessa sigla (TRN-BAS-S00, TRN-BAS-S01) scrivono i codici delle
-    // loro parti nello stesso TRN-BAS-###, e contando per gruppo il secondo
-    // ripartiva da 001, già preso.
-    const stessoGruppo = i => i.machineItemId === mac.id && i.id !== it.id
-      && (i.groupItemId === grp.id || itemSigla(i.groupItemId) === grp.sigla);
-    const siblings = (db.items || []).filter(i => i.type === type && stessoGruppo(i));
-    // L'altro blocco che abita lo stesso prefisso: le parti per un sottogruppo,
-    // i sottogruppi per una parte. Vedi il commento su nextCodeNumber.
-    const altroTipo = type === 'parte' ? 'sottogruppo' : 'parte';
-    const altri = (db.items || []).filter(i => i.type === altroTipo && stessoGruppo(i));
-    const n = nextCodeNumber(type, siblings, sm, altri, `${mac.sigla}-${grp.sigla}-`);
-    if (n == null) return codeFallito(`Numerazione ${type === 'parte' ? 'parti' : 'sottogruppi'} esaurita`);
-    return `${mac.sigla}-${grp.sigla}-${String(n).padStart(sm.incrN, '0')}`;
+    return codiceFiglio(type, mac, grp, it.id);
   }
   return '';
+}
+// Il prossimo codice di un sottogruppo o di una parte sotto `grp`. Il gruppo
+// può essere ancora una bozza ({ id: null, sigla }): l'anteprima della scheda
+// gruppo chiede così che codici avranno i figli prima che il gruppo esista.
+function codiceFiglio(type, mac, grp, exceptId) {
+  const sm = machineScheme(mac);
+  // Lo stesso **prefisso**, non lo stesso gruppo (dalla 0.105.5): due gruppi
+  // con la stessa sigla (TRN-BAS-S00, TRN-BAS-S01) scrivono i codici delle
+  // loro parti nello stesso TRN-BAS-###, e contando per gruppo il secondo
+  // ripartiva da 001, già preso.
+  const stessoGruppo = i => i.machineItemId === mac.id && i.id !== exceptId
+    && (i.groupItemId === grp.id || itemSigla(i.groupItemId) === grp.sigla);
+  const siblings = (db.items || []).filter(i => i.type === type && stessoGruppo(i));
+  // L'altro blocco che abita lo stesso prefisso: le parti per un sottogruppo,
+  // i sottogruppi per una parte. Vedi il commento su nextCodeNumber.
+  const altroTipo = type === 'parte' ? 'sottogruppo' : 'parte';
+  const altri = (db.items || []).filter(i => i.type === altroTipo && stessoGruppo(i));
+  const n = nextCodeNumber(type, siblings, sm, altri, `${mac.sigla}-${grp.sigla}-`);
+  if (n == null) return codeFallito(`Numerazione ${type === 'parte' ? 'parti' : 'sottogruppi'} esaurita`);
+  return `${mac.sigla}-${grp.sigla}-${String(n).padStart(sm.incrN, '0')}`;
+}
+// ─── Anteprima dei codici figli (dalla 0.115.0) ───
+// La scheda di una macchina o di un gruppo mostra, mentre si compila, i codici
+// che avranno i figli. `d` è la bozza della scheda (itemDraftFromForm), `codice`
+// il codice che il padre avrà. Restituisce { righe: [{ tipo, codice, nota }],
+// avvisi: [testo] }, o null per gli altri tipi.
+const SIGLA_ESEMPIO = { alpha: 'A', num: '0', alnum: 'X' };
+function anteprimaCodiciFigli(d, codice) {
+  if (!d || (d.type !== 'macchina' && d.type !== 'gruppo')) return null;
+  const righe = [], avvisi = [];
+  const salvato = d.id ? getItem(d.id) : null;
+  if (d.type === 'macchina') {
+    if (!d.sigla) return { righe, avvisi: ['Scrivi la sigla macchina per vedere i codici dei figli.'] };
+    const sm = machineScheme(d);
+    const g = (SIGLA_ESEMPIO[sm.gType] || 'A').repeat(sm.gLen);
+    const p = `${d.sigla}-${g}-`;
+    righe.push({ tipo: 'Macchina', codice: codice || `${d.sigla}-S${'0'.repeat(sm.incrS)}` });
+    righe.push({ tipo: 'Gruppo', codice: `${p}S${'0'.repeat(sm.incrS)}`, nota: `${g} = sigla del gruppo, ${typeHint(sm.gLen, sm.gType)}` });
+    righe.push({ tipo: 'Parte', codice: `${p}${'1'.padStart(sm.incrN, '0')}`, nota: 'a salire' });
+    righe.push({ tipo: 'Sottogruppo', codice: `${p}${'9'.repeat(sm.incrN)}`, nota: 'a scendere' });
+    if (codice && itemCodeKey(codice).indexOf(itemCodeKey(d.sigla + '-')) !== 0)
+      avvisi.push(`Il codice ${codice} non comincia con la sigla: i figli seguono la sigla ${d.sigla}, non il codice.`);
+    if (salvato && salvato.sigla && salvato.sigla !== d.sigla) {
+      const figli = (db.items || []).filter(i => i.machineItemId === salvato.id).length;
+      if (figli) avvisi.push(`Cambiando la sigla da ${salvato.sigla} a ${d.sigla}, i ${figli} codici figli già creati restano come sono: solo i nuovi useranno ${d.sigla}.`);
+    }
+    return { righe, avvisi };
+  }
+  const mac = getItem(d.machineItemId);
+  if (!mac) return { righe, avvisi: ['Scegli la macchina per vedere i codici dei figli.'] };
+  if (!mac.sigla) return { righe, avvisi: [`La macchina ${mac.code} non ha sigla: senza, i figli non hanno codice automatico.`] };
+  if (!d.sigla) return { righe, avvisi: ['Scrivi la sigla del gruppo per vedere i codici dei figli.'] };
+  const grp = { id: d.id || null, sigla: d.sigla };
+  const errore = codeGenError;
+  righe.push({ tipo: 'Gruppo', codice: codice || '' });
+  righe.push({ tipo: 'Prima parte libera', codice: codiceFiglio('parte', mac, grp, null) || '—', nota: 'a salire' });
+  righe.push({ tipo: 'Primo sottogruppo libero', codice: codiceFiglio('sottogruppo', mac, grp, null) || '—', nota: 'a scendere' });
+  codeGenError = errore;
+  if (mac.codeManual || codiceFuoriSchema(mac))
+    avvisi.push(`La macchina ha il codice ${mac.code}${mac.codeManual ? ' (manuale)' : ''}: i figli seguono la sua sigla ${mac.sigla}.`);
+  if (salvato) {
+    const figli = (db.items || []).filter(i => i.groupItemId === salvato.id);
+    if (salvato.sigla && salvato.sigla !== d.sigla && figli.length)
+      avvisi.push(`Cambiando la sigla da ${salvato.sigla} a ${d.sigla}, i ${figli.length} codici figli già creati restano come sono: solo i nuovi useranno ${d.sigla}.`);
+    else if (figli.length) {
+      const n = t => figli.filter(i => i.type === t).length;
+      righe.push({ tipo: 'Già creati', codice: '', nota: `${n('parte')} parti, ${n('sottogruppo')} sottogruppi` });
+    }
+  }
+  return { righe, avvisi };
+}
+// ─── Codice scritto a mano (dalla 0.115.0) ───
+// Il codice nasce dalle scelte (famiglia, macchina, gruppo, sigla) e di regola
+// resta quello. Scriverlo a mano è un'eccezione voluta — RTT-S00 per una
+// macchina di sigla MAX — e la scheda la chiede con una spunta e una conferma;
+// l'articolo la ricorda in `codeManual`, con chi e quando.
+//
+// Il prefisso che il codice dovrebbe avere secondo le scelte dell'articolo, o
+// null quando le scelte non bastano a dirlo (una macchina senza sigla, un
+// gruppo senza macchina): lì non c'è uno schema da rispettare.
+function codiceAtteso(it) {
+  if (!it) return null;
+  const type = it.type;
+  if (type === 'materiale' || type === 'acquistato') return familyCodePrefix(type, it.familyId, it.subFamilyId) || null;
+  if (type === 'macchina') return it.sigla ? `${it.sigla}-S` : null;
+  const mac = getItem(it.machineItemId);
+  if (type === 'gruppo') return mac && mac.sigla && it.sigla ? `${mac.sigla}-${it.sigla}-S` : null;
+  if (type === 'sottogruppo' || type === 'parte') {
+    const grp = getItem(it.groupItemId);
+    if (!mac || !grp) return type === 'parte' ? familyCodePrefix(type, it.familyId, it.subFamilyId) || null : null;
+    return mac.sigla && grp.sigla ? `${mac.sigla}-${grp.sigla}-` : null;
+  }
+  return null;
+}
+// Il codice non è quello che le scelte comporrebbero: prefisso diverso, o
+// dopo il prefisso qualcosa che non è il numero progressivo.
+function codiceFuoriSchema(it) {
+  const p = codiceAtteso(it);
+  if (!p) return false;
+  const c = itemCodeKey(it.code), k = itemCodeKey(p);
+  return !(c.startsWith(k) && /^\d+$/.test(c.slice(k.length)));
+}
+// I codici fuori schema che nessuno ha dichiarato manuali: scritti a mano
+// prima della 0.115.0, o arrivati da un import. Gestione li elenca.
+function codiciFuoriSchema() {
+  return (db.items || []).filter(i => !i.codeManual && codiceFuoriSchema(i))
+    .sort((a, b) => String(a.code).localeCompare(String(b.code)));
 }
 // Etichetta di appartenenza per il catalogo: "TRN › BAS"
 function codingLabel(it) {
