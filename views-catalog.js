@@ -755,6 +755,12 @@ function itemBadges(i) {
   return (i.favorite ? ' <span class="pick-fav" title="Preferito">★</span>' : '')
     + (i.obsolete ? ' <span class="obs-mark" title="Articolo obsoleto">' + ico('blocked', 'tinted') + '</span>' : '');
 }
+// Il codice scritto a mano, accanto al codice: un'eccezione voluta (0.115.0).
+function codeManualMark(i) {
+  if (!i || !i.codeManual) return '';
+  const t = 'Codice scritto a mano' + (i.codeNote ? ': ' + i.codeNote : '');
+  return ` <span class="code-man-mark" title="${esc(t)}">manuale</span>`;
+}
 // Variante testuale per i menu a tendina: dentro un <option> non entra né HTML
 // né un’icona, quindi qui il simbolo resta un carattere.
 function itemBadgesTxt(i) {
@@ -824,7 +830,7 @@ function catalogRow(i, scope) {
     + (i.type === 'parte' && partSourcing(i) === 'buy' ? `<span class="buy-mark" title="Parte acquistata da fornitore">${ico('cart', 'tinted')}</span>` : '');
   return `<tr data-sel="${i.id}" class="${i.obsolete ? 'row-obsolete' : ''}">
     <td class="col-flags" style="width:1%;white-space:nowrap">${flags}</td>
-    <td class="col-code" style="font-family:var(--mono)">${codeLink(i.id, i.code)}</td>
+    <td class="col-code" style="font-family:var(--mono)">${codeLink(i.id, i.code)}${codeManualMark(i)}</td>
     <td class="col-name">${esc(i.name)}</td>
     <td class="col-type"><span class="bom-type-tag tt-${typeKey(i.type)}">${typeShort(i.type)}</span> ${typeLabel(i.type)}</td>
     <td class="col-family" style="color:var(--text-dim)">${esc(codingLabel(i) || familyLabel(i))}</td>
@@ -1133,8 +1139,9 @@ function itemModalBody(it, scope) {
           ${types.map(x => `<option value="${x}" ${t === x ? 'selected' : ''}>${TYPE_OPTION_LABELS[x]}</option>`).join('')}
         </select>
       </div>
-      <div class="modal-field"><label>Codice</label><input id="it-code" value="${it ? esc(it.code) : ''}" oninput="markCodeManual()" ${dis(lock.structLocked)}></div>
+      ${itemCodeFieldHtml(it, lock)}
     </div>
+    ${itemCodeNoteHtml(it, lock)}
     <div class="modal-field" id="fld-name-std"><label>Descrizione</label><input id="it-name" value="${it ? esc(it.name) : ''}" ${dis(lock.nameLocked)}></div>
     <div class="modal-grid" id="fld-name-parte">
       <div class="modal-field"><label>Concetto</label>
@@ -1259,7 +1266,23 @@ function codingFieldsHtml(it, structLocked) {
           oninput="this.value=this.value.toUpperCase();refreshItemCode()" ${dis}></div>
       <div class="modal-field" id="fld-coding-group"><label>Gruppo</label>
         <select id="it-group" onchange="refreshItemCode()" ${dis}>${groupOptions(macId, grpId)}</select></div>
-    </div>`;
+    </div>
+    <div id="code-preview" class="code-preview" style="display:none" aria-live="polite"></div>`;
+}
+// Il riquadro «Anteprima codici» di macchine e gruppi: che codici avranno i
+// figli con le scelte di adesso. Si ridisegna a ogni cambio della codifica.
+function renderCodePreview() {
+  const box = document.getElementById('code-preview');
+  if (!box) return;
+  const a = anteprimaCodiciFigli(itemDraftFromForm(), val('it-code'));
+  if (!a) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const righe = a.righe.map(r => `<div class="code-preview-row">
+      <span class="code-preview-tipo">${esc(r.tipo)}</span>
+      <span class="code-preview-code">${esc(r.codice)}</span>
+      <span class="code-preview-nota">${esc(r.nota || '')}</span></div>`).join('');
+  const avvisi = a.avvisi.map(t => `<p class="code-preview-avviso">${ico('warning', 'tinted', '')} ${esc(t)}</p>`).join('');
+  box.innerHTML = `<div class="code-preview-title">${ico('eye', 'tinted', '')} Anteprima codici</div>${righe ? `<div class="code-preview-grid">${righe}</div>` : ''}${avvisi}`;
 }
 function onItemMachineChange() {
   const macId = val('it-machine');
@@ -1291,14 +1314,83 @@ function itemDraftFromForm() {
   }
   return draft;
 }
-// Stato: true finché il codice è ancora "automatico" (non modificato a mano dall'utente)
+// Stato: true finché il codice è "automatico", cioè composto dalle scelte.
+// Diventa false solo con la spunta «Manuale» confermata (dalla 0.115.0):
+// prima bastava un tasto nel campo, e un codice cambiato per sbaglio non si
+// distingueva più da uno voluto.
 let itemCodeAuto = true;
-function markCodeManual() { itemCodeAuto = false; }
 function refreshItemCode() {
-  if (!itemCodeAuto) return;
   const codeEl = document.getElementById('it-code');
-  if (!codeEl) return;
-  codeEl.value = genItemCodeUI(itemDraftFromForm());
+  if (codeEl && itemCodeAuto) codeEl.value = itemCodeAutomatico();
+  renderCodePreview();
+}
+// Il codice automatico della scheda. In modifica l'articolo tiene il suo,
+// finché è ancora coerente con le scelte: rigenerarlo darebbe il numero
+// successivo, non il suo.
+function itemCodeAutomatico() {
+  const d = itemDraftFromForm();
+  const it = d.id ? getItem(d.id) : null;
+  if (it && it.code && !codiceFuoriSchema(Object.assign({}, d, { code: it.code }))) return it.code;
+  return genItemCodeUI(d);
+}
+// Il campo Codice: si legge e basta, finché non si spunta «Manuale».
+function itemCodeFieldHtml(it, lock) {
+  const man = !!(it && it.codeManual);
+  const ro = lock.structLocked ? 'disabled' : (man ? '' : 'readonly');
+  return `<div class="modal-field"><label for="it-code">Codice</label>
+      <div class="code-field">
+        <input id="it-code" value="${it ? esc(it.code) : ''}" ${ro} class="${man ? '' : 'code-auto'}" oninput="renderCodePreview()">
+        <label class="flag-check code-manual-check" title="Scrivere il codice a mano invece di comporlo dalle scelte">
+          <input type="checkbox" id="it-code-manual" ${man ? 'checked' : ''} ${lock.structLocked ? 'disabled' : ''} onclick="return codeManualClick(this)"> Manuale</label>
+      </div></div>`;
+}
+// Il motivo, facoltativo, e l'avviso per un codice fuori schema che nessuno ha
+// dichiarato manuale (scritto prima della 0.115.0, o arrivato da un import).
+function itemCodeNoteHtml(it, lock) {
+  const man = !!(it && it.codeManual);
+  const fuori = it && !man && codiceFuoriSchema(it);
+  const chi = man && it.codeManualAt
+    ? ` <span class="empty-text" style="padding:0">— deciso${it.codeManualBy ? ' da ' + esc(actorName(it.codeManualBy)) : ''} il ${esc(fmtStamp(it.codeManualAt))}</span>` : '';
+  return `<div class="modal-field" id="fld-code-note" style="${man ? '' : 'display:none'}">
+      <label for="it-code-note">Motivo del codice manuale (facoltativo)${chi}</label>
+      <input id="it-code-note" value="${it ? esc(it.codeNote || '') : ''}" placeholder="es. sigla commerciale della macchina"></div>
+    ${fuori ? `<p class="empty-text code-warn" id="code-warn">${ico('warning', 'tinted', '')} Il codice non segue la codifica (${esc(codiceAtteso(it))}…). ${lock.structLocked
+      ? 'L\'articolo è già usato e il codice resta questo: se è voluto, confermalo come manuale da Gestione › Backup.'
+      : `Se è voluto spunta «Manuale». <button type="button" class="btn-ghost" onclick="setCodeManual(false)">Usa il codice automatico</button>`}</p>` : ''}`;
+}
+// La spunta non cambia da sola: chiede prima, e cambia solo con il «Sì».
+// Annullare la domanda in qualunque modo la lascia com'era.
+function codeManualClick(cb) {
+  const verso = cb.checked;          // lo stato che il clic vorrebbe
+  if (verso) askConfirm('Vuoi modificare manualmente il codice?\nDi regola il codice si compone da solo dalle scelte dell\'articolo: scriverlo a mano è un\'eccezione, e resterà segnalata.',
+    () => setCodeManual(true), { title: 'Codice manuale', ok: 'Sì', cancel: 'No', safe: true });
+  else askConfirm('Ripristinare il codice automatico?\nIl codice scritto a mano viene sostituito da quello composto dalle scelte.',
+    () => setCodeManual(false), { title: 'Codice automatico', ok: 'Sì', cancel: 'No', safe: true });
+  return false;
+}
+function setCodeManual(on) {
+  codeManualUi(on);
+  if (on) { const el = document.getElementById('it-code'); if (el && el.focus) el.focus(); }
+  else refreshItemCode();
+}
+function codeManualUi(on) {
+  const cb = document.getElementById('it-code-manual');
+  const el = document.getElementById('it-code');
+  if (cb) cb.checked = on;
+  itemCodeAuto = !on;
+  if (el) {
+    el.readOnly = !on;
+    el.className = on ? '' : 'code-auto';
+  }
+  const nota = document.getElementById('fld-code-note');
+  if (nota) nota.style.display = on ? '' : 'none';
+  const warn = document.getElementById('code-warn');
+  if (warn) warn.style.display = 'none';
+}
+// Spuntato «Manuale» e lasciato vuoto: l'articolo prenderebbe come codice il
+// suo id interno, che non è certo l'eccezione che si voleva scrivere.
+function codeManualErr() {
+  return !itemCodeAuto && !val('it-code') ? 'Codice manuale: scrivi il codice, o togli la spunta per quello automatico' : null;
 }
 // Anteprima del nome composto (concetto + descrizione) nella modale parte
 function updatePartNamePreview() {
@@ -1972,6 +2064,7 @@ function applyItemSource(id) {
   const src = getItem(id); if (!src) return;
   window.__dupSourceId = id;
   itemCodeAuto = true;
+  codeManualUi(false);
   setVal('it-type', src.type); toggleItemFields();
   if (usesFamily(src.type)) {
     setVal('it-family', src.familyId || '');
@@ -2020,7 +2113,16 @@ function readItemForm(it) {
   // un campo disabled non cambia valore da solo, ma non è questo il punto in
   // cui fidarsi del DOM è la sola garanzia.
   const lock = itemLockState(it);
-  if (!lock.structLocked) it.code = val('it-code') || it.id;
+  if (!lock.structLocked) {
+    it.code = val('it-code') || it.id;
+    const man = !itemCodeAuto;
+    if (man && !it.codeManual) { it.codeManualAt = nowISO(); it.codeManualBy = actorId || null; }
+    if (!man) { delete it.codeManualAt; delete it.codeManualBy; }
+    it.codeManual = man;
+  }
+  // Il motivo si può scrivere anche dopo, quando il codice è ormai bloccato.
+  if (it.codeManual) it.codeNote = val('it-code-note');
+  else delete it.codeNote;
   // Le parti compongono il nome da concetto + descrizione libera; gli altri tipi restano a testo libero
   if (!lock.nameLocked) {
     if (it.type === 'parte') {
@@ -2144,6 +2246,8 @@ function saveNewItem() {
   if (nameErr) { showToast(nameErr, 'error'); return; }
   const codErr = validateItemCoding(null);
   if (codErr) { showToast(codErr, 'error'); return; }
+  const manErr = codeManualErr();
+  if (manErr) { showToast(manErr, 'error'); return; }
   const dupErr = validateItemCode(val('it-code'), null, null);
   if (dupErr) { showToast(dupErr, 'error'); return; }
   const it = { id: gid(), type: val('it-type') };
@@ -2210,10 +2314,13 @@ function editItemModal(id) {
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveItemEdit('${id}')">Salva</button></div>`, true);
   if (!p) return;
-  itemCodeAuto = false; // in modifica non si rigenera mai il codice esistente
+  // All'apertura il codice resta quello che è, anche se fuori schema: lo si
+  // ricompone solo se si cambia una scelta che lo determina.
+  itemCodeAuto = false;
   window.__editingItemId = id;
   window.__itemScope = scope;
   toggleItemFields();
+  itemCodeAuto = !it.codeManual;
 }
 function saveItemEdit(id) {
   if (!roleGuard('catalog')) return;
@@ -2222,6 +2329,8 @@ function saveItemEdit(id) {
   if (nameErr) { showToast(nameErr, 'error'); return; }
   const codErr = validateItemCoding(id);
   if (codErr) { showToast(codErr, 'error'); return; }
+  const manErr = codeManualErr();
+  if (manErr) { showToast(manErr, 'error'); return; }
   const dupErr = validateItemCode(val('it-code'), id, it.code);
   if (dupErr) { showToast(dupErr, 'error'); return; }
   const fare = () => {
