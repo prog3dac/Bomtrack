@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.115.0 — 2026-10-27
+
+**Il codice articolo si scrive a mano solo per scelta.** Il codice nasce dalle scelte della scheda e di regola resta quello; prima bastava digitare nel campo perché l'app smettesse di generarlo, senza traccia, e un codice cambiato per sbaglio non si distingueva più da un'eccezione voluta (come `RTT-S00` per una macchina di sigla `MAX`). **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge a `items` le colonne `code_manual`, `code_manual_by`, `code_manual_at`, `code_note`, non tocca i dati).
+
+- **Spunta «Manuale» accanto al codice**: il campo si legge soltanto; spuntando l'app chiede «Vuoi modificare manualmente il codice?» e lo apre solo con **Sì**. Togliendo la spunta chiede «Ripristinare il codice automatico?». Su un articolo già usato resta tutto bloccato, come prima.
+- **L'eccezione resta scritta**: l'articolo ricorda chi l'ha decisa e quando, con un motivo facoltativo. Etichetta **MANUALE** accanto al codice in catalogo, e una riga nella scheda di sola lettura.
+- **In modifica il codice segue le scelte**: cambiando famiglia, macchina o gruppo di un articolo non ancora usato, il codice automatico si ricompone; prima restava quello vecchio.
+- **Codici fuori codifica**: in *Gestione → Backup → Controllo dati* l'elenco degli articoli il cui codice non segue la codifica e non è segnato manuale (scritti a mano prima di questa versione, o importati), con **È voluto** per confermarli e **Apri** per sistemarli.
+
+**Manuale** — cap. 8 il campo Codice, cap. 9 «Il codice scritto a mano».
+
 ### 0.114.0 — 2026-10-24
 
 **Il Gantt dell'Avanzamento si legge meglio.** Nessun cambio a `supabase/schema.sql`.

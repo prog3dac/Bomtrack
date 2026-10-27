@@ -73,6 +73,7 @@ function dbCloudCompleto() {
       st({ id: g1, code: 'GRP-001', name: 'Gruppo', type: 'gruppo', uom: 'pz', active: true, machineItemId: mac, groupItemId: '',
         components: [{ itemId: p1, qty: 2, scrapPct: 0 }, { itemId: c1, qty: 4, scrapPct: 2 }], operations: [{ workCenterId: wc1, hours: 1, note: 'montaggio' }] }),
       st({ id: mac, code: 'NT-1', name: 'Macchina', type: 'macchina', uom: 'pz', active: true, rev: 'B',
+        codeManual: true, codeManualBy: usr, codeManualAt: T0, codeNote: 'sigla commerciale',
         components: [{ itemId: g1, qty: 1, scrapPct: 0 }], operations: [] }),
     ],
     plans: [st({ id: plan, number: 'FAB-2026-001', title: 'Lotto', date: '2026-03-01', dueDate: '2026-05-01', notes: '', jobId: job, active: true,
