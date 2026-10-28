@@ -72,9 +72,18 @@ function computeCost(it, itemId, visited) {
 
   // assieme (macchina/gruppo/sottogruppo): somma figli + lavorazioni
   const next = new Set(visited); next.add(itemId);
+  // Le righe condizionate di un modello configurabile (varianti.js) non
+  // valgono finché non si sceglie: qui conta la parte comune.
+  const righe = typeof varRigheComuni === 'function' ? varRigheComuni(it) : (it.components || []);
+  return assiemeCost(it, righe, c => costOf(c.itemId, next));
+}
+// Il costo di un assieme date le sue righe e il costo di ciascun figlio. Una
+// funzione a sé perché il configuratore (varianti.js) la usa con le righe
+// risolte da una combinazione di scelte, senza creare articoli per saperlo.
+function assiemeCost(it, righe, costoFiglio) {
   let material = 0, purchased = 0, labor = 0, parts = 0, childOverhead = 0, cycle = false;
-  (it.components || []).forEach(c => {
-    const cc = costOf(c.itemId, next);
+  (righe || []).forEach(c => {
+    const cc = costoFiglio(c);
     if (cc.cycle) cycle = true;
     const factor = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
     material += cc.material * factor;

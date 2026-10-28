@@ -138,6 +138,24 @@ function homeSegnali() {
   agg(senzaPrezzo.map(it => voce(it.code, `${it.name} — ${typeLabel(it.type)}`, `itemInfoModal('${it.id}')`)),
     'articolo d\'acquisto senza prezzo', 'articoli d\'acquisto senza prezzo', 'buy', 'media');
 
+  // Distinte che usano ancora un articolo fuori produzione che ha un
+  // sostitutivo (modulo Alternativi): c'è qualcosa da fare, e si sa cosa.
+  if (typeof distinteConObsoleti === 'function') {
+    agg(distinteConObsoleti().map(x => voce(x.asm.code,
+      `${x.asm.name} — usa ${x.item.code}, fuori produzione: il sostitutivo è ${x.sost.code}`,
+      x.asm.type === 'parte' ? `homeApri('cycle','${x.asm.id}')` : `itemInfoModal('${x.asm.id}')`)),
+    'distinta con un articolo fuori produzione', 'distinte con articoli fuori produzione', 'design', 'media');
+  }
+
+  // Macchine generate da un modello cambiato dopo (modulo Varianti): la loro
+  // distinta non è più quella che il modello darebbe oggi.
+  if (typeof varGenerateDaAggiornare === 'function') {
+    agg(varGenerateDaAggiornare().map(x => voce(x.code,
+      `${x.name} — il modello ${(getItem(x.configuredFromId) || {}).code || ''} è cambiato dopo la generazione: rigenerala se deve seguirlo`,
+      `homeApri('bom','${x.id}')`)),
+    'macchina generata da un modello cambiato', 'macchine generate da un modello cambiato', 'design', 'media');
+  }
+
   // Fasi a costo orario rimaste senza ore. Fino alla 0.64.2 una normalizzazione
   // cancellava le ore di ogni fase oraria a ogni caricamento; il recupero le
   // ricostruisce dividendo il costo per la tariffa del centro, ma dove il centro
@@ -215,6 +233,7 @@ function homeApri(tipo, id) {
   else if (tipo === 'odl') { setView('odl'); openOdlEdit(id); }
   else if (tipo === 'odp') { setView('odp'); openOdpEdit(id); }
   else if (tipo === 'cycle') { setView('cycles'); openCycleFor(id); }
+  else if (tipo === 'bom') { currentBomId = id; bomExpanded = new Set(); setView('bom'); }
   else if (tipo === 'backup') { setView('manage'); setMgmtTab('backup'); }
 }
 // Quante voci si scrivono per esteso. Oltre, l'elenco smetterebbe di essere un

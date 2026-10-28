@@ -70,6 +70,9 @@ function mrpExplode(lines, opz) {
     asm: new Map(), intOps: new Map(), stock: new Map(), cycle: false,
     scaffale: (opz && opz.scaffale) || null, lotti: mrpLotti(lines) };
   (lines || []).forEach(l => mrpDescend(l.itemId, Number(l.qty) || 0, new Set(), acc, l.dueDate || ''));
+  // Le decisioni «usa l'alternativo» del piano (alternativi.js), dopo la
+  // discesa: spostano quantità fra articoli d'acquisto già accumulati.
+  if (opz && opz.sostituzioni && opz.sostituzioni.length) mrpApplicaSostituzioni(acc.buy, opz.sostituzioni);
   const perCodice = m => Array.from(m.values()).sort((a, b) => String(a.item.code).localeCompare(String(b.item.code)));
   // Le fasi si ordinano per parte e poi per posizione nel ciclo: l'ordine delle
   // fasi è quello in cui si eseguono, ed è ciò che il terzista legge.
@@ -133,7 +136,7 @@ function mrpLotti(lines) {
     rami.set(itemId, (rami.get(itemId) || 0) + 1);
     const next = new Set(ancestors); next.add(itemId);
     if (it.type === 'parte') (it.cycle || []).forEach(r => { if (r.kind !== 'op') giu(r.itemId, qty * (Number(r.qty) || 0), next); });
-    else (it.components || []).forEach(c => giu(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next));
+    else varRigheComuni(it).forEach(c => giu(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next));
   };
   (lines || []).forEach(l => giu(l.itemId, Number(l.qty) || 0, new Set()));
   const lotti = new Map();
@@ -200,8 +203,9 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
     mrpAddLoad(acc.load, o.workCenterId, prog.start, Number(o.hours) || 0, qty, it, '');
   });
   const perFigli = schedChildDue(prog.start);
-  // la quantità di riga porta con sé lo scarto, come nel rollup
-  (it.components || []).forEach(c => {
+  // la quantità di riga porta con sé lo scarto, come nel rollup. Di un
+  // modello da configurare (varianti.js) conta la parte comune, come nel costo.
+  varRigheComuni(it).forEach(c => {
     const f = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
     mrpDescend(c.itemId, qty * f, next, acc, perFigli);
   });
@@ -381,7 +385,7 @@ function schedTree(itemId, qty, due, ancestors, lotti) {
   const prog = schedAssembly(it, mrpLotto({ lotti }, it, qty), due);
   const perFigli = schedChildDue(prog.start);
   const figli = [];
-  (it.components || []).forEach(c => {
+  varRigheComuni(it).forEach(c => {
     const f = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
     const n = schedTree(c.itemId, qty * f, perFigli, next, lotti);
     if (n) figli.push(n);
@@ -786,6 +790,11 @@ function mrpBuyRow(entry, netMode, planId) {
     // Ordinato, ma arriva dopo il giorno in cui serve (dalla 0.111.0): la data
     // in cui l'in arrivo basta davvero, o vuota. E gli ordini scaduti.
     arrivoTardi: tardi.data, scaduti: tardi.scaduti,
+    // Modulo Alternativi: quanto di questo articolo è passato a un altro in
+    // questo piano, al posto di chi sta, e gli equivalenti da proporre.
+    planId: planId || null,
+    sostituito: entry.sostituito || 0, sostituisce: entry.sostituisce || [],
+    alternative: typeof altProposte === 'function' ? altProposte(it, planId, st.net) : [],
   };
 }
 // «Coperto» guardava solo le quantità: un ordine che arriva il 5/11 copriva un
@@ -1588,6 +1597,14 @@ function planAddModal(id) {
 function planAddLines(id, ids) {
   if (!roleGuard('docs')) return;
   const p = getPlan(id); if (!p) return;
+  // Un modello configurabile (varianti.js) non si produce così com'è: prima
+  // si sceglie, e si pianifica la macchina che il configuratore genera.
+  const modelli = ids.map(getItem).filter(it => it && varRichiedeScelte(it));
+  if (modelli.length) {
+    showToast(`${modelli.map(x => x.code).join(', ')}: ${modelli.length === 1 ? 'è un modello' : 'sono modelli'} da configurare. Genera la macchina dalle sue scelte e metti in piano quella.`, 'error');
+    ids = ids.filter(x => !modelli.some(m => m.id === x));
+    if (!ids.length) return;
+  }
   ids.forEach(itemId => {
     const it = getItem(itemId); if (!it) return;
     // Stesso articolo due volte: si somma sulla riga esistente invece di duplicarla
@@ -2307,7 +2324,8 @@ function renderPlanEdit(id) {
       <td class="line-actions"><button class="mini-btn danger" onclick="planDelLine('${id}','${l.id}')" title="Togli dal piano">${ico('trash', 'tinted', 'Togli dal piano')}</button></td></tr>`;
     return `<tr>
       <td style="font-family:var(--mono)">${codeLink(it.id, it.code)}</td>
-      <td>${esc(it.name)}<span class="bom-type-tag tt-${typeKey(it.type)}" style="margin-left:6px">${typeShort(it.type)}</span></td>
+      <td>${esc(it.name)}<span class="bom-type-tag tt-${typeKey(it.type)}" style="margin-left:6px">${typeShort(it.type)}</span>${varRichiedeScelte(it)
+        ? ` <span class="mrp-warn" title="Le righe che dipendono dalle scelte non sono contate: genera la macchina dal configuratore e metti in piano quella">${ico('warning', 'tinted', '')} modello da configurare</span>` : ''}</td>
       <td>${esc(it.uom || '')}</td>
       <td><input type="number" class="rfq-qty-input" min="0" step="any" value="${Number(l.qty) || 0}"
         onchange="planSetLineQty('${id}','${l.id}',this.value)"></td>
@@ -2839,6 +2857,7 @@ function mrpBuyLineHtml(r) {
   (r.docRefs || []).forEach(x => seg.push(
     `<span class="price-best" title="Questo articolo è già in ${esc(docRefLabel(x))} (${fmtQtyIt(x.qty)} ${esc(x.uom)}) generato da questo fabbisogno">📄 ${esc(x.number)}</span>`));
   if ((r.bozze || []).length) seg.push(mrpBozzeBadge(r));
+  if (typeof altBadgeRiga === 'function') seg.push(...altBadgeRiga(r));
   const celleStock = mrpNet ? `
     <td style="font-family:var(--mono);text-align:right;color:var(--text-dim)">${fmtQtyIt(r.qty)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(r.onHand)}${r.safety > 0 ? `<span class="empty-text" style="padding:0"> (min ${fmtQtyIt(r.safety)})</span>` : ''}</td>

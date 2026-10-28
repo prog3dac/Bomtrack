@@ -2139,7 +2139,7 @@ function odlMaterialeProposto(o, l) {
   const pezzi = Number(l.qty) || 0;
   const righe = a.outKind === 'clStep'
     ? (a.part && hasStock(a.part) ? [{ item: a.part, perPezzo: 1, qty: pezzi }] : [])
-    : clMaterialsOf(a.part, pezzi);
+    : (typeof sostituzioniMateriali === 'function' ? sostituzioniMateriali(o.planId, clMaterialsOf(a.part, pezzi)) : clMaterialsOf(a.part, pezzi));
   const gia = clRegistrato(o, l, 'out');
   return righe.map(x => Object.assign({}, x, { gia: gia.get(x.item.id) || 0, residuo: Math.max(0, x.qty - (gia.get(x.item.id) || 0)) }));
 }

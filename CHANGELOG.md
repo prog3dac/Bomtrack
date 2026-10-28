@@ -2,6 +2,35 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.119.1 — 2026-10-28
+
+**Varianti: si comincia da Gestione DB.** Con il modulo acceso, ogni macchina ha la striscia sopra l'albero. Su una macchina senza opzioni c'è **Aggiungi opzioni**: prima la striscia compariva solo su una macchina che le aveva già, e da lì non si poteva cominciare. Nella finestra delle opzioni ogni scelta ha **Valore** ed **Etichetta** in due campi separati, al posto della riga unica `3 = 3 m; 4 = 4 m`. Nessun cambio a `supabase/schema.sql` rispetto alla 0.119.0.
+
+### 0.119.0 — 2026-10-28
+
+**Varianti e configuratore** (secondo modulo). **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor prima di aggiornare l'app sui PC collegati all'archivio condiviso (tabella `item_options`, colonne `items.configured_from_id`, `config_choices`, `config_key`, `config_hash`, `item_components.cond` e `qty_expr`).
+- **Il modello**: una macchina con delle opzioni (codice, nome, scelte). Le righe di distinta, anche dentro i gruppi, possono valere **solo se** (`L=4|5 & M=B`) e avere una **quantità da formula** (`L*2+0,5`). Le formule si leggono con un piccolo parser, senza eval.
+- **Configura**: dalle scelte nasce la macchina concreta `<modello>-V01`, con la sua distinta. I gruppi che cambiano con le scelte diventano gruppi derivati (`<gruppo>-V01`), quelli uguali si riusano, e quelli fissi restano gli articoli del modello. La stessa combinazione non si genera due volte. Con l'archivio condiviso i codici nuovi si impegnano tutti insieme sul server.
+- **Protezioni**: il modello, e un gruppo con righe variabili, non si mettono in un piano. Il costo del modello è quello della parte comune, e la distinta dice l'intervallo da minimo a massimo su tutte le combinazioni.
+- **Il modello cambia**: la macchina generata lo dice, il Riepilogo la segnala (segnale 15) e **Rigenera** riscrive la sua distinta con le stesse scelte, senza cambiarle codice.
+- Scheda **Varianti** nel pannello laterale delle macchine.
+
+**Correzioni (0.118.0)**: il sostitutivo di un articolo era dichiarato in `REFS` con il nome di campo sbagliato, e una migrazione degli id l'avrebbe lasciato orfano. Al primo caricamento sull'archivio condiviso un articolo poteva arrivare prima del suo sostitutivo e venire rifiutato: ora il riferimento si scrive al secondo giro, come quelli a macchina e gruppo (vale anche per il modello di un articolo generato).
+
+**Manuale** — cap. 13 «Varianti e configuratore», cap. 25 «Moduli», segnale 15 del cap. 5.
+
+### 0.118.0 — 2026-10-28
+
+**Moduli che si accendono e si spengono.** In *Gestione → Impostazioni* c'è la sezione **Moduli**: le funzioni che non servono a tutti si accendono da lì. Spento vuol dire nascosto e ignorato dai conti, non cancellato: i dati scritti restano, e riaccendendo il modulo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti. Un modulo nuovo nasce spento.
+
+**Alternativi e sostitutivi** (primo modulo). **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor prima di aggiornare l'app sui PC collegati all'archivio condiviso (tabelle `item_alternatives` e `production_plan_substitutions`, colonna `items.replaced_by_id`).
+- **Alternativi**: un commerciale, una materia prima o una parte comprata dichiara i suoi equivalenti, in ordine di preferenza e con una nota. Valgono in tutte le distinte, si contano uno a uno e con la stessa unità. Scheda **Alternativi** nel pannello laterale, segno **⇄** in distinta.
+- **Sostitutivo**: un articolo segnato come non più utilizzabile indica chi lo sostituisce. Il Riepilogo segnala le distinte che lo usano ancora (segnale 14).
+- **Il fabbisogno propone, chi pianifica decide.** Una riga d'acquisto scoperta con un equivalente libero a scaffale, o un obsoleto con sostitutivo, porta il pulsante **⇄**: la finestra *Usa un alternativo* dice quanto è libero e propone la quantità. La decisione vale per quel piano: lista d'acquisto, netto, impegni, documenti generati, montaggio, ordini di produzione e materiale per il terzista usano l'alternativo per la quota decisa, mai più di quanto serve. *Annulla* rimette tutto sul principale.
+- Distinta, costificazione e revisioni restano sul principale.
+
+**Manuale** — cap. 19 «Alternativi e sostitutivi», cap. 25 «Moduli», segnale 14 del cap. 5.
+
 ### 0.117.0 — 2026-10-27
 
 **Menu a tendina nei file Excel da importare.** Nei file Articoli (Acquisti e Progetto) e Impostazioni le colonne a valori ammessi hanno un menu a tendina vero, collegato agli elenchi dell'app: prima c'era solo il foglio Liste da cui copiare, o la convalida da impostare a mano. Nessun cambio a `supabase/schema.sql`.

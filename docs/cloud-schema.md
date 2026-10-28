@@ -82,11 +82,13 @@ immaginarle.
 | `workCenters[].suppliers` | `work_center_suppliers` | id uuid PK, work_center_id uuid FK, supplier_id uuid FK, rate numeric, note, created_at, updated_at — i fornitori di conto lavoro abituali del centro, con la tariffa propria (dalla 0.80.1 in `SCHEMA` e `REFS`) |
 | `families` | `families` | id uuid PK, name, kind ('acquistato'\|'materiale'\|'parte'), sigla, created_at, updated_at |
 | `families[].subs` | `sub_families` | id uuid PK, family_id uuid FK, name, sigla, created_at, updated_at |
-| `items` | `items` | id uuid PK, code, name, type enum, uom, notes, active, favorite, obsolete, unit_cost, purchase_price, supplier_id FK, supplier_code, supplier_desc, active_price_id FK → `item_prices(id)`, sourcing ('make'\|'buy'), family_id FK, sub_family_id FK, machine_item_id FK, group_item_id FK, sigla, overhead_pct_override, margin_pct_override, assembly_days numeric (solo assiemi: giorni di montaggio), created_at, updated_at |
-| `items[].components` | `item_components` | item_id uuid FK, child_item_id uuid FK, qty numeric, scrap_pct numeric |
+| `items` | `items` | id uuid PK, code, name, type enum, uom, notes, active, favorite, obsolete, unit_cost, purchase_price, supplier_id FK, supplier_code, supplier_desc, active_price_id FK → `item_prices(id)`, sourcing ('make'\|'buy'), family_id FK, sub_family_id FK, machine_item_id FK, group_item_id FK, sigla, overhead_pct_override, margin_pct_override, assembly_days numeric (solo assiemi: giorni di montaggio), replaced_by_id FK → `items(id)` (il sostitutivo di un obsoleto, modulo Alternativi), configured_from_id FK → `items(id)` (il modello o il gruppo da cui il configuratore l'ha generato, modulo Varianti), config_choices jsonb (le scelte, solo sulla macchina generata), config_key (la combinazione, per riusarla), config_hash (l'impronta del modello alla generazione), created_at, updated_at |
+| `items[].components` | `item_components` | item_id uuid FK, child_item_id uuid FK, qty numeric, scrap_pct numeric, cond (la condizione «vale solo se», modulo Varianti), qty_expr (la formula di quantità, modulo Varianti) |
 | `items[].operations` | `item_operations` | item_id uuid FK, work_center_id uuid FK, hours numeric, note |
 | `items[].cycle` | `item_cycle_rows` | item_id uuid FK, kind ('item'\|'op'), pos int. **Riga articolo** (`kind='item'`): child_item_id (l'articolo citato; `item_id` è il padre), qty, cost_override nullable. **Riga lavorazione** (`kind='op'`): work_center_id FK, supplier_id FK **nullable** (nullo = interna, valorizzato = conto lavoro esterno), cost_mode ('fisso'\|'orario'), hours numeric, days int, rate numeric, cost numeric, note |
 | `items[].priceList` | `item_prices` | id uuid PK, item_id uuid FK, supplier_id FK **nullable** (quotazione inserita a mano), price numeric, min_qty numeric, lead_days int, code, description (in locale `desc`, che in SQL è una parola riservata), date, rfq_id FK nullable, line_id, note, created_at, updated_at |
+| `items[].alternatives` | `item_alternatives` | item_id uuid FK (il padre), alt_item_id uuid FK (l'equivalente; in locale `itemId`), note, pos int. Modulo Alternativi, dalla 0.118.0. Tabella «replace» come la distinta: l'elenco, in ordine di preferenza, è la definizione |
+| `items[].options` | `item_options` | item_id uuid FK, code (il codice che le righe citano, `L`), name, choices jsonb (`[{ value, label }]`), pos int. Modulo Varianti, dalla 0.119.0. Tabella «replace»: l'elenco delle opzioni è la definizione del modello |
 | `rfqs` | `rfqs` | id uuid PK, number unique per anno, title, date, status ('bozza'\|'inviata'\|'ricevuta'\|'chiusa'), supplier_id FK, transport, payment, plan_id FK nullable, notes, notes_internal, active, created_at, updated_at |
 | `rfqs[].lines` | `rfq_lines` | id uuid PK, rfq_id uuid FK, item_id FK **nullable** (riga manuale, o riga di conto lavoro), phase_key text **nullable**, phase_keys text **nullable** (tutte le fasi della tratta, separate da virgola), code, description, uom, qty, price nullable, delivery_date, note |
 | `orders` | `orders` | id uuid PK, number unique per anno, title, date, status ('bozza'\|'inviato'\|'confermato'\|'parziale'\|'evaso'\|'annullato'), supplier_id FK, transport, payment, rfq_id FK nullable, plan_id FK nullable, supplier_confirmation, notes, notes_internal, active, created_at, updated_at |
@@ -100,6 +102,7 @@ immaginarle.
 | `prodDecls` | `production_declarations` | id uuid PK, odp_id uuid FK **nullable**, phase_id uuid FK **nullable**, odl_id uuid **nullable**, odl_line_id uuid **nullable** (avvii e rientri di una riga d'ordine di lavoro senza ODP, dalla 0.116.0: senza chiave, come `order_id` sui movimenti), kind ('avvio'\|'avanzamento'\|'forzatura'\|'chiusura'), date, qty numeric, scrap numeric, note, motivo (solo su `forzatura`), created_by, created_at |
 | `plans` | `production_plans` | id uuid PK, number unique per anno, title, date, notes, active, created_at, updated_at |
 | `plans[].lines` | `production_plan_lines` | id uuid PK, plan_id uuid FK, item_id uuid FK, qty numeric |
+| `plans[].substitutions` | `production_plan_substitutions` | id uuid PK, plan_id uuid FK, item_id uuid FK (il principale), alt_item_id uuid FK (l'alternativo), qty numeric, note, created_at, updated_at. Modulo Alternativi, dalla 0.118.0: «in questo piano, qty di questo articolo diventano quell'altro». Merge per riga |
 | `revisions` | `item_revisions` | id uuid PK, item_id uuid FK, rev, date, motivo, **snapshot jsonb**, created_by, created_at |
 | `trash` | `trash` | id uuid PK, coll, deleted_at, deleted_by uuid FK, **record jsonb** — le eliminazioni recuperabili, ripulite dopo `TRASH_DAYS` dal server (`pulizia_archivio()`, dalla 0.106.0) |
 | `jobs` | `jobs` | id uuid PK, number unique per anno, customer, title, customer_ref, status ('aperta'\|'produzione'\|'chiusa'\|'annullata'), date, due_date, notes, active, created_at, updated_at |
@@ -441,7 +444,7 @@ tutti. Sta nel registro (`SCHEMA` in `store.js`) ed è verificata in
 `test/sync.test.js`.
 
 **Merge per riga** — `item_prices`, `rfq_lines`, `order_lines`,
-`work_order_lines`, `production_plan_lines`, `sub_families`,
+`work_order_lines`, `production_plan_lines`, `production_plan_substitutions`, `sub_families`,
 `production_order_phases`, `production_order_materials`,
 `work_center_suppliers`. Righe con identità propria, dove
 l'aggiunta concorrente **è lo scenario normale, non un conflitto**: due colleghi
