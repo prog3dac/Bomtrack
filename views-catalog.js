@@ -2315,6 +2315,9 @@ onPanelClose('form', () => { window.__editingItemId = null; window.__itemScope =
 function editItemModal(id) {
   if (!roleGuard('catalog')) return;
   const it = getItem(id); if (!it) return;
+  // Una variante nata prima della 0.120.3 non aveva ancora la codifica del
+  // modello: la prende qui, prima che la scheda la mostri vuota.
+  if (it.configuredFromId && typeof varAllineaCodifica === 'function') varAllineaCodifica([it]);
   const scope = scopeOf(it.type);
   const p = openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica articolo</h3>${itemModalBody(it, scope)}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>

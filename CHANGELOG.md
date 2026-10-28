@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.120.4 — 2026-10-28
+
+**Varianti: la codifica si allinea da sola.** Una variante generata prima della 0.120.3 non aveva la sigla macchina e la codifica del modello finché non si salvava il modello. Ora le prende appena si apre la sua scheda, o la pagina Varianti del suo modello.
+
 ### 0.120.3 — 2026-10-28
 
 **Varianti: la codifica è quella del modello.** La macchina generata eredita tutta la codifica del modello: macrofamiglia, sottofamiglia, sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati, con una nota che rimanda al modello. Quando si salva il modello, le sue varianti lo seguono (anche Rigenera riallinea). Una variante non conta come un'altra macchina con la stessa sigla, e non compare fra le macchine a cui legare un gruppo: i gruppi stanno sul modello. Il filtro per macchina negli elenchi articoli mostra il modello insieme alle sue varianti.

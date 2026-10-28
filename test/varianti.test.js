@@ -337,6 +337,15 @@ describe('La codifica è quella del modello', () => {
     assert.equal(ev(a, `getItem('${r.id}').sigla`), 'NSX');
     assert.equal(ev(a, `'subFamilyId' in getItem('${r.id}')`), false);
   });
+  it('una variante nata senza codifica la prende aprendo la scheda o la pagina', () => {
+    const a = app();
+    const r = genera(a, { L: '3', M: 'S' });
+    a.eval("getItem('mac').sigla = 'NST'");
+    a.eval(`editItemModal('${r.id}')`);
+    assert.equal(ev(a, `getItem('${r.id}').sigla`), 'NST');
+    a.eval("getItem('mac').sigla = 'NSX'; setView('varianti')");
+    assert.equal(ev(a, `getItem('${r.id}').sigla`), 'NSX');
+  });
   it('nella scheda è bloccata, e non conta come un\'altra macchina con la stessa sigla', () => {
     const a = app();
     a.eval("getItem('mac').sigla = 'NST'");

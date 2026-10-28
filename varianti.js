@@ -386,6 +386,18 @@ function varCopiaCodifica(t, m) {
   });
   return cambiata;
 }
+// Le varianti date che non hanno la codifica del loro modello la prendono, e
+// si salva una volta sola. Serve per quelle generate prima della 0.120.3, e
+// per quelle arrivate da un collega mentre il modello cambiava.
+function varAllineaCodifica(varianti) {
+  let n = 0;
+  (varianti || []).forEach(m => {
+    const t = m && m.configuredFromId && getItem(m.configuredFromId);
+    if (t && varCopiaCodifica(t, m)) { touch(m); n++; }
+  });
+  if (n && canWrite('bom')) saveDB();
+  return n;
+}
 // Dopo il salvataggio del modello: le sue varianti lo seguono.
 function varEreditaCodifica(t) {
   if (!t || t.configuredFromId) return;
@@ -474,6 +486,7 @@ function renderVarianti() {
   }
   const modelli = varModelli();
   const t = varCorrente();
+  if (t) varAllineaCodifica(varGenerateDa(t.id));
   if (sel) sel.innerHTML = modelli.length
     ? modelli.map(m => `<option value="${m.id}" ${m.id === currentVarId ? 'selected' : ''}>${esc(m.code + ' — ' + m.name)}</option>`).join('')
     : '<option value="">— nessun modello —</option>';
