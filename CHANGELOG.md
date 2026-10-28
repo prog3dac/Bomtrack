@@ -11,7 +11,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - **Il modello cambia**: la macchina generata lo dice, il Riepilogo la segnala (segnale 15) e **Rigenera** riscrive la sua distinta con le stesse scelte, senza cambiarle codice.
 - Scheda **Varianti** nel pannello laterale delle macchine.
 
-**Correzione (0.118.0)**: il sostitutivo di un articolo era dichiarato in `REFS` con il nome di campo sbagliato, e una migrazione degli id l'avrebbe lasciato orfano.
+**Correzioni (0.118.0)**: il sostitutivo di un articolo era dichiarato in `REFS` con il nome di campo sbagliato, e una migrazione degli id l'avrebbe lasciato orfano. Al primo caricamento sull'archivio condiviso un articolo poteva arrivare prima del suo sostitutivo e venire rifiutato: ora il riferimento si scrive al secondo giro, come quelli a macchina e gruppo (vale anche per il modello di un articolo generato).
 
 **Manuale** — cap. 13 «Varianti e configuratore», cap. 25 «Moduli», segnale 15 del cap. 5.
 
