@@ -1054,6 +1054,9 @@ function renderModuliSettings() {
     ${Object.keys(MODULI).map(k => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0 8px">
       <input type="checkbox" class="set-modulo" value="${k}" ${moduloAttivo(k) ? 'checked' : ''} style="margin-top:3px">
       <span><strong>${esc(MODULI[k].nome)}</strong><br><span class="empty-text" style="padding:0">${esc(MODULI[k].descr)}</span></span></label>`).join('')}
+    ${moduloAttivo('costiReali') ? `<div class="modal-field" style="max-width:420px;margin:4px 0 8px 24px"><label>Valore del magazzino</label>
+      <select id="set-valore-mag"><option value="listino" ${db.settings.valoreMagazzino !== 'medio' ? 'selected' : ''}>A listino (costo unitario in uso)</option>
+      <option value="medio" ${db.settings.valoreMagazzino === 'medio' ? 'selected' : ''}>A costo medio d'acquisto</option></select></div>` : ''}
     <p class="empty-text" style="text-align:left;padding:4px 0 12px">Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. <strong>I dati già scritti restano</strong>: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti i colleghi.</p>`;
 }
 function readModuliSettings() {
@@ -1148,6 +1151,7 @@ function saveSettings() {
   db.settings.codePrefixParte = (val('set-pfx-prt') || 'PRT').toUpperCase();
   db.settings.sessionDays = numVal('set-session', 0, 365);
   if (document.querySelector && (document.querySelector('.set-modulo') || document.querySelector('.set-area'))) db.settings.modules = readModuliSettings();
+  if (document.getElementById('set-valore-mag') && val('set-valore-mag')) db.settings.valoreMagazzino = val('set-valore-mag') === 'medio' ? 'medio' : 'listino';
   // Il calendario si sostituisce intero: calendario.js riconosce il cambio
   // dalla firma, e un oggetto nuovo non lascia dietro di sé pezzi del vecchio.
   let scartati = [];

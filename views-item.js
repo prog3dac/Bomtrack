@@ -244,6 +244,9 @@ function itemInfoMagazzino(it) {
     ['Impegnato', rawHtml(`<span style="font-family:var(--mono)">${fmtUom(impQty, u)}</span>`)],
     ['Libero', rawHtml(`<strong style="font-family:var(--mono)${libero < 0 ? ';color:var(--red)' : ''}">${fmtUom(libero, u)}</strong>`)],
     safetyStockOf(it) ? ['Scorta minima', rawHtml(`<span style="font-family:var(--mono)">${fmtUom(safetyStockOf(it), u)}</span>`)] : null,
+    moduloAttivo('costiReali') ? ['Costo medio d\'acquisto', costoMedioOf(it.id) != null
+      ? rawHtml(`<span style="font-family:var(--mono)">${fmtPer(costoMedioOf(it.id), u)}</span> <span class="empty-text" style="padding:0">su ${costoMedioIndex().get(it.id).righe} ${costoMedioIndex().get(it.id).righe === 1 ? 'riga ricevuta' : 'righe ricevute'}</span>`)
+      : 'nessun ricevimento: vale il listino'] : null,
     lotSizeOf(it) ? ['Lotto di riordino', rawHtml(`<span style="font-family:var(--mono)">${fmtUom(lotSizeOf(it), u)}</span>`)] : null,
     ['Movimenti registrati', String(movementsOf(it.id).length)],
   ]) + dettaglio);

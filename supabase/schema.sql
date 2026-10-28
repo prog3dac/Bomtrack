@@ -138,6 +138,8 @@ create table if not exists public.jobs (
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.122.0: il preventivo fotografato della commessa (modulo Costi reali).
+alter table public.jobs add column if not exists cost_snapshot jsonb;
 
 -- ─── Articoli ───────────────────────────────────────────────
 create table if not exists public.items (

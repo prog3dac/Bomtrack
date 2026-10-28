@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.121.0**
+**Versione dell'app documentata: 0.122.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1783,6 +1783,32 @@ consegna**. Avvisa, non blocca: la decisione resta a chi la prende.
 piani della stessa commessa non si contendono la stessa merce. Se non ci sono piani aperti, la
 scheda lo dice, invece di dichiarare tutto coperto.
 
+### Consuntivo (modulo Costi reali, dalla 0.122.0)
+
+Con il modulo **Costi reali** acceso (→ [cap. 25](#25-gestione), *Moduli*) la scheda della
+commessa ha la sezione **Consuntivo**: quanto si pensava di spendere e quanto si è speso davvero,
+voce per voce — *Materiali e acquisti*, *Lavorazioni*, *Spese generali*, *Totale* — con lo
+scostamento in euro e in percentuale (rosso se si è speso di più).
+
+- **Preventivo.** È il costo industriale delle righe dei piani della commessa, come in
+  *Visualizza DB*. Finché la commessa è *Aperta* è **provvisorio** e segue i costi di oggi; quando
+  passa a **In produzione** si **congela**, e da lì un listino che cambia non lo tocca più.
+  **Aggiorna preventivo** lo rifà con i costi di oggi (prima di andare in produzione il pulsante
+  si chiama **Congela preventivo**).
+- **Reale — materiali.** Per ogni articolo conta quello che la commessa ha **consumato**: i
+  prelievi degli ODP, le uscite a conto lavoro, i montaggi dichiarati, meno i resi, al valore del
+  magazzino (listino o costo medio). Un articolo mai prelevato conta per quanto è **arrivato** sui
+  suoi ODA. Mai tutte e due le cose: la merce comprata per la commessa entra a magazzino e poi ne
+  esce, e contarla due volte raddoppierebbe il costo.
+- **Reale — lavorazioni.** Le righe ricevute degli ODL al prezzo dell'ordine; i pezzi lavorati
+  nelle fasi interne degli ODP per il costo di fase del ciclo (ore × tariffa, o costo fisso a
+  pezzo); le operazioni di montaggio degli assiemi dichiarati montati.
+- **Reale — spese generali.** Nella stessa proporzione che hanno nel preventivo.
+
+Sotto la tabella, **Da dove viene il reale** elenca ogni importo con il documento da cui viene.
+Il reale cresce con il lavoro: a metà commessa è più basso del preventivo per definizione, e la
+riga sopra la tabella dice anche quanto è ordinato e non ancora arrivato.
+
 ---
 
 ## 19. Fabbisogno materiali
@@ -2893,6 +2919,15 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 |---|---|
 | Alternativi e sostitutivi (→ [cap. 19](#19-fabbisogno-materiali)) | spento |
 | Varianti e configuratore (→ [cap. 13](#13-tecnico--gestione-db)) | spento |
+| Costi reali (→ [cap. 18](#18-commesse)), nell'area Pianificazione | spento |
+
+**Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
+commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
+ricevute (gli ordini annullati non contano), nell'unità di gestione; non si salva, si ricalcola
+dagli ordini, e un articolo mai ricevuto vale il listino. Si vede nella scheda articolo, sezione
+Magazzino. Con il modulo acceso compare qui sotto la scelta **Valore del magazzino**: *a listino*
+(come prima) o *a costo medio*; vale per il Magazzino, il Cruscotto e le differenze d'inventario.
+Il modulo vive nella Pianificazione: spegnendo l'area si spegne anche lui.
 
 Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. I dati
 già scritti **restano**: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale

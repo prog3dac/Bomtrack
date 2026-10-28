@@ -427,6 +427,7 @@ function renderJobEdit(id) {
       ${jobCoverageKpi(cov)}
     </div>
 
+    ${moduloAttivo('costiReali') ? consuntivoHtml(id) : ''}
     ${elenco(ico('package', 'tinted', '') + ' Copertura materiale', jobCoverageHtml(cov),
       'Nessun piano di fabbisogno aperto: la copertura del materiale non è calcolabile.')}
     ${elenco(ico('list', 'tinted', '') + ' Fabbisogni', piani.map(rigaPiano).join(''), 'Nessun piano collegato. Si aggancia dalla testata di un piano, nel campo Commessa.')}
@@ -488,6 +489,8 @@ function jobSetField(id, field, value) {
 function jobApplyField(id, field, value) {
   const j = getJob(id); if (!j) return;
   j[field] = campoTesto(value);
+  // Costi reali: andando in produzione il preventivo si fotografa (consuntivo.js).
+  if (field === 'status' && value === 'produzione') consCongelaAlLancio(j);
   touch(j); saveDB();
   // Lo stato e le date cambiano l'intestazione, l'avviso di ritardo e la
   // copertura: si ridisegna. Gli altri campi no, per non far saltare il cursore.

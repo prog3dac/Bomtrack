@@ -303,7 +303,7 @@ function invDifferenze(s) {
     // Il valore è quello della giacenza (itemUnitCost, come valoreGiacenza):
     // il costo manuale `unitCost` di un commerciale è quasi sempre vuoto, e una
     // perdita di dieci pezzi da 5 € valeva zero (dalla 0.105.6).
-    return { it, esistente, contato, diff: +(contato - esistente).toFixed(6), valore: (contato - esistente) * (it ? itemUnitCost(it) : 0) };
+    return { it, esistente, contato, diff: +(contato - esistente).toFixed(6), valore: (contato - esistente) * (it ? costoGiacenza(it) : 0) };
   }).filter(r => r.it);
 }
 function invRiepilogoModal() {

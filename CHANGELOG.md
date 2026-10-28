@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.122.0 — 2026-10-28
+
+**Modulo Costi reali.** Si accende in *Gestione → Impostazioni → Moduli* e vive nell'area Pianificazione.
+
+- **Costo medio d'acquisto**: la media dei prezzi degli ODA pesata sulle quantità ricevute, nell'unità di gestione, ricalcolata dagli ordini e mai salvata. Nella scheda articolo; e il magazzino si può valorizzare *a costo medio* invece che *a listino* (Magazzino, Cruscotto, differenze d'inventario).
+- **Consuntivo di commessa**: nella scheda della commessa, preventivo e reale per Materiali e acquisti, Lavorazioni, Spese generali, con lo scostamento in € e in %, e l'elenco dei documenti da cui viene ogni importo. Il preventivo si congela quando la commessa va *In produzione*; **Aggiorna preventivo** lo rifà. Il materiale conta una volta sola: prelevato se è stato prelevato, altrimenti ricevuto sugli ODA.
+
+**Schema Supabase**: una colonna nuova, `jobs.cost_snapshot` (`jsonb`). Va eseguita `supabase/schema.sql` prima di aggiornare l'app sui PC collegati all'archivio condiviso.
+
+**Manuale**: cap. 18 «Consuntivo» e cap. 25 *Moduli*.
+
 ### 0.121.0 — 2026-10-28
 
 **L'app a moduli: la base e tre aree.** La base c'è sempre: anagrafiche, distinta base con costificazione e revisioni, richieste d'offerta, ordini e listini, Riepilogo e Gestione. In *Gestione → Impostazioni → Aree* si accendono e spengono **Magazzino** (vista Magazzino e Cruscotto), **Pianificazione** (Commesse e Fabbisogno) e **Produzione interna** (cicli, centri, ODP, ODL, conto lavoro, carico e avanzamento; richiede la Pianificazione). Un'area spenta sparisce dalla barra, dal Riepilogo, dal calendario, dalla ricerca e dai documenti collegati; un link vecchio riporta al Riepilogo con un avviso. I dati restano.

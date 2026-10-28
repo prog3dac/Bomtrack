@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.121.0';
+const APP_VERSION = '0.122.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -669,6 +669,13 @@ const MODULI = {
   varianti: {
     nome: 'Varianti e configuratore',
     descr: 'Una macchina modello con opzioni (lunghezza, motore…) e i gruppi che entrano solo per certe scelte, gestiti nella pagina Tecnico → Varianti. Il configuratore genera la macchina concreta, con la sua distinta, e riusa quella già fatta per la stessa combinazione.',
+  },
+  // Dalla 0.122.0. Vive nella Pianificazione perché il suo punto d'arrivo è
+  // il consuntivo della commessa.
+  costiReali: {
+    nome: 'Costi reali',
+    descr: 'Il costo medio d\'acquisto di ogni articolo, calcolato dai ricevimenti degli ordini, e la scelta di valorizzare il magazzino a costo medio invece che a listino.',
+    area: 'pianificazione',
   },
 };
 function moduloAttivo(nome) {
