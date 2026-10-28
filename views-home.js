@@ -213,6 +213,20 @@ function homeSegnali() {
   // Prima i più gravi (dalla 0.105.6), come promette il manuale: l'allarme
   // rosso del backup o dello spazio stava in fondo, sotto le informazioni.
   // L'ordinamento è stabile: a parità di gravità resta l'ordine di sopra.
+  // Modulo Officina: le manutenzioni scadute, per centro.
+  if (moduloAttivo('officina')) {
+    const scadute = maintPlans().map(p => ({ p, s: maintStato(p) })).filter(x => x.s.scaduto);
+    agg(scadute.map(({ p }) => { const wc = getWorkCenter(p.workCenterId);
+      return voce(wc ? wc.name : '', p.title, `setView('manutenzione')`); }),
+    'manutenzione scaduta', 'manutenzioni scadute', 'manutenzione', 'media');
+  }
+  // Modulo Capacità finita: gli ordini che con i centri pieni non ce la fanno.
+  if (moduloAttivo('capacita')) {
+    agg(capInRitardo().map(o => voce(o.number, `finisce il ${fmtDateIt(capOrdine(o.id).fattibile)}, serve il ${fmtDateIt(o.dueDate)}`,
+      `homeApri('odp','${o.id}')`)),
+    'ordine di produzione in ritardo a capacità finita', 'ordini di produzione in ritardo a capacità finita', 'odp', 'media');
+  }
+
   // Un'area spenta (Gestione → Impostazioni) non parla: i suoi avvisi
   // porterebbero a una vista che non c'è.
   return out.filter(s => vistaAttiva(s.vista)).sort((a, b) => CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
@@ -491,6 +505,15 @@ function homeEventi() {
       azione: `reminderModal('${r.id}')` });
   });
 
+  // Modulo Officina: la prossima manutenzione a calendario di ogni piano.
+  if (moduloAttivo('officina')) maintPlans().forEach(pm => {
+    const s = maintStato(pm, oggi);
+    if (!s.scadenza) return;
+    const wc = getWorkCenter(pm.workCenterId);
+    out.push({ tipo: 'manutenzione', data: s.scadenza, icona: 'wrench', testo: `Manutenzione ${wc ? wc.name : ''}`.trim(),
+      dettaglio: pm.title || '', gravita: s.scadenza < oggi ? 'alta' : calGravitaData(s.scadenza, oggi), azione: `setView('manutenzione')` });
+  });
+
   out.forEach(e => { delete e.numero; delete e.n; });
   return out.filter(calEventoAttivo).sort((a, b) => a.data.localeCompare(b.data) || CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }
@@ -509,6 +532,7 @@ const CAL_FILTRI = [
   { id: 'richieste', label: 'Richieste', tipi: ['richiesta'] },
   { id: 'fasi', label: 'Avvio fasi ODP', tipi: ['fase'], vista: 'odp' },
   { id: 'produzione', label: 'Fine produzione', tipi: ['produzione'], vista: 'odp' },
+  { id: 'manutenzione', label: 'Manutenzione', tipi: ['manutenzione'], vista: 'manutenzione', modulo: 'officina' },
   { id: 'promemoria', label: 'Promemoria', tipi: ['promemoria'] },
 ];
 const CAL_FILTRI_KEY = 'bomtrack_cal_nascosti';
@@ -530,7 +554,7 @@ function calFiltroSalva() {
 function calEventoAttivo(e) {
   if (e.tipo === 'ordine') return !/homeApri\('odl'/.test(e.azione || '') || vistaAttiva('odl');
   const f = calFiltroDi(e.tipo);
-  return !f || !f.vista || vistaAttiva(f.vista);
+  return !f || ((!f.vista || vistaAttiva(f.vista)) && (!f.modulo || moduloAttivo(f.modulo)));
 }
 function calFiltroDi(tipo) { return CAL_FILTRI.find(f => f.tipi.includes(tipo)) || null; }
 function calVisibile(e) { const f = calFiltroDi(e.tipo); return !f || !calNascosti().has(f.id); }
@@ -544,7 +568,7 @@ function calFiltriHtml(eventi) {
   const n = calNascosti();
   const conta = new Map();
   eventi.forEach(e => { const f = calFiltroDi(e.tipo); if (f) conta.set(f.id, (conta.get(f.id) || 0) + 1); });
-  const chips = CAL_FILTRI.filter(f => !f.vista || vistaAttiva(f.vista)).map(f => {
+  const chips = CAL_FILTRI.filter(f => (!f.vista || vistaAttiva(f.vista)) && (!f.modulo || moduloAttivo(f.modulo))).map(f => {
     const on = !n.has(f.id);
     return `<button type="button" class="cal-filtro${on ? ' on' : ''}" aria-pressed="${on}" onclick="homeCalFiltro('${f.id}')" title="${on ? 'Nascondi' : 'Mostra'} ${esc(f.label.toLowerCase())}">${esc(f.label)} <span class="cal-filtro-n">${conta.get(f.id) || 0}</span></button>`;
   }).join('');

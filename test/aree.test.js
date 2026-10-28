@@ -98,6 +98,7 @@ describe('Aree: Riepilogo e calendario', () => {
 // ogni documento si apre.
 const COMBINAZIONI = {
   'tutto acceso': {},
+  'tutto acceso con i moduli': { alternativi: true, varianti: true, costiReali: true, officina: true, capacita: true },
   'costruttore': { produzione: false },
   'senza magazzino': { magazzino: false },
   'solo la base': { magazzino: false, pianificazione: false, produzione: false },
@@ -122,6 +123,8 @@ describe('Aree: ogni vista accesa si disegna', () => {
       // I documenti delle viste accese si aprono; quelli delle spente no, senza esplodere.
       a.eval(`(db.plans || []).forEach(p => { setView('mrp'); openPlanEdit(p.id); });
         (db.orders || []).forEach(o => { setView('orders'); openOrderEdit(o.id); });
+        (db.prodOrders || []).forEach(o => { setView('odp'); openOdpEdit(o.id); });
+        (db.jobs || []).forEach(j => { setView('jobs'); openJobEdit(j.id); });
         (db.items || []).forEach(it => itemInfoModal(it.id));
         (db.items || []).filter(it => it.type === 'parte').forEach(it => homeApri('cycle', it.id));`);
     });

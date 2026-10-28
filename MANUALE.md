@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.122.0**
+**Versione dell'app documentata: 0.123.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2785,6 +2785,68 @@ piano.
 E una regola di lettura: **i pezzi di un codice non si sommano fra le sue fasi** — ogni fase lavora
 gli stessi pezzi — **mentre le ore sì**.
 
+### Coda a capacità finita (modulo Capacità finita, dalla 0.123.0)
+
+Il carico qui sopra è a capacità **infinita**: dice quando ogni fase deve partire perché la
+consegna regga, e il sovraccarico si vede ma non sposta niente. Con il modulo **Capacità finita**
+acceso (→ [cap. 25](#25-gestione), *Moduli*) sotto la tabella compare la **Coda a capacità
+finita**: il conto fatto in avanti, da oggi.
+
+- Entrano le fasi **interne** non chiuse degli ODP **lanciati e in corso**, ordine per ordine
+  **per data di consegna** (la più vicina prima).
+- Ogni fase occupa il suo centro per le ore del ciclo sui pezzi ancora da fare, più
+  l'attrezzaggio se non è partita, senza superare le **ore al giorno** del centro (*Ore lavorate
+  al giorno*, o la capacità settimanale divisa per i giorni lavorativi), nei giorni lavorativi del
+  calendario di fabbrica e **fuori dai fermi** registrati in manutenzione.
+- Una fase comincia il giorno lavorativo dopo la fine della precedente. Una fase esterna non
+  occupa centri: dura i suoi giorni dal terzista più il trasporto.
+
+Per ogni centro la coda dice ordine, fase, ore, dal / al e la data in cui l'ordine serve; in
+rosso le fasi di un ordine che finisce dopo. Nella scheda dell'ODP una riga sopra le fasi dice
+la **data fattibile** a capacità finita, e nel Riepilogo c'è il segnale *ordini di produzione in
+ritardo a capacità finita*.
+
+**Propone, non comanda.** Le date pianificate degli ordini e del fabbisogno restano quelle a
+ritroso: la coda è un avviso da guardare, non una data riscritta. Le fasi non si spostano a mano.
+
+---
+
+### Terminale di reparto (modulo Officina, dalla 0.123.0)
+
+*Produzione → Reparto* è la schermata di chi lavora alla macchina, a pulsanti grandi per il
+telefono. Si sceglie il **centro** (l'app lo ricorda su quel dispositivo) e compaiono le fasi
+interne degli ODP lanciati che si possono lavorare adesso — *Avviabili* o *In corso* — per data di
+consegna.
+
+- **Inizia** apre una **timbratura** a nome di chi è entrato. Se la fase non è ancora avviata,
+  prima si apre la finestra di avvio di sempre (sulla prima fase esce il materiale), e la
+  timbratura parte dopo.
+- **Pausa** chiude la timbratura; **Riprendi** ne apre un'altra.
+- **Fine e dichiara** chiude la timbratura e apre la dichiarazione dei pezzi buoni e degli scarti,
+  la stessa dell'ODP.
+
+Una persona ha **una sola** timbratura aperta: cominciare un'altra fase mette in pausa quella in
+corso. Ogni scheda dice i pezzi da fare, le ore timbrate e quelle previste dal ciclo. Il **QR**
+dell'ODP, con il modulo acceso, porta gli stessi pulsanti. Le ore timbrate entrano nel
+**consuntivo** della commessa al posto delle ore del ciclo, e fanno scadere le manutenzioni «ogni
+N ore».
+
+### Manutenzione (modulo Officina, dalla 0.123.0)
+
+*Produzione → Manutenzione* tiene i **piani** per centro: un intervento ricorrente (cambio olio,
+taratura…) **ogni N giorni**, **ogni N ore lavorate**, o tutti e due — scade al primo dei due.
+I giorni si contano dall'ultimo intervento registrato (o dalla nascita del piano), le ore sono
+quelle **timbrate** su quel centro da allora. Un piano porta i **ricambi di serie**, scritti un
+codice per riga con la quantità (`CMM-001 2`).
+
+**Registra** un intervento: la data, i ricambi usati — che **escono dal magazzino** come consumo —
+e il **fermo macchina** dal / al, anche futuro: la capacità finita non mette fasi su quel centro
+in quei giorni. Un intervento fuori piano si registra dal menu sopra lo storico.
+
+Le manutenzioni scadute sono un segnale del Riepilogo, e la prossima scadenza di ogni piano sta nel
+calendario (filtro *Manutenzione*). I piani si creano e modificano da amministratore; gli
+interventi li registra anche chi ha il ruolo *Officina e magazzino*.
+
 ---
 
 # Parte VI — Amministrazione
@@ -2920,6 +2982,8 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Alternativi e sostitutivi (→ [cap. 19](#19-fabbisogno-materiali)) | spento |
 | Varianti e configuratore (→ [cap. 13](#13-tecnico--gestione-db)) | spento |
 | Costi reali (→ [cap. 18](#18-commesse)), nell'area Pianificazione | spento |
+| Officina: terminale di reparto e manutenzione (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
+| Capacità finita (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità

@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.123.0 — 2026-10-28
+
+**Modulo Officina** (area Produzione interna).
+- **Terminale di reparto**, *Produzione → Reparto*: le fasi interne da lavorare, per centro, con Inizia / Pausa / Fine a pulsanti grandi. Ogni operatore timbra con il suo utente; Fine porta alla dichiarazione dei pezzi. Una fase non avviata si avvia prima, con il materiale. Il QR dell'ODP porta gli stessi pulsanti. Le ore timbrate entrano nel consuntivo della commessa al posto di quelle del ciclo.
+- **Manutenzione**, *Produzione → Manutenzione*: piani per centro ogni N giorni e/o N ore lavorate, con i ricambi di serie; interventi registrati con i ricambi che escono dal magazzino e il fermo macchina. Le scadute sono un segnale del Riepilogo, le prossime stanno nel calendario.
+
+**Modulo Capacità finita** (area Produzione interna): le fasi interne degli ODP lanciati in fila sui centri per data di consegna, nelle ore al giorno di ogni centro, nei giorni lavorativi e fuori dai fermi. La data fattibile nella scheda dell'ODP, la coda per centro nel Carico centri, il segnale degli ordini in ritardo nel Riepilogo. Propone e non cambia le date.
+
+**Schema Supabase**: tre tabelle nuove, `production_time_logs`, `maintenance_plans`, `maintenance_events`. Va eseguita `supabase/schema.sql` prima di aggiornare l'app sui PC collegati all'archivio condiviso.
+
+**Manuale**: cap. 24 «Coda a capacità finita», «Terminale di reparto», «Manutenzione»; cap. 25 *Moduli*.
+
 ### 0.122.0 — 2026-10-28
 
 **Modulo Costi reali.** Si accende in *Gestione → Impostazioni → Moduli* e vive nell'area Pianificazione.

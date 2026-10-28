@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.122.0';
+const APP_VERSION = '0.123.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -359,6 +359,7 @@ function invalidateCaches() {
   if (typeof invalidateProd === 'function') invalidateProd();       // sta in views-prod.js, caricato dopo
   if (typeof invalidateNomiImport === 'function') invalidateNomiImport(); // sta in import-export.js, caricato dopo
   if (typeof invalidateVarianti === 'function') invalidateVarianti(); // sta in varianti.js, caricato dopo
+  if (typeof invalidateCapacita === 'function') invalidateCapacita(); // capacita.js
 }
 // ─── Librerie esterne (PDF ed Excel) ───
 // Stanno in vendor/, dentro il repo: l'app è fatta per aprirsi con un doppio
@@ -677,6 +678,18 @@ const MODULI = {
     descr: 'Il costo medio d\'acquisto di ogni articolo, calcolato dai ricevimenti degli ordini, e la scelta di valorizzare il magazzino a costo medio invece che a listino.',
     area: 'pianificazione',
   },
+  // Dalla 0.123.0: terminale di reparto e manutenzione (officina.js).
+  officina: {
+    nome: 'Officina',
+    descr: 'Il terminale di reparto, Produzione → Reparto: chi lavora alla macchina timbra Inizia, Pausa e Fine sulla fase dal telefono, e le ore entrano nel consuntivo. E la manutenzione dei centri, ogni tanti giorni o tante ore lavorate, con i ricambi che escono dal magazzino e i fermi macchina.',
+    area: 'produzione',
+  },
+  // Dalla 0.123.0: le fasi in fila sui centri senza superarne le ore (capacita.js).
+  capacita: {
+    nome: 'Capacità finita',
+    descr: 'Le fasi interne degli ordini di produzione in fila sui centri, per data di consegna, senza superare le ore che ogni centro lavora e fuori dai fermi. Ogni ordine ha la sua data fattibile accanto a quella richiesta; il Carico centri mostra la coda. Propone, non cambia le date.',
+    area: 'produzione',
+  },
 };
 function moduloAttivo(nome) {
   const m = db && db.settings && db.settings.modules;
@@ -714,7 +727,7 @@ const AREE = {
   produzione: {
     nome: 'Produzione interna',
     descr: 'Parti fatte in casa con distinta parte e ciclo, centri di lavoro, ordini di produzione e di lavoro, conto lavoro, carico centri e avanzamento. Spento, ogni parte vale come acquistata e costa il suo prezzo di listino.',
-    viste: ['cycles', 'load', 'avz', 'odp', 'odl'],
+    viste: ['cycles', 'load', 'avz', 'odp', 'odl', 'reparto', 'manutenzione'],
     richiede: 'pianificazione',
   },
 };
@@ -768,10 +781,10 @@ function roleGuardRuolo(area) {
 // Area di scrittura corrispondente a ciascuna vista (per il banner di sola lettura)
 // `load` (Carico centri) è null come `report`: è un prospetto derivato, in sola
 // lettura, da cui non si scrive niente.
-const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', pricelist: 'catalog', manage: 'manage' };
+const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', manage: 'manage' };
 // Le viste in cui l'officina lavora pur senza l'area della vista: lì non va in
 // sola lettura, e le guardie dei singoli gesti fanno il resto.
-const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp']);
+const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione']);
 
 // Le due viste di anagrafica: ciò che si compra e ciò che si progetta.
 // Ogni vista ha i suoi filtri (prefisso degli id nella pagina) e la creazione

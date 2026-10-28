@@ -371,7 +371,14 @@ function qrSchedaHtml(tipo, rec) {
     if (f) {
       const stato = opStatoFase(o, f);
       fase = `<p>Fase ${esc(String(f.seq))} <strong>${esc(f.wcName || '')}</strong>${f.supplierId ? ' · ' + esc(f.supplierName || supplierName(f.supplierId) || '') : ''} — ${esc(ODP_FASE_LABELS[stato] || stato)} · ${fmtQtyIt(opProcessati(o, f))} di ${fmtQtyIt(opDaFare(o, f))}</p>`;
-      if (canWriteShop('docs')) {
+      // Con il modulo Officina il QR della fase interna è il terminale: si timbra da qui.
+      const timbra = canWriteShop('docs') && moduloAttivo('officina') && !f.supplierId && (stato === 'avviabile' || stato === 'corso');
+      if (timbra) {
+        if (logApertoDiFase(o.id, f.id, utenteId())) {
+          bottoni.push(qrBtn('Pausa', 'clock', `repartoPausa('${o.id}','${f.id}')`, true));
+          bottoni.push(qrBtn('Fine e dichiara', 'check', `repartoFine('${o.id}','${f.id}')`));
+        } else bottoni.push(qrBtn(`Inizia la fase ${f.seq}`, 'factory', `repartoInizia('${o.id}','${f.id}')`, true));
+      } else if (canWriteShop('docs')) {
         if (stato === 'avviabile') bottoni.push(qrBtn('Avvia la fase ' + f.seq, 'factory', `opAvviaModal('${o.id}','${f.id}')`, true));
         else if (stato === 'corso') bottoni.push(qrBtn('Dichiara avanzamento', 'check', `opDichiaraModal('${o.id}','${f.id}')`, true));
       }

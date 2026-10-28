@@ -268,7 +268,11 @@ const NAV = [
   // due elenchi: uno compra merce, l'altro manda pezzi a lavorare.
   { id: 'prod', icon: 'factory', label: 'Produzione', views: [
     { id: 'odp', label: 'Ordini di produzione' },
-    { id: 'odl', label: 'Ordini di lavoro' }] },
+    { id: 'odl', label: 'Ordini di lavoro' },
+    // Modulo Officina (0.123.0): il terminale di chi lavora alla macchina e la
+    // manutenzione dei centri.
+    { id: 'reparto', label: 'Reparto', modulo: 'officina' },
+    { id: 'manutenzione', label: 'Manutenzione', modulo: 'officina' }] },
   // Il magazzino non conosce la divisione fra acquisti e progetto: commerciali,
   // materie prime e parti stanno sullo stesso scaffale.
   { id: 'stock', icon: 'package', label: 'Magazzino', views: [
@@ -418,6 +422,9 @@ function setView(v) {
   // Una vista di un'area spenta (un link vecchio, la ricerca, un segnale) non
   // si apre: si torna al Riepilogo dicendo perché.
   if (!vistaAttiva(v)) { showToast(`${AREE[areaDiVista(v)].nome}: area spenta in Gestione → Impostazioni`, 'error'); v = 'home'; }
+  // Lo stesso per la voce di un modulo spento.
+  const voce = (groupOfView(v) || { views: [] }).views.find(w => w.id === v);
+  if (voce && voce.modulo && !moduloAttivo(voce.modulo)) { showToast(`${MODULI[voce.modulo].nome}: modulo spento in Gestione → Impostazioni`, 'error'); v = 'home'; }
   scriviHash(v);
   // Si lascia un documento aperto (dalla 0.105.3): quel che era in sospeso si
   // salva, come quando si apre un altro documento. Restava «da salvare» anche
@@ -445,6 +452,8 @@ function setView(v) {
   else if (v === 'stock') renderStock();
   else if (v === 'cycles') renderCycles();
   else if (v === 'varianti') renderVarianti();
+  else if (v === 'reparto') renderReparto();
+  else if (v === 'manutenzione') renderManutenzione();
   else if (v === 'report') renderReport();
   else if (v === 'home') renderHome();
   else if (v === 'dash') renderDash();

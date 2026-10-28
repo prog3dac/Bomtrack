@@ -114,13 +114,26 @@ function consReale(jobId) {
     dettaglio.push({ voce: 'lavorazioni', testo: `${d.number || 'ODL'} — ${supplierName(d.supplierId) || 'terzista'}, ${fmtQtyIt(r)} pz ricevuti`, valore: r * p });
   }));
   // ── Lavorazioni interne: le fasi degli ODP e i montaggi ──
+  // Con il modulo Officina e delle timbrature sulla fase, le ore timbrate
+  // prendono il posto di quelle del ciclo, alla tariffa della fase (o del centro).
+  const timbrate = moduloAttivo('officina') && typeof oreTimbrate === 'function';
   o.odp.forEach(d => (d.phases || []).forEach(f => {
     if (f.supplierId) return;
-    const n = opProcessati(d, f);
-    const v = n * consFaseCostoPezzo(f);
+    const ore = timbrate ? oreTimbrate(d.id, f.id) : 0;
+    let v, testo;
+    if (ore > 0) {
+      const wc = getWorkCenter(f.workCenterId);
+      const tariffa = f.costMode === 'orario' && Number(f.rate) > 0 ? Number(f.rate) : (wc ? Number(wc.hourlyRate) || 0 : 0);
+      v = ore * tariffa;
+      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtOre(ore)} timbrate`;
+    } else {
+      const n = opProcessati(d, f);
+      v = n * consFaseCostoPezzo(f);
+      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtQtyIt(n)} pz`;
+    }
     if (!v) return;
     lavorazioni += v;
-    dettaglio.push({ voce: 'lavorazioni', testo: `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtQtyIt(n)} pz`, valore: v });
+    dettaglio.push({ voce: 'lavorazioni', testo, valore: v });
   }));
   o.montaggi.forEach(r => {
     const asm = getItem(r.itemId); if (!asm) return;

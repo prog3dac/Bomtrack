@@ -1015,6 +1015,7 @@ function renderOdpEdit(id) {
       ${kpi('Fasi chiuse', `${chiuse}/${fasi.length}`, 'purple')}
       ${esterno > 0 ? kpi('Lavorazioni esterne', fmtN(esterno), '') : ''}
     </div>
+    ${typeof capOdpHtml === 'function' ? capOdpHtml(o) : ''}
     ${o.status === 'bozza' ? `<div class="rfq-warn">${ico('warning', 'tinted', '')} L'ordine è in <strong>bozza</strong>: quantità, date e fasi si possono ancora cambiare, e non si dichiara niente. <strong>Lancia</strong> per aprire la produzione — da lì fasi e materiale si congelano.</div>` : ''}
     <div class="mrp-section">
       <div class="cycle-section-head"><h3>${ico('wrench', 'tinted pill', '')} Le fasi, in successione</h3>
@@ -1277,7 +1278,8 @@ function odpAnnullaSave(id) {
 // di lavoro (dalla 0.116.0): finito il gesto si ridisegna la vista da cui si è
 // partiti, non sempre quella degli ordini di produzione.
 function opRidisegna() {
-  if (typeof activeView !== 'undefined' && activeView === 'odl' && typeof renderOdl === 'function') renderOdl();
+  if (typeof activeView !== 'undefined' && activeView === 'reparto' && typeof renderReparto === 'function') renderReparto();
+  else if (typeof activeView !== 'undefined' && activeView === 'odl' && typeof renderOdl === 'function') renderOdl();
   else renderOdp();
 }
 function opFaseDi(id, faseId) {
@@ -1329,6 +1331,8 @@ function opAvviaSave(id, faseId) {
   const materiali = opAvviaRighe();
   const sotto = avvisoSottoZero(materiali);
   if (!opAvvia(id, faseId, { materiali, note: val('op-note') })) return;
+  // Avviata dal terminale di reparto: la timbratura parte adesso (officina.js).
+  if (typeof repartoDopoAvvio === 'function') repartoDopoAvvio(id, faseId);
   closeModal(); opRidisegna();
   if (sotto.length) showToast('Fase avviata, ma l\'esistente va sotto zero: ' + sotto.join('; '), 'error');
   else showToast('Fase avviata');

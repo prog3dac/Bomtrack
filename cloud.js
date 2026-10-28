@@ -873,7 +873,8 @@ function cloudNomeDi(rec) { return rec ? (rec.number || rec.code || rec.name || 
 const CLOUD_RIF_SVUOTABILI = new Set(['rfqs.plan_id', 'item_prices.rfq_id', 'orders.rfq_id', 'orders.plan_id',
   'production_orders.plan_id', 'production_orders.job_id', 'work_orders.rfq_id', 'work_orders.plan_id',
   'work_orders.odp_id', 'work_order_lines.odp_id', 'work_order_lines.odp_phase_id',
-  'production_declarations.phase_id', 'stock_movements.decl_id', 'productions.plan_id', 'reminders.job_id']);
+  'production_declarations.phase_id', 'stock_movements.decl_id', 'productions.plan_id', 'reminders.job_id',
+  'production_time_logs.phase_id', 'maintenance_events.plan_id']);
 async function cloudRiparaRiferimento(e) {
   const msg = String(e.message || ''), det = String(e.dettagli || '');
   const mancante = /is not present in table "([a-z_]+)"/.exec(det);
@@ -1591,7 +1592,7 @@ const CLOUD_ORDINE_CARICAMENTO = ['profiles', 'suppliers', 'customers', 'familie
   'work_center_suppliers', 'jobs', 'items*', 'production_plans', 'production_plan_lines', 'rfqs', 'rfq_lines',
   'item_prices', 'items', 'orders', 'order_lines', 'production_orders', 'production_order_phases',
   'production_order_materials', 'work_orders', 'work_order_lines', 'production_declarations', 'stock_movements',
-  'order_receipts', 'productions', 'item_revisions', 'attachment_docs', 'attachments', 'generated_docs', 'reminders', 'trash'];
+  'order_receipts', 'productions', 'item_revisions', 'attachment_docs', 'attachments', 'generated_docs', 'reminders', 'production_time_logs', 'maintenance_plans', 'maintenance_events', 'trash'];
 const CLOUD_AUTORIFERIMENTI = { items: ['machine_item_id', 'group_item_id', 'active_price_id', 'replaced_by_id', 'configured_from_id'] };
 function cloudLottiCaricamento(payload, n) {
   const up = payload.upsert || {}, lotti = [], fatti = new Set();

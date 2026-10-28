@@ -121,3 +121,12 @@ describe('Consuntivo di commessa', () => {
     assert.match(appCommessa().eval("renderJobEdit('J1')"), /Consuntivo/);
   });
 });
+
+describe('Consuntivo con le ore timbrate', () => {
+  it('con il modulo Officina le ore timbrate prendono il posto di quelle del ciclo', () => {
+    const a = appCommessa({ costiReali: true, officina: true });
+    a.eval(`db.timeLogs = [{ id: 't1', odpId: 'odp1', phaseId: 'f1', workCenterId: 'w1', userId: 'u', startedAt: '2026-10-01T08:00:00.000Z', endedAt: '2026-10-01T09:30:00.000Z', active: true }]`);
+    // 1,5 h × 40 €/h (fase a costo fisso: vale la tariffa del centro) + ODL 50
+    assert.equal(voce(a.eval("jobConsuntivo('J1')"), 'lavorazioni').reale, 1.5 * 40 + 50);
+  });
+});

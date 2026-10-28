@@ -486,6 +486,12 @@ const SCHEMA = {
   // nessun documento («sollecitare SKF», «collaudo in officina»). Tutte le altre
   // date il calendario le legge dove sono già, senza copiarle qui.
   reminders: { table: 'reminders' },
+  // Modulo Officina (0.123.0). Le timbrature sono eventi, come le
+  // dichiarazioni: le ore di una fase si sommano da qui. I piani di
+  // manutenzione e gli interventi registrati, con ricambi e fermi.
+  timeLogs: { table: 'production_time_logs' },
+  maintPlans: { table: 'maintenance_plans' },
+  maintEvents: { table: 'maintenance_events' },
   // Il cestino non è dominio: è la rete sotto le eliminazioni. In cloud è una
   // tabella come le altre, con il record conservato in jsonb.
   trash: { table: 'trash' },
@@ -755,6 +761,9 @@ function migrateDB() {
   });
   if (!db.jobs) db.jobs = [];             // commesse cliente
   if (!db.reminders) db.reminders = [];   // promemoria del calendario
+  if (!db.timeLogs) db.timeLogs = [];     // timbrature del reparto
+  if (!db.maintPlans) db.maintPlans = []; // piani di manutenzione
+  if (!db.maintEvents) db.maintEvents = []; // interventi di manutenzione
   // Cestino: le eliminazioni recenti, recuperabili. Si svuota da solo passata
   // la finestra di ripristino, altrimenti crescerebbe finché lo spazio del
   // browser non finisce — e a quel punto il rimedio sarebbe peggio del male.
