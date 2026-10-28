@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.117.0**
+**Versione dell'app documentata: 0.118.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -619,6 +619,7 @@ Ogni segnale **nomina i codici e i numeri che lo riguardano** (fino a otto, poi 
 | 11 | Giorni dall'ultimo backup (da 7; 🔴 da 30) — *solo amministratori* | 🟠 media | a Gestione → Backup |
 | 12 | Backup automatico in pausa o non riuscito — *solo amministratori, solo con il backup automatico attivo* | 🟠 media | **Riprendi** lo salva subito |
 | 13 | Spazio del browser occupato (dal 70%; 🔴 dal 90%) — *solo amministratori*. Con l'archivio in IndexedDB conta lo spazio di tutto il sito, allegati compresi | 🟠 media | a Gestione → Backup |
+| 14 | Distinte che usano un articolo fuori produzione con un sostitutivo — *solo con il modulo Alternativi acceso* (→ [cap. 19](#19-fabbisogno-materiali)) | 🟠 media | alla distinta o al ciclo |
 
 **Tre precisazioni** (dalla 0.105.6):
 
@@ -2117,6 +2118,45 @@ montaggio a *fatto* nel programma e nell'avanzamento.
 si **chiude**, e la sua quota torna libera per gli altri. Un piano chiuso non sparisce: resta
 consultabile, smette solo di impegnare. Si riapre quando serve.
 
+### Alternativi e sostitutivi (modulo, dalla 0.118.0)
+
+Si accende in *Gestione → Impostazioni → Moduli*. Spento, non si vede niente di quanto segue e il
+fabbisogno lo ignora; i dati già scritti restano e riaccendendolo tornano com'erano.
+
+**Due cose diverse.** Un **alternativo** è un articolo equivalente, da usare al posto del
+principale quando il principale manca: il cuscinetto FAG al posto dell'SKF. Il **sostitutivo**
+prende il posto di un articolo **fuori produzione**, per sempre.
+
+**Dove si dichiarano.** Nel pannello laterale di un commerciale, di una materia prima o di una
+parte comprata: scheda **Alternativi**, pulsante **Modifica alternativi**. Si aggiungono in ordine
+di preferenza, con una nota (*stesse quote, gioco radiale diverso*). Valgono **in tutte le
+distinte**: si dichiarano una volta sola. Un alternativo si conta **uno a uno** e con la **stessa
+unità** del principale; un articolo in metri non sostituisce un articolo in pezzi. Il sostitutivo
+si sceglie nella stessa finestra, e solo su un articolo segnato come non più utilizzabile. In
+distinta, accanto alle righe che hanno equivalenti, compare il segno **⇄**.
+
+**Il fabbisogno propone, tu decidi.** Nella lista d'acquisto di un piano, una riga che ha ancora
+qualcosa da comprare e un alternativo con merce **libera** (esistente + in arrivo − impegnato dagli
+altri piani) porta il pulsante **⇄ alternativo a scaffale**. Un obsoleto con sostitutivo porta
+sempre **⇄ obsoleto: c'è …**, anche senza giacenza, perché il principale non si compra più. Il
+pulsante apre la finestra **Usa un alternativo**: per ogni equivalente dice quanto è libero e
+propone una quantità (quella che manca, fin dove l'alternativo basta); **Usa** la registra.
+
+**Cosa cambia con la decisione.** Vale **per quel piano soltanto**. La quantità scelta passa dal
+principale all'alternativo, e da lì in avanti l'alternativo è un articolo come gli altri: la lista
+d'acquisto, il netto, gli impegni verso gli altri piani, le richieste e gli ordini generati, il
+**montaggio** (che scarica l'alternativo per la quota decisa), gli **ordini di produzione** del
+piano (che congelano il materiale alternativo) e il materiale mandato al terzista. Una sostituzione per più di quanto serve si ferma
+a quanto serve. Le righe lo dicono: *⇄ 15 pz all'alternativo* sul principale, *⇄ al posto di …*
+sull'alternativo. **Annulla**, nella stessa finestra, rimette tutto sul principale. Una decisione
+che non sposta più niente resta scritta finché qualcuno non la toglie.
+
+**Cosa non cambia.** La distinta, la costificazione e le revisioni restano sul principale: è
+quello progettato.
+
+**Il Riepilogo** segnala le distinte che usano ancora un articolo fuori produzione che ha un
+sostitutivo (segnale 14 del [cap. 5](#5-riepilogo--richiede-attenzione)).
+
 ### Generare i documenti
 
 I tre pulsanti **Genera richieste / ordini / ordini di lavoro** aprono la stessa finestra: le righe
@@ -2741,6 +2781,16 @@ nell'import da Excel vengono registrate automaticamente.
 
 La durata si conta dall'**ultimo uso**, e dalla 0.105.4 vale anche con l'archivio condiviso: chi
 non apre l'app per più giorni di così rientra con la password.
+
+**Moduli** (dalla 0.118.0)
+
+| Modulo | Di serie |
+|---|---|
+| Alternativi e sostitutivi (→ [cap. 19](#19-fabbisogno-materiali)) | spento |
+
+Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. I dati
+già scritti **restano**: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale
+per tutti i colleghi.
 
 **Calendario di fabbrica**
 

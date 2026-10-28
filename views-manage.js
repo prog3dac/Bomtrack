@@ -1022,11 +1022,29 @@ function renderSettings() {
     </div>
     <p class="empty-text" style="text-align:left;padding:4px 0 12px">Passati questi giorni dall'ultimo accesso, "Ricordami su questo PC" smette di valere e va reinserita la password. <strong>0 = la sessione non scade mai</strong> (com'era fino alla 0.21.0): comodo su un PC personale, meno su una postazione condivisa in officina.</p>
 
+    ${renderModuliSettings()}
+
     ${renderCalendarSettings()}
 
     ${renderQrSettings()}
 
     <button class="add-btn-sm" onclick="saveSettings()">Salva impostazioni</button></div>`;
+}
+// ─── Moduli ───
+// Un interruttore per modulo (MODULI in core.js). Spegnere non cancella niente:
+// lo dice la nota, perché è la prima cosa che chi spegne si chiede.
+function renderModuliSettings() {
+  return `<h3 class="settings-group-title">${ico('settings', 'tinted', '')} Moduli</h3>
+    ${Object.keys(MODULI).map(k => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0 8px">
+      <input type="checkbox" class="set-modulo" value="${k}" ${moduloAttivo(k) ? 'checked' : ''} style="margin-top:3px">
+      <span><strong>${esc(MODULI[k].nome)}</strong><br><span class="empty-text" style="padding:0">${esc(MODULI[k].descr)}</span></span></label>`).join('')}
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. <strong>I dati già scritti restano</strong>: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti i colleghi.</p>`;
+}
+function readModuliSettings() {
+  const prima = (db.settings && db.settings.modules) || {};
+  const out = Object.assign({}, prima);
+  Array.from(document.querySelectorAll('.set-modulo') || []).forEach(x => { if (MODULI[x.value]) out[x.value] = !!x.checked; });
+  return out;
 }
 // ─── Calendario di fabbrica ───
 // I giorni in cui si lavora, per la programmazione a ritroso del fabbisogno
@@ -1099,6 +1117,7 @@ function saveSettings() {
   db.settings.codePrefixMateriale = (val('set-pfx-mat') || 'MAT').toUpperCase();
   db.settings.codePrefixParte = (val('set-pfx-prt') || 'PRT').toUpperCase();
   db.settings.sessionDays = numVal('set-session', 0, 365);
+  if (document.querySelector && document.querySelector('.set-modulo')) db.settings.modules = readModuliSettings();
   // Il calendario si sostituisce intero: calendario.js riconosce il cambio
   // dalla firma, e un oggetto nuovo non lascia dietro di sé pezzi del vecchio.
   let scartati = [];

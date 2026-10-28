@@ -168,7 +168,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     <span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${toggle}
       <span class="bom-code">${codeLink(child.id, child.code)}</span>
       <span class="bom-type-tag tt-${typeKey(child.type)}">${typeShort(child.type)}</span>
-      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}</span>
+      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}${altMarker(child)}</span>
     </span>
     <span class="num">${qty}</span>
     <span>${esc(child.uom || '')}</span>
@@ -211,7 +211,7 @@ function renderCycleBomNode(row, level, pos) {
     if (!ci) return `<div class="bom-node" style="padding-left:${18 + indent}px"><span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${ico('warning', 'tinted')} articolo mancante</span></div>`;
     name = `<span class="bom-code">${codeLink(ci.id, ci.code)}</span>
       <span class="bom-type-tag tt-${typeKey(ci.type)}">${typeShort(ci.type)}</span>
-      <span class="nm" title="${esc(ci.name)}">${esc(ci.name)}</span>`;
+      <span class="nm" title="${esc(ci.name)}">${esc(ci.name)}${altMarker(ci)}</span>`;
     qtyCell = Number(row.qty) || 0; uom = ci.uom || ''; unit = costOf(row.itemId).total;
   }
   return `<div class="bom-node bom-node-cycle" style="padding-left:${18 + indent}px">

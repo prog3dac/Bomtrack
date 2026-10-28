@@ -105,11 +105,22 @@ function opFreezePhases(part) {
 // Il materiale che l'ordine consuma: le righe di distinta parte del ciclo per i
 // pezzi lanciati. Congelarlo significa che una modifica al ciclo non riscrive
 // retroattivamente quanto è già uscito dal magazzino.
-function opFreezeMaterials(part, qty) {
-  return clMaterialsOf(part, Number(qty) || 0).map(x => ({
-    id: newId(), itemId: x.item.id, code: x.item.code || '', name: x.item.name || '',
-    uom: itemUom(x.item), perPezzo: x.perPezzo, qty: x.qty,
-  }));
+// Con `planId` valgono le sostituzioni decise sul piano (alternativi.js): la
+// quota di materiale passata all'alternativo si congela come alternativo.
+function opFreezeMaterials(part, qty, planId) {
+  let righe = clMaterialsOf(part, Number(qty) || 0).map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo, qty: x.qty }));
+  if (planId && typeof sostituzioniPrelievo === 'function') {
+    const orig = new Map(righe.map(r => [r.itemId, r]));
+    righe = sostituzioniPrelievo(planId, righe).map(r => {
+      const o = orig.get(r.sostituisce || r.itemId);
+      return Object.assign({}, r, { perPezzo: o && o.qty > 0 ? o.perPezzo * r.qty / o.qty : r.perPezzo });
+    });
+  }
+  return righe.map(r => {
+    const it = getItem(r.itemId);
+    return { id: newId(), itemId: r.itemId, code: (it && it.code) || '', name: (it && it.name) || '',
+      uom: itemUom(it), perPezzo: r.perPezzo, qty: r.qty };
+  }).filter(r => r.code || r.name);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -872,7 +883,7 @@ function odpSetField(id, field, value) {
     // nessuno. Ricongelarlo qui tiene le due cose d'accordo senza chiederlo.
     o.qty = Math.max(0, Number(value) || 0);
     const part = getItem(o.itemId);
-    if (part && o.status === 'bozza') o.materials = opFreezeMaterials(part, o.qty);
+    if (part && o.status === 'bozza') o.materials = opFreezeMaterials(part, o.qty, o.planId);
     if (o.status === 'bozza') odpPianifica(o);
   } else {
     o[field] = campoTesto(value) || (field === 'jobId' ? null : '');
@@ -1503,13 +1514,14 @@ function nextOdpNumber() { return numeroProgressivo('ODP'); }
 // un ordine scritto a mano non è una seconda specie di ordine.
 function odpNew(part, qty, dueDate, extra) {
   const n = Math.max(0, Number(qty) || 0);
+  const planId = (extra && extra.planId) || null;
   return odpPianifica(stampNew(Object.assign({
     id: gid(), number: nextOdpNumber(), itemId: part.id,
     code: part.code || '', name: part.name || '', uom: itemUom(part),
     qty: n, date: oggiISO(), dueDate: dueDate || '',
     status: 'bozza', title: '', notes: '', notesInternal: '',
     planId: null, jobId: null,
-    phases: opFreezePhases(part), materials: opFreezeMaterials(part, n),
+    phases: opFreezePhases(part), materials: opFreezeMaterials(part, n, planId),
     active: true,
   }, extra || {})));
 }

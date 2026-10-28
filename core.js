@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.117.0';
+const APP_VERSION = '0.118.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -649,6 +649,27 @@ function canWrite(area) {
   return canWriteRuolo(area) && !(typeof cloudSolaLettura === 'function' && cloudSolaLettura());
 }
 function isAdmin() { return !!currentUser && currentUser.role === 'admin'; }
+
+// ─── Moduli (dalla 0.118.0) ───
+// Le funzioni che non servono a tutti si accendono e si spengono da Gestione →
+// Impostazioni. Spento vuol dire **nascosto e ignorato dai conti**, non
+// cancellato: i dati scritti restano dove sono, e riaccendendo il modulo
+// tornano come erano. Per questo un modulo spento non tocca mai un record —
+// ogni lettura passa da moduloAttivo(), e basta quello.
+//
+// Stanno in `settings.modules`, cioè nel blocco unico delle impostazioni: con
+// l'archivio condiviso valgono per tutti i colleghi, e non serve una colonna.
+// Un modulo nuovo nasce spento: chi non lo cerca non deve trovarsi campi in più.
+const MODULI = {
+  alternativi: {
+    nome: 'Alternativi e sostitutivi',
+    descr: 'Articoli equivalenti da usare quando il principale manca, e il sostitutivo di un articolo fuori produzione. Il fabbisogno li propone, la scelta resta a chi pianifica.',
+  },
+};
+function moduloAttivo(nome) {
+  const m = db && db.settings && db.settings.modules;
+  return !!(MODULI[nome] && m && m[nome] === true);
+}
 // Guardia dei mutatori, sul modello di rfqGuard: blocca e spiega.
 function roleGuard(area) {
   if (canWrite(area)) return true;

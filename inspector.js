@@ -88,6 +88,8 @@ function inspAzioniArticolo(it) {
     cmd('file', 'Apri documento', `allegatoApriPrimo('${it.id}')`),
     cmd('folder', `Allegati${allegatiCount(it.id) ? ' (' + allegatiCount(it.id) + ')' : ''}`, `allegatiModal('${it.id}')`),
     cmd('link', 'Dove è usato e impatto costi', `usageModal('${it.id}')`),
+    moduloAttivo('alternativi') && altAmmesso(it)
+      ? cmd('link', `Alternativi${altDi(it).length ? ' (' + altDi(it).length + ')' : ''}`, `altModal('${it.id}')`, { write: true }) : null,
     cmd('eye', 'Scheda completa', `itemInfoModal('${it.id}')`),
     cmd('trash', 'Elimina articolo', `delItem('${it.id}')`, { write: true, danger: true }),
   ].filter(Boolean);
@@ -109,6 +111,8 @@ function inspSchedeArticolo(it) {
     { id: 'scheda', testo: 'Scheda', corpo: () => itemInfoBody(it) },
     hasPriceList(it) ? { id: 'listino', testo: 'Listino', corpo: () => priceListBody(it.id) } : null,
     { id: 'usato', testo: 'Dove è usato', corpo: () => usageBody(it.id) },
+    moduloAttivo('alternativi') && (altAmmesso(it) || altUsatoDa(it.id).length)
+      ? { id: 'alternativi', testo: 'Alternativi', corpo: () => altBody(it.id) } : null,
     { id: 'storico', testo: 'Storico', corpo: () => storicoBody('items', it.id) },
   ].filter(Boolean);
 }

@@ -359,6 +359,10 @@ const SCHEMA = {
       operations: { table: 'item_operations', rowId: null, merge: 'replace' },
       cycle: { table: 'item_cycle_rows', rowId: null, merge: 'replace' },
       priceList: { table: 'item_prices', rowId: 'id', merge: 'row' },
+      // Gli equivalenti dell'articolo (modulo Alternativi, dalla 0.118.0), in
+      // ordine di preferenza. Come la distinta: l'elenco è la definizione, le
+      // righe non hanno identità propria.
+      alternatives: { table: 'item_alternatives', rowId: null, merge: 'replace' },
     },
   },
   // Le revisioni rilasciate sono fotografie congelate: `snapshot` resta un
@@ -441,7 +445,12 @@ const SCHEMA = {
   // lavorare. Tenerli in una tabella sola costringeva ogni conto a filtrare per
   // un campo, ed è il tipo di distinzione che prima o poi qualcuno dimentica.
   workOrders: { table: 'work_orders', children: { lines: { table: 'work_order_lines', rowId: 'id', merge: 'row', derived: ['received'] } } },
-  plans: { table: 'production_plans', children: { lines: { table: 'production_plan_lines', rowId: 'id', merge: 'row' } } },
+  // `substitutions` (dalla 0.118.0): le decisioni «per questo piano, di questo
+  // articolo usa quest'altro», una riga per decisione.
+  plans: { table: 'production_plans', children: {
+    lines: { table: 'production_plan_lines', rowId: 'id', merge: 'row' },
+    substitutions: { table: 'production_plan_substitutions', rowId: 'id', merge: 'row' },
+  } },
   // ─── Ordini di produzione (ODP) ───
   // Il documento che segue una parte lungo il suo ciclo: le fasi congelate in
   // successione, e il magazzino mosso ai **due estremi veri del ciclo** — esce
@@ -511,9 +520,10 @@ const SCHEMA = {
 const REFS = {
   items: {
     fields: { supplierId: 'supplier', familyId: 'family', subFamilyId: 'subFamily',
-      machineItemId: 'item', groupItemId: 'item' },
+      machineItemId: 'item', groupItemId: 'item', replacedBy: 'item' },
     children: {
       components: { itemId: 'item' },
+      alternatives: { itemId: 'item' },
       operations: { workCenterId: 'workCenter' },
       cycle: { itemId: 'item', workCenterId: 'workCenter', supplierId: 'supplier' },
       priceList: { supplierId: 'supplier' },
@@ -536,7 +546,7 @@ const REFS = {
   // Le righe di un ODL non hanno un articolo: portano una `phaseKey`, che un
   // itemId ce l'ha dentro ma dentro una stringa — vedi la nota qui sopra.
   workOrders: { fields: { supplierId: 'supplier' }, children: { lines: {} } },
-  plans: { children: { lines: { itemId: 'item' } } },
+  plans: { children: { lines: { itemId: 'item' }, substitutions: { itemId: 'item', altItemId: 'item' } } },
   prodOrders: {
     fields: { itemId: 'item' },
     children: {

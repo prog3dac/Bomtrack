@@ -70,6 +70,9 @@ function mrpExplode(lines, opz) {
     asm: new Map(), intOps: new Map(), stock: new Map(), cycle: false,
     scaffale: (opz && opz.scaffale) || null, lotti: mrpLotti(lines) };
   (lines || []).forEach(l => mrpDescend(l.itemId, Number(l.qty) || 0, new Set(), acc, l.dueDate || ''));
+  // Le decisioni «usa l'alternativo» del piano (alternativi.js), dopo la
+  // discesa: spostano quantità fra articoli d'acquisto già accumulati.
+  if (opz && opz.sostituzioni && opz.sostituzioni.length) mrpApplicaSostituzioni(acc.buy, opz.sostituzioni);
   const perCodice = m => Array.from(m.values()).sort((a, b) => String(a.item.code).localeCompare(String(b.item.code)));
   // Le fasi si ordinano per parte e poi per posizione nel ciclo: l'ordine delle
   // fasi è quello in cui si eseguono, ed è ciò che il terzista legge.
@@ -786,6 +789,11 @@ function mrpBuyRow(entry, netMode, planId) {
     // Ordinato, ma arriva dopo il giorno in cui serve (dalla 0.111.0): la data
     // in cui l'in arrivo basta davvero, o vuota. E gli ordini scaduti.
     arrivoTardi: tardi.data, scaduti: tardi.scaduti,
+    // Modulo Alternativi: quanto di questo articolo è passato a un altro in
+    // questo piano, al posto di chi sta, e gli equivalenti da proporre.
+    planId: planId || null,
+    sostituito: entry.sostituito || 0, sostituisce: entry.sostituisce || [],
+    alternative: typeof altProposte === 'function' ? altProposte(it, planId, st.net) : [],
   };
 }
 // «Coperto» guardava solo le quantità: un ordine che arriva il 5/11 copriva un
@@ -2839,6 +2847,7 @@ function mrpBuyLineHtml(r) {
   (r.docRefs || []).forEach(x => seg.push(
     `<span class="price-best" title="Questo articolo è già in ${esc(docRefLabel(x))} (${fmtQtyIt(x.qty)} ${esc(x.uom)}) generato da questo fabbisogno">📄 ${esc(x.number)}</span>`));
   if ((r.bozze || []).length) seg.push(mrpBozzeBadge(r));
+  if (typeof altBadgeRiga === 'function') seg.push(...altBadgeRiga(r));
   const celleStock = mrpNet ? `
     <td style="font-family:var(--mono);text-align:right;color:var(--text-dim)">${fmtQtyIt(r.qty)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(r.onHand)}${r.safety > 0 ? `<span class="empty-text" style="padding:0"> (min ${fmtQtyIt(r.safety)})</span>` : ''}</td>

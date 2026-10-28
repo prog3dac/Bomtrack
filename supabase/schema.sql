@@ -159,6 +159,7 @@ create table if not exists public.items (
   rev text, lot_size numeric, lot_mode text, safety_stock numeric, assembly_days numeric,
   location text,
   code_manual boolean, code_manual_by uuid, code_manual_at timestamptz, code_note text,
+  replaced_by_id uuid references public.items(id) on delete set null deferrable initially deferred,
   child_sets text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
@@ -177,6 +178,8 @@ alter table public.items add column if not exists code_manual boolean;
 alter table public.items add column if not exists code_manual_by uuid;
 alter table public.items add column if not exists code_manual_at timestamptz;
 alter table public.items add column if not exists code_note text;
+-- 0.118.0: il sostitutivo di un articolo fuori produzione (modulo Alternativi).
+alter table public.items add column if not exists replaced_by_id uuid references public.items(id) on delete set null deferrable initially deferred;
 -- A6: `unique (code)` va aggiunto dopo la bonifica dei duplicati storici
 -- (Gestione › Backup › codici duplicati). Prima, rifiuterebbe dati veri.
 
@@ -211,6 +214,18 @@ create table if not exists public.item_cycle_rows (
   synced_at timestamptz not null default clock_timestamp()
 );
 
+-- 0.118.0: gli equivalenti di un articolo, in ordine di preferenza (modulo
+-- Alternativi). Quarta tabella «replace», per la stessa ragione delle altre:
+-- l'elenco è la definizione, e `item_id` è il padre — l'alternativo è
+-- `alt_item_id`.
+create table if not exists public.item_alternatives (
+  id text primary key,
+  item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
+  alt_item_id uuid references public.items(id) deferrable initially deferred,
+  note text, pos int,
+  synced_at timestamptz not null default clock_timestamp()
+);
+
 -- ─── Documenti ──────────────────────────────────────────────
 create table if not exists public.production_plans (
   id uuid primary key,
@@ -226,6 +241,18 @@ create table if not exists public.production_plan_lines (
   plan_id uuid not null references public.production_plans(id) on delete cascade deferrable initially deferred,
   item_id uuid references public.items(id) deferrable initially deferred,
   qty numeric, due_date date,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+
+-- 0.118.0: «per questo piano, di questo articolo usa quest'altro» (modulo
+-- Alternativi). Una riga per decisione, con chi l'ha presa.
+create table if not exists public.production_plan_substitutions (
+  id uuid primary key,
+  plan_id uuid not null references public.production_plans(id) on delete cascade deferrable initially deferred,
+  item_id uuid references public.items(id) deferrable initially deferred,
+  alt_item_id uuid references public.items(id) deferrable initially deferred,
+  qty numeric, note text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -502,8 +529,10 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('item_operations', 'items', 'item_id', 'replace'),
   ('item_cycle_rows', 'items', 'item_id', 'replace'),
   ('item_prices', 'items', 'item_id', 'row'),
+  ('item_alternatives', 'items', 'item_id', 'replace'),
   ('production_plans', null, null, 'root'),
   ('production_plan_lines', 'production_plans', 'plan_id', 'row'),
+  ('production_plan_substitutions', 'production_plans', 'plan_id', 'row'),
   ('rfqs', null, null, 'root'),
   ('rfq_lines', 'rfqs', 'rfq_id', 'row'),
   ('orders', null, null, 'root'),
@@ -1014,6 +1043,7 @@ select t, a from (values
   ('item_operations', 'catalog'), ('item_operations', 'bom'), ('item_operations', 'manage'),
   ('item_cycle_rows', 'catalog'), ('item_cycle_rows', 'bom'), ('item_cycle_rows', 'manage'),
   ('item_prices', 'catalog'), ('item_prices', 'bom'), ('item_prices', 'manage'),
+  ('item_alternatives', 'catalog'), ('item_alternatives', 'bom'), ('item_alternatives', 'manage'),
   ('item_revisions', 'catalog'), ('item_revisions', 'bom'),
   ('attachments', 'catalog'), ('attachment_docs', 'catalog'),
   -- Le richieste d'offerta sono documenti (dalla 0.105.6 solo `docs`): la
@@ -1023,7 +1053,7 @@ select t, a from (values
   ('rfqs', 'docs'), ('rfq_lines', 'docs'),
   ('orders', 'docs'), ('order_lines', 'docs'), ('order_receipts', 'docs'),
   ('work_orders', 'docs'), ('work_order_lines', 'docs'),
-  ('production_plans', 'docs'), ('production_plan_lines', 'docs'),
+  ('production_plans', 'docs'), ('production_plan_lines', 'docs'), ('production_plan_substitutions', 'docs'),
   ('production_orders', 'docs'), ('production_order_phases', 'docs'), ('production_order_materials', 'docs'),
   ('production_declarations', 'docs'), ('productions', 'docs'),
   ('generated_docs', 'docs'),

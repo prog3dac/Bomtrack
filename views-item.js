@@ -479,10 +479,14 @@ const STORICO_CAMPI = {
   transportDefault: 'Trasporto predefinito', transportOptions: 'Opzioni di trasporto',
   paymentDefault: 'Pagamento predefinito', paymentOptions: 'Opzioni di pagamento',
   scheduleBufferDays: 'Giorni di margine', sessionDays: 'Durata della sessione (giorni)', qr: 'Codici QR',
+  modules: 'Moduli',
+  // Modulo Alternativi
+  alternatives: 'Alternativi', replacedById: 'Sostituito da', substitutions: 'Sostituzioni',
+  altItemId: 'Alternativo',
 };
 const STORICO_RIF = { supplierId: 'suppliers', customerId: 'customers', familyId: 'families',
   workCenterId: 'workCenters', itemId: 'items', jobId: 'jobs', planId: 'plans',
-  machineItemId: 'items', groupItemId: 'items', rfqId: 'rfqs', odpId: 'prodOrders', docId: 'attachmentDocs' };
+  machineItemId: 'items', groupItemId: 'items', replacedById: 'items', altItemId: 'items', rfqId: 'rfqs', odpId: 'prodOrders', docId: 'attachmentDocs' };
 // Valori in codice che hanno un nome per chi legge.
 const STORICO_VALORI = {
   sourcing: { make: 'produzione interna', buy: 'acquisto' },

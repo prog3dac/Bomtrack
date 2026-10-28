@@ -138,6 +138,15 @@ function homeSegnali() {
   agg(senzaPrezzo.map(it => voce(it.code, `${it.name} — ${typeLabel(it.type)}`, `itemInfoModal('${it.id}')`)),
     'articolo d\'acquisto senza prezzo', 'articoli d\'acquisto senza prezzo', 'buy', 'media');
 
+  // Distinte che usano ancora un articolo fuori produzione che ha un
+  // sostitutivo (modulo Alternativi): c'è qualcosa da fare, e si sa cosa.
+  if (typeof distinteConObsoleti === 'function') {
+    agg(distinteConObsoleti().map(x => voce(x.asm.code,
+      `${x.asm.name} — usa ${x.item.code}, fuori produzione: il sostitutivo è ${x.sost.code}`,
+      x.asm.type === 'parte' ? `homeApri('cycle','${x.asm.id}')` : `itemInfoModal('${x.asm.id}')`)),
+    'distinta con un articolo fuori produzione', 'distinte con articoli fuori produzione', 'design', 'media');
+  }
+
   // Fasi a costo orario rimaste senza ore. Fino alla 0.64.2 una normalizzazione
   // cancellava le ore di ogni fase oraria a ogni caricamento; il recupero le
   // ricostruisce dividendo il costo per la tariffa del centro, ma dove il centro

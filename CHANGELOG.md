@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.118.0 — 2026-10-28
+
+**Moduli che si accendono e si spengono.** In *Gestione → Impostazioni* c'è la sezione **Moduli**: le funzioni che non servono a tutti si accendono da lì. Spento vuol dire nascosto e ignorato dai conti, non cancellato: i dati scritti restano, e riaccendendo il modulo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti. Un modulo nuovo nasce spento.
+
+**Alternativi e sostitutivi** (primo modulo). **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor prima di aggiornare l'app sui PC collegati all'archivio condiviso (tabelle `item_alternatives` e `production_plan_substitutions`, colonna `items.replaced_by_id`).
+- **Alternativi**: un commerciale, una materia prima o una parte comprata dichiara i suoi equivalenti, in ordine di preferenza e con una nota. Valgono in tutte le distinte, si contano uno a uno e con la stessa unità. Scheda **Alternativi** nel pannello laterale, segno **⇄** in distinta.
+- **Sostitutivo**: un articolo segnato come non più utilizzabile indica chi lo sostituisce. Il Riepilogo segnala le distinte che lo usano ancora (segnale 14).
+- **Il fabbisogno propone, chi pianifica decide.** Una riga d'acquisto scoperta con un equivalente libero a scaffale, o un obsoleto con sostitutivo, porta il pulsante **⇄**: la finestra *Usa un alternativo* dice quanto è libero e propone la quantità. La decisione vale per quel piano: lista d'acquisto, netto, impegni, documenti generati, montaggio, ordini di produzione e materiale per il terzista usano l'alternativo per la quota decisa, mai più di quanto serve. *Annulla* rimette tutto sul principale.
+- Distinta, costificazione e revisioni restano sul principale.
+
+**Manuale** — cap. 19 «Alternativi e sostitutivi», cap. 25 «Moduli», segnale 14 del cap. 5.
+
 ### 0.117.0 — 2026-10-27
 
 **Menu a tendina nei file Excel da importare.** Nei file Articoli (Acquisti e Progetto) e Impostazioni le colonne a valori ammessi hanno un menu a tendina vero, collegato agli elenchi dell'app: prima c'era solo il foglio Liste da cui copiare, o la convalida da impostare a mano. Nessun cambio a `supabase/schema.sql`.

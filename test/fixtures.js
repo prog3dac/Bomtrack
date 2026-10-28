@@ -49,8 +49,9 @@ const T0 = '2026-03-01T08:00:00.000Z';
 const st = o => Object.assign({ createdAt: T0, updatedAt: T0 }, o);
 function dbCloudCompleto() {
   const [s1, s2, wc1, fam, sub, job, m1, c1, p1, g1, mac, pr1, pr2, rfq, rl1, rl2, ord, ol1, plan, pll,
-    odp, ph1, ph2, mt1, odl, wl1, dec, mv1, mv2, rc1, prd, rev, adoc, att, rem, trash, cust, wcs, usr, cn, gdoc] =
-    Array.from({ length: 41 }, (_, i) => U(i + 1));
+    odp, ph1, ph2, mt1, odl, wl1, dec, mv1, mv2, rc1, prd, rev, adoc, att, rem, trash, cust, wcs, usr, cn, gdoc,
+    sb1] =
+    Array.from({ length: 42 }, (_, i) => U(i + 1));
   return makeDb({
     users: [st({ id: usr, name: 'Anna', username: 'anna', email: 'a@x.it', role: 'admin', color: '#3A7BE8', active: true, passwordHash: 'h', passwordSalt: 's' })],
     suppliers: [st({ id: s1, name: 'SKF', referente: '', email: '', phone: '', vat: '', street: '', streetNumber: '', zip: '', city: '', province: '', country: '', defaultTransport: '', defaultPayment: '', active: true }),
@@ -65,7 +66,8 @@ function dbCloudCompleto() {
         activePriceId: pr1, priceListSeeded: true, altUom: 'm', altFactor: 2.5, conceptId: 'cn-albero',
         priceList: [st({ id: pr1, supplierId: s1, price: 4.5, minQty: '', leadDays: 10, code: 'B1', desc: 'Barra', date: '2026-02-01', rfqId: rfq, lineId: rl1, note: '', priceUom: 'kg' }),
           st({ id: pr2, supplierId: null, price: 4.8, minQty: 100, leadDays: '', code: '', desc: '', date: '2026-01-01', rfqId: null, note: '' })] }),
-      st({ id: c1, code: 'CMM-001', name: 'Cuscinetto', type: 'acquistato', uom: 'pz', purchasePrice: 12, supplierId: s1, familyId: '', subFamilyId: '', notes: '', active: true, favorite: true, priceList: [] }),
+      st({ id: c1, code: 'CMM-001', name: 'Cuscinetto', type: 'acquistato', uom: 'pz', purchasePrice: 12, supplierId: s1, familyId: '', subFamilyId: '', notes: '', active: true, favorite: true, priceList: [],
+        alternatives: [{ itemId: m1, note: 'stesse quote' }], replacedById: m1 }),
       st({ id: p1, code: 'PRT-001', name: 'Albero', type: 'parte', uom: 'pz', unitCost: 0, sourcing: 'make', active: true, lotSize: 10, lotMode: 'min', safetyStock: 5, priceList: [],
         cycle: [{ kind: 'item', itemId: m1, qty: 1.2, costOverride: null },
           { kind: 'op', workCenterId: wc1, supplierId: null, costMode: 'orario', cost: 0, hours: 0.5, days: 0, rate: 40, note: 'tornitura' },
@@ -77,7 +79,8 @@ function dbCloudCompleto() {
         components: [{ itemId: g1, qty: 1, scrapPct: 0 }], operations: [] }),
     ],
     plans: [st({ id: plan, number: 'FAB-2026-001', title: 'Lotto', date: '2026-03-01', dueDate: '2026-05-01', notes: '', jobId: job, active: true,
-      lines: [st({ id: pll, itemId: mac, qty: 2, dueDate: '' })] })],
+      lines: [st({ id: pll, itemId: mac, qty: 2, dueDate: '' })],
+      substitutions: [st({ id: sb1, itemId: c1, altItemId: m1, qty: 3, note: '' })] })],
     rfqs: [st({ id: rfq, number: 'RDO-2026-001', title: '', date: '2026-02-01', status: 'ricevuta', supplierId: s1, transport: '', payment: '', planId: plan, jobId: job, notes: '', notesInternal: '', active: true,
       lines: [st({ id: rl1, itemId: m1, code: 'MAT-ACC-BAR-001', description: 'Barra', uom: 'kg', qty: 100, price: 4.5, deliveryDate: '', note: '', phaseKey: null, phaseKeys: null }),
         st({ id: rl2, itemId: null, code: 'PRT-001', description: 'Tempra', uom: 'pz', qty: 10, price: '', deliveryDate: '2026-04-01', note: '', phaseKey: p1 + '#1#' + wc1, phaseKeys: p1 + '#1#' + wc1 })] })],

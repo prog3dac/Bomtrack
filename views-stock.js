@@ -421,7 +421,10 @@ function mrpScaffale(planId) {
     return t;
   } };
 }
-function mrpOpzPiano(planId) { return { scaffale: mrpScaffale(planId) }; }
+// Con il modulo Alternativi, anche le sostituzioni decise sul piano.
+function mrpOpzPiano(planId) {
+  return { scaffale: mrpScaffale(planId), sostituzioni: typeof sostituzioniPiano === 'function' ? sostituzioniPiano(planId) : [] };
+}
 // L'esplosione di un piano **com'è davvero**: al netto delle parti pronte che
 // gli toccano. È quella che usano tutte le viste di un piano; la lorda resta per
 // costi e anteprime.
@@ -432,7 +435,9 @@ function mrpOpzPiano(planId) { return { scaffale: mrpScaffale(planId) }; }
 // Il risultato si legge e basta: chi deve cambiarlo se ne fa una copia.
 function mrpExplodePlan(p) {
   if (!p || !p.id) return mrpExplode((p && p.lines) || [], mrpOpzPiano(p && p.id));
-  const chiave = JSON.stringify(p.lines || []);
+  // Le sostituzioni contano solo col modulo acceso: spegnerlo deve cambiare
+  // l'esplosione anche senza toccare il piano.
+  const chiave = JSON.stringify([p.lines || [], typeof sostituzioniPiano === 'function' ? sostituzioniPiano(p.id) : []]);
   const gia = _esplosi.get(p.id);
   if (gia && gia.chiave === chiave) return gia.exp;
   const exp = mrpExplode(p.lines || [], mrpOpzPiano(p.id));
@@ -1146,7 +1151,10 @@ function clFromOdlModal(docId, lineId, verso) {
   const pezzi = Number(l.qty) || 0;
   // In uscita dal **primo** estremo del ciclo esce il materiale; da ogni altro
   // esce il pezzo stesso, che è quello tornato dalla fase precedente.
-  const righe = (uscita && !passaggio) ? clMaterialsOf(parte, pezzi)
+  // Con le sostituzioni decise sul piano dell'ordine (alternativi.js).
+  const materiali = () => typeof sostituzioniMateriali === 'function'
+    ? sostituzioniMateriali(o.planId, clMaterialsOf(parte, pezzi)) : clMaterialsOf(parte, pezzi);
+  const righe = (uscita && !passaggio) ? materiali()
     : (parte && hasStock(parte) ? [{ item: parte, perPezzo: 1, qty: pezzi }] : []);
   const gia = clRegistrato(o, l, verso);
   const titolo = uscita

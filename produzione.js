@@ -193,9 +193,12 @@ function produzioneElimina(id) {
 // I **sottoassiemi** non si tengono a magazzino e hanno un montaggio loro: si
 // dichiarano a parte, ciascuno con i suoi componenti. Scendere nei loro figli
 // da qui scaricherebbe due volte chi li dichiara entrambi.
-function montaggioComponenti(asm, pezzi) {
+// Con `planId` valgono le sostituzioni decise sul piano (alternativi.js): la
+// quota passata all'alternativo esce come alternativo.
+function montaggioComponenti(asm, pezzi, planId) {
   const n = Number(pezzi) || 0;
-  const stock = [], sotto = [];
+  let stock = [];
+  const sotto = [];
   ((asm && asm.components) || []).forEach(c => {
     const it = getItem(c.itemId); if (!it) return;
     const perPezzo = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
@@ -205,6 +208,15 @@ function montaggioComponenti(asm, pezzi) {
       else stock.push({ item: it, perPezzo, qty: perPezzo * n });
     } else if (isAssembly(it.type)) sotto.push({ item: it, perPezzo, qty: perPezzo * n });
   });
+  if (planId && typeof sostituzioniPrelievo === 'function' && sostituzioniPiano(planId).length) {
+    const orig = new Map(stock.map(x => [x.item.id, x]));
+    stock = sostituzioniPrelievo(planId, stock.map(x => ({ itemId: x.item.id, qty: x.qty })))
+      .map(r => {
+        const o = orig.get(r.sostituisce || r.itemId);
+        const quota = o && o.qty > 0 ? r.qty / o.qty : 0;
+        return { item: getItem(r.itemId), perPezzo: o ? o.perPezzo * quota : 0, qty: r.qty, sostituisce: r.sostituisce || null };
+      }).filter(x => x.item);
+  }
   return { stock, sotto };
 }
 function montaggioMovimenti(prodId) { return (db.movements || []).filter(m => m.orderId === prodId && m.kind === 'scarico'); }
@@ -216,7 +228,7 @@ function montaggioDichiara(planId, asmId, qty, righe, note) {
   if (!p || !asm || !isAssembly(asm.type)) return null;
   const q = Number(qty) || 0;
   if (!(q > 0)) { showToast('Scrivi quanti ne sono stati montati', 'error'); return null; }
-  const lista = righe || montaggioComponenti(asm, q).stock.map(x => ({ itemId: x.item.id, qty: x.qty }));
+  const lista = righe || montaggioComponenti(asm, q, planId).stock.map(x => ({ itemId: x.item.id, qty: x.qty }));
   const rec = Store.insert('productions', { planId, itemId: asmId, qty: q, date: nowISO(), note: String(note || '').trim() });
   if (!rec) return null;
   const testo = `Montaggio ${asm.code || ''} — ${p.number || ''}`.trim();
@@ -251,7 +263,7 @@ function montaggioBody() {
   const resta = daFare(planId, asm.id, richiesti);
   const u = itemUom(asm) || 'pz';
   const puoScrivere = canWriteShop('docs');
-  const comp = montaggioComponenti(asm, resta);
+  const comp = montaggioComponenti(asm, resta, planId);
   window.__montRighe = comp.stock.map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo }));
   const storico = (db.productions || [])
     .filter(x => x.planId === planId && x.itemId === asm.id)
@@ -268,7 +280,7 @@ function montaggioBody() {
     const esistente = onHandOf(x.item.id);
     return `<div class="mgmt-item">
       <span style="width:130px;font-family:var(--mono)">${esc(x.item.code)}</span>
-      <span style="flex:1">${esc(x.item.name)} <span class="empty-text" style="padding:0">${fmtQtyIt(x.perPezzo)} ${esc(itemUom(x.item))}/${esc(u)} · a magazzino ${fmtUom(esistente, itemUom(x.item))}</span></span>
+      <span style="flex:1">${esc(x.item.name)}${x.sostituisce ? ` <span class="price-best" title="Alternativo deciso sul piano">⇄ al posto di ${esc((getItem(x.sostituisce) || {}).code || '')}</span>` : ''} <span class="empty-text" style="padding:0">${fmtQtyIt(x.perPezzo)} ${esc(itemUom(x.item))}/${esc(u)} · a magazzino ${fmtUom(esistente, itemUom(x.item))}</span></span>
       <input class="num" type="number" id="mont-q-${i}" min="0" step="any" value="${esc(String(+x.qty.toFixed(4)))}" style="width:110px" oninput="montaggioAvviso()" aria-label="Quantità di ${esc(x.item.code)}">
       <span class="empty-text" style="padding:0;width:40px">${esc(itemUom(x.item))}</span>
     </div>`;
