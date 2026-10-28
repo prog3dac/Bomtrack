@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.120.1 — 2026-10-28
+
+**Varianti: la sezione Opzioni è più corta.** Le opzioni stanno due per riga (una sola su schermi stretti), e la sezione si richiude dal titolo: richiusa, dice in una riga le opzioni con le loro scelte.
+
 ### 0.120.0 — 2026-10-28
 
 **Varianti: una pagina sola, *Tecnico → Varianti*.** Modello, opzioni, regole, configuratore e macchine generate stanno tutti lì; la voce compare solo con il modulo acceso. Tolti i comandi sparsi: la striscia con i pulsanti in Gestione DB (resta una riga che dice cos'è la macchina, con il link alla pagina), la scheda e le azioni Varianti nel pannello laterale, i campi *Vale solo se* e *Quantità da formula* in *Modifica componente*. **+ Nuovo modello** trasforma in modello una macchina già in archivio; **Rigenera tutte** riallinea insieme le macchine di un modello cambiato. Il segnale 15 del Riepilogo porta alla pagina.

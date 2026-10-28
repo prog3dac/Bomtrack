@@ -302,3 +302,19 @@ describe('A modulo spento', () => {
     assert.deepEqual(ev(a, "getPlan('pl1').lines.map(l => l.itemId)"), ['mac']);
   });
 });
+
+describe('La sezione Opzioni', () => {
+  it('si richiude e dice le opzioni in una riga, e si riapre', () => {
+    const a = app();
+    a.eval("setView('varianti')");
+    assert.match(a.html('var-body'), /var-opz-grid/);
+    a.eval("varOpzioniApriChiudi('mac')");
+    const h = a.html('var-body');
+    assert.doesNotMatch(h, /var-opz-grid/);
+    assert.match(h, /aria-expanded="false"/);
+    assert.match(h, /Lunghezza: 3 m, 4 m, 5 m/);
+    assert.doesNotMatch(h, /\+ Opzione/);
+    a.eval("varOpzioniApriChiudi('mac')");
+    assert.match(a.html('var-body'), /var-opz-grid/);
+  });
+});

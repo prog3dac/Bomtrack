@@ -434,7 +434,7 @@ function varSezioneOpzioni(t) {
   const opz = t.options || [];
   const blocco = (o, i) => {
     const scelte = Array.isArray(o.choices) ? o.choices : [];
-    return `<div class="cycle-box" style="margin-bottom:10px;padding:10px">
+    return `<div class="cycle-box" style="padding:10px">
       <div class="var-opz-head" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
         ${scrivibile ? `<input value="${esc(o.code || '')}" title="Codice dell'opzione: è quello che le regole citano" style="width:70px;font-family:var(--mono)" onchange="varOpzioneSet('${t.id}', ${i}, 'code', this.value)">
         <input value="${esc(o.name || '')}" placeholder="Nome, es. Lunghezza" style="flex:1;min-width:160px" onchange="varOpzioneSet('${t.id}', ${i}, 'name', this.value)">
@@ -452,9 +452,22 @@ function varSezioneOpzioni(t) {
       ${scrivibile ? `<button class="btn-outline" style="margin-top:8px" onclick="varSceltaAggiungi('${t.id}', ${i})">+ Scelta</button>` : ''}
     </div>`;
   };
-  return varSezione('list', 'Opzioni', opz.length, opz.map(blocco).join('')
-    || '<p class="empty-text" style="text-align:left">Nessuna opzione.</p>',
-    varScrivibile(t) ? `<button class="add-btn-sm" onclick="varOpzioneAggiungi('${t.id}')">+ Opzione</button>` : '');
+  // Richiusa, la sezione dice in una riga le opzioni e le loro scelte: le
+  // opzioni si scrivono una volta, e dopo occupano solo spazio.
+  const chiusa = varOpzioniChiuse.has(t.id);
+  const titolo = `<button type="button" class="var-toggle" aria-expanded="${!chiusa}" onclick="varOpzioniApriChiudi('${t.id}')">${ico(chiusa ? 'chevronRight' : 'chevronDown', 'tinted', '')} Opzioni</button>`;
+  const corpo = chiusa
+    ? `<p class="empty-text" style="text-align:left;padding:0">${varOpzioni(t).map(o => `<strong style="font-family:var(--mono)">${esc(varCodice(o.code))}</strong> ${esc(o.name || '')}: ${esc(o.choices.map(c => c.label || c.value).join(', '))}`).join(' · ') || 'Nessuna opzione con delle scelte.'}</p>`
+    : (opz.length ? `<div class="var-opz-grid">${opz.map(blocco).join('')}</div>` : '<p class="empty-text" style="text-align:left">Nessuna opzione.</p>');
+  return varSezione('list', titolo, opz.length, corpo,
+    varScrivibile(t) && !chiusa ? `<button class="add-btn-sm" onclick="varOpzioneAggiungi('${t.id}')">+ Opzione</button>` : '');
+}
+// I modelli con la sezione Opzioni richiusa. Dura quanto la sessione: è
+// comodità di lettura, non un dato da salvare.
+const varOpzioniChiuse = new Set();
+function varOpzioniApriChiudi(id) {
+  if (varOpzioniChiuse.has(id)) varOpzioniChiuse.delete(id); else varOpzioniChiuse.add(id);
+  renderVarianti();
 }
 
 // ── 2. Regole ──
