@@ -55,6 +55,7 @@ const CAT_ALIAS = {
   'Codice fornitore': ['CodiceFornitore', 'SupplierCode'],
   'Descrizione fornitore': ['DescrizioneFornitore', 'SupplierDesc'],
   'Data prezzo': ['DataPrezzo'],
+  'In uso': ['InUso', 'Prezzo in uso'],
   'Scorta minima': ['ScortaMinima', 'SafetyStock'],
   'Lotto riordino': ['LottoRiordino', 'LotSize', 'Lotto'],
   'Preferito': ['Favorite'],
@@ -70,11 +71,10 @@ const CAT_ALIAS = {
   'Cifre numerazione': ['CifreNumerazione', 'incrDigitsN'],
   'Concetto *': ['Concetto', 'Concept'],
   'Descrizione *': ['Descrizione', 'DescrizioneLibera', 'Nome', 'Name', 'Denominazione'],
+  // La descrizione libera delle parti, che non è obbligatoria: un file di prima
+  // della 0.117.0 la chiama ancora «Descrizione *».
+  'Descrizione': ['Descrizione *', 'DescrizioneLibera', 'Nome', 'Name', 'Denominazione'],
   'Approvvigionamento': ['Sourcing'],
-  'Codice articolo *': ['Codice articolo', 'CodiceArticolo'],
-  'Prezzo *': ['Prezzo', 'Price'],
-  'Data *': ['Data', 'Date'],
-  'In uso': ['InUso', 'Attiva', 'Predefinita'],
 };
 function catNames(h) { return [h].concat(CAT_ALIAS[h] || []); }
 function catCell(row, h) { return cell(row, ...catNames(h)); }
@@ -149,7 +149,6 @@ function catNumOut(v) { return v === '' || v == null ? '' : (Number(v) || 0); }
 // Il vuoto come «no». Va bene dove la colonna indica quale riga fra tante è
 // quella scelta ("In uso"): là il no è ovvio e scriverlo trentadue volte è
 // rumore.
-function catSiNo(v) { return v ? 'Sì' : ''; }
 // Il no scritto, per i flag che si devono poter **spegnere** da file. boolCell
 // legge la cella vuota come «non toccare»: un articolo a cui si è tolto il
 // Preferito, esportato e ricaricato su un'altra postazione, restava preferito
@@ -159,6 +158,9 @@ function catSiNoEsplicito(v) { return v ? 'Sì' : 'No'; }
 function catSupplierName(id) { const s = getSupplier(id); return s ? (s.name || '') : ''; }
 
 // ─── Colonne per tipo ───
+// Il prezzo sta sulla riga dell'articolo ed è la quotazione in uso (dalla
+// 0.117.0). Il foglio Listino, con tutte le quotazioni, non c'è più: le altre
+// restano nell'app, e l'import non ne cancella nessuna.
 // [intestazione, valore in export]. L'import legge per intestazione, quindi
 // l'ordine qui dentro è solo l'ordine con cui si presentano nel foglio.
 const CAT_COL_PRICE = [
@@ -175,14 +177,27 @@ const CAT_COL_PRICE = [
   // quotazione si esporta in linea, e senza questa colonna la sua nota non
   // finiva in nessuna cella del file — persa al primo giro su una postazione nuova.
   ['Note prezzo', (it, q) => q ? (q.note || '') : ''],
+  // Sì = la quotazione della riga va in uso; vuoto o No = si aggiunge al
+  // listino e basta. In export è sempre Sì: sulla riga c'è quella in uso.
+  ['In uso', (it, q) => q ? 'Sì' : ''],
 ];
 const CAT_COL_STOCK = [
   ['Scorta minima', it => catNumOut(it.safetyStock)],
   ['Lotto riordino', it => catNumOut(it.lotSize)],
 ];
+// Macro e sotto si scrivono col nome e la sigla fra quadre, «Meccanico [MEC]»
+// (dalla 0.117.0): la sigla è quella che finisce nel codice, e chi sceglie
+// dalla tendina deve vederla. L'import legge il nome e usa la sigla solo per
+// una famiglia nuova; il solo nome, come nei file di prima, vale ancora.
+function catSiglaFam(x) { return x ? (x.sigla || siglaFromName(x.name)) : ''; }
+function catFamValore(x) { return x ? `${x.name || ''} [${catSiglaFam(x)}]` : ''; }
+function catFamLeggi(v) {
+  const m = /^(.*?)\s*\[\s*([^\]]*?)\s*\]\s*$/.exec(String(v == null ? '' : v));
+  return m && m[1] ? { nome: m[1].trim(), sigla: m[2] } : { nome: String(v == null ? '' : v).trim(), sigla: '' };
+}
 const CAT_COL_FAMILY = [
-  ['Macrofamiglia', it => familyName(it.familyId)],
-  ['Sottofamiglia', it => subFamilyName(it.familyId, it.subFamilyId)],
+  ['Macrofamiglia', it => catFamValore(getFamily(it.familyId))],
+  ['Sottofamiglia', it => { const f = getFamily(it.familyId); return catFamValore(f && (f.subs || []).find(x => x.id === it.subFamilyId)); }],
 ];
 const CAT_COL_ALTUOM = [
   ['UM acquisto', it => it.altUom || ''],
@@ -231,7 +246,8 @@ const CAT_COLS_PARTE = [
   ['Codice macchina', it => catItemCode(it.machineItemId)],
   ['Codice gruppo', it => catItemCode(it.groupItemId)],
   ['Concetto *', it => conceptName(it.conceptId)],
-  ['Descrizione *', it => it.nameFree || ''],
+  // Facoltativa dalla 0.117.0: il nome di una parte può essere il solo concetto.
+  ['Descrizione', it => it.nameFree || ''],
   ['UM *', it => it.uom || ''],
   ['Approvvigionamento', it => PART_SOURCING[partSourcing(it)] || ''],
 ].concat(CAT_COL_FAMILY, CAT_COL_ALTUOM, CAT_COL_PRICE, CAT_COL_STOCK, [
@@ -245,19 +261,6 @@ const CAT_COLS = {
   acquistato: CAT_COLS_BUY, materiale: CAT_COLS_BUY, macchina: CAT_COLS_MACCHINA,
   gruppo: CAT_COLS_GRUPPO, sottogruppo: CAT_COLS_SOTTOGRUPPO, parte: CAT_COLS_PARTE,
 };
-const CAT_COLS_PRICELIST = [
-  ['Codice articolo *', (it) => it.code || ''],
-  ['Fornitore', (it, r) => catSupplierName(r.supplierId)],
-  ['Prezzo *', (it, r) => catNumOut(r.price)],
-  ['UM prezzo', (it, r) => r.priceUom || ''],
-  ['Q.tà min', (it, r) => catNumOut(r.minQty)],
-  ['GG consegna', (it, r) => catNumOut(r.leadDays)],
-  ['Codice fornitore', (it, r) => r.code || ''],
-  ['Descrizione fornitore', (it, r) => r.desc || ''],
-  ['Data *', (it, r) => r.date || ''],
-  ['In uso', (it, r) => catSiNo(it.activePriceId === r.id)],
-  ['Note', (it, r) => r.note || ''],
-];
 function catItemCode(id) { const it = getItem(id); return it ? (it.code || '') : ''; }
 
 // ─── I fogli dei due file ───
@@ -275,6 +278,7 @@ const CATALOG_SHEET_DEFS = {
     { name: 'Parti', type: 'parte' },
   ],
 };
+// Il foglio dei file fino alla 0.116.0: se c'è si dice che non si legge più.
 const CAT_PRICE_SHEET = 'Listino';
 const CAT_SCOPE_LABEL = { buy: 'Acquisti', design: 'Progetto' };
 function catScopeOf(scope) { return CATALOG_SHEET_DEFS[scope] ? scope : 'buy'; }
@@ -283,19 +287,7 @@ function catItemsOfType(type) { return (db.items || []).filter(i => i.type === t
 // ═══════════════════════════════════════════════════════════
 //  EXPORT — i dati veri, che sono anche il template
 // ═══════════════════════════════════════════════════════════
-// Una quotazione compare in un posto solo: quella singola e in uso sta sulla
-// riga dell'articolo (il caso normale), tutte le altre stanno nel foglio
-// Listino. Così il giro export → import → export non duplica e non perde niente.
-function catInlineQuote(it) {
-  const righe = priceRows(it);
-  if (righe.length !== 1) return null;
-  return it.activePriceId === righe[0].id ? righe[0] : null;
-}
-function catListinoRows(it) {
-  const righe = priceRows(it);
-  if (!righe.length || catInlineQuote(it)) return [];
-  return righe;
-}
+function catInlineQuote(it) { return activePriceRow(it); }
 function catalogSheets(scope) {
   scope = catScopeOf(scope);
   const out = [];
@@ -311,30 +303,19 @@ function catalogSheets(scope) {
       cols: cols.map(c => ({ wch: catWidth(c[0]) })),
     });
   });
-  const listino = [];
-  CATALOG_SHEET_DEFS[scope].forEach(def => {
-    catItemsOfType(def.type).forEach(it => {
-      catListinoRows(it).forEach(r => listino.push(CAT_COLS_PRICELIST.map(c => c[1](it, r))));
-    });
-  });
-  out.push({ name: CAT_PRICE_SHEET,
-    aoa: [CAT_COLS_PRICELIST.map(c => c[0])].concat(listino),
-    cols: CAT_COLS_PRICELIST.map(c => ({ wch: catWidth(c[0]) })) });
   return out;
 }
 function catWidth(h) {
   if (h === 'Note' || h === 'Descrizione fornitore') return 38;
-  if (h === 'Descrizione *' || h === 'Descrizione composta (calcolato)') return 34;
+  if (h === 'Descrizione *' || h === 'Descrizione' || h === 'Descrizione composta (calcolato)') return 34;
   if (h === 'Fornitore' || h === 'Macrofamiglia' || h === 'Sottofamiglia' || h === 'Approvvigionamento') return 24;
   if (h.indexOf('Codice') === 0) return 18;
   return 13;
 }
 // ─── Foglio Liste ───
-// Non è decorazione: SheetJS (edizione community) non sa scrivere le convalide
-// dati, quindi menu a tendina veri non ce ne sono. Un elenco contiguo su un
-// foglio a parte è però esattamente ciò che serve per farsela da sé in due clic
-// (Dati → Convalida → Elenco → =Liste!$B$2:$B$40), ed è anche il vocabolario a
-// cui rimandano i messaggi d'errore dell'import.
+// Il vocabolario a cui rimandano i messaggi d'errore dell'import, da leggere.
+// Le tendine vere (dalla 0.117.0) prendono gli stessi valori dal foglio
+// nascosto Tendine: vedi catTendine e scriviXlsxConTendine in core.js.
 function catListeAoa(scope) {
   const colonne = [];
   const push = (titolo, valori) => colonne.push([titolo].concat(valori));
@@ -345,8 +326,8 @@ function catListeAoa(scope) {
     [['acquistato', 'commerciali'], ['materiale', 'materie prime']].forEach(([kind, et]) => {
       const macro = [], sotto = [];
       (db.families || []).filter(f => (f.kind || 'acquistato') === kind).forEach(f => {
-        if (!(f.subs || []).length) { macro.push(f.name); sotto.push(''); }
-        (f.subs || []).forEach(s => { macro.push(f.name); sotto.push(s.name); });
+        if (!(f.subs || []).length) { macro.push(catFamValore(f)); sotto.push(''); }
+        (f.subs || []).forEach(s => { macro.push(catFamValore(f)); sotto.push(catFamValore(s)); });
       });
       // Macro e sotto stanno appaiate perché sono dipendenti: due elenchi piatti
       // direbbero che qualunque sottofamiglia sta sotto qualunque macrofamiglia.
@@ -366,8 +347,8 @@ function catListeAoa(scope) {
     push('Tipo sigla gruppo', Object.values(CODE_TYPES));
     const macro = [], sotto = [];
     (db.families || []).filter(f => (f.kind || 'acquistato') === 'parte').forEach(f => {
-      if (!(f.subs || []).length) { macro.push(f.name); sotto.push(''); }
-      (f.subs || []).forEach(s => { macro.push(f.name); sotto.push(s.name); });
+      if (!(f.subs || []).length) { macro.push(catFamValore(f)); sotto.push(''); }
+      (f.subs || []).forEach(s => { macro.push(catFamValore(f)); sotto.push(catFamValore(s)); });
     });
     push('Macrofamiglia parti', macro);
     push('Sottofamiglia parti', sotto);
@@ -378,6 +359,75 @@ function catListeAoa(scope) {
   const aoa = [];
   for (let r = 0; r < righe; r++) aoa.push(colonne.map(c => (c[r] === undefined ? '' : c[r])));
   return aoa;
+}
+// ─── Menu a tendina (dalla 0.117.0) ───
+// Le stesse liste del foglio Liste, agganciate alle colonne da compilare. Dove
+// l'import crea ciò che manca (fornitori, famiglie, unità) la tendina avvisa e
+// lascia scrivere; dove non lo crea (concetti, Sì/No, valori fissi) blocca.
+// Macchine e gruppi puntano alle colonne Codice dei fogli dello stesso file,
+// così vale anche una macchina appena aggiunta in fondo al foglio Macchine.
+function catCoppieFamiglia(kind) {
+  const chiavi = [], valori = [];
+  (db.families || []).filter(f => (f.kind || 'acquistato') === kind).forEach(f => {
+    (f.subs || []).forEach(s => { chiavi.push(catFamValore(f)); valori.push(catFamValore(s)); });
+  });
+  return [chiavi, valori];
+}
+function catMacro(kind) { return (db.families || []).filter(f => (f.kind || 'acquistato') === kind).map(catFamValore); }
+function catTendine(scope) {
+  scope = catScopeOf(scope);
+  const liste = [['UM', uomList().map(u => u.code)],
+    ['Fornitori', (db.suppliers || []).filter(s => s.active !== false).map(s => s.name)],
+    ['Sì / No', ['Sì', 'No']]];
+  const regole = [];
+  const r = (foglio, colonna, lista, o) => regole.push(Object.assign({ foglio, colonna, lista }, o));
+  const avviso = { avviso: true };
+  const famiglie = (foglio, kind) => {
+    const [chiavi, valori] = catCoppieFamiglia(kind);
+    liste.push(['Macrofamiglie ' + kind, catMacro(kind)], ['Sottofamiglie ' + kind, valori, chiavi]);
+    r(foglio, 'Macrofamiglia', 'Macrofamiglie ' + kind, avviso);
+    r(foglio, 'Sottofamiglia', 'Sottofamiglie ' + kind, Object.assign({ dipendeDa: 'Macrofamiglia' }, avviso));
+  };
+  const prezzo = foglio => {
+    r(foglio, 'Fornitore', 'Fornitori', avviso);
+    r(foglio, 'UM prezzo', 'UM', avviso);
+    r(foglio, 'In uso', 'Sì / No');
+  };
+  CATALOG_SHEET_DEFS[scope].forEach(def => {
+    const f = def.name;
+    r(f, 'UM *', 'UM', avviso);
+    if (def.type === 'acquistato' || def.type === 'materiale') {
+      r(f, 'UM acquisto', 'UM', avviso);
+      famiglie(f, def.type);
+      prezzo(f);
+      r(f, 'Preferito', 'Sì / No');
+      r(f, 'Obsoleto', 'Sì / No');
+    } else if (def.type === 'macchina') {
+      r(f, 'Tipo sigla gruppo', 'Tipo sigla gruppo');
+    } else if (def.type === 'gruppo') {
+      r(f, 'Codice macchina *', null, { rif: { foglio: 'Macchine', colonna: 'Codice' }, avviso: true,
+        messaggio: 'Codice non presente nel foglio Macchine: l\'import lo cerca comunque in catalogo.' });
+    } else {
+      r(f, 'Codice macchina', null, { rif: { foglio: 'Macchine', colonna: 'Codice' }, avviso: true,
+        messaggio: 'Codice non presente nel foglio Macchine: l\'import lo cerca comunque in catalogo.' });
+      r(f, 'Codice gruppo', null, { rif: { foglio: 'Gruppi', colonna: 'Codice' }, avviso: true,
+        messaggio: 'Codice non presente nel foglio Gruppi: l\'import lo cerca comunque in catalogo.' });
+    }
+    if (def.type === 'parte') {
+      r(f, 'Concetto *', 'Concetti', { messaggio: 'Il concetto deve esistere già (Gestione → Concetti): l\'import non lo crea.' });
+      r(f, 'Approvvigionamento', 'Approvvigionamento');
+      r(f, 'UM acquisto', 'UM', avviso);
+      famiglie(f, 'parte');
+      prezzo(f);
+      r(f, 'Obsoleto', 'Sì / No');
+    }
+  });
+  if (scope === 'design') {
+    liste.push(['Concetti', conceptList().map(c => c.name)],
+      ['Approvvigionamento', Object.values(PART_SOURCING)],
+      ['Tipo sigla gruppo', Object.values(CODE_TYPES)]);
+  }
+  return { liste, regole };
 }
 function catInfoAoa(scope) {
   const comune = [
@@ -390,7 +440,8 @@ function catInfoAoa(scope) {
     ['', 'Il Codice è la chiave: se esiste, l\'articolo viene aggiornato; se è vuoto, viene generato.'],
     ['', 'Una colonna cancellata lascia il campo com\'è; una colonna presente ma vuota lo svuota.'],
     ['', 'L\'import non elimina mai articoli né quotazioni: si eliminano dall\'app.'],
-    ['', 'Il foglio Liste contiene tutti i valori ammessi. Menu a tendina: Dati → Convalida → Elenco → =Liste!$A$2:$A$50'],
+    ['', 'Le colonne con valori ammessi (UM, famiglie, fornitori, concetti, macchine, gruppi, Sì/No…) hanno un menu a tendina; il foglio Liste li elenca tutti.'],
+    ['', 'Sottofamiglia propone solo quelle della Macrofamiglia scelta. Dove l\'import crea ciò che manca (fornitori, famiglie, unità) si può anche scrivere un valore nuovo.'],
     ['', 'Decimali con la virgola o con il punto: vanno bene entrambi. Le date come 2025-01-31 o 31/01/2025.'],
     [],
     ['Unità di misura', ''],
@@ -404,7 +455,11 @@ function catInfoAoa(scope) {
     ['Prezzi', ''],
     ['', 'Prezzo e fornitore sulla riga articolo creano una QUOTAZIONE nel listino e diventano il prezzo in uso.'],
     ['', 'Il prezzo è per una unità: nell\'UM prezzo se valorizzata, altrimenti nell\'UM dell\'articolo.'],
-    ['', 'Un articolo con più quotazioni le tiene nel foglio Listino, e la riga articolo le lascia vuote.'],
+    ['', 'Sulla riga c\'è una quotazione sola: quella in uso. Le altre restano nell\'app (Listino fornitori) e l\'import non le tocca.'],
+    ['', 'Per lo stesso fornitore entra solo una Data prezzo PIÙ RECENTE di quelle già a listino: una data più vecchia non entra (avviso nel report).'],
+    ['', 'Stessa data e stesso fornitore = la stessa quotazione: se è uguale non succede niente, se è diversa non viene sovrascritta (avviso). Un prezzo nuovo vuole una data nuova.'],
+    ['', 'In uso = Sì: la quotazione della riga diventa quella in uso. Vuoto o No: si aggiunge al listino e basta (ma la prima quotazione di un articolo va comunque in uso).'],
+    ['', 'Data prezzo vuota = oggi.'],
     ['', 'Una quotazione senza fornitore azzera il fornitore dell\'articolo.'],
     ['', 'UM prezzo vale solo se coincide con UM acquisto dell\'articolo; qualunque altro valore viene ignorato.'],
   ];
@@ -417,7 +472,7 @@ function catInfoAoa(scope) {
       ['UM *', 'Unità di gestione: quella con cui l\'articolo va in distinta e a magazzino.'],
       ['UM acquisto', 'Solo se il fornitore quota in un\'altra unità (barra gestita a metri, comprata a chilo).'],
       ['Fattore', 'Quante UM acquisto stanno in una UM (es. 5,55 kg per ogni metro). Vale insieme a UM acquisto: da soli non valgono.'],
-      ['Macrofamiglia / Sottofamiglia', 'Create se non esistono. Determinano il codice automatico.'],
+      ['Macrofamiglia / Sottofamiglia', 'Nome e sigla, come «Meccanico [MEC]»: la sigla è quella del codice automatico. Create se non esistono, con la sigla fra quadre se libera.'],
       ['Fornitore', 'Creato se non esiste.'],
       ['Scorta minima / Lotto riordino', 'Vuoto = non impostato (diverso da 0).'],
       ['Preferito / Obsoleto', "Sì oppure No. Cella vuota = lascia il valore invariato."],
@@ -441,8 +496,9 @@ function catInfoAoa(scope) {
     ['Codice macchina', 'Codice di una macchina già a catalogo o presente nel foglio Macchine.'],
     ['Codice gruppo', 'Codice di un gruppo di QUELLA macchina.'],
     ['Sigla (gruppo)', 'Deve rispettare lo schema della sua macchina ed essere unica su quella macchina.'],
-    ['Concetto *', 'Deve esistere già (Gestione → Concetti). Non viene creato dall\'import: finisce dentro il nome della parte, e un refuso resterebbe per sempre.'],
-    ['Descrizione *', 'La parte libera del nome. Nome parte = Concetto + Descrizione.'],
+    ['Concetto *', 'Obbligatorio. Deve esistere già (Gestione → Concetti). Non viene creato dall\'import: finisce dentro il nome della parte, e un refuso resterebbe per sempre.'],
+    ['Descrizione', 'Facoltativa: la parte libera del nome. Nome parte = Concetto + Descrizione.'],
+    ['Macrofamiglia / Sottofamiglia', 'Nome e sigla, come «Lamiere [LAM]»: la sigla è quella del codice. Create se non esistono.'],
     ['Approvvigionamento', 'Produzione interna oppure Acquisto da fornitore. Su una parte a produzione interna con ciclo, il prezzo di listino non diventa costo.'],
     ['Esempio', 'Parti: codice vuoto · macchina TRN-S00 · gruppo TRN-BAS-S00 · concetto ALBERO · descrizione motore 20x100 · UM pz'],
   ]);
@@ -450,6 +506,11 @@ function catInfoAoa(scope) {
 function exportCatalogXlsx(scope) {
   scope = catScopeOf(scope);
   if (!requireXlsx()) return;
+  scriviXlsxConTendine(catalogWorkbook(scope), `bomtrack_${scope === 'buy' ? 'acquisti' : 'progetto'}_${catToday()}.xlsx`, catTendine(scope));
+  showToast('Articoli esportati');
+}
+function catalogWorkbook(scope) {
+  scope = catScopeOf(scope);
   const wb = XLSX.utils.book_new();
   catalogSheets(scope).forEach(sh => {
     const ws = XLSX.utils.aoa_to_sheet(sh.aoa);
@@ -466,17 +527,16 @@ function exportCatalogXlsx(scope) {
   info['!cols'] = [{ wch: 30 }, { wch: 110 }];
   info['!protect'] = { password: '' };
   XLSX.utils.book_append_sheet(wb, info, 'Istruzioni');
-  XLSX.writeFile(wb, `bomtrack_${scope === 'buy' ? 'acquisti' : 'progetto'}_${catToday()}.xlsx`);
-  showToast('Articoli esportati');
+  return wb;
 }
 
 // ═══════════════════════════════════════════════════════════
 //  IMPORT
 // ═══════════════════════════════════════════════════════════
-// Tre fasi, e l'ordine non è un dettaglio:
+// Due fasi, e l'ordine non è un dettaglio:
 //   A. i fogli articolo, nell'ordine dichiarato;
-//   B. il foglio Listino, che ha bisogno degli articoli della fase A;
 //   C. la quotazione in uso, una volta per articolo e non una per riga.
+// (La fase B era il foglio Listino, tolto nella 0.117.0.)
 // Gli stessi tre contatori di _stat() in import-export.js, che è dove vivono i
 // contatori dei report: un nome solo per un oggetto solo.
 function catStat() { return _stat(); }
@@ -513,11 +573,12 @@ function importCatalogSheets(byName, scope, opts) {
     // **nessun** foglio nostro: con il solo Listino leggerlo come foglio unico
     // di articoli sarebbe un modo raffinato di sbagliare tutto.
     if (!trovati && !rep.foreign.length && !Array.isArray(listino)) catLegacySheets(byName, ctx);
-    if (Array.isArray(listino)) {
-      const st = catStat();
-      listino.forEach((row, i) => catApplyPriceRow(row, ctx, i + 2, st));
-      rep.sheets.push(Object.assign({ name: CAT_PRICE_SHEET }, st));
-    } else if (trovati) rep.missing.push(CAT_PRICE_SHEET);
+    // Dalla 0.117.0 il prezzo si legge solo dalla riga dell'articolo. Un file di
+    // prima porta ancora il foglio: non si legge, ma lo si dice, perché chi
+    // l'ha compilato si aspetta di vedere quei prezzi entrare.
+    if (Array.isArray(listino) && listino.some(r => Object.values(r).some(v => String(v == null ? '' : v).trim()))) {
+      rep.warnings.push(`foglio ${CAT_PRICE_SHEET} ignorato: il prezzo si importa solo dalla riga dell'articolo (una quotazione per articolo, quella in uso)`);
+    }
     catFinalizePrices(ctx);
     return rep;
   };
@@ -596,9 +657,9 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   // ── Descrizione ──
   if (type === 'parte') {
     const cn = catCell(row, 'Concetto *');
-    const descr = catCell(row, 'Descrizione *');
+    const descr = catCell(row, 'Descrizione');
     if (isNew && !cn) { err('concetto mancante'); return; }
-    if (isNew && !descr) { err('descrizione mancante'); return; }
+    if (cn === '') { err('il concetto non può restare vuoto'); return; }
     if (cn !== null && cn !== '') {
       const c = conceptList().find(x => (x.name || '').toUpperCase() === cn.toUpperCase());
       // Il concetto non si crea dall'import: finisce dentro il nome della parte
@@ -735,11 +796,14 @@ function catApplyItemRow(row, def, ctx, ln, st) {
 
   // ── Famiglia ── (dopo i controlli: una riga sbagliata non crea famiglie)
   if (usesFamily(type)) {
-    const fam = catCell(row, 'Macrofamiglia');
-    const sub = catCell(row, 'Sottofamiglia');
+    const famRaw = catCell(row, 'Macrofamiglia');
+    const subRaw = catCell(row, 'Sottofamiglia');
+    const famL = catFamLeggi(famRaw), subL = catFamLeggi(subRaw);
+    const fam = famRaw === null ? null : famL.nome;
+    const sub = subRaw === null ? null : subL.nome;
     if ((fam !== null || sub !== null) && !lock.structLocked) {
       if (fam) {
-        const f = findOrCreateFamily(fam, sub || '', type, rep);
+        const f = findOrCreateFamily(fam, sub || '', type, rep, famL.sigla, subL.sigla);
         it.familyId = f.familyId; it.subFamilyId = f.subFamilyId;
       } else if (fam === '') { it.familyId = ''; it.subFamilyId = ''; }
     } else if (fam && lock.structLocked) {
@@ -766,6 +830,11 @@ function catApplyItemRow(row, def, ctx, ln, st) {
     ctx.seen.set(itemCodeKey(auto), ln);
   }
 
+  // Il prezzo si controlla qui, prima che la riga entri: un prezzo sbagliato
+  // scoperto dopo lasciava l'articolo già scritto, con un errore nel report.
+  const prezzo = hasPriceList(it) ? catNum(row, 'Prezzo') : null;
+  if (prezzo !== null && prezzo !== '' && (isNaN(prezzo) || prezzo < 0)) { err('prezzo non valido'); return; }
+
   if (!isNew) {
     const bloccati = [];
     const tieni = (campi, etichetta) => {
@@ -788,7 +857,7 @@ function catApplyItemRow(row, def, ctx, ln, st) {
     it = orig;
     if (cambiaConversione) {
       const s = catStage(ctx, it);
-      if (!s.inline && !s.forced) s.inline = activePriceRow(it);
+      if (!s.inline) s.inline = activePriceRow(it);
     }
   }
   delete it.__famigliaDiversa;
@@ -804,13 +873,17 @@ function catApplyItemRow(row, def, ctx, ln, st) {
 
   // ── Quotazione sulla riga articolo ──
   if (hasPriceList(it)) {
-    const prezzo = catNum(row, 'Prezzo');
     if (prezzo !== null && prezzo !== '') {
-      if (isNaN(prezzo) || prezzo < 0) { err('prezzo non valido'); return; }
       // Lo stato si fotografa PRIMA di toccare il listino: catStage registra
       // se l'articolo aveva già quotazioni, e dopo la creazione sarebbe tardi.
       const s = catStage(ctx, it);
-      s.inline = catUpsertQuote(it, row, ctx, foglio, ln, prezzo);
+      const q = catUpsertQuote(it, row, ctx, foglio, ln, prezzo);
+      // «In uso» = Sì la mette in uso; vuoto o No la aggiunge soltanto. Senza
+      // la colonna (i file di prima della 0.117.0) la riga era per definizione
+      // la quotazione in uso, e tale resta.
+      const inUso = catBool(row, 'In uso');
+      if (q && (inUso === true || (inUso === null && catCell(row, 'In uso') === null))) s.inline = q;
+      else if (inUso === true) avviso(`${esc(it.code)}: «In uso» è Sì, ma la quotazione non è entrata: resta in uso quella di prima`);
     }
   }
 }
@@ -824,103 +897,86 @@ function catStage(ctx, it) {
   // `aveva` fotografa la situazione PRIMA di questo import: serve a non
   // attivare da soli una quotazione su un articolo che ne aveva già e che
   // qualcuno aveva deliberatamente lasciato senza prezzo in uso.
-  if (!s) { s = { it, inline: null, forced: null, aveva: priceRows(it).length > 0 }; ctx.touched.set(it.id, s); }
+  if (!s) { s = { it, inline: null, aveva: priceRows(it).length > 0 }; ctx.touched.set(it.id, s); }
   return s;
 }
-// Crea o aggiorna la quotazione. Identità = (articolo, fornitore, data): l'id
-// non sta nel foglio — un uuid fra le mani di chi compila è solo rumore, e
-// cambiare la data *è* una quotazione nuova.
+// La quotazione della riga (dalla 0.117.0). Identità = (articolo, fornitore,
+// data): l'id non sta nel foglio — un uuid fra le mani di chi compila è solo
+// rumore. Le regole:
+//   · per lo stesso fornitore entra solo una data PIÙ RECENTE di tutte le sue
+//     quotazioni già a listino; una data più vecchia non entra, e lo si dice;
+//   · la stessa data è la stessa quotazione: uguale, non succede niente (è il
+//     file esportato e ricaricato); diversa, non si sovrascrive — un prezzo
+//     cambiato è una quotazione nuova, con la sua data;
+//   · non si cancella mai niente.
+// Restituisce la quotazione della riga (nuova o già presente), o null.
 function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
   const rep = ctx.rep;
+  const avviso = m => rep.warnings.push(`${foglio}, riga ${ln}: ${m}`);
   const supName = catCell(row, 'Fornitore');
   const supplierId = supName ? findOrCreateSupplier(supName, rep) : (supName === '' ? null : undefined);
-  const dataCella = catCell(row, foglio === CAT_PRICE_SHEET ? 'Data *' : 'Data prezzo');
-  const data = catDate(row, foglio === CAT_PRICE_SHEET ? 'Data *' : 'Data prezzo') || catToday();
+  const dataCella = catCell(row, 'Data prezzo');
+  const data = catDate(row, 'Data prezzo') || catToday();
   // Ripiegare su oggi va bene per una cella vuota, non per una cella scritta
   // male: la data è l'identità della quotazione, e sostituirla di nascosto
   // significa creare una riga nuova al posto di aggiornarne una.
-  if (dataCella && !catDate(row, foglio === CAT_PRICE_SHEET ? 'Data *' : 'Data prezzo')) {
-    rep.warnings.push(`${foglio}, riga ${ln}: data "${esc(String(dataCella))}" non riconosciuta, si usa oggi (${data})`);
+  if (dataCella && !catDate(row, 'Data prezzo')) {
+    avviso(`data "${esc(String(dataCella))}" non riconosciuta, si usa oggi (${data})`);
   }
   if (!Array.isArray(it.priceList)) it.priceList = [];
-  const sid = supplierId === undefined ? null : supplierId;
-  let r = null;
-  if (supplierId === undefined) {
-    // La colonna non c'è: il foglio non dice niente sul fornitore, e «una colonna
-    // cancellata lascia il campo com'è» è la regola dichiarata nei template.
-    // Prima si cercava una quotazione *senza* fornitore e, non trovandola, se ne
-    // creava una nuova: un doppione a ogni ricarica dello stesso file.
-    // Si cerca per data soltanto: se quella data individua una quotazione sola,
-    // è quella. Se ne individua più d'una, l'identità è ambigua e si ricade sul
-    // caso normale, che almeno è prevedibile.
-    const perData = it.priceList.filter(x => (x.date || '') === data);
-    if (perData.length === 1) r = perData[0];
-  }
-  if (!r) r = it.priceList.find(x => (x.supplierId || null) === sid && (x.date || '') === data);
-  const nuova = !r;
-  if (nuova) {
-    r = stampNew({ id: gid(), supplierId: sid, price: '', minQty: '', leadDays: '',
-      code: '', desc: '', date: data, rfqId: null, note: '' });
-    it.priceList.push(r);
-  }
-  r.price = prezzo;
+  // Colonna Fornitore assente: il foglio non dice niente sul fornitore, e «una
+  // colonna cancellata lascia il campo com'è». Si prende quello della
+  // quotazione in uso, o nessuno.
+  const sid = supplierId === undefined ? ((activePriceRow(it) || {}).supplierId || null) : supplierId;
+  const suoi = it.priceList.filter(x => (x.supplierId || null) === sid);
+  const chi = sid ? `di ${esc(catSupplierName(sid))}` : 'senza fornitore';
+
+  // La quotazione come la vuole la riga, su una copia.
+  const r = { supplierId: sid, price: prezzo, priceUom: undefined, minQty: '', leadDays: '', code: '', desc: '', note: '' };
   const pu = catCell(row, 'UM prezzo');
   if (pu) {
     // Solo l'unità di acquisto dell'articolo converte davvero (priceUomOf):
     // qualunque altra verrebbe ignorata in silenzio, e il silenzio qui è un
-    // prezzo giusto nell'unità sbagliata.
+    // prezzo giusto nell'unità sbagliata. L'unità di gestione vuol dire
+    // «prezzo nella mia unità».
     if (pu === altUomOf(it)) r.priceUom = pu;
-    // L'unità di gestione vuol dire «prezzo nella mia unità»: un'unità
-    // d'acquisto rimasta da prima moltiplicherebbe il prezzo per il fattore.
-    else if (pu === it.uom) delete r.priceUom;
-    else rep.warnings.push(`${foglio}, riga ${ln}: "UM prezzo" ${esc(pu)} non è l'unità di acquisto di ${esc(it.code)}: ignorata`);
-  } else if (pu === '') {
-    // Colonna presente e vuota: come per gli altri campi, si svuota (0.105.3).
-    delete r.priceUom;
+    else if (pu !== it.uom) avviso(`"UM prezzo" ${esc(pu)} non è l'unità di acquisto di ${esc(it.code)}: ignorata`);
   }
   for (const [h, campo] of [['Q.tà min', 'minQty'], ['GG consegna', 'leadDays']]) {
     const v = catNum(row, h);
-    if (v === null) continue;
-    r[campo] = v === '' || isNaN(v) ? '' : v;
+    if (v !== null) r[campo] = v === '' || isNaN(v) ? '' : v;
   }
   const sc = catCell(row, 'Codice fornitore'); if (sc !== null) r.code = sc;
   const sd = catCell(row, 'Descrizione fornitore'); if (sd !== null) r.desc = sd;
-  // Nel foglio Listino la nota della quotazione si chiama «Note»; nei fogli
-  // articolo quel nome è già della nota dell'articolo, e la quotazione in linea
-  // porta la sua sotto «Note prezzo».
-  const nt = foglio === CAT_PRICE_SHEET ? catCell(row, 'Note') : catCell(row, 'Note prezzo');
-  if (nt !== null) r.note = nt;
-  if (!nuova) touch(r);
-  return r;
-}
-// ─── Foglio Listino ───
-function catApplyPriceRow(row, ctx, ln, st) {
-  const rep = ctx.rep;
-  const err = m => rep.errors.push(`${CAT_PRICE_SHEET}, riga ${ln}: ${m}`);
-  if (!Object.values(row).some(v => String(v == null ? '' : v).trim())) { st.skipped++; return; }
-  const code = catCell(row, 'Codice articolo *');
-  if (!code) { err('codice articolo mancante'); return; }
-  const it = getItemByCode(code);
-  if (!it) { err(`articolo "${esc(code)}" non trovato: importa prima i fogli articolo`); return; }
-  if (!hasPriceList(it)) { err(`${typeLabel(it.type)} non ha listino`); return; }
-  const prezzo = catNum(row, 'Prezzo *');
-  if (prezzo === null || prezzo === '' || isNaN(prezzo) || prezzo < 0) { err('prezzo non valido'); return; }
-  const s = catStage(ctx, it);          // prima di toccare il listino: vedi catStage
-  const prima = priceRows(it).length;
-  const r = catUpsertQuote(it, row, ctx, CAT_PRICE_SHEET, ln, prezzo);
-  if (!r) return;
-  if (catBool(row, 'In uso') === true) {
-    if (s.forced && s.forced !== r) rep.warnings.push(`${CAT_PRICE_SHEET}, riga ${ln}: più di una quotazione "In uso" per ${esc(code)}: vale l'ultima`);
-    s.forced = r;
+  // «Note» è già la nota dell'articolo: quella della quotazione è «Note prezzo».
+  const nt = catCell(row, 'Note prezzo'); if (nt !== null) r.note = nt;
+
+  const stessa = suoi.find(x => (x.date || '') === data);
+  if (stessa) {
+    const n = v => (v === '' || v == null ? '' : String(v));
+    const uguale = Number(stessa.price) === Number(prezzo) && n(stessa.priceUom) === n(r.priceUom) &&
+      n(stessa.minQty) === n(r.minQty) && n(stessa.leadDays) === n(r.leadDays) &&
+      (sc === null || n(stessa.code) === n(r.code)) && (sd === null || n(stessa.desc) === n(r.desc)) &&
+      (nt === null || n(stessa.note) === n(r.note));
+    if (!uguale) avviso(`${esc(it.code)}: c'è già una quotazione ${chi} del ${data}, diversa: non aggiornata. Per un prezzo nuovo serve una data più recente.`);
+    return stessa;
   }
-  touch(it);
-  if (priceRows(it).length > prima) st.created++; else st.updated++;
+  const ultima = suoi.reduce((m, x) => ((x.date || '') > m ? x.date : m), '');
+  if (ultima && data < ultima) {
+    avviso(`${esc(it.code)}: quotazione ${chi} del ${data} non importata, a listino ce n'è una più recente (${ultima})`);
+    return null;
+  }
+  const nuova = stampNew({ id: gid(), supplierId: sid, price: prezzo, minQty: r.minQty, leadDays: r.leadDays,
+    code: r.code, desc: r.desc, date: data, rfqId: null, note: r.note });
+  if (r.priceUom) nuova.priceUom = r.priceUom;
+  it.priceList.push(nuova);
+  return nuova;
 }
 // ─── Fase C: quale quotazione va in uso ───
 function catFinalizePrices(ctx) {
   ctx.touched.forEach(s => {
     const it = s.it;
-    let riga = s.forced || s.inline;
+    let riga = s.inline;
     // Ripiego per l'articolo che non ne aveva nessuna: una sola quotazione e
     // nessuno che dica quale usare vuol dire quella.
     if (!riga && !s.aveva && priceRows(it).length === 1) riga = priceRows(it)[0];

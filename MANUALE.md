@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.116.0**
+**Versione dell'app documentata: 0.117.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2855,14 +2855,29 @@ Quattro blocchi. **In tutti, l'export è anche il template**: si esporta quello 
 modifica il file, lo si ricarica. Ogni file porta un foglio **Istruzioni** e un foglio **Liste**
 con i valori ammessi.
 
+**Menu a tendina** *(dalla 0.117.0)*. Nei file Articoli e Impostazioni le colonne che accettano
+solo certi valori hanno un menu a tendina, preso dagli elenchi dell'app al momento dell'export:
+
+- **Articoli**: UM e UM acquisto/prezzo, Macrofamiglia e Sottofamiglia (con la sigla), Fornitore, Concetto,
+  Approvvigionamento, Tipo sigla gruppo, Preferito / Obsoleto (Sì/No). *Codice macchina*
+  e *Codice gruppo* propongono i codici dei fogli `Macchine` e `Gruppi` dello stesso file, quindi
+  anche una macchina appena aggiunta in fondo.
+- **Sottofamiglia** propone solo quelle della *Macrofamiglia* scelta sulla stessa riga.
+- **Impostazioni**: Attivo, Ruolo, Tipo delle condizioni offerta, Predefinita.
+- Dove l'import **crea ciò che manca** (fornitori, famiglie, unità di misura) la tendina avvisa ma
+  lascia scrivere un valore nuovo. Dove non lo crea (concetti, Sì/No, valori fissi) lo rifiuta.
+- I valori stanno in un foglio nascosto **Tendine**: non va modificato, e l'import lo ignora. Per
+  avere elenchi aggiornati basta esportare di nuovo.
+
 ### I quattro blocchi
 
 **1. Articoli — Acquisti**
-Fogli: `Commerciali` · `Materie prime` · `Listino`.
+Fogli: `Commerciali` · `Materie prime`.
 Pulsanti: *Esporta Acquisti* · *🔍 Verifica un file* · *Carica Acquisti*.
 
 **2. Articoli — Progetto**
-Fogli: `Macchine` · `Gruppi` · `Sottogruppi` · `Parti` · `Listino`.
+Fogli: `Macchine` · `Gruppi` · `Sottogruppi` · `Parti`. Nelle parti il **Concetto** è
+obbligatorio, la **Descrizione** no: il nome della parte può essere il solo concetto.
 **Il tipo è il foglio**: non c'è una colonna «tipo». I fogli si applicano in quest'ordine, così i
 padri esistono prima dei figli.
 **La distinta non è in questi file** — sta nel blocco 3.
@@ -2889,9 +2904,31 @@ colleghi che esistono già: uno nuovo si invita da *Gestione → Utenti* (dalla 
 | **Una riga con un errore non applica niente** | E su un articolo già usato codice, famiglia, codifica e U.M. restano com'erano, con un avviso (dalla 0.105.5) |
 | **L'import è additivo** | Non cancella mai niente. Quello che non è nel file resta com'è |
 | **Fornitori e famiglie mancanti si creano al volo** | I **concetti no**: quelli si aggiungono a mano, perché la nomenclatura non deve crescere per distrazione |
-| **Fornitore + prezzo** | Creano una **quotazione a listino**, che diventa il prezzo in uso |
+| **Fornitore + prezzo** | Sulla riga dell'articolo c'è **una quotazione sola, quella in uso**; all'import crea una **quotazione a listino**. Le altre quotazioni dell'articolo restano nell'app (dalla 0.117.0 il foglio `Listino` non c'è più, e in un file di prima viene ignorato con un avviso). Le regole sono nel riquadro qui sotto |
+| **Famiglie con la sigla** | *Macrofamiglia* e *Sottofamiglia* si scrivono col nome e la sigla del codice fra quadre, `Meccanico [MEC]`. Una famiglia nuova prende la sigla scritta, se è libera. Il solo nome vale ancora (dalla 0.117.0) |
 | **U.M. sconosciute** | Vengono registrate automaticamente nell'elenco |
 | **CSV** | I `.csv` in UTF-8 nudo vengono riconosciuti da soli |
+
+### Il prezzo sulla riga dell'articolo *(dalla 0.117.0)*
+
+| Caso | Cosa succede |
+|---|---|
+| **Stesso fornitore, data più recente** | Entra come quotazione nuova |
+| **Stesso fornitore, data più vecchia** dell'ultima a listino | **Non entra**, con un avviso |
+| **Stesso fornitore, stessa data** | È la stessa quotazione: uguale, non succede niente (è il file esportato e ricaricato); diversa, **non viene sovrascritta** e lo si dice. Un prezzo nuovo vuole una data nuova |
+| **Un altro fornitore** | Entra, qualunque sia la data |
+| **In uso = Sì** | La quotazione della riga diventa quella in uso (prezzo, fornitore e costo dell'articolo). Se non è entrata, resta quella di prima, con un avviso |
+| **In uso vuoto o No** | Si aggiunge al listino e basta. Eccezione: la **prima** quotazione di un articolo va comunque in uso |
+| **Colonna In uso assente** (file di prima) | La riga va in uso, come allora |
+| **Prezzo vuoto** | Nessuna quotazione: le altre colonne del prezzo non contano |
+| **Prezzo non valido** (testo, negativo) | Errore, e la riga non entra per niente |
+| **Fornitore vuoto** | Quotazione senza fornitore; se va in uso, l'articolo resta senza fornitore |
+| **Fornitore nuovo** | Viene creato |
+| **Colonna Fornitore assente** | Vale il fornitore della quotazione in uso |
+| **Data prezzo vuota** | Oggi. Attenzione: la stessa riga senza data, ricaricata un altro giorno, fa una quotazione nuova |
+| **UM prezzo** diversa da UM e da UM acquisto | Ignorata, con un avviso |
+| **Parte a produzione interna** | La quotazione entra ma non diventa costo: il costo viene dal ciclo |
+| **L'import non cancella** | Nessuna quotazione viene mai eliminata |
 
 ### 🔍 Verifica un file
 

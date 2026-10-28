@@ -2,6 +2,29 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.117.0 — 2026-10-27
+
+**Menu a tendina nei file Excel da importare.** Nei file Articoli (Acquisti e Progetto) e Impostazioni le colonne a valori ammessi hanno un menu a tendina vero, collegato agli elenchi dell'app: prima c'era solo il foglio Liste da cui copiare, o la convalida da impostare a mano. Nessun cambio a `supabase/schema.sql`.
+
+- **Articoli**: UM, UM acquisto e UM prezzo, Macrofamiglia, Sottofamiglia, Fornitore, Concetto, Approvvigionamento, Tipo sigla gruppo, Preferito e Obsoleto. *Codice macchina* e *Codice gruppo* propongono i codici dei fogli Macchine e Gruppi dello stesso file.
+- **Sottofamiglia dipendente**: propone solo le sottofamiglie della macrofamiglia scelta sulla riga.
+- **Avvisa o blocca come l'import**: un fornitore, una famiglia o un'unità nuovi si possono scrivere (l'import li crea) con un avviso; un concetto o un Sì/No fuori elenco vengono rifiutati.
+- **Impostazioni**: Attivo, Ruolo, Tipo delle condizioni offerta, Predefinita.
+- I valori stanno nel foglio nascosto **Tendine**, che l'import ignora. Se le tendine non si riescono a scrivere, il file esce come prima.
+- **Famiglie con la sigla**: Macrofamiglia e Sottofamiglia escono come `Meccanico [MEC]`, così chi sceglie vede la sigla che finisce nel codice. Una famiglia nuova scritta così prende quella sigla, se libera; il solo nome vale ancora.
+
+**Niente più foglio Listino.** Sulla riga dell'articolo c'è una sola quotazione, quella in uso, anche quando l'articolo ne ha altre (prima in quel caso la riga restava vuota e tutto andava nel Listino). L'import legge il prezzo solo dalla riga. Le altre quotazioni restano nell'app. Un file di prima con il foglio Listino si carica ancora, ma quel foglio viene ignorato con un avviso.
+
+**Regole del prezzo all'import.**
+- **Solo date più recenti**: per lo stesso fornitore una quotazione entra solo se la sua data è più recente di tutte quelle già a listino; altrimenti non entra, con un avviso.
+- **Stessa data, stessa quotazione**: uguale non cambia niente; diversa non viene più sovrascritta (prima sì), con un avviso.
+- **Colonna «In uso»** (Sì/No, nuova): Sì mette in uso la quotazione della riga, vuoto o No la aggiunge soltanto. La prima quotazione di un articolo va comunque in uso; un file di prima senza la colonna si comporta come allora.
+- **Corretto: un prezzo non valido lasciava la riga a metà.** L'articolo veniva creato o aggiornato e il report segnava l'errore; ora la riga non entra.
+
+**Parti: Descrizione facoltativa.** Il Concetto resta obbligatorio (e non si può svuotare); la descrizione libera no, e la colonna si chiama ora *Descrizione* senza asterisco. I file di prima con *Descrizione \** si leggono uguale.
+
+**Manuale** — cap. 27 «Menu a tendina», i blocchi Articoli e le regole comuni.
+
 ### 0.116.0 — 2026-10-27
 
 **Avvia e dichiara anche sull'ordine di lavoro.** Sulla riga dell'ODL ci sono gli stessi due gesti dell'ordine di produzione, al posto di *spedisci materiale*, *manda al terzista*, *ritira dal terzista* e *registra rientro*, che scrivevano movimenti e basta: niente scarti, niente stato, e i pezzi rientrati da scrivere a mano una seconda volta. **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor (aggiunge le colonne `odl_id` e `odl_line_id` a `production_declarations`, non tocca i dati).
