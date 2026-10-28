@@ -72,6 +72,29 @@ describe('Condizioni e formule', () => {
     assert.equal(ev(a, "varQtyValuta('(L + 1) / 2', { L: '5' })"), 3);
     assert.equal(ev(a, "varQtyValuta('-L+10', { L: '4' })"), 6);
   });
+  it('una tabella dà la quantità per scelta, anche per le opzioni a lettere', () => {
+    const a = app();
+    assert.equal(ev(a, "varQtyValuta('M(S=2; B=3)', { M: 'B' })"), 3);
+    assert.equal(ev(a, "varQtyValuta('M(S=2, B=3)', { M: 's' })"), 2);
+    assert.equal(ev(a, "varQtyValuta('M(S=2)', { M: 'B' })"), 0, 'una scelta che non c\'è vale 0');
+    assert.equal(ev(a, "varQtyValuta('L(3=1,4=2,5=2,5)', { L: '5' })"), 2.5, 'la virgola separa se dopo viene una chiave');
+    assert.equal(ev(a, "varQtyValuta('L*M(S=1; B=2)+1', { L: '4', M: 'B' })"), 9);
+    assert.deepEqual(ev(a, "varFormulaCodici('L*M(S=1; B=2)')"), ['L', 'M']);
+    assert.deepEqual(ev(a, "varFormulaTabelle('L(3=1,4=2) + M(S=1; B=2)')"), [{ code: 'L', valori: ['3', '4'] }, { code: 'M', valori: ['S', 'B'] }]);
+    const err = js => ev(a, `(() => { try { ${js}; return null; } catch (e) { return e.message; } })()`);
+    assert.match(err("varQtyValuta('M*2', { M: 'B' })"), /usa una tabella, per esempio M\(B=2\)/);
+    assert.match(err("varQtyValuta('M(S 2)', { M: 'B' })"), /ci vuole «=»/);
+    assert.match(err("varQtyValuta('M(S=2', { M: 'B' })"), /parentesi chiusa/);
+    assert.equal(ev(a, "varControllaRiga('', 'M(S=2; B=3)')"), null);
+  });
+  it('dalla pagina una tabella con una scelta che il modello non ha si rifiuta', () => {
+    const a = app();
+    a.eval("varRegolaSet('mac', 1, 'qtyExpr', 'M(S=2; X=3)')");
+    assert.equal(ev(a, "getItem('mac').components[1].qtyExpr || null"), null);
+    a.eval("varRegolaSet('mac', 1, 'qtyExpr', 'M(s=2; B=3)')");
+    assert.equal(ev(a, "getItem('mac').components[1].qtyExpr"), 'M(s=2; B=3)');
+    assert.equal(ev(a, "varCostoScelte('mac', { L: '3', M: 'S' }).total"), 66 + 640 + 10);
+  });
   it('un errore si dice con parole, non con un\'eccezione di JavaScript', () => {
     const a = app();
     const err = js => ev(a, `(() => { try { ${js}; return null; } catch (e) { return e.message; } })()`);
@@ -300,6 +323,20 @@ describe('A modulo spento', () => {
     assert.deepEqual(ev(a, 'varRegoleFuoriPosto()'), []);
     a.eval("planAddLines('pl1', ['mac'])");
     assert.deepEqual(ev(a, "getPlan('pl1').lines.map(l => l.itemId)"), ['mac']);
+  });
+});
+
+describe('Gli esempi', () => {
+  it('la sezione Regole li apre in una finestra, con le formule che il parser accetta', () => {
+    const a = app();
+    a.eval("setView('varianti')");
+    assert.match(a.html('var-body'), /varEsempiModal\(\)/);
+    a.eval('globalThis.__m = ""; openModal = h => { __m = h; }; varEsempiModal()');
+    assert.match(a.eval('__m'), /M\(S=2; B=3\)/);
+    // Ogni esempio deve funzionare davvero: un esempio sbagliato insegna l'errore.
+    const scelte = { L: '4', M: 'B', P: 'SI' };
+    ev(a, 'VAR_ESEMPI_QTY.map(r => r[0])').forEach(f => assert.equal(typeof ev(a, `varQtyValuta(${JSON.stringify(f)}, ${JSON.stringify(scelte)})`), 'number', f));
+    ev(a, 'VAR_ESEMPI_COND.map(r => r[0])').filter(c => c !== '(vuoto)').forEach(c => assert.doesNotThrow(() => ev(a, `varCondParse(${JSON.stringify(c)})`), c));
   });
 });
 

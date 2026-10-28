@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.120.2 — 2026-10-28
+
+**Varianti: quantità per scelta, ed esempi.** Nella *Quantità da formula* una tabella dà la quantità per ogni scelta, anche di un'opzione a lettere: `M(S=2; B=3)` vale 2 col motore standard e 3 col maggiorato, e una scelta non scritta vale 0. Si combina con il resto della formula (`L*M(S=1; B=2)`). Una scelta che l'opzione non ha si rifiuta subito. Il pulsante **Esempi** della sezione Regole apre una finestra con esempi pratici delle due colonne.
+
 ### 0.120.1 — 2026-10-28
 
 **Varianti: la sezione Opzioni è più corta.** Le opzioni stanno due per riga (una sola su schermi stretti), e la sezione si richiude dal titolo: richiusa, dice in una riga le opzioni con le loro scelte.

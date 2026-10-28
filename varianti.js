@@ -100,27 +100,74 @@ function varCondVale(clausole, scelte) {
 // Una formula di quantità: numeri, + − × ÷, parentesi e i codici delle opzioni
 // con valore numerico. Un parser piccolo e senza eval, perché il testo lo
 // scrive chiunque abbia accesso alla distinta.
+// Le opzioni che la formula cita. Le chiavi di una tabella per scelta
+// (`M(S=2; B=3)`) sono valori di M, non opzioni: non si contano.
 function varFormulaCodici(expr) {
-  return (String(expr || '').match(/[A-Za-z][A-Za-z0-9_]*/g) || []).map(varCodice);
+  const senzaTabelle = String(expr || '').replace(/\(([^()]*=[^()]*)\)/g, '()');
+  return (senzaTabelle.match(/[A-Za-z][A-Za-z0-9_]*/g) || []).map(varCodice);
+}
+// Le tabelle per scelta della formula: [{ code, valori: ['S', 'B'] }].
+function varFormulaTabelle(expr) {
+  const out = [];
+  String(expr || '').replace(/([A-Za-z][A-Za-z0-9_]*)\s*\(([^()]*=[^()]*)\)/g, (m, code, corpo) => {
+    out.push({ code: varCodice(code), valori: (corpo.match(/[^=,;()\s]+(?=\s*=)/g) || []).map(varValore) });
+    return m;
+  });
+  return out;
 }
 function varQtyValuta(expr, scelte) {
-  const s = String(expr || '').replace(/,/g, '.');
+  const s = String(expr || '');
   let i = 0;
   const spazi = () => { while (i < s.length && /\s/.test(s[i])) i++; };
   const errore = msg => { throw new Error(`formula «${expr}»: ${msg}`); };
+  // Un numero, con il punto o con la virgola. In una tabella `3=1,4=2` la
+  // virgola separa: se dopo il numero viene un «=», la parte dopo la virgola
+  // è la chiave seguente.
+  const numero = () => {
+    const m = s.slice(i).match(/^\d+(?:[.,]\d+)?|^[.,]\d+/);
+    if (!m) return null;
+    let t = m[0];
+    if (t.includes(',') && /^\s*=/.test(s.slice(i + t.length)) && /^\d/.test(t)) t = t.split(',')[0];
+    i += t.length;
+    return parseFloat(t.replace(',', '.'));
+  };
+  // `M(S=2; B=3)`: la quantità per scelta. Una scelta che non c'è vale 0.
+  const tabella = k => {
+    i++;
+    const scelta = varValore(scelte[k]).toLowerCase();
+    let trovato = null;
+    for (;;) {
+      spazi();
+      const chiave = s.slice(i).match(/^[^=,;()\s]+/);
+      if (!chiave) errore(`nella tabella di ${k} manca una scelta`);
+      i += chiave[0].length; spazi();
+      if (s[i] !== '=') errore(`nella tabella di ${k}, dopo «${chiave[0]}» ci vuole «=»`);
+      i++; spazi();
+      const neg = s[i] === '-'; if (neg) i++;
+      const v = numero();
+      if (v == null) errore(`nella tabella di ${k}, «${chiave[0]}=» vuole un numero`);
+      if (trovato == null && chiave[0].toLowerCase() === scelta) trovato = neg ? -v : v;
+      spazi();
+      if (s[i] === ';' || s[i] === ',') { i++; continue; }
+      if (s[i] === ')') { i++; return trovato == null ? 0 : trovato; }
+      errore(`manca la parentesi chiusa della tabella di ${k}`);
+    }
+  };
   const primario = () => {
     spazi();
     if (s[i] === '(') { i++; const v = somma(); spazi(); if (s[i] !== ')') errore('manca una parentesi chiusa'); i++; return v; }
     if (s[i] === '-') { i++; return -primario(); }
-    const num = s.slice(i).match(/^\d+(\.\d+)?|^\.\d+/);
-    if (num) { i += num[0].length; return parseFloat(num[0]); }
+    const num = numero();
+    if (num != null) return num;
     const id = s.slice(i).match(/^[A-Za-z][A-Za-z0-9_]*/);
     if (id) {
       i += id[0].length;
       const k = varCodice(id[0]);
       if (!(k in scelte)) errore(`l'opzione ${k} non esiste nel modello`);
+      spazi();
+      if (s[i] === '(') return tabella(k);
       const v = parseFloat(varValore(scelte[k]).replace(',', '.'));
-      if (!Number.isFinite(v)) errore(`l'opzione ${k} vale «${scelte[k]}», che non è un numero`);
+      if (!Number.isFinite(v)) errore(`l'opzione ${k} vale «${scelte[k]}», che non è un numero: usa una tabella, per esempio ${k}(${scelte[k]}=2)`);
       return v;
     }
     errore(i < s.length ? `non capisco «${s.slice(i)}»` : 'è incompleta');
@@ -489,7 +536,41 @@ function varSezioneRegole(t) {
     : '<p class="empty-text" style="text-align:left;padding:8px">La distinta del modello è vuota.</p>';
   return varSezione('tree', 'Regole', righe.filter(varRigaVariante).length + ' di ' + righe.length,
     `<div class="cycle-box">${tab}</div>
-    <p class="empty-text" style="text-align:left;padding:8px 0 0">Una riga vuota vale sempre. <code>L=3|4</code> vuol dire «se L è 3 oppure 4», <code>&amp;</code> «e», <code>!=</code> «diverso da». La formula usa numeri, <code>+ - * /</code>, parentesi e i codici delle opzioni con valore numerico. Per aggiungere o togliere gruppi apri il modello in <a href="#" onclick="currentBomId='${t.id}';bomExpanded=new Set();setView('bom');return false">Gestione DB</a>.</p>`);
+    <p class="empty-text" style="text-align:left;padding:8px 0 0">Una riga con i campi vuoti vale sempre. Per aggiungere o togliere gruppi apri il modello in <a href="#" onclick="currentBomId='${t.id}';bomExpanded=new Set();setView('bom');return false">Gestione DB</a>.</p>`,
+    `<button class="btn-outline" style="margin-left:auto" onclick="varEsempiModal()">${ico('file', 'tinted', '')} Esempi</button>`);
+}
+// Esempi pratici delle due colonne, su un nastro con tre opzioni. Statici: si
+// leggono meglio di quelli costruiti sulle opzioni del modello, che possono
+// essere ancora a metà.
+const VAR_ESEMPI_COND = [
+  ['L=3', 'solo sul nastro da 3 m'],
+  ['L=4|5', 'sul 4 m oppure sul 5 m'],
+  ['M!=S', 'con qualunque motore tranne lo standard'],
+  ['L=5 & M=B', 'solo sul 5 m con il motore maggiorato'],
+  ['L=4|5 & P=SI', 'su 4 o 5 m, e solo con la protezione'],
+  ['(vuoto)', 'sempre'],
+];
+const VAR_ESEMPI_QTY = [
+  ['L', 'un modulo per metro', '3 · 4 · 5'],
+  ['L+1', 'un supporto in più dei metri', '4 · 5 · 6'],
+  ['L*2', 'due gambe per metro', '6 · 8 · 10'],
+  ['L*0,5+1', 'i decimali con la virgola', '2,5 · 3 · 3,5'],
+  ['M(S=2; B=3)', 'cuscinetti: 2 col motore standard, 3 col maggiorato', 'S → 2 · B → 3'],
+  ['M(B=1)', 'un rinforzo solo col maggiorato: le scelte non scritte valgono 0', 'S → 0 · B → 1'],
+  ['L(3=1; 4=2; 5=2)', 'quantità per scelta anche su un\'opzione numerica', '1 · 2 · 2'],
+  ['L*M(S=1; B=2)', 'si combinano: per metro, e doppi col maggiorato', 'L=4, B → 8'],
+];
+function varEsempiModal() {
+  const righe = (rr, n) => rr.map(r => `<tr><td style="font-family:var(--mono);white-space:nowrap;font-variant-ligatures:none">${esc(r[0])}</td>${r.slice(1, n).map((x, j) => `<td${j === 1 ? ' style="white-space:nowrap"' : ''}>${esc(x)}</td>`).join('')}</tr>`).join('');
+  openModal(`<h3>${ico('file', 'tinted pill', '')} Esempi di regole</h3>
+    <p class="empty-text" style="text-align:left;padding:0 0 10px">Un nastro con tre opzioni: <strong>L</strong> lunghezza (3, 4, 5), <strong>M</strong> motore (S standard, B maggiorato), <strong>P</strong> protezione (SI, NO).</p>
+    <h4 style="margin:6px 0">Vale solo se: il gruppo entra o no</h4>
+    <div class="table-wrap"><table class="price-table"><thead><tr><th scope="col">Scrivi</th><th scope="col">Il gruppo entra</th></tr></thead><tbody>${righe(VAR_ESEMPI_COND, 2)}</tbody></table></div>
+    <p class="empty-text" style="text-align:left;padding:6px 0 10px"><code>|</code> vuol dire «oppure», <code>&amp;</code> «e», <code>!=</code> «diverso da».</p>
+    <h4 style="margin:6px 0">Quantità da formula: quanti gruppi entrano</h4>
+    <div class="table-wrap"><table class="price-table"><thead><tr><th scope="col">Scrivi</th><th scope="col">Cosa vuol dire</th><th scope="col">Risultato</th></tr></thead><tbody>${righe(VAR_ESEMPI_QTY, 3)}</tbody></table></div>
+    <p class="empty-text" style="text-align:left;padding:6px 0 10px">Numeri, <code>+ - * /</code> e parentesi. Un'opzione a lettere si usa solo con la tabella <code>M(S=2; B=3)</code>. Se il risultato è 0 il gruppo non entra; se è negativo la generazione si ferma e dice quale riga. I due campi si combinano: <em>Vale solo se</em> <code>P=SI</code> con formula <code>L</code> mette un pannello per metro, solo con la protezione.</p>
+    <div class="modal-actions"><button class="add-btn-sm" onclick="closeModal()">Chiudi</button></div>`, true);
 }
 function varRegolaSet(id, i, campo, valore) {
   if (!roleGuard('bom')) return;
@@ -503,6 +584,14 @@ function varRegolaSet(id, i, campo, valore) {
   const citati = campo === 'cond' ? varCondParse(v).map(x => x.code) : varFormulaCodici(v);
   const ignoti = citati.filter(k => !codici.has(k));
   if (ignoti.length) { showToast(`Il modello non ha l'opzione ${ignoti[0]}`, 'error'); renderVarianti(); return; }
+  if (campo === 'qtyExpr') {
+    for (const tab of varFormulaTabelle(v)) {
+      const o = varOpzioni(t).find(x => varCodice(x.code) === tab.code);
+      const ok = new Set((o ? o.choices : []).map(c => varValore(c.value).toLowerCase()));
+      const fuori = tab.valori.find(x => !ok.has(x.toLowerCase()));
+      if (fuori) { showToast(`${tab.code} non ha la scelta «${fuori}»`, 'error'); renderVarianti(); return; }
+    }
+  }
   if (v) c[campo] = v; else delete c[campo];
   touch(t);
   saveDB();

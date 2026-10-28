@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.120.1**
+**Versione dell'app documentata: 0.120.2**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1230,9 +1230,9 @@ livello, con due campi per riga. Una riga con i campi vuoti vale sempre.
 | Campo | Esempio | Cosa fa |
 |---|---|---|
 | **Vale solo se** | `M=B` · `L=4\|5` · `L=5 & M!=S` | La riga conta solo con queste scelte. `\|` vuol dire «oppure», `&` «e», `!=` «diverso da» |
-| **Quantità da formula** | `L` · `L*2` · `L+1` | Quanti gruppi entrano, calcolato dalla scelta. Si usano numeri, `+ - * /`, parentesi e i codici delle opzioni con valore numerico |
+| **Quantità da formula** | `L` · `L*2` · `L+1` · `M(S=2; B=3)` | Quanti gruppi entrano, calcolato dalla scelta. Si usano numeri, `+ - * /`, parentesi e i codici delle opzioni con valore numerico. Per un'opzione a lettere, o per quantità che non seguono un conto, c'è la **tabella per scelta**: `M(S=2; B=3)` vale 2 con S e 3 con B, e una scelta non scritta vale 0 |
 
-Un codice di opzione che il modello non ha, o una regola scritta male, si rifiuta subito. I gruppi
+Il pulsante **Esempi** della sezione apre una finestra con esempi pratici delle due colonne. Un codice di opzione che il modello non ha, o una regola scritta male, si rifiuta subito. I gruppi
 si aggiungono e si tolgono in *Gestione DB*, come in ogni distinta: la pagina ha il link. In
 distinta le righe con una regola si riconoscono dal segno `se M=B` o `q.tà = L` accanto al nome.
 
