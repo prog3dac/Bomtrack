@@ -2,36 +2,35 @@
 //  BOMTRACK — varianti.js (modulo Varianti, dalla 0.119.0)
 // ═══════════════════════════════════════════════════════════
 // Una macchina **modello** dichiara le sue opzioni (lunghezza 3/4/5 m, motore
-// standard o maggiorato…), e le righe della sua distinta — o di un gruppo che
-// ci sta dentro — possono valere solo per certe scelte (`cond`, «L=3|4 & M=B»)
-// o avere una quantità che dipende da una scelta (`qtyExpr`, «L*2+0,5»).
+// standard o maggiorato…), e le righe della **sua** distinta — i gruppi del
+// primo livello — possono valere solo per certe scelte (`cond`, «L=3|4 & M=B»)
+// o avere una quantità che dipende da una scelta (`qtyExpr`, «L*2»).
+//
+// ── Fino ai gruppi del primo livello, non oltre (dalla 0.120.0) ──
+// Le scelte decidono **quali gruppi entrano nella macchina, e quanti**. Ogni
+// gruppo resta un articolo normale e fisso: il telaio da 3 m e quello da 4 m
+// sono due gruppi, e il modello li sceglie con «L=3» e «L=4». Niente copie di
+// gruppi, niente regole dentro i gruppi: la variante si legge per intero nella
+// distinta del modello, e la si gestisce da una pagina sola (Tecnico → Varianti).
+// Fino alla 0.119 le regole scendevano a ogni livello e generavano gruppi
+// derivati: troppe cose in giro per quello che serve davvero.
 //
 // ── Il modello non si produce: si configura ──
 // Il configuratore prende una combinazione di scelte e genera la **macchina
-// concreta**: un articolo vero, con la sua distinta, che si pianifica, si
-// costifica e si revisiona come qualunque altra macchina. Niente scelte
-// portate in giro sui piani, niente esplosioni «con parametri»: a valle del
-// configuratore il resto dell'app non sa nemmeno che le varianti esistono.
-//
-// Dentro la distinta generata:
-//   - un gruppo che non ha righe condizionate (né sotto di sé) è **lo stesso**
-//     articolo del modello, non una copia: si progetta una volta sola;
-//   - un gruppo le cui righe cambiano con le scelte diventa un **gruppo
-//     derivato**, con codice `<codice del gruppo>-V01`. Se un'altra
-//     configurazione ha già prodotto le stesse righe, si riusa quello;
-//   - la macchina con la stessa combinazione di scelte, se c'è già, si riusa.
+// concreta** `<modello>-V01`: un articolo vero, con la sua distinta, che si
+// pianifica, si costifica e si revisiona come qualunque altra macchina. La
+// stessa combinazione, se c'è già, si riusa.
 //
 // ── Il modello cambia ──
-// Ogni generato ricorda l'impronta (`configHash`) del modello com'era. Quando
-// il modello cambia la scheda lo dice, e «Rigenera» riscrive la distinta della
-// macchina concreta dalle scelte che aveva. Il passato resta nelle revisioni.
+// Ogni macchina generata ricorda l'impronta (`configHash`) del modello com'era.
+// Quando il modello cambia la pagina Varianti lo dice, e «Rigenera» riscrive la
+// distinta della macchina dalle scelte che aveva.
 //
 // Con il modulo spento le righe condizionate contano come righe normali e le
 // opzioni restano scritte senza che nessuno le legga.
 
 function varAttivo() { return typeof moduloAttivo === 'function' && moduloAttivo('varianti'); }
-let _varToccati = null;
-function invalidateVarianti() { _varToccati = null; }
+function invalidateVarianti() { /* niente in cache: le letture sono dirette */ }
 
 // ═══════════════════════════════════════════════════════════
 //  OPZIONI, CONDIZIONI E FORMULE
@@ -47,37 +46,34 @@ function varOpzioni(it) {
 }
 function varCodice(c) { return String(c == null ? '' : c).trim().toUpperCase(); }
 function varValore(v) { return String(v == null ? '' : v).trim(); }
-// È un modello: una macchina con opzioni, che non è a sua volta generata.
-function varModello(it) {
-  return varAttivo() && !!it && it.type === 'macchina' && !it.configuredFromId && varOpzioni(it).length > 0;
+// Una macchina della pagina Varianti: ha delle opzioni, anche ancora da
+// completare, e non è a sua volta generata.
+function varInPagina(it) {
+  return !!it && it.type === 'macchina' && !it.configuredFromId && Array.isArray(it.options) && it.options.length > 0;
 }
+// È un modello: ha almeno un'opzione con delle scelte.
+function varModello(it) {
+  return varAttivo() && varInPagina(it) && varOpzioni(it).length > 0;
+}
+function varModelli() { return (db.items || []).filter(varInPagina).sort((a, b) => String(a.code).localeCompare(String(b.code))); }
 function varRigaVariante(c) { return !!c && !!(c.cond || c.qtyExpr); }
-// La parte comune di un assieme: le righe che non dipendono dalle scelte, né
-// per esserci né per la quantità. È la distinta che costo e fabbisogno usano
-// per un modello, che così com'è non si produce.
+// La parte comune del modello: le righe che non dipendono dalle scelte, né per
+// esserci né per la quantità. È la distinta che costo e fabbisogno usano per
+// un modello, che così com'è non si produce. Su ogni altro assieme le
+// condizioni non valgono (vedi varRegoleFuoriPosto) e le righe contano tutte.
 function varRigheComuni(it) {
   const righe = (it && it.components) || [];
-  return varAttivo() ? righe.filter(c => !varRigaVariante(c)) : righe;
-}
-// L'assieme ha righe che cambiano con le scelte, qui o più sotto.
-function varToccato(id) {
-  if (!varAttivo()) return false;
-  if (!_varToccati) _varToccati = new Map();
-  const visita = (x, sopra) => {
-    if (_varToccati.has(x)) return _varToccati.get(x);
-    const it = getItem(x);
-    if (!it || !isAssembly(it.type) || sopra.has(x)) return false;
-    sopra.add(x);
-    const si = (it.components || []).some(c => varRigaVariante(c) || visita(c.itemId, sopra));
-    sopra.delete(x);
-    _varToccati.set(x, si);
-    return si;
-  };
-  return visita(id, new Set());
+  return varModello(it) ? righe.filter(c => !varRigaVariante(c)) : righe;
 }
 // Non si mette in un piano così com'è: prima si sceglie.
-function varRichiedeScelte(it) {
-  return varAttivo() && !!it && isAssembly(it.type) && (varModello(it) || varToccato(it.id));
+function varRichiedeScelte(it) { return varModello(it); }
+// Condizioni scritte dove non valgono: dentro un gruppo, o su una macchina che
+// non è un modello. Succedeva con la 0.119, che le ammetteva a ogni livello; la
+// pagina Varianti le elenca per toglierle, e intanto contano come righe normali.
+function varRegoleFuoriPosto() {
+  if (!varAttivo()) return [];
+  return (db.items || []).filter(it => isAssembly(it.type) && !varModello(it)
+    && (it.components || []).some(varRigaVariante));
 }
 
 // «L=3|4 & M!=B» → [{ code: 'L', neg: false, valori: ['3', '4'] }, …].
@@ -206,49 +202,17 @@ function varFirma(it) {
     p: (it.operations || []).map(o => [o.workCenterId, Number(o.hours) || 0, o.note || '']),
   }));
 }
-// Il modello e tutti gli assiemi che cambiano con le scelte, sotto di lui.
-function varFirmaAlbero(id) {
-  const parti = [], visti = new Set();
-  const visita = x => {
-    if (visti.has(x)) return;
-    visti.add(x);
-    const it = getItem(x);
-    if (!it) return;
-    parti.push(x + ':' + varFirma(it));
-    (it.components || []).forEach(c => { if (varToccato(c.itemId)) visita(c.itemId); });
-  };
-  visita(id);
-  return varHash(parti.join('|'));
-}
-// I codici delle opzioni che un assieme legge, qui o più sotto: servono a dire
-// nel nome di un gruppo derivato le sole scelte che lo riguardano.
-function varCodiciUsati(id) {
-  const out = new Set(), visti = new Set();
-  const visita = x => {
-    if (visti.has(x)) return;
-    visti.add(x);
-    const it = getItem(x);
-    if (!it || !isAssembly(it.type)) return;
-    (it.components || []).forEach(c => {
-      try { varCondParse(c.cond).forEach(k => out.add(k.code)); } catch (e) { /* la segnala la generazione */ }
-      varFormulaCodici(c.qtyExpr).forEach(k => out.add(k));
-      visita(c.itemId);
-    });
-  };
-  visita(id);
-  return out;
-}
 
 // ═══════════════════════════════════════════════════════════
-//  RISOLUZIONE: dalle scelte alle righe
+//  RISOLUZIONE E GENERAZIONE
 // ═══════════════════════════════════════════════════════════
-// Le righe di un assieme per una combinazione di scelte. `figlio(c)` dice che
-// cosa diventa il componente: un id per la generazione, un costo per il
-// calcolo dell'intervallo. Gli errori finiscono in `errori`, riga per riga.
+// Le righe del modello per una combinazione di scelte. Gli errori finiscono
+// in `errori`, riga per riga.
 function varRigheScelte(it, scelte, errori) {
   const out = [];
   (it.components || []).forEach((c, i) => {
-    const dove = `${it.code}, riga ${i + 1}`;
+    const comp = getItem(c.itemId);
+    const dove = `riga ${i + 1}${comp ? ` (${comp.code})` : ''}`;
     try {
       if (c.cond && !varCondVale(varCondParse(c.cond), scelte)) return;
       const qty = c.qtyExpr ? varQtyValuta(c.qtyExpr, scelte) : (Number(c.qty) || 0);
@@ -259,41 +223,10 @@ function varRigheScelte(it, scelte, errori) {
   });
   return out;
 }
-function varRisolvi(id, scelte, ctx) {
-  const it = getItem(id);
-  if (!it || !isAssembly(it.type) || !varToccato(id)) return id;
-  if (ctx.memo.has(id)) return ctx.memo.get(id);
-  const righe = varRigheScelte(it, scelte, ctx.errori).map(r => Object.assign(r, { itemId: varRisolvi(r.itemId, scelte, ctx) }));
-  const chiave = varFirma(it) + '|' + JSON.stringify(righe.map(r => [r.itemId, r.qty, r.scrapPct]));
-  const gia = (db.items || []).concat(ctx.nuovi).find(x => x.configuredFromId === id && x.configKey === chiave);
-  if (gia) { ctx.memo.set(id, gia.id); if (!ctx.riusati.includes(gia)) ctx.riusati.push(gia); return gia.id; }
-  const usati = varCodiciUsati(id);
-  const etichetta = varEtichetteScelte(ctx.modello, scelte, usati);
-  const n = varCopia(it, righe, ctx, etichetta);
-  n.configKey = chiave;
-  ctx.memo.set(id, n.id);
-  return n.id;
-}
-// Il nuovo assieme derivato: la definizione dell'originale con le righe
-// risolte. Quello che riguarda l'acquisto o la codifica (listini, sigle,
-// alternativi) non si copia: il derivato è un assieme fatto in casa, e il suo
-// codice segue lo schema `-V01` del configuratore, non la sigla.
-function varCopia(it, righe, ctx, etichetta) {
-  const n = { id: gid(), type: it.type, uom: it.uom, notes: it.notes || '', active: true,
-    name: etichetta ? `${it.name} — ${etichetta}` : it.name,
-    components: righe,
-    operations: (it.operations || []).map(o => Object.assign({}, o)),
-    configuredFromId: it.id };
-  ['machineItemId', 'groupItemId', 'familyId', 'subFamilyId', 'overheadPctOverride', 'marginPctOverride', 'assemblyDays']
-    .forEach(k => { if (it[k] != null && it[k] !== '') n[k] = it[k]; });
-  n.code = varCodiceNuovo(it, ctx);
-  ctx.nuovi.push(n);
-  return n;
-}
-// Il primo `<codice>-Vnn` che nessuno ha: né in archivio, né fra quelli che
-// questa generazione sta creando, né fra quelli che un collega ha impegnato.
-function varCodiceNuovo(base, ctx) {
-  const presi = new Set((db.items || []).concat(ctx ? ctx.nuovi : []).map(x => itemCodeKey(x.code)));
+// Il primo `<codice>-Vnn` che nessuno ha: né in archivio, né fra quelli che un
+// collega ha impegnato sul server.
+function varCodiceNuovo(base) {
+  const presi = new Set((db.items || []).map(x => itemCodeKey(x.code)));
   const altrui = typeof _codiciAltrui !== 'undefined' ? _codiciAltrui : new Set();
   for (let n = 1; ; n++) {
     const c = `${base.code}-V${String(n).padStart(2, '0')}`;
@@ -301,13 +234,11 @@ function varCodiceNuovo(base, ctx) {
     if (!presi.has(k) && !altrui.has(k)) return c;
   }
 }
-
 // Prepara la generazione senza scrivere niente: { errori, esistente, macchina,
-// nuovi, riusati }. Con `macchina` data (Rigenera) le righe si riscrivono su
-// quella invece di crearne una nuova.
+// scelte }. Con `macchina` data (Rigenera) le righe si riscrivono su quella.
 function varPrepara(modelloId, scelteDate, macchina) {
   const t = getItem(modelloId);
-  const out = { errori: [], esistente: null, macchina: null, nuovi: [], riusati: [], scelte: null };
+  const out = { errori: [], esistente: null, macchina: null, scelte: null };
   if (!varModello(t)) { out.errori.push('Non è un modello configurabile'); return out; }
   const norm = varNormalizzaScelte(t, scelteDate);
   if (norm.errori.length) { out.errori = norm.errori; return out; }
@@ -317,12 +248,10 @@ function varPrepara(modelloId, scelteDate, macchina) {
     out.esistente = (db.items || []).find(x => x.configuredFromId === t.id && x.configKey === chiave) || null;
     if (out.esistente) return out;
   }
-  const ctx = { modello: t, memo: new Map(), nuovi: [], riusati: [], errori: out.errori };
-  const righe = varRigheScelte(t, norm.scelte, ctx.errori).map(r => Object.assign(r, { itemId: varRisolvi(r.itemId, norm.scelte, ctx) }));
-  if (!righe.length && !ctx.errori.length) ctx.errori.push('Con queste scelte la distinta resta vuota');
-  if (ctx.errori.length) return out;
-  const dati = { components: righe, operations: (t.operations || []).map(o => Object.assign({}, o)),
-    configHash: varFirmaAlbero(t.id) };
+  const righe = varRigheScelte(t, norm.scelte, out.errori);
+  if (!righe.length && !out.errori.length) out.errori.push('Con queste scelte la distinta resta vuota');
+  if (out.errori.length) return out;
+  const dati = { components: righe, operations: (t.operations || []).map(o => Object.assign({}, o)), configHash: varFirma(t) };
   if (macchina) out.macchina = Object.assign({}, macchina, dati);
   else {
     out.macchina = Object.assign({ id: gid(), type: 'macchina', uom: t.uom, notes: t.notes || '', active: true,
@@ -330,50 +259,42 @@ function varPrepara(modelloId, scelteDate, macchina) {
       configuredFromId: t.id, configChoices: norm.scelte, configKey: chiave }, dati);
     ['overheadPctOverride', 'marginPctOverride', 'assemblyDays', 'familyId', 'subFamilyId']
       .forEach(k => { if (t[k] != null && t[k] !== '') out.macchina[k] = t[k]; });
-    out.macchina.code = varCodiceNuovo(t, ctx);
-    ctx.nuovi.push(out.macchina);
+    out.macchina.code = varCodiceNuovo(t);
   }
-  out.nuovi = ctx.nuovi;
-  out.riusati = ctx.riusati;
   return out;
 }
-// Con l'archivio condiviso i codici nuovi si impegnano tutti insieme sul
-// server prima di salvare. Se un collega ne ha preso uno, la generazione si
-// rifà da capo: `_codiciAltrui` lo conosce, e varCodiceNuovo lo salta.
-function varConCodici(prepara, fare) {
+// Con l'archivio condiviso il codice nuovo si impegna sul server prima di
+// salvare. Se un collega l'ha appena preso, si rifà: `_codiciAltrui` lo
+// conosce, e varCodiceNuovo lo salta.
+function varConCodice(prepara, fare) {
   let prep = prepara();
-  if (prep.errori.length || prep.esistente) return fare(prep);
+  if (prep.errori.length || prep.esistente || !prep.macchina || getItem(prep.macchina.id)) return fare(prep);
   if (typeof cloudCondiviso !== 'function' || !cloudCondiviso()) return fare(prep);
   if (!cloudCreazioneInizia()) return null;
   return (async () => {
     for (let tentativi = 0; tentativi < 8; tentativi++) {
-      const lista = prep.nuovi.filter(n => n.code).map(n => ({ codice: n.code, item: n.id }));
       let presi;
-      try { presi = await cloudImpegnaCodici(lista); }
-      catch (e) { cloudErroreRiserva(e, 'i codici della macchina configurata'); return null; }
+      try { presi = await cloudImpegnaCodici([{ codice: prep.macchina.code, item: prep.macchina.id }]); }
+      catch (e) { cloudErroreRiserva(e, 'il codice della macchina configurata'); return null; }
       if (!presi.length) return fare(prep);
-      const altrui = new Set(presi.map(itemCodeKey));
-      cloudLiberaCodici(lista.map(x => x.codice).filter(c => !altrui.has(itemCodeKey(c))));
       prep = prepara();
       if (prep.errori.length) return fare(prep);
     }
-    showToast('I codici li stanno prendendo dei colleghi: riprova fra un momento', 'error');
+    showToast('Il codice lo stanno prendendo dei colleghi: riprova fra un momento', 'error');
     return null;
   })().finally(cloudCreazioneFinita);
 }
-function varInserisci(nuovi) {
-  nuovi.forEach(n => { if (!getItem(n.id)) { stampNew(n); db.items.push(n); } });
-}
-// Genera (o ritrova) la macchina concreta. `fatto({ item, riusata, nuovi })`
-// riceve il risultato; senza archivio condiviso succede subito.
+// Genera (o ritrova) la macchina concreta. `fatto({ item, riusata })` riceve
+// il risultato; senza archivio condiviso succede subito.
 function varGenera(modelloId, scelte, fatto) {
   if (!roleGuard('bom')) return null;
-  return varConCodici(() => varPrepara(modelloId, scelte), prep => {
+  return varConCodice(() => varPrepara(modelloId, scelte), prep => {
     if (prep.errori.length) { showToast(prep.errori[0] + (prep.errori.length > 1 ? ` (e altri ${prep.errori.length - 1})` : ''), 'error'); return null; }
-    if (prep.esistente) { const r = { item: prep.esistente, riusata: true, nuovi: [] }; if (fatto) fatto(r); return r; }
-    varInserisci(prep.nuovi);
+    if (prep.esistente) { const r = { item: prep.esistente, riusata: true }; if (fatto) fatto(r); return r; }
+    stampNew(prep.macchina);
+    db.items.push(prep.macchina);
     saveDB();
-    const r = { item: getItem(prep.macchina.id), riusata: false, nuovi: prep.nuovi };
+    const r = { item: getItem(prep.macchina.id), riusata: false };
     if (fatto) fatto(r);
     return r;
   });
@@ -382,27 +303,29 @@ function varGenera(modelloId, scelte, fatto) {
 function varModelloAggiornato(it) {
   if (!varAttivo() || !it || it.type !== 'macchina' || !it.configuredFromId) return false;
   const t = getItem(it.configuredFromId);
-  return !!t && varModello(t) && it.configHash !== varFirmaAlbero(t.id);
+  return !!t && varModello(t) && it.configHash !== varFirma(t);
 }
 // Rigenera la distinta della macchina concreta dalle scelte che aveva, sul
 // modello di adesso. La macchina resta la stessa (codice, piani, movimenti):
 // cambia la distinta, come quando la si modifica a mano.
-function varRigenera(id, fatto) {
+function varRigenera(id) {
   if (!roleGuard('bom')) return null;
   const m = getItem(id);
   if (!m || !m.configuredFromId) return null;
-  return varConCodici(() => varPrepara(m.configuredFromId, m.configChoices || {}, m), prep => {
-    if (prep.errori.length) { showToast(prep.errori[0], 'error'); return null; }
-    varInserisci(prep.nuovi);
-    m.components = prep.macchina.components;
-    m.operations = prep.macchina.operations;
-    m.configHash = prep.macchina.configHash;
-    touch(m);
-    saveDB();
-    const r = { item: m, nuovi: prep.nuovi };
-    if (fatto) fatto(r);
-    return r;
-  });
+  const prep = varPrepara(m.configuredFromId, m.configChoices || {}, m);
+  if (prep.errori.length) { showToast(`${m.code}: ${prep.errori[0]}`, 'error'); return null; }
+  m.components = prep.macchina.components;
+  m.operations = prep.macchina.operations;
+  m.configHash = prep.macchina.configHash;
+  touch(m);
+  saveDB();
+  return m;
+}
+function varGenerateDa(id) { return (db.items || []).filter(x => x.configuredFromId === id); }
+// Per il Riepilogo: le macchine generate da un modello che è cambiato dopo.
+function varGenerateDaAggiornare() {
+  if (!varAttivo()) return [];
+  return (db.items || []).filter(varModelloAggiornato);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -410,14 +333,11 @@ function varRigenera(id, fatto) {
 // ═══════════════════════════════════════════════════════════
 // Il costo di una combinazione, senza creare niente: le righe risolte passano
 // da assiemeCost (costing.js) come quelle di un assieme vero.
-function varCostoScelte(id, scelte, visti) {
+function varCostoScelte(id, scelte) {
   const it = getItem(id);
   if (!it) return Object.assign({}, ZERO_COST);
-  if (!isAssembly(it.type) || !varToccato(id)) return costOf(id);
-  const sopra = visti || new Set();
-  if (sopra.has(id)) return Object.assign({}, ZERO_COST, { cycle: true });
-  const next = new Set(sopra); next.add(id);
-  return assiemeCost(it, varRigheScelte(it, scelte, null), c => varCostoScelte(c.itemId, scelte, next));
+  if (!varModello(it)) return costOf(id);
+  return assiemeCost(it, varRigheScelte(it, scelte, null), c => costOf(c.itemId, new Set([id])));
 }
 // Tutte le combinazioni, se sono poche abbastanza da contarle (`limite`).
 function varCombinazioni(t, limite) {
@@ -439,102 +359,271 @@ function varIntervalloCosto(t) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  DISTINTA: i segni sulle righe e l'intestazione
+//  NELLE ALTRE VISTE: solo segni, nessun comando
 // ═══════════════════════════════════════════════════════════
-function varTagRiga(c) {
-  if (!varAttivo() || !varRigaVariante(c)) return '';
+// Il segno accanto a una riga di distinta del modello.
+function varTagRiga(c, parent) {
+  if (!varAttivo() || !varRigaVariante(c) || (parent && !varModello(parent))) return '';
   const seg = [];
   if (c.cond) seg.push(`<span class="price-best" title="La riga vale solo con queste scelte del modello">se ${esc(c.cond)}</span>`);
   if (c.qtyExpr) seg.push(`<span class="price-best" title="La quantità si calcola dalle scelte del modello">q.tà = ${esc(c.qtyExpr)}</span>`);
   return ' ' + seg.join(' ');
 }
-// La striscia sopra l'albero: modello, assieme con righe variabili, o
-// macchina generata.
-function varBannerBom(it) {
-  if (!varAttivo() || !it) return '';
-  const scrivibile = canWrite('bom');
-  const riga = (testo, bottoni) => `<div class="empty-text" style="text-align:left;padding:8px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">${testo}${bottoni ? `<span style="display:flex;gap:6px">${bottoni}</span>` : ''}</div>`;
-  if (varModello(it)) {
-    const r = varIntervalloCosto(it);
-    const n = varGenerateDa(it.id).length;
-    return riga(`${ico('tree', 'tinted', '')} <span><strong>Modello configurabile</strong>: ${varOpzioni(it).map(o => esc(o.name || o.code)).join(', ')}. ${r ? `Costo da ${fmtN(r.min)} a ${fmtN(r.max)} su ${r.n} combinazioni.` : 'Troppe combinazioni per calcolare l\'intervallo di costo.'} I costi qui sotto sono della parte comune. ${n ? `${n} ${n === 1 ? 'macchina generata' : 'macchine generate'}.` : ''}</span>`,
-      `<button class="btn-outline" onclick="varOpzioniModal('${it.id}')">Opzioni</button>${scrivibile ? `<button class="add-btn-sm" onclick="varConfiguraModal('${it.id}')">Configura</button>` : ''}`);
-  }
-  if (it.configuredFromId && getItem(it.configuredFromId)) {
+// Una riga sola sopra la distinta: dice che cos'è e porta alla pagina.
+function varRigaBom(it) {
+  if (!varAttivo() || !it || it.type !== 'macchina') return '';
+  const vai = id => `<a href="#" onclick="varApri('${id}');return false">Varianti</a>`;
+  let testo = '';
+  if (varInPagina(it)) testo = `<strong>Modello configurabile</strong>: i costi qui sotto sono della parte comune. Opzioni, regole e configurazione stanno in ${vai(it.id)}.`;
+  else if (it.configuredFromId && getItem(it.configuredFromId)) {
     const t = getItem(it.configuredFromId);
-    const scelte = it.configChoices ? ` con ${esc(varEtichetteScelte(t, it.configChoices) || varChiaveScelte(it.configChoices))}` : '';
-    const vecchia = varModelloAggiornato(it);
-    return riga(`${ico('tree', 'tinted', '')} <span>Generato da ${codeLink(t.id, t.code)}${scelte}.${vecchia ? ` <span class="mrp-warn">${ico('warning', 'tinted', '')} Il modello è cambiato dopo la generazione.</span>` : ''}</span>`,
-      vecchia && scrivibile ? `<button class="add-btn-sm" onclick="varRigeneraUI('${it.id}')">Rigenera</button>` : '');
-  }
-  // Una macchina qualunque: da qui si comincia, aggiungendo la prima opzione.
-  if (it.type === 'macchina' && !it.configuredFromId)
-    return riga(`${ico('tree', 'tinted', '')} <span>${(it.options || []).length ? 'Le opzioni di questa macchina non hanno ancora scelte: finché non ne hanno, non è un modello.' : 'Questa macchina non ha opzioni. Aggiungendone una (lunghezza, motore…) diventa un modello da configurare.'}</span>`,
-      `<button class="${scrivibile ? 'add-btn-sm' : 'btn-outline'}" onclick="varOpzioniModal('${it.id}')">${scrivibile ? 'Aggiungi opzioni' : 'Opzioni'}</button>`);
-  if (varToccato(it.id)) return riga(`${ico('tree', 'tinted', '')} <span>Ha righe che valgono solo con certe scelte: si usa dentro un modello configurabile, e il configuratore ne fa la copia giusta per ogni combinazione.</span>`);
-  return '';
+    testo = `Generata da ${esc(t.code)}${it.configChoices ? ` con ${esc(varEtichetteScelte(t, it.configChoices) || varChiaveScelte(it.configChoices))}` : ''}.${varModelloAggiornato(it) ? ` <span class="mrp-warn">${ico('warning', 'tinted', '')} Il modello è cambiato dopo la generazione.</span>` : ''} Si gestisce in ${vai(t.id)}.`;
+  } else return '';
+  return `<div class="empty-text" style="text-align:left;padding:8px 12px">${ico('tree', 'tinted', '')} ${testo}</div>`;
 }
-function varGenerateDa(id) { return (db.items || []).filter(x => x.configuredFromId === id); }
+function varApri(id) { if (id) currentVarId = id; setView('varianti'); }
 
 // ═══════════════════════════════════════════════════════════
-//  OPZIONI DEL MODELLO
+//  LA PAGINA: Tecnico → Varianti
 // ═══════════════════════════════════════════════════════════
-onPanelClose('varopzioni', () => { window.__varModelloId = null; });
-function varOpzioniModal(id) {
-  const it = getItem(id); if (!it || it.type !== 'macchina') return;
-  window.__varModelloId = id;
-  openModal(`<h3>${ico('tree', 'tinted pill', '')} Opzioni del modello — ${esc(it.code)}</h3>
-    <p style="color:var(--text-dim);margin-bottom:14px">${esc(it.name)}</p>
-    <div id="varopz-body">${varOpzioniBody(id)}</div>
-    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'varopzioni');
+let currentVarId = null;
+function varCorrente() {
+  const m = varModelli();
+  if (!m.some(x => x.id === currentVarId)) currentVarId = m.length ? m[0].id : null;
+  return getItem(currentVarId);
 }
-function varOpzioniRefresh() {
-  const host = document.getElementById('varopz-body');
-  if (host && window.__varModelloId) host.innerHTML = varOpzioniBody(window.__varModelloId);
-  if (activeView === 'bom') renderBom();
-  renderInspector();
+function renderVarianti() {
+  invalidateCaches();
+  const host = document.getElementById('var-body');
+  const sel = document.getElementById('var-select');
+  if (!host) return;
+  if (!varAttivo()) {
+    if (sel) sel.innerHTML = '';
+    host.innerHTML = `<div class="empty-text">Il modulo Varianti è spento. Si accende in <strong>Gestione → Impostazioni → Moduli</strong>.</div>`;
+    return;
+  }
+  const modelli = varModelli();
+  const t = varCorrente();
+  if (sel) sel.innerHTML = modelli.length
+    ? modelli.map(m => `<option value="${m.id}" ${m.id === currentVarId ? 'selected' : ''}>${esc(m.code + ' — ' + m.name)}</option>`).join('')
+    : '<option value="">— nessun modello —</option>';
+  const fuori = varRegoleFuoriPosto();
+  const avvisoFuori = fuori.length ? `<div class="cycle-section">
+      <div class="cycle-section-head"><h3>${ico('warning', 'tinted pill', '')} Condizioni fuori posto <span class="cycle-dim">${fuori.length}</span></h3></div>
+      <p class="empty-text" style="text-align:left;padding:0 0 8px">Le condizioni valgono solo sulle righe di una macchina modello. Su questi assiemi non contano, e le righe valgono sempre: toglile per non confonderti.</p>
+      <div class="cycle-box"><table class="price-table"><tbody>${fuori.map(x => `<tr><td style="font-family:var(--mono)">${codeLink(x.id, x.code)}</td><td>${esc(x.name)}</td>
+        <td>${(x.components || []).filter(varRigaVariante).length} righe</td>
+        <td>${canWrite('bom') ? `<button class="btn-outline" onclick="varTogliCondizioni('${x.id}')">Togli le condizioni</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : '';
+  if (!t) {
+    host.innerHTML = `<div class="empty-text">Nessun modello. Un modello è una macchina con delle opzioni: crealo con <strong>+ Nuovo modello</strong> scegliendo una macchina già in archivio.</div>${avvisoFuori}`;
+    return;
+  }
+  host.innerHTML = `${varSezioneOpzioni(t)}${varSezioneRegole(t)}${varSezioneConfigura(t)}${varSezioneGenerate(t)}${avvisoFuori}`;
+  varConfiguraAnteprima();
 }
-// Ogni opzione è un riquadro: codice e nome in testa, sotto le sue scelte,
-// una per riga con il valore (quello che le righe di distinta citano) e
-// l'etichetta (quello che si legge nel configuratore e nel nome della macchina).
-function varOpzioniBody(id) {
-  const it = getItem(id); if (!it) return '';
-  const scrivibile = canWrite('bom') && !it.configuredFromId;
-  const opz = Array.isArray(it.options) ? it.options : [];
-  const ro = (v, mono) => `<span${mono ? ' style="font-family:var(--mono)"' : ''}>${esc(v || '')}</span>`;
+function onVarSelect() { currentVarId = val('var-select'); renderVarianti(); }
+const varScrivibile = t => canWrite('bom') && !!t && !t.configuredFromId;
+const varSezione = (icona, titolo, conta, corpo, azione) => `<div class="cycle-section">
+    <div class="cycle-section-head"><h3>${ico(icona, 'tinted pill', '')} ${titolo}${conta != null ? ` <span class="cycle-dim">${conta}</span>` : ''}</h3>${azione || ''}</div>
+    ${corpo}</div>`;
+
+// ── 1. Opzioni ──
+function varSezioneOpzioni(t) {
+  const scrivibile = varScrivibile(t);
+  const opz = t.options || [];
   const blocco = (o, i) => {
     const scelte = Array.isArray(o.choices) ? o.choices : [];
-    return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div class="modal-grid" style="align-items:end">
-        <div class="modal-field"><label>Codice</label>${scrivibile ? `<input value="${esc(o.code || '')}" style="font-family:var(--mono)" onchange="varOpzioneSet('${id}', ${i}, 'code', this.value)">` : ro(o.code, true)}</div>
-        <div class="modal-field"><label>Opzione</label>${scrivibile ? `<input value="${esc(o.name || '')}" placeholder="es. Lunghezza" onchange="varOpzioneSet('${id}', ${i}, 'name', this.value)">` : ro(o.name)}</div>
+    return `<div class="cycle-box" style="margin-bottom:10px;padding:10px">
+      <div class="var-opz-head" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        ${scrivibile ? `<input value="${esc(o.code || '')}" title="Codice dell'opzione: è quello che le regole citano" style="width:70px;font-family:var(--mono)" onchange="varOpzioneSet('${t.id}', ${i}, 'code', this.value)">
+        <input value="${esc(o.name || '')}" placeholder="Nome, es. Lunghezza" style="flex:1;min-width:160px" onchange="varOpzioneSet('${t.id}', ${i}, 'name', this.value)">
+        <button class="mini-btn" title="Togli l'opzione" onclick="varOpzioneTogli('${t.id}', ${i})">${ico('trash', 'tinted', 'Togli l\'opzione')}</button>`
+        : `<strong style="font-family:var(--mono)">${esc(o.code || '')}</strong> ${esc(o.name || '')}`}
       </div>
-      <div class="table-wrap"><table class="price-table"><thead><tr><th scope="col">Valore</th><th scope="col">Etichetta</th><th scope="col"></th></tr></thead><tbody>
+      <table class="price-table"><thead><tr><th scope="col">Valore</th><th scope="col">Etichetta</th><th scope="col"></th></tr></thead><tbody>
         ${scelte.map((c, j) => scrivibile ? `<tr>
-          <td><input value="${esc(c.value || '')}" placeholder="es. 3" style="width:110px;font-family:var(--mono)" onchange="varSceltaSet('${id}', ${i}, ${j}, 'value', this.value)"></td>
-          <td><input value="${esc(c.label || '')}" placeholder="es. 3 metri" style="width:100%" onchange="varSceltaSet('${id}', ${i}, ${j}, 'label', this.value)"></td>
-          <td><button class="mini-btn" title="Togli la scelta" onclick="varSceltaTogli('${id}', ${i}, ${j})">${ico('trash', 'tinted', 'Togli')}</button></td></tr>`
-          : `<tr><td>${ro(c.value, true)}</td><td>${ro(c.label)}</td><td></td></tr>`).join('')
+          <td><input value="${esc(c.value || '')}" placeholder="es. 3" style="width:110px;font-family:var(--mono)" onchange="varSceltaSet('${t.id}', ${i}, ${j}, 'value', this.value)"></td>
+          <td><input value="${esc(c.label || '')}" placeholder="es. 3 metri" style="width:100%" onchange="varSceltaSet('${t.id}', ${i}, ${j}, 'label', this.value)"></td>
+          <td><button class="mini-btn" title="Togli la scelta" onclick="varSceltaTogli('${t.id}', ${i}, ${j})">${ico('trash', 'tinted', 'Togli la scelta')}</button></td></tr>`
+          : `<tr><td style="font-family:var(--mono)">${esc(c.value || '')}</td><td>${esc(c.label || '')}</td><td></td></tr>`).join('')
           || '<tr><td colspan="3" class="empty-text">Nessuna scelta.</td></tr>'}
-      </tbody></table></div>
-      ${scrivibile ? `<div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn-outline" onclick="varSceltaAggiungi('${id}', ${i})">+ Aggiungi una scelta</button>
-        <button class="btn-ghost" onclick="varOpzioneTogli('${id}', ${i})">${ico('trash', 'tinted', '')} Togli l'opzione</button></div>` : ''}
+      </tbody></table>
+      ${scrivibile ? `<button class="btn-outline" style="margin-top:8px" onclick="varSceltaAggiungi('${t.id}', ${i})">+ Scelta</button>` : ''}
     </div>`;
   };
-  return `${opz.length ? opz.map(blocco).join('') : '<p class="empty-text" style="text-align:left;padding:0 0 8px">Nessuna opzione: la macchina non è un modello.</p>'}
-    ${scrivibile ? `<div><button class="add-btn-sm" onclick="varOpzioneAggiungi('${id}')">+ Aggiungi un'opzione</button></div>` : ''}
-    <p class="empty-text" style="text-align:left;padding:12px 0 0">Il codice dell'opzione (es. <code>L</code>) e il valore della scelta (es. <code>3</code>) sono quelli che le righe di distinta citano: «vale solo se» <code>L=3|4</code>, oppure la quantità <code>L*2</code>. L'etichetta è quella che si legge. Una macchina con almeno un'opzione con delle scelte è un modello: non si mette in un piano, si configura.</p>`;
+  return varSezione('list', 'Opzioni', opz.length, opz.map(blocco).join('')
+    || '<p class="empty-text" style="text-align:left">Nessuna opzione.</p>',
+    varScrivibile(t) ? `<button class="add-btn-sm" onclick="varOpzioneAggiungi('${t.id}')">+ Opzione</button>` : '');
 }
+
+// ── 2. Regole ──
+// Le righe della distinta del modello, con la condizione e la formula
+// scrivibili qui. Le righe si aggiungono e si tolgono in Gestione DB: qui si
+// decide solo quando valgono.
+function varSezioneRegole(t) {
+  const scrivibile = varScrivibile(t);
+  const righe = t.components || [];
+  const tab = righe.length ? `<table class="price-table"><thead><tr><th scope="col">#</th><th scope="col">Codice</th><th scope="col">Gruppo</th>
+      <th scope="col" style="text-align:right">Q.tà</th><th scope="col">Vale solo se</th><th scope="col">Quantità da formula</th></tr></thead><tbody>
+    ${righe.map((c, i) => {
+      const g = getItem(c.itemId);
+      return `<tr><td>${i + 1}</td><td style="font-family:var(--mono)">${g ? codeLink(g.id, g.code) : '—'}</td><td>${g ? esc(g.name) : '(articolo mancante)'}</td>
+        <td style="text-align:right;font-family:var(--mono)">${c.qtyExpr ? '—' : esc(String(Number(c.qty) || 0))}</td>
+        <td>${scrivibile ? `<input value="${esc(c.cond || '')}" placeholder="sempre" style="width:100%;font-family:var(--mono)" onchange="varRegolaSet('${t.id}', ${i}, 'cond', this.value)">` : esc(c.cond || 'sempre')}</td>
+        <td>${scrivibile ? `<input value="${esc(c.qtyExpr || '')}" placeholder="—" style="width:100%;font-family:var(--mono)" onchange="varRegolaSet('${t.id}', ${i}, 'qtyExpr', this.value)">` : esc(c.qtyExpr || '')}</td></tr>`;
+    }).join('')}</tbody></table>`
+    : '<p class="empty-text" style="text-align:left;padding:8px">La distinta del modello è vuota.</p>';
+  return varSezione('tree', 'Regole', righe.filter(varRigaVariante).length + ' di ' + righe.length,
+    `<div class="cycle-box">${tab}</div>
+    <p class="empty-text" style="text-align:left;padding:8px 0 0">Una riga vuota vale sempre. <code>L=3|4</code> vuol dire «se L è 3 oppure 4», <code>&amp;</code> «e», <code>!=</code> «diverso da». La formula usa numeri, <code>+ - * /</code>, parentesi e i codici delle opzioni con valore numerico. Per aggiungere o togliere gruppi apri il modello in <a href="#" onclick="currentBomId='${t.id}';bomExpanded=new Set();setView('bom');return false">Gestione DB</a>.</p>`);
+}
+function varRegolaSet(id, i, campo, valore) {
+  if (!roleGuard('bom')) return;
+  const t = getItem(id); const c = t && t.components && t.components[i];
+  if (!c) return;
+  const v = String(valore || '').trim();
+  const err = campo === 'cond' ? varControllaRiga(v, '') : varControllaRiga('', v);
+  if (err) { showToast(err, 'error'); renderVarianti(); return; }
+  // Un codice che il modello non ha: si dice subito, invece che al Genera.
+  const codici = new Set((t.options || []).map(o => varCodice(o.code)));
+  const citati = campo === 'cond' ? varCondParse(v).map(x => x.code) : varFormulaCodici(v);
+  const ignoti = citati.filter(k => !codici.has(k));
+  if (ignoti.length) { showToast(`Il modello non ha l'opzione ${ignoti[0]}`, 'error'); renderVarianti(); return; }
+  if (v) c[campo] = v; else delete c[campo];
+  touch(t);
+  saveDB();
+  renderVarianti();
+}
+function varTogliCondizioni(id) {
+  if (!roleGuard('bom')) return;
+  const it = getItem(id); if (!it) return;
+  askConfirm(`Togliere condizioni e formule dalle righe di ${it.code}? Le righe restano, e valgono sempre.`, () => {
+    (it.components || []).forEach(c => { delete c.cond; delete c.qtyExpr; });
+    touch(it);
+    saveDB();
+    renderVarianti();
+    savedToast('Condizioni tolte');
+  });
+}
+
+// ── 3. Configura ──
+function varSezioneConfigura(t) {
+  if (!varModello(t)) return varSezione('eye', 'Configura', null, '<p class="empty-text" style="text-align:left">Per configurare serve almeno un\'opzione con delle scelte.</p>');
+  const r = varIntervalloCosto(t);
+  const campi = varOpzioni(t).map(o => `<div class="modal-field"><label>${esc(o.name || o.code)} <span class="empty-text" style="padding:0">(${esc(varCodice(o.code))})</span></label>
+    <select class="var-scelta" data-code="${esc(varCodice(o.code))}" onchange="varConfiguraAnteprima()">${o.choices.map(c => `<option value="${esc(c.value)}">${esc(c.label ? `${c.label} (${c.value})` : c.value)}</option>`).join('')}</select></div>`).join('');
+  return varSezione('eye', 'Configura', null, `
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">${r ? `Costo da <strong>${fmtN(r.min)}</strong> a <strong>${fmtN(r.max)}</strong> su ${r.n} combinazioni.` : 'Troppe combinazioni per calcolare l\'intervallo di costo.'}</p>
+    <div class="modal-grid">${campi}</div>
+    <div id="varconf-prev" style="margin-top:10px"></div>
+    ${canWrite('bom') ? `<div style="margin-top:10px"><button class="add-btn-sm" id="varconf-ok" onclick="varConfiguraGenera()">Genera la macchina</button></div>` : ''}`);
+}
+function varScelteDalForm() {
+  const s = {};
+  document.querySelectorAll('.var-scelta').forEach(el => { s[el.getAttribute('data-code')] = el.value; });
+  return s;
+}
+function varConfiguraAnteprima() {
+  const host = document.getElementById('varconf-prev');
+  const t = getItem(currentVarId);
+  if (!host || !varModello(t)) return;
+  const prep = varPrepara(t.id, varScelteDalForm());
+  const ok = document.getElementById('varconf-ok');
+  if (prep.errori.length) {
+    host.innerHTML = `<div class="mrp-warn">${prep.errori.map(e => `<div>${ico('warning', 'tinted', '')} ${esc(e)}</div>`).join('')}</div>`;
+    if (ok) ok.disabled = true;
+    return;
+  }
+  if (ok) { ok.disabled = false; ok.textContent = prep.esistente ? 'Apri la macchina' : 'Genera la macchina'; }
+  if (prep.esistente) {
+    host.innerHTML = `<p>Questa combinazione esiste già: <strong>${esc(prep.esistente.code)}</strong> ${esc(prep.esistente.name)}.</p>`;
+    return;
+  }
+  const m = prep.macchina;
+  host.innerHTML = `<p style="margin:0 0 6px">Nascerà <strong style="font-family:var(--mono)">${esc(m.code)}</strong> ${esc(m.name)} · costo <strong>${fmtN(varCostoScelte(t.id, prep.scelte).total)}</strong></p>
+    <div class="table-wrap"><table class="price-table"><thead><tr><th scope="col">Codice</th><th scope="col">Gruppo</th><th scope="col" style="text-align:right">Q.tà</th></tr></thead><tbody>
+    ${m.components.map(c => { const g = getItem(c.itemId); return `<tr><td style="font-family:var(--mono)">${esc(g ? g.code : '?')}</td><td>${esc(g ? g.name : '')}</td><td style="text-align:right;font-family:var(--mono)">${esc(String(c.qty))}</td></tr>`; }).join('')}
+    </tbody></table></div>`;
+}
+function varConfiguraGenera() {
+  const t = getItem(currentVarId);
+  if (!t) return;
+  varGenera(t.id, varScelteDalForm(), r => {
+    savedToast(r.riusata ? `La macchina ${r.item.code} c'era già` : `Generata ${r.item.code}`);
+    if (r.riusata) { currentBomId = r.item.id; bomExpanded = new Set(); setView('bom'); }
+    else renderVarianti();
+  });
+}
+
+// ── 4. Varianti generate ──
+function varSezioneGenerate(t) {
+  const gen = varGenerateDa(t.id).filter(x => x.type === 'macchina').sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  const vecchie = gen.filter(varModelloAggiornato);
+  const scrivibile = canWrite('bom');
+  const tab = gen.length ? `<table class="price-table"><thead><tr><th scope="col">Codice</th><th scope="col">Scelte</th><th scope="col" style="text-align:right">Costo</th><th scope="col">Stato</th><th scope="col"></th></tr></thead><tbody>
+    ${gen.map(x => {
+      const vecchia = varModelloAggiornato(x);
+      return `<tr><td style="font-family:var(--mono)">${codeLink(x.id, x.code)}</td>
+        <td>${esc(x.configChoices ? (varEtichetteScelte(t, x.configChoices) || varChiaveScelte(x.configChoices)) : '')}</td>
+        <td style="text-align:right;font-family:var(--mono)">${fmtN(costOf(x.id).total)}</td>
+        <td>${vecchia ? `<span class="mrp-warn">${ico('warning', 'tinted', '')} modello cambiato</span>` : '<span class="price-best">aggiornata</span>'}</td>
+        <td style="white-space:nowrap"><button class="mini-btn" title="Apri la distinta" onclick="currentBomId='${x.id}';bomExpanded=new Set();setView('bom')">${ico('eye', 'tinted', 'Apri la distinta')}</button>
+          ${vecchia && scrivibile ? `<button class="btn-outline" onclick="varRigeneraUI(['${x.id}'])">Rigenera</button>` : ''}</td></tr>`;
+    }).join('')}</tbody></table>`
+    : '<p class="empty-text" style="text-align:left;padding:8px">Nessuna macchina generata da questo modello.</p>';
+  return varSezione('package', 'Varianti generate', gen.length, `<div class="cycle-box">${tab}</div>`,
+    vecchie.length > 1 && scrivibile ? `<button class="add-btn-sm" onclick="varRigeneraTutte('${t.id}')">Rigenera tutte (${vecchie.length})</button>` : '');
+}
+function varRigeneraTutte(id) { varRigeneraUI(varGenerateDa(id).filter(varModelloAggiornato).map(x => x.id)); }
+function varRigeneraUI(ids) {
+  const macchine = (ids || []).map(getItem).filter(Boolean);
+  if (!macchine.length) return;
+  const chi = macchine.length === 1 ? macchine[0].code : `${macchine.length} macchine`;
+  askConfirm(`Riscrivere la distinta di ${chi} dal modello di adesso, con le stesse scelte? Il codice resta lo stesso, quindi piani e movimenti non cambiano. Se ti serve tenere traccia della distinta di prima, rilascia prima una revisione.`, () => {
+    const fatte = macchine.filter(m => varRigenera(m.id));
+    if (fatte.length) savedToast(fatte.length === 1 ? `Distinta di ${fatte[0].code} rigenerata` : `${fatte.length} distinte rigenerate`);
+    renderVarianti();
+  });
+}
+
+// ── Nuovo modello ──
+// Una macchina diventa modello quando le si dà la prima opzione. Si sceglie
+// fra quelle che non sono già modelli né generate.
+function varNuovoModelloModal() {
+  if (!roleGuard('bom')) return;
+  const libere = (db.items || []).filter(i => i.type === 'macchina' && !i.configuredFromId && !varInPagina(i))
+    .sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  if (!libere.length) { showToast('Nessuna macchina da trasformare in modello: creane una in Articoli di progetto', 'error'); return; }
+  openModal(`<h3>${ico('tree', 'tinted pill', '')} Nuovo modello</h3>
+    <p class="empty-text" style="text-align:left;padding:0 0 10px">Scegli la macchina che fa da modello. La sua distinta resta com'è: dopo aggiungi le opzioni e scrivi le regole sulle sue righe.</p>
+    <div class="modal-field"><label>Macchina</label><select id="var-nuovo" class="sel-cerca">${libere.map(m => `<option value="${m.id}">${esc(m.code + ' — ' + m.name)}</option>`).join('')}</select></div>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="varNuovoModello(val('var-nuovo'))">Crea il modello</button></div>`);
+}
+function varNuovoModello(id) {
+  if (!roleGuard('bom')) return;
+  const it = getItem(id);
+  if (!it || it.type !== 'macchina' || it.configuredFromId || varInPagina(it)) return;
+  it.options = [{ code: 'A', name: '', choices: [] }];
+  touch(it);
+  saveDB();
+  closeModal();
+  currentVarId = id;
+  renderVarianti();
+  savedToast(`${it.code} è un modello: aggiungi le scelte della prima opzione`);
+}
+
+// ── Modifica delle opzioni ──
 function varOpzioniMuta(id, fn) {
   if (!roleGuard('bom')) return;
   const it = getItem(id); if (!it || it.configuredFromId) return;
   if (!Array.isArray(it.options)) it.options = [];
-  if (fn(it) === false) { varOpzioniRefresh(); return; }
+  if (fn(it) === false) { renderVarianti(); return; }
   if (!it.options.length) delete it.options;
   touch(it);
   saveDB();
-  varOpzioniRefresh();
+  renderVarianti();
 }
 function varOpzioneAggiungi(id) {
   varOpzioniMuta(id, it => {
@@ -544,7 +633,13 @@ function varOpzioneAggiungi(id) {
     it.options.push({ code: k, name: '', choices: [] });
   });
 }
-function varOpzioneTogli(id, i) { varOpzioniMuta(id, it => { it.options.splice(i, 1); }); }
+function varOpzioneTogli(id, i) {
+  const it = getItem(id); if (!it || !it.options || !it.options[i]) return;
+  const ultima = it.options.length === 1;
+  const fai = () => varOpzioniMuta(id, x => { x.options.splice(i, 1); });
+  if (ultima) askConfirm(`È l'ultima opzione: togliendola ${it.code} smette di essere un modello e sparisce da questa pagina. Le regole scritte sulle sue righe restano, ma non valgono più.`, fai);
+  else fai();
+}
 function varOpzioneSet(id, i, campo, valore) {
   varOpzioniMuta(id, it => {
     const o = it.options[i]; if (!o) return false;
@@ -572,107 +667,9 @@ function varSceltaSet(id, i, j, campo, valore) {
     if (!c) return false;
     const v = varValore(valore);
     if (campo === 'value') {
-      if (/[|&=!]/.test(v)) { showToast('Il valore non può contenere | & = !: sono i segni delle condizioni', 'error'); return false; }
+      if (/[|&=!]/.test(v)) { showToast('Il valore non può contenere | & = !: sono i segni delle regole', 'error'); return false; }
       if (v && o.choices.some((x, k) => k !== j && varValore(x.value).toLowerCase() === v.toLowerCase())) { showToast(`C'è già la scelta ${v}`, 'error'); return false; }
       c.value = v;
     } else c.label = v;
   });
-}
-
-// ═══════════════════════════════════════════════════════════
-//  IL CONFIGURATORE
-// ═══════════════════════════════════════════════════════════
-onPanelClose('varconf', () => { window.__varConfId = null; });
-function varConfiguraModal(id) {
-  const t = getItem(id);
-  if (!varModello(t)) { showToast('Non è un modello configurabile', 'error'); return; }
-  window.__varConfId = id;
-  const campi = varOpzioni(t).map(o => `<div class="modal-field"><label>${esc(o.name || o.code)} <span class="empty-text" style="padding:0">(${esc(varCodice(o.code))})</span></label>
-    <select class="var-scelta" data-code="${esc(varCodice(o.code))}" onchange="varConfiguraAnteprima()">${o.choices.map(c => `<option value="${esc(c.value)}">${esc(c.label ? `${c.label} (${c.value})` : c.value)}</option>`).join('')}</select></div>`).join('');
-  openModal(`<h3>${ico('tree', 'tinted pill', '')} Configura — ${esc(t.code)}</h3>
-    <p style="color:var(--text-dim);margin-bottom:14px">${esc(t.name)}</p>
-    <div class="modal-grid">${campi}</div>
-    <div id="varconf-prev" style="margin-top:12px"></div>
-    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
-      <button class="add-btn-sm" id="varconf-ok" onclick="varConfiguraGenera()">Genera la macchina</button></div>`, true, 'varconf');
-  varConfiguraAnteprima();
-}
-function varScelteDalForm() {
-  const s = {};
-  document.querySelectorAll('.var-scelta').forEach(el => { s[el.getAttribute('data-code')] = el.value; });
-  return s;
-}
-function varConfiguraAnteprima() {
-  const host = document.getElementById('varconf-prev');
-  if (!host || !window.__varConfId) return;
-  const t = getItem(window.__varConfId);
-  const scelte = varScelteDalForm();
-  const prep = varPrepara(t.id, scelte);
-  const ok = document.getElementById('varconf-ok');
-  if (prep.errori.length) {
-    host.innerHTML = `<div class="mrp-warn">${prep.errori.map(e => `<div>${ico('warning', 'tinted', '')} ${esc(e)}</div>`).join('')}</div>`;
-    if (ok) ok.disabled = true;
-    return;
-  }
-  if (ok) { ok.disabled = false; ok.textContent = prep.esistente ? 'Apri la macchina' : 'Genera la macchina'; }
-  const costo = varCostoScelte(t.id, prep.scelte).total;
-  if (prep.esistente) {
-    host.innerHTML = `<p>Questa combinazione esiste già: <strong>${esc(prep.esistente.code)}</strong> ${esc(prep.esistente.name)}.${varModelloAggiornato(prep.esistente) ? ` <span class="mrp-warn">Il modello è cambiato dopo la generazione: aprendola puoi rigenerarla.</span>` : ''}</p>`;
-    return;
-  }
-  const derivati = prep.nuovi.filter(n => n.id !== prep.macchina.id);
-  host.innerHTML = `<p style="margin:0 0 6px">Costo previsto: <strong>${fmtN(costo)}</strong></p>
-    <div class="table-wrap"><table class="price-table"><thead><tr><th scope="col"></th><th scope="col">Codice</th><th scope="col">Articolo</th></tr></thead><tbody>
-      <tr><td>Nuova</td><td style="font-family:var(--mono)">${esc(prep.macchina.code)}</td><td>${esc(prep.macchina.name)}</td></tr>
-      ${derivati.map(n => `<tr><td>Nuovo</td><td style="font-family:var(--mono)">${esc(n.code)}</td><td>${esc(n.name)}</td></tr>`).join('')}
-      ${prep.riusati.map(n => `<tr><td>Riusato</td><td style="font-family:var(--mono)">${esc(n.code)}</td><td>${esc(n.name)}</td></tr>`).join('')}
-    </tbody></table></div>
-    <p class="empty-text" style="text-align:left;padding:8px 0 0">I gruppi senza righe variabili restano quelli del modello. I gruppi che cambiano con le scelte diventano gruppi derivati, e si riusano quando un'altra configurazione ha già prodotto le stesse righe.</p>`;
-}
-function varConfiguraGenera() {
-  if (!window.__varConfId) return;
-  varGenera(window.__varConfId, varScelteDalForm(), r => {
-    closeModal();
-    savedToast(r.riusata ? `La macchina ${r.item.code} c'era già` : `Generata ${r.item.code}${r.nuovi.length > 1 ? ` con ${r.nuovi.length - 1} ${r.nuovi.length === 2 ? 'gruppo derivato' : 'gruppi derivati'}` : ''}`);
-    currentBomId = r.item.id; bomExpanded = new Set();
-    if (activeView === 'bom') renderBom(); else setView('bom');
-  });
-}
-function varRigeneraUI(id) {
-  const m = getItem(id); if (!m) return;
-  askConfirm(`Riscrivere la distinta di ${m.code} dal modello di adesso, con le stesse scelte? La macchina resta la stessa: cambia la sua distinta, come quando la si modifica a mano. Se serve tenere traccia di quella di prima, rilascia prima una revisione.`, () => {
-    varRigenera(id, r => {
-      savedToast(`Distinta di ${m.code} rigenerata${r.nuovi.length ? ` (${r.nuovi.length} ${r.nuovi.length === 1 ? 'gruppo derivato nuovo' : 'gruppi derivati nuovi'})` : ''}`);
-      if (activeView === 'bom') renderBom();
-      renderInspector();
-    });
-  });
-}
-
-// ═══════════════════════════════════════════════════════════
-//  PANNELLO LATERALE E RIEPILOGO
-// ═══════════════════════════════════════════════════════════
-function varBody(id) {
-  const it = getItem(id); if (!it) return '';
-  const scrivibile = canWrite('bom');
-  if (it.configuredFromId) {
-    const t = getItem(it.configuredFromId);
-    return `<p style="margin:0 0 6px"><strong>Generata da</strong> ${t ? `${codeLink(t.id, t.code)} ${esc(t.name)}` : '(modello eliminato)'}</p>
-      ${t && it.configChoices ? `<p style="margin:0 0 6px">${esc(varEtichetteScelte(t, it.configChoices) || varChiaveScelte(it.configChoices))}</p>` : ''}
-      ${varModelloAggiornato(it) ? `<p class="mrp-warn">${ico('warning', 'tinted', '')} Il modello è cambiato dopo la generazione.</p>${scrivibile ? `<div class="insp-cmds"><button class="insp-cmd" onclick="varRigeneraUI('${it.id}')">${ico('refresh', 'tinted', '')} Rigenera la distinta</button></div>` : ''}` : ''}`;
-  }
-  const opz = varOpzioni(it);
-  const gen = varGenerateDa(id).filter(x => x.type === 'macchina');
-  return `${opz.length ? `<p style="margin:0 0 4px"><strong>Opzioni</strong></p>${opz.map(o => `<div class="insp-multi-row"><span style="font-family:var(--mono)">${esc(varCodice(o.code))}</span> <span>${esc(o.name || '')}: ${esc(o.choices.map(c => c.label || c.value).join(', '))}</span></div>`).join('')}`
-      : '<p class="empty-text" style="text-align:left;padding:0 0 8px">Nessuna opzione. Aggiungendone una, la macchina diventa un modello da configurare.</p>'}
-    ${gen.length ? `<p style="margin:10px 0 4px"><strong>Macchine generate</strong></p>${gen.map(x => `<div class="insp-multi-row">${codeLink(x.id, x.code)} <span>${esc(x.name)}</span>${varModelloAggiornato(x) ? ` <span class="mrp-warn" title="Il modello è cambiato dopo la generazione">${ico('warning', 'tinted', '')}</span>` : ''}</div>`).join('')}` : ''}
-    <div class="insp-cmds">
-      <button class="insp-cmd" onclick="varOpzioniModal('${it.id}')">${ico('edit', 'tinted', '')} ${scrivibile ? 'Modifica opzioni' : 'Opzioni'}</button>
-      ${scrivibile && varModello(it) ? `<button class="insp-cmd" onclick="varConfiguraModal('${it.id}')">${ico('tree', 'tinted', '')} Configura</button>` : ''}
-    </div>`;
-}
-// Per il Riepilogo: le macchine generate da un modello che è cambiato dopo.
-function varGenerateDaAggiornare() {
-  if (!varAttivo()) return [];
-  return (db.items || []).filter(varModelloAggiornato);
 }

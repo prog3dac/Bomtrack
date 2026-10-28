@@ -439,6 +439,10 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .cycle-picker-box .search:focus{border-color:var(--accent)}
 /* Vista Cicli di lavorazione */
 .cyc-part-select{flex:1;min-width:240px}
+/* Varianti: il modello in alto, e codice e nome di ogni opzione (varianti.js) */
+#var-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;min-width:240px;max-width:100%}
+.var-opz-head input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:13px;outline:none}
+.var-opz-head input:focus,#var-select:focus{border-color:var(--accent)}
 /* Da dove viene il costo della parte: si legge qui, si sceglie nella scheda articolo */
 .cycle-note{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:18px;padding:10px 12px;
   background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-dim);line-height:1.5}

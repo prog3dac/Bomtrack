@@ -40,7 +40,7 @@ describe('Integrità della barra', () => {
 
   it('ogni gruppo tiene le viste del suo processo', () => {
     const g = Object.fromEntries(nav(app()).map(x => [x.id, x.views.map(v => v.id)]));
-    assert.deepEqual(g.tech, ['design', 'buy', 'bom', 'report', 'cycles']);
+    assert.deepEqual(g.tech, ['design', 'buy', 'bom', 'report', 'cycles', 'varianti']);
     assert.deepEqual(g.plan, ['jobs', 'mrp', 'load', 'avz']);
     assert.deepEqual(g.buying, ['rfq', 'orders', 'pricelist']);
     assert.deepEqual(g.prod, ['odp', 'odl']);

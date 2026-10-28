@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.119.1';
+const APP_VERSION = '0.120.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -668,7 +668,7 @@ const MODULI = {
   },
   varianti: {
     nome: 'Varianti e configuratore',
-    descr: 'Una macchina modello con opzioni (lunghezza, motore…) e righe di distinta che valgono solo per certe scelte. Il configuratore genera la macchina concreta, con la sua distinta, e riusa quella già fatta per la stessa combinazione.',
+    descr: 'Una macchina modello con opzioni (lunghezza, motore…) e i gruppi che entrano solo per certe scelte, gestiti nella pagina Tecnico → Varianti. Il configuratore genera la macchina concreta, con la sua distinta, e riusa quella già fatta per la stessa combinazione.',
   },
 };
 function moduloAttivo(nome) {
@@ -692,7 +692,7 @@ function roleGuardRuolo(area) {
 // Area di scrittura corrispondente a ciascuna vista (per il banner di sola lettura)
 // `load` (Carico centri) è null come `report`: è un prospetto derivato, in sola
 // lettura, da cui non si scrive niente.
-const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', pricelist: 'catalog', manage: 'manage' };
+const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', pricelist: 'catalog', manage: 'manage' };
 // Le viste in cui l'officina lavora pur senza l'area della vista: lì non va in
 // sola lettura, e le guardie dei singoli gesti fanno il resto.
 const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp']);

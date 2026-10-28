@@ -1,15 +1,16 @@
-// Modulo Varianti (dalla 0.119.0): la macchina modello con le sue opzioni, le
-// righe che valgono solo per certe scelte e il configuratore che genera la
-// macchina concreta.
+// Modulo Varianti (dalla 0.119.0, pagina sua dalla 0.120.0): la macchina
+// modello con le sue opzioni, le righe che valgono solo per certe scelte e il
+// configuratore che genera la macchina concreta.
 //
 // Quello che qui si fissa:
 //   - condizioni e formule si leggono senza eval, e un errore si nomina;
+//   - le regole stanno solo sulle righe del modello, cioè sui gruppi del primo
+//     livello: dentro un gruppo non valgono, e la pagina offre di toglierle;
 //   - il modello non si pianifica, e il suo costo è quello della parte comune;
-//   - la macchina generata è un articolo come gli altri: piano e costo la
-//     leggono senza sapere che è nata da un modello;
-//   - un gruppo che non cambia con le scelte è lo stesso del modello, uno che
-//     cambia diventa un derivato, e i derivati uguali si riusano;
+//   - la macchina generata è un articolo come gli altri e usa i gruppi del
+//     modello così come sono, senza copie;
 //   - quando il modello cambia lo si dice, e Rigenera riallinea;
+//   - tutto si gestisce dalla pagina Tecnico → Varianti;
 //   - a modulo spento non cambia niente.
 
 const assert = require('node:assert/strict');
@@ -19,11 +20,12 @@ const { makeDb, mat, acq, asm, comp } = require('./fixtures.js');
 
 const riga = (itemId, qty, extra) => Object.assign(comp(itemId, qty), extra || {});
 
-// Il nastro: lunghezza 3/4/5 m e motore standard o maggiorato.
-//   tel  — il telaio: il profilo è lungo 2×L metri, le viti sono sempre 4;
-//   trs  — la trasmissione: un motore o l'altro, e due cuscinetti;
-//   fis  — il gruppo fisso, che non cambia mai;
-//   pro  — la protezione, solo sul nastro da 5 m.
+// Il nastro: lunghezza 3/4/5 m e motore standard o maggiorato. I gruppi sono
+// tutti fissi; il modello sceglie quali e quanti.
+//   mod  — il modulo da un metro (2 m di profilo, 2 viti): ce ne sono L;
+//   trss — la trasmissione col motore standard, trsb con quello maggiorato;
+//   fis  — il gruppo fisso, che c'è sempre;
+//   prt  — la protezione, solo sul nastro da 5 m.
 function app(opz) {
   const o = opz || {};
   const a = loadApp({ silent: true });
@@ -33,23 +35,27 @@ function app(opz) {
     items: [
       acq('mots', 300), acq('motb', 450), acq('cus', 10), acq('vite', 1), acq('pro', 50),
       Object.assign(mat('prof', 10), { uom: 'm' }),
-      asm('tel', 'gruppo', { components: [riga('prof', 3, { qtyExpr: 'L*2' }), comp('vite', 4)] }),
-      asm('trs', 'gruppo', { components: [riga('mots', 1, { cond: 'M=S' }), riga('motb', 1, { cond: 'M=B' }), comp('cus', 2)] }),
+      asm('mod', 'gruppo', { components: [comp('prof', 2), comp('vite', 2)] }),
+      asm('trss', 'gruppo', { components: [comp('mots', 1), comp('cus', 2)] }),
+      asm('trsb', 'gruppo', { components: [comp('motb', 1), comp('cus', 2)] }),
       asm('fis', 'gruppo', { components: [comp('vite', 10)] }),
+      asm('prt', 'gruppo', { components: [comp('pro', 1)] }),
       asm('mac', 'macchina', {
         options: [
           { code: 'L', name: 'Lunghezza', choices: [{ value: '3', label: '3 m' }, { value: '4', label: '4 m' }, { value: '5', label: '5 m' }] },
           { code: 'M', name: 'Motore', choices: [{ value: 'S', label: 'standard' }, { value: 'B', label: 'maggiorato' }] },
         ],
-        components: [comp('tel', 1), comp('trs', 1), comp('fis', 1), riga('pro', 1, { cond: 'L=5' })],
+        components: [riga('mod', 3, { qtyExpr: 'L' }), riga('trss', 1, { cond: 'M=S' }), riga('trsb', 1, { cond: 'M=B' }),
+          comp('fis', 1), riga('prt', 1, { cond: 'L=5' })],
       }),
+      asm('mac2', 'macchina', { components: [comp('fis', 1)] }),
     ],
     plans: [{ id: 'pl1', number: 'FAB-1', title: 'p', date: '2026-07-01', active: true, lines: [] }],
   }));
   return a;
 }
 const ev = (a, js) => JSON.parse(a.eval(`(invalidateCaches(), JSON.stringify(${js}))`));
-const genera = (a, scelte) => ev(a, `(() => { const r = varGenera('mac', ${JSON.stringify(scelte)}); return r && { id: r.item.id, code: r.item.code, riusata: r.riusata, nuovi: r.nuovi.map(n => n.code) }; })()`);
+const genera = (a, scelte) => ev(a, `(() => { const r = varGenera('mac', ${JSON.stringify(scelte)}); return r && { id: r.item.id, code: r.item.code, riusata: r.riusata }; })()`);
 const righe = (a, id) => ev(a, `getItem(${JSON.stringify(id)}).components.map(c => [getItem(c.itemId).code, c.qty])`);
 
 describe('Condizioni e formule', () => {
@@ -86,47 +92,39 @@ describe('Condizioni e formule', () => {
 describe('Il modello', () => {
   it('è una macchina con opzioni, e solo a modulo acceso', () => {
     assert.equal(ev(app(), "varModello(getItem('mac'))"), true);
+    assert.equal(ev(app(), "varModello(getItem('mac2'))"), false);
     assert.equal(ev(app(), "varModello(getItem('fis'))"), false);
     assert.equal(ev(app({ spento: true }), "varModello(getItem('mac'))"), false);
   });
-  it('si sa quali gruppi cambiano con le scelte', () => {
-    const a = app();
-    assert.deepEqual(['tel', 'trs', 'fis', 'mac'].map(id => ev(a, `varToccato('${id}')`)), [true, true, false, true]);
-  });
   it('il suo costo è quello della parte comune; l\'intervallo dice da quanto a quanto', () => {
     const a = app();
-    // Comune: 4 viti + 2 cuscinetti + 10 viti = 4 + 20 + 10. Il profilo a
-    // formula non conta finché non si sceglie.
-    assert.equal(ev(a, "costOf('mac').total"), 34);
-    // Minimo: 3 m standard = 34 + 60 di profilo + 300. Massimo: 5 m maggiorato
-    // con la protezione = 34 + 100 + 450 + 50.
-    assert.deepEqual(ev(a, "varIntervalloCosto(getItem('mac'))"), { min: 394, max: 634, n: 6 });
+    // Comune: solo il gruppo fisso, 10 viti. I moduli a formula non contano
+    // finché non si sceglie.
+    assert.equal(ev(a, "costOf('mac').total"), 10);
+    // Minimo: 3 m standard = 3×22 + 320 + 10. Massimo: 5 m maggiorato con la
+    // protezione = 5×22 + 470 + 10 + 50.
+    assert.deepEqual(ev(a, "varIntervalloCosto(getItem('mac'))"), { min: 396, max: 640, n: 6 });
   });
   it('non si mette in un piano: si configura', () => {
     const a = app();
     a.eval("planAddLines('pl1', ['mac', 'fis'])");
     assert.deepEqual(ev(a, "getPlan('pl1').lines.map(l => l.itemId)"), ['fis']);
-    a.eval("planAddLines('pl1', ['tel'])");
-    assert.deepEqual(ev(a, "getPlan('pl1').lines.map(l => l.itemId)"), ['fis'], 'anche un gruppo con righe variabili');
   });
 });
 
 describe('Il configuratore', () => {
-  it('genera la macchina, i gruppi derivati dove cambia qualcosa e riusa il resto', () => {
+  it('genera la macchina con i gruppi del modello, senza copiarli', () => {
     const a = app();
+    const n = ev(a, 'db.items.length');
     const r = genera(a, { L: '4', M: 'B' });
     assert.equal(r.code, 'MAC-V01');
     assert.equal(r.riusata, false);
-    assert.deepEqual(r.nuovi.sort(), ['MAC-V01', 'TEL-V01', 'TRS-V01']);
-    assert.deepEqual(righe(a, r.id), [['TEL-V01', 1], ['TRS-V01', 1], ['FIS', 1]], 'il gruppo fisso è quello del modello, la protezione non c\'è');
-    const tel = ev(a, "getItemByCode('TEL-V01').id");
-    assert.deepEqual(righe(a, tel), [['PROF', 8], ['VITE', 4]]);
-    assert.deepEqual(righe(a, ev(a, "getItemByCode('TRS-V01').id")), [['MOTB', 1], ['CUS', 2]]);
+    assert.equal(ev(a, 'db.items.length'), n + 1, 'nasce solo la macchina');
+    assert.deepEqual(righe(a, r.id), [['MOD', 4], ['TRSB', 1], ['FIS', 1]], 'la protezione non c\'è');
     const m = ev(a, `getItem('${r.id}')`);
     assert.equal(m.configuredFromId, 'mac');
     assert.deepEqual(m.configChoices, { L: '4', M: 'B' });
     assert.match(m.name, /4 m, maggiorato/);
-    assert.equal(ev(a, `getItem('${tel}').name`), 'Assieme tel — 4 m', 'il nome del derivato dice solo le scelte che lo riguardano');
   });
   it('la stessa combinazione non si genera due volte', () => {
     const a = app();
@@ -136,24 +134,17 @@ describe('Il configuratore', () => {
     assert.equal(r2.id, r1.id);
     assert.equal(r2.riusata, true);
     assert.equal(ev(a, 'db.items.length'), n);
-  });
-  it('un gruppo derivato uguale a uno già fatto si riusa', () => {
-    const a = app();
-    genera(a, { L: '4', M: 'B' });
-    const r = genera(a, { L: '4', M: 'S' });
-    assert.equal(r.code, 'MAC-V02');
-    assert.deepEqual(r.nuovi.sort(), ['MAC-V02', 'TRS-V02'], 'il telaio da 4 m c\'era già');
-    assert.deepEqual(righe(a, r.id), [['TEL-V01', 1], ['TRS-V02', 1], ['FIS', 1]]);
+    assert.equal(genera(a, { L: '4', M: 'S' }).code, 'MAC-V02');
   });
   it('la macchina generata costa quanto il configuratore aveva detto, ed è un articolo normale', () => {
     const a = app();
     const r = genera(a, { L: '5', M: 'B' });
-    assert.equal(ev(a, `costOf('${r.id}').total`), 634);
+    assert.equal(ev(a, `costOf('${r.id}').total`), 640);
     assert.equal(ev(a, `costOf('${r.id}').total`), ev(a, "varCostoScelte('mac', { L: '5', M: 'B' }).total"));
     assert.equal(ev(a, `varRichiedeScelte(getItem('${r.id}'))`), false);
     a.eval(`planAddLines('pl1', ['${r.id}'])`);
     const buy = ev(a, "Object.fromEntries(mrpExplodePlan(getPlan('pl1')).buy.map(e => [e.item.id, e.qty]))");
-    assert.deepEqual(buy, { prof: 10, vite: 14, motb: 1, cus: 2, pro: 1 });
+    assert.deepEqual(buy, { prof: 10, vite: 20, motb: 1, cus: 2, pro: 1 });
   });
   it('una scelta che manca o non esiste ferma la generazione', () => {
     const a = app();
@@ -165,10 +156,10 @@ describe('Il configuratore', () => {
   });
   it('una riga che cita un\'opzione che il modello non ha si nomina', () => {
     const a = app();
-    a.eval("getItem('fis').components.push({ itemId: 'pro', qty: 1, scrapPct: 0, cond: 'X=1' })");
+    a.eval("getItem('mac').components.push({ itemId: 'prt', qty: 1, scrapPct: 0, cond: 'X=1' })");
     const e = ev(a, "varPrepara('mac', { L: '4', M: 'S' }).errori");
     assert.equal(e.length, 1);
-    assert.match(e[0], /^FIS, riga 2: l'opzione X non esiste/);
+    assert.match(e[0], /^riga 6 \(PRT\): l'opzione X non esiste/);
   });
   it('il codice dei generati segue lo schema -V e non risulta fuori schema', () => {
     const a = app();
@@ -186,21 +177,63 @@ describe('Il configuratore', () => {
   });
 });
 
+describe('Le regole stanno sul primo livello', () => {
+  it('dentro un gruppo una condizione non vale: la riga conta sempre', () => {
+    const a = app();
+    a.eval("getItem('trsb').components[0].cond = 'M=S'; saveDB()");
+    assert.equal(ev(a, "costOf('trsb').total"), 470);
+    const r = genera(a, { L: '3', M: 'B' });
+    assert.equal(ev(a, `costOf('${r.id}').total`), 66 + 470 + 10);
+    assert.equal(ev(a, "varTagRiga(getItem('trsb').components[0], getItem('trsb'))"), '', 'e la distinta del gruppo non la mostra');
+  });
+  it('la pagina le elenca e le toglie', () => {
+    const a = app();
+    a.eval("getItem('trsb').components[0].cond = 'M=S'; getItem('mac2').components[0].qtyExpr = 'L'; saveDB()");
+    assert.deepEqual(ev(a, 'varRegoleFuoriPosto().map(x => x.code).sort()'), ['MAC2', 'TRSB']);
+    a.eval("varTogliCondizioni('trsb'); confirmYes()");
+    assert.deepEqual(ev(a, 'varRegoleFuoriPosto().map(x => x.code)'), ['MAC2']);
+    assert.equal(ev(a, "getItem('trsb').components[0].cond || null"), null);
+    a.eval("setView('varianti')");
+    assert.match(a.html('var-body'), /Condizioni fuori posto/);
+  });
+  it('una regola si scrive dalla pagina, e un\'opzione che non c\'è si rifiuta', () => {
+    const a = app();
+    a.eval("varRegolaSet('mac', 3, 'cond', 'M=S|B')");
+    assert.equal(ev(a, "getItem('mac').components[3].cond"), 'M=S|B');
+    a.eval("varRegolaSet('mac', 3, 'cond', 'X=1')");
+    assert.equal(ev(a, "getItem('mac').components[3].cond"), 'M=S|B');
+    a.eval("varRegolaSet('mac', 3, 'cond', 'M=')");
+    assert.equal(ev(a, "getItem('mac').components[3].cond"), 'M=S|B', 'neanche una sintassi sbagliata');
+    a.eval("varRegolaSet('mac', 3, 'qtyExpr', 'L*2')");
+    assert.equal(ev(a, "getItem('mac').components[3].qtyExpr"), 'L*2');
+    a.eval("varRegolaSet('mac', 3, 'cond', '')");
+    assert.equal(ev(a, "'cond' in getItem('mac').components[3]"), false, 'vuota vuol dire sempre');
+  });
+});
+
 describe('Il modello cambia', () => {
   it('la macchina generata lo sa, e Rigenera riscrive la sua distinta', () => {
     const a = app();
     const r = genera(a, { L: '4', M: 'B' });
     assert.equal(ev(a, `varModelloAggiornato(getItem('${r.id}'))`), false);
-    a.eval("getItem('tel').components[1].qty = 6; saveDB()");
+    a.eval("getItem('mac').components[3].qty = 2; saveDB()");
     assert.equal(ev(a, `varModelloAggiornato(getItem('${r.id}'))`), true);
     assert.deepEqual(ev(a, 'varGenerateDaAggiornare().map(x => x.code)'), ['MAC-V01']);
-    a.eval(`varRigenera('${r.id}')`);
+    a.eval(`varRigeneraUI(['${r.id}']); confirmYes()`);
     assert.equal(ev(a, `getItem('${r.id}').code`), 'MAC-V01', 'la macchina resta la stessa');
-    assert.deepEqual(righe(a, r.id), [['TEL-V02', 1], ['TRS-V01', 1], ['FIS', 1]], 'nuovo telaio, la trasmissione non è cambiata');
-    assert.deepEqual(righe(a, ev(a, "getItemByCode('TEL-V02').id")), [['PROF', 8], ['VITE', 6]]);
+    assert.deepEqual(righe(a, r.id), [['MOD', 4], ['TRSB', 1], ['FIS', 2]]);
     assert.equal(ev(a, `varModelloAggiornato(getItem('${r.id}'))`), false);
   });
-  it('un gruppo fisso che cambia non chiede di rigenerare: è lo stesso articolo', () => {
+  it('Rigenera tutte prende più macchine insieme', () => {
+    const a = app();
+    const r1 = genera(a, { L: '3', M: 'S' }), r2 = genera(a, { L: '5', M: 'B' });
+    a.eval("getItem('mac').components[0].qtyExpr = 'L+1'; saveDB()");
+    a.eval("varRigeneraTutte('mac'); confirmYes()");
+    assert.deepEqual(righe(a, r1.id)[0], ['MOD', 4]);
+    assert.deepEqual(righe(a, r2.id)[0], ['MOD', 6]);
+    assert.deepEqual(ev(a, 'varGenerateDaAggiornare()'), []);
+  });
+  it('un gruppo che cambia dentro non chiede di rigenerare: è lo stesso articolo', () => {
     const a = app();
     const r = genera(a, { L: '4', M: 'B' });
     a.eval("getItem('fis').components[0].qty = 12; saveDB()");
@@ -209,18 +242,25 @@ describe('Il modello cambia', () => {
   });
 });
 
-describe('Le schermate', () => {
-  it('la distinta del modello dice che è un modello e l\'intervallo di costo', () => {
+describe('La pagina Varianti', () => {
+  it('sta sotto Tecnico, e solo a modulo acceso', () => {
     const a = app();
-    assert.match(ev(a, "varBannerBom(getItem('mac'))"), /Modello configurabile.*da € 394,00 a € 634,00 su 6 combinazioni/s);
-    assert.match(ev(a, "varTagRiga(getItem('mac').components[3])"), /se L=5/);
+    a.eval("setView('varianti')");
+    assert.match(a.html('sub-nav'), />Varianti</);
+    assert.match(a.html('var-body'), /Opzioni.*Regole.*Configura.*Varianti generate/s);
+    const b = app({ spento: true });
+    b.eval("setView('bom')");
+    assert.doesNotMatch(b.html('sub-nav'), />Varianti</);
   });
-  it('il pannello laterale ha la scheda Varianti sulle macchine, a modulo acceso', () => {
-    const conta = a => ev(a, "inspSchedeArticolo(getItem('mac')).map(s => s.id)").includes('varianti');
-    assert.equal(conta(app()), true);
-    assert.equal(conta(app({ spento: true })), false);
+  it('un modello nuovo nasce da una macchina che c\'è già', () => {
+    const a = app();
+    a.eval("varNuovoModello('mac2')");
+    assert.deepEqual(ev(a, "getItem('mac2').options"), [{ code: 'A', name: '', choices: [] }]);
+    assert.equal(ev(a, 'currentVarId'), 'mac2');
+    assert.equal(ev(a, "varModello(getItem('mac2'))"), false, 'finché non ha scelte non si configura');
+    assert.deepEqual(ev(a, 'varModelli().map(x => x.id)'), ['mac', 'mac2'], 'ma è già nella pagina');
   });
-  it('le opzioni si scrivono dalla scheda del modello', () => {
+  it('le opzioni si scrivono dalla pagina', () => {
     const a = app();
     a.eval("varOpzioneAggiungi('mac')");
     a.eval("varOpzioneSet('mac', 2, 'code', 'p'); varOpzioneSet('mac', 2, 'name', 'Protezione')");
@@ -235,26 +275,29 @@ describe('Le schermate', () => {
     a.eval("varOpzioneSet('mac', 2, 'code', 'L')");
     assert.equal(ev(a, "getItem('mac').options[2].code"), 'P', 'un codice già usato non si accetta');
   });
-});
-
-describe('Si comincia da Gestione DB', () => {
-  it('una macchina senza opzioni offre di aggiungerle; un gruppo fisso no', () => {
+  it('fuori dalla pagina restano solo segni, nessun comando', () => {
     const a = app();
-    a.eval("delete getItem('mac').options");
-    assert.match(ev(a, "varBannerBom(getItem('mac'))"), /non ha opzioni.*Aggiungi opzioni/s);
-    assert.equal(ev(a, "varBannerBom(getItem('fis'))"), '');
+    assert.match(ev(a, "varRigaBom(getItem('mac'))"), /Modello configurabile.*varApri\('mac'\)/s);
+    assert.match(ev(a, "varTagRiga(getItem('mac').components[4], getItem('mac'))"), /se L=5/);
+    const r = genera(a, { L: '3', M: 'S' });
+    assert.match(ev(a, `varRigaBom(getItem('${r.id}'))`), /Generata da MAC con 3 m, standard/);
+    assert.equal(ev(a, "varRigaBom(getItem('mac2'))"), '');
+    const ins = ev(a, "inspSchedeArticolo(getItem('mac')).map(s => s.id).concat(inspAzioniArticolo(getItem('mac')).map(c => c.label || c.testo || ''))");
+    assert.equal(ins.includes('varianti'), false);
+    assert.equal(ins.some(x => /Configura|Rigenera/.test(x)), false);
   });
 });
 
 describe('A modulo spento', () => {
   it('le righe condizionate contano come righe normali e niente è un modello', () => {
     const a = app({ spento: true });
-    // Tutto sommato: 3 m di profilo (la quantità scritta), 4 viti, i due
-    // motori, 2 cuscinetti, 10 viti, la protezione.
-    assert.equal(ev(a, "costOf('mac').total"), 30 + 4 + 300 + 450 + 20 + 10 + 50);
+    // Tutto sommato: 3 moduli (la quantità scritta), le due trasmissioni, il
+    // gruppo fisso, la protezione.
+    assert.equal(ev(a, "costOf('mac').total"), 66 + 320 + 470 + 10 + 50);
     assert.equal(ev(a, "varRichiedeScelte(getItem('mac'))"), false);
-    assert.equal(ev(a, "varBannerBom(getItem('mac'))"), '');
-    assert.equal(ev(a, "varTagRiga(getItem('mac').components[3])"), '');
+    assert.equal(ev(a, "varRigaBom(getItem('mac'))"), '');
+    assert.equal(ev(a, "varTagRiga(getItem('mac').components[4], getItem('mac'))"), '');
+    assert.deepEqual(ev(a, 'varRegoleFuoriPosto()'), []);
     a.eval("planAddLines('pl1', ['mac'])");
     assert.deepEqual(ev(a, "getPlan('pl1').lines.map(l => l.itemId)"), ['mac']);
   });

@@ -385,6 +385,16 @@
     <div id="cyc-body"></div>
   </div>
 
+  <!-- VARIANTI (modulo): modelli, opzioni, regole, configuratore — varianti.js -->
+  <div id="view-varianti" class="view-panel">
+    <div class="bom-toolbar">
+      <h2 class="section-title"><svg class="ico ic-tree tinted pill" aria-hidden="true"><use href="#ic-tree"></use></svg> Varianti</h2>
+      <select id="var-select" aria-label="Modello" onchange="onVarSelect()"></select>
+      <button class="add-btn-sm" onclick="varNuovoModelloModal()">+ Nuovo modello</button>
+    </div>
+    <div id="var-body"></div>
+  </div>
+
   <!-- COSTIFICAZIONE & REPORT -->
   <div id="view-report" class="view-panel">
     <h2 class="section-title"><svg class="ico ic-euro tinted pill" aria-hidden="true"><use href="#ic-euro"></use></svg> Costificazione &amp; Report</h2>
