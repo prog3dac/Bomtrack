@@ -520,7 +520,7 @@ const SCHEMA = {
 const REFS = {
   items: {
     fields: { supplierId: 'supplier', familyId: 'family', subFamilyId: 'subFamily',
-      machineItemId: 'item', groupItemId: 'item', replacedBy: 'item' },
+      machineItemId: 'item', groupItemId: 'item', replacedById: 'item' },
     children: {
       components: { itemId: 'item' },
       alternatives: { itemId: 'item' },

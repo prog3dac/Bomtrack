@@ -80,6 +80,11 @@ describe('Gli alternativi dell\'articolo', () => {
     assert.deepEqual(ev(a, "altUsatoDa('fag').map(i => i.id)"), ['skf']);
     assert.equal(ev(a, "isItemUsedAnywhere('fag')"), true);
   });
+  it('i riferimenti nuovi sono dichiarati in REFS con il nome vero del campo', () => {
+    const a = app();
+    assert.equal(ev(a, 'REFS.items.fields.replacedById'), 'item');
+    assert.equal(ev(a, 'REFS.items.children.alternatives.itemId'), 'item');
+  });
 });
 
 describe('Il fabbisogno propone, non decide', () => {
