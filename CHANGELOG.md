@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.120.3 — 2026-10-28
+
+**Varianti: la codifica è quella del modello.** La macchina generata eredita tutta la codifica del modello: macrofamiglia, sottofamiglia, sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati, con una nota che rimanda al modello. Quando si salva il modello, le sue varianti lo seguono (anche Rigenera riallinea). Una variante non conta come un'altra macchina con la stessa sigla, e non compare fra le macchine a cui legare un gruppo: i gruppi stanno sul modello. Il filtro per macchina negli elenchi articoli mostra il modello insieme alle sue varianti.
+
 ### 0.120.2 — 2026-10-28
 
 **Varianti: quantità per scelta, ed esempi.** Nella *Quantità da formula* una tabella dà la quantità per ogni scelta, anche di un'opzione a lettere: `M(S=2; B=3)` vale 2 col motore standard e 3 col maggiorato, e una scelta non scritta vale 0. Si combina con il resto della formula (`L*M(S=1; B=2)`). Una scelta che l'opzione non ha si rifiuta subito. Il pulsante **Esempi** della sezione Regole apre una finestra con esempi pratici delle due colonne.

@@ -326,6 +326,29 @@ describe('A modulo spento', () => {
   });
 });
 
+describe('La codifica è quella del modello', () => {
+  it('la variante eredita famiglia, sigla e schema, e li segue quando il modello cambia', () => {
+    const a = app();
+    a.eval("Object.assign(getItem('mac'), { familyId: 'f1', subFamilyId: 's1', sigla: 'NST', gCodeLen: 3, gCodeType: 'alpha', incrDigitsS: 2, incrDigitsN: 3 })");
+    const r = genera(a, { L: '3', M: 'S' });
+    const campi = "(({ familyId, subFamilyId, sigla, gCodeLen, gCodeType, incrDigitsS, incrDigitsN }) => ({ familyId, subFamilyId, sigla, gCodeLen, gCodeType, incrDigitsS, incrDigitsN }))";
+    assert.deepEqual(ev(a, `${campi}(getItem('${r.id}'))`), ev(a, `${campi}(getItem('mac'))`));
+    a.eval("getItem('mac').sigla = 'NSX'; delete getItem('mac').subFamilyId; varEreditaCodifica(getItem('mac'))");
+    assert.equal(ev(a, `getItem('${r.id}').sigla`), 'NSX');
+    assert.equal(ev(a, `'subFamilyId' in getItem('${r.id}')`), false);
+  });
+  it('nella scheda è bloccata, e non conta come un\'altra macchina con la stessa sigla', () => {
+    const a = app();
+    a.eval("getItem('mac').sigla = 'NST'");
+    const r = genera(a, { L: '3', M: 'S' });
+    const lock = ev(a, `itemLockState(getItem('${r.id}'))`);
+    assert.equal(lock.structLocked, true);
+    assert.equal(lock.ereditata, true);
+    assert.match(ev(a, `itemLockNote(itemLockState(getItem('${r.id}')))`), /Variante generata da un modello/);
+    assert.deepEqual(ev(a, 'machineItems().map(m => m.id)'), ['mac', 'mac2']);
+  });
+});
+
 describe('Gli esempi', () => {
   it('la sezione Regole li apre in una finestra, con le formule che il parser accetta', () => {
     const a = app();

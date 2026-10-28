@@ -963,7 +963,7 @@ function catalogFilteredRows(scope, soloIds) {
   if (fsf) rows = rows.filter(i => i.subFamilyId === fsf);
   // Acquisti non ha questi due filtri in barra: `leggi` dà sempre '' e qui non
   // scattano mai.
-  if (fm) rows = rows.filter(i => i.type === 'macchina' ? i.id === fm : i.machineItemId === fm);
+  if (fm) rows = rows.filter(i => i.type === 'macchina' ? i.id === fm || i.configuredFromId === fm : i.machineItemId === fm);
   if (fg) rows = rows.filter(i => i.type === 'gruppo' ? i.id === fg : i.groupItemId === fg);
   if (q) rows = rows.filter(i => (i.code + ' ' + i.name).toLowerCase().includes(q));
   // La scelta fatta a mano è un filtro come gli altri, ma applicato per ultimo:
@@ -1113,9 +1113,13 @@ function itemPricingSummary(it) {
 // solo per nome/concetto/descrizione, mai per codice/famiglia/codifica.
 function itemLockState(it) {
   const used = !!it && isItemUsedAnywhere(it.id);
-  return { used, structLocked: used, nameLocked: used && !isAdmin() };
+  // Una macchina generata da un modello (varianti.js) eredita tutta la
+  // codifica: codice, famiglia, sigla e schema si cambiano sul modello.
+  const ereditata = !!it && !!it.configuredFromId;
+  return { used, ereditata, structLocked: used || ereditata, nameLocked: used && !isAdmin() };
 }
 function itemLockNote(lock) {
+  if (lock.ereditata) return `<p class="empty-text" style="text-align:left;padding:0 0 10px">${ico('lock', 'tinted', '')} Variante generata da un modello: codice e codifica (famiglia, sigla macchina, schema dei codici) sono quelli del modello e si cambiano lì.</p>`;
   if (!lock.used) return '';
   const extra = lock.nameLocked ? '' : ' Come amministratore puoi comunque correggere nome/concetto/descrizione.';
   return `<p class="empty-text" style="text-align:left;padding:0 0 10px">${ico('lock', 'tinted', '')} Articolo già utilizzato: i campi identificativi non sono più modificabili.${extra}</p>`;
@@ -1274,7 +1278,9 @@ function codingFieldsHtml(it, structLocked) {
 function renderCodePreview() {
   const box = document.getElementById('code-preview');
   if (!box) return;
-  const a = anteprimaCodiciFigli(itemDraftFromForm(), val('it-code'));
+  // Una variante generata non ha figli suoi: i gruppi stanno sul modello.
+  const gen = getItem(window.__editingItemId);
+  const a = gen && gen.configuredFromId ? null : anteprimaCodiciFigli(itemDraftFromForm(), val('it-code'));
   if (!a) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = '';
   const righe = a.righe.map(r => `<div class="code-preview-row">
@@ -2336,6 +2342,8 @@ function saveItemEdit(id) {
   const fare = () => {
     readItemForm(it);
     touch(it);
+    // Le varianti generate da questa macchina ne seguono la codifica.
+    if (typeof varEreditaCodifica === 'function') varEreditaCodifica(it);
     saveDB(); closeModal(); renderCatalogs(); savedToast('Articolo aggiornato');
   };
   // Solo un codice cambiato va impegnato: quello che l'articolo ha già è suo.

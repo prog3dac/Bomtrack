@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.120.2';
+const APP_VERSION = '0.120.3';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -1121,7 +1121,10 @@ function typeHint(len, type) { return `${len} car., ${(CODE_TYPES[type] || '').t
 function typeOptionsHtml(sel) {
   return Object.keys(CODE_TYPES).map(v => `<option value="${v}" ${v === sel ? 'selected' : ''}>${CODE_TYPES[v]}</option>`).join('');
 }
-function machineItems() { return (db.items || []).filter(i => i.type === 'macchina'); }
+// Le macchine che portano una codifica propria. Quelle generate da un modello
+// (varianti.js) ne hanno la sigla e lo schema, ereditati: non contano come
+// un'altra macchina con la stessa sigla, e i gruppi stanno sul modello.
+function machineItems() { return (db.items || []).filter(i => i.type === 'macchina' && !i.configuredFromId); }
 function groupItemsFor(machineId) { return (db.items || []).filter(i => i.type === 'gruppo' && i.machineItemId === machineId); }
 function itemSigla(id) { const it = getItem(id); return it ? (it.sigla || '') : ''; }
 // Numeri già usati dai codici degli articoli passati (parte finale numerica del codice)

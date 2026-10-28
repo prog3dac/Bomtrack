@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.120.2</span>
+        <span class="chip">v0.120.3</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -593,6 +593,7 @@ PRT-…               parte non legata a una macchina</code></pre>
 <p><strong>Configura.</strong> Si sceglie un valore per ogni opzione, e l'anteprima dice cosa nascerà: la <strong>macchina</strong> con codice <code>&lt;codice del modello&gt;-V01</code>, <code>-V02</code>…, il nome del modello seguito dalle scelte, il costo e i gruppi che conterrà. Sopra c'è l'intervallo di costo <strong>da quanto a quanto</strong> su tutte le combinazioni, fino a 256. <strong>Genera la macchina</strong> la crea; se la combinazione esiste già, il pulsante diventa <strong>Apri la macchina</strong>.</p>
 <p><strong>Varianti generate.</strong> Le macchine nate da questo modello, con le scelte, il costo e lo stato: <em>aggiornata</em> oppure <em>modello cambiato</em>.</p>
 <p><strong>La macchina generata è una macchina come le altre.</strong> Si mette in un piano, si costifica, si revisiona. In Gestione DB una riga sopra l'albero dice da quale modello è nata.</p>
+<p><strong>La codifica è quella del modello.</strong> La macchina generata eredita macrofamiglia, sottofamiglia, sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati: si cambiano sul modello, e salvando il modello le varianti lo seguono. Una variante non conta come un'altra macchina con la stessa sigla e non ha gruppi suoi: i gruppi stanno sul modello.</p>
 <p><strong>Il modello non si mette in un piano.</strong> Aggiungerlo a un piano viene rifiutato con un avviso; un piano che ne contiene già uno lo segnala con <em>modello da configurare</em>. Il <strong>costo</strong> del modello nelle card e in Gestione DB è quello della <strong>parte comune</strong>, cioè delle righe senza regole.</p>
 <p><strong>Quando il modello cambia.</strong> Ogni macchina generata ricorda com'era il modello quando è nata. Se poi cambiano le opzioni o le righe del modello, la macchina risulta <em>modello cambiato</em>, il Riepilogo la segnala (segnale 15) e nella pagina c'è <strong>Rigenera</strong>, o <strong>Rigenera tutte</strong> quando sono più d'una. Rigenera riscrive la distinta della macchina con le stesse scelte, sul modello di adesso: il codice resta lo stesso, così piani e movimenti non cambiano. Per tenere traccia della distinta di prima, rilascia una revisione prima di rigenerare. Un gruppo che cambia dentro non chiede di rigenerare: è lo stesso articolo, e la modifica arriva già.</p>
 <p><strong>Condizioni fuori posto.</strong> Con la 0.119 le regole si potevano scrivere anche dentro i gruppi. Dalla 0.120 lì non valgono più e le righe contano sempre: la pagina elenca gli assiemi che ne hanno ancora, con il pulsante <strong>Togli le condizioni</strong>.</p>

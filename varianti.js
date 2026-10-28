@@ -304,8 +304,9 @@ function varPrepara(modelloId, scelteDate, macchina) {
     out.macchina = Object.assign({ id: gid(), type: 'macchina', uom: t.uom, notes: t.notes || '', active: true,
       name: `${t.name} — ${varEtichetteScelte(t, norm.scelte)}`,
       configuredFromId: t.id, configChoices: norm.scelte, configKey: chiave }, dati);
-    ['overheadPctOverride', 'marginPctOverride', 'assemblyDays', 'familyId', 'subFamilyId']
+    ['overheadPctOverride', 'marginPctOverride', 'assemblyDays']
       .forEach(k => { if (t[k] != null && t[k] !== '') out.macchina[k] = t[k]; });
+    varCopiaCodifica(t, out.macchina);
     out.macchina.code = varCodiceNuovo(t);
   }
   return out;
@@ -364,9 +365,31 @@ function varRigenera(id) {
   m.components = prep.macchina.components;
   m.operations = prep.macchina.operations;
   m.configHash = prep.macchina.configHash;
+  varCopiaCodifica(getItem(m.configuredFromId), m);
   touch(m);
   saveDB();
   return m;
+}
+// La codifica che la variante eredita dal modello, tutta: famiglia, sigla
+// macchina e schema dei codici dei figli. Non si scrive sulla variante (la
+// sua scheda la blocca): si copia qui, alla generazione, a Rigenera e quando
+// si salva il modello.
+const VAR_CODIFICA = ['familyId', 'subFamilyId', 'sigla', 'gCodeLen', 'gCodeType', 'incrDigitsS', 'incrDigitsN'];
+function varCopiaCodifica(t, m) {
+  if (!t || !m) return false;
+  let cambiata = false;
+  VAR_CODIFICA.forEach(k => {
+    const v = t[k] != null && t[k] !== '' ? t[k] : undefined;
+    if (m[k] === v) return;
+    if (v === undefined) delete m[k]; else m[k] = v;
+    cambiata = true;
+  });
+  return cambiata;
+}
+// Dopo il salvataggio del modello: le sue varianti lo seguono.
+function varEreditaCodifica(t) {
+  if (!t || t.configuredFromId) return;
+  varGenerateDa(t.id).forEach(m => { if (varCopiaCodifica(t, m)) touch(m); });
 }
 function varGenerateDa(id) { return (db.items || []).filter(x => x.configuredFromId === id); }
 // Per il Riepilogo: le macchine generate da un modello che è cambiato dopo.

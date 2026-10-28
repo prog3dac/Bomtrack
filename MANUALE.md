@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.120.2**
+**Versione dell'app documentata: 0.120.3**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1247,6 +1247,11 @@ già, il pulsante diventa **Apri la macchina**.
 
 **La macchina generata è una macchina come le altre.** Si mette in un piano, si costifica, si
 revisiona. In Gestione DB una riga sopra l'albero dice da quale modello è nata.
+
+**La codifica è quella del modello.** La macchina generata eredita macrofamiglia, sottofamiglia,
+sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati: si
+cambiano sul modello, e salvando il modello le varianti lo seguono. Una variante non conta come
+un'altra macchina con la stessa sigla e non ha gruppi suoi: i gruppi stanno sul modello.
 
 **Il modello non si mette in un piano.** Aggiungerlo a un piano viene rifiutato con un avviso; un
 piano che ne contiene già uno lo segnala con *modello da configurare*. Il **costo** del modello
