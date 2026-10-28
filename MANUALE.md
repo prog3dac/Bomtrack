@@ -1206,10 +1206,13 @@ vende in più versioni: lunghezza 3, 4 o 5 m, motore standard o maggiorato. Inve
 una distinta per combinazione, se ne tiene una sola, il **modello**, e il configuratore genera la
 macchina di ogni combinazione.
 
-**Il modello.** È una macchina con delle **opzioni**. Le opzioni si scrivono da **Opzioni** sulla
-striscia sopra l'albero, o dalla scheda **Varianti** del pannello laterale. Ogni opzione ha un
-**codice** breve (`L`, `M`), un nome e le sue scelte, scritte in una riga: `3 = 3 m; 4 = 4 m; 5 = 5 m`.
-Prima dell'uguale c'è il valore che le righe citano, dopo l'etichetta che si legge.
+**Il modello.** È una macchina con delle **opzioni**. In *Tecnico → Gestione DB*, con il modulo
+acceso, ogni macchina ha una striscia sopra l'albero: su una macchina che non ha ancora opzioni
+c'è il pulsante **Aggiungi opzioni**, su un modello ci sono **Opzioni** e **Configura**. Le opzioni
+si scrivono anche dalla scheda **Varianti** del pannello laterale. Ogni opzione ha un **codice**
+breve (`L`, `M`), un nome e le sue **scelte**, una per riga, in due campi: il **valore** (`3`), che
+è quello che le righe di distinta citano, e l'**etichetta** (`3 metri`), che è quella che si legge
+nel configuratore e nel nome della macchina generata.
 
 **Le righe che cambiano.** Nella finestra *Modifica componente* di una riga, a modulo acceso, ci
 sono due campi in più.

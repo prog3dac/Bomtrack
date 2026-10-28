@@ -223,10 +223,26 @@ describe('Le schermate', () => {
   it('le opzioni si scrivono dalla scheda del modello', () => {
     const a = app();
     a.eval("varOpzioneAggiungi('mac')");
-    a.eval("varOpzioneSet('mac', 2, 'code', 'p'); varOpzioneSet('mac', 2, 'name', 'Protezione'); varOpzioneSet('mac', 2, 'choices', 'S = sì; N = no; S')");
-    assert.deepEqual(ev(a, "getItem('mac').options[2]"), { code: 'P', name: 'Protezione', choices: [{ value: 'S', label: 'sì' }, { value: 'N', label: 'no' }] });
+    a.eval("varOpzioneSet('mac', 2, 'code', 'p'); varOpzioneSet('mac', 2, 'name', 'Protezione')");
+    a.eval("varSceltaAggiungi('mac', 2); varSceltaSet('mac', 2, 0, 'value', 'S'); varSceltaSet('mac', 2, 0, 'label', 'sì')");
+    a.eval("varSceltaAggiungi('mac', 2); varSceltaSet('mac', 2, 1, 'value', 's')");
+    assert.equal(ev(a, "getItem('mac').options[2].choices[1].value"), '', 'un valore già usato non si accetta');
+    a.eval("varSceltaSet('mac', 2, 1, 'value', 'N'); varSceltaSet('mac', 2, 1, 'label', 'no'); varSceltaAggiungi('mac', 2)");
+    assert.deepEqual(ev(a, "getItem('mac').options[2]"), { code: 'P', name: 'Protezione', choices: [{ value: 'S', label: 'sì' }, { value: 'N', label: 'no' }, { value: '', label: '' }] });
+    assert.equal(ev(a, "varOpzioni(getItem('mac'))[2].choices.length"), 2, 'la scelta ancora vuota non conta');
+    a.eval("varSceltaTogli('mac', 2, 2)");
+    assert.equal(ev(a, "getItem('mac').options[2].choices.length"), 2);
     a.eval("varOpzioneSet('mac', 2, 'code', 'L')");
     assert.equal(ev(a, "getItem('mac').options[2].code"), 'P', 'un codice già usato non si accetta');
+  });
+});
+
+describe('Si comincia da Gestione DB', () => {
+  it('una macchina senza opzioni offre di aggiungerle; un gruppo fisso no', () => {
+    const a = app();
+    a.eval("delete getItem('mac').options");
+    assert.match(ev(a, "varBannerBom(getItem('mac'))"), /non ha opzioni.*Aggiungi opzioni/s);
+    assert.equal(ev(a, "varBannerBom(getItem('fis'))"), '');
   });
 });
 

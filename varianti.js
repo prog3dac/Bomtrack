@@ -37,9 +37,13 @@ function invalidateVarianti() { _varToccati = null; }
 //  OPZIONI, CONDIZIONI E FORMULE
 // ═══════════════════════════════════════════════════════════
 // Le opzioni valide del modello: un codice, un nome, almeno una scelta.
+// Le scelte senza valore (una riga appena aggiunta e non ancora scritta) non
+// contano.
 function varOpzioni(it) {
   if (!it || !Array.isArray(it.options)) return [];
-  return it.options.filter(o => o && o.code && Array.isArray(o.choices) && o.choices.length);
+  return it.options.filter(o => o && o.code && Array.isArray(o.choices))
+    .map(o => Object.assign({}, o, { choices: o.choices.filter(c => c && varValore(c.value)) }))
+    .filter(o => o.choices.length);
 }
 function varCodice(c) { return String(c == null ? '' : c).trim().toUpperCase(); }
 function varValore(v) { return String(v == null ? '' : v).trim(); }
@@ -463,6 +467,10 @@ function varBannerBom(it) {
     return riga(`${ico('tree', 'tinted', '')} <span>Generato da ${codeLink(t.id, t.code)}${scelte}.${vecchia ? ` <span class="mrp-warn">${ico('warning', 'tinted', '')} Il modello è cambiato dopo la generazione.</span>` : ''}</span>`,
       vecchia && scrivibile ? `<button class="add-btn-sm" onclick="varRigeneraUI('${it.id}')">Rigenera</button>` : '');
   }
+  // Una macchina qualunque: da qui si comincia, aggiungendo la prima opzione.
+  if (it.type === 'macchina' && !it.configuredFromId)
+    return riga(`${ico('tree', 'tinted', '')} <span>${(it.options || []).length ? 'Le opzioni di questa macchina non hanno ancora scelte: finché non ne hanno, non è un modello.' : 'Questa macchina non ha opzioni. Aggiungendone una (lunghezza, motore…) diventa un modello da configurare.'}</span>`,
+      `<button class="${scrivibile ? 'add-btn-sm' : 'btn-outline'}" onclick="varOpzioniModal('${it.id}')">${scrivibile ? 'Aggiungi opzioni' : 'Opzioni'}</button>`);
   if (varToccato(it.id)) return riga(`${ico('tree', 'tinted', '')} <span>Ha righe che valgono solo con certe scelte: si usa dentro un modello configurabile, e il configuratore ne fa la copia giusta per ogni combinazione.</span>`);
   return '';
 }
@@ -471,18 +479,6 @@ function varGenerateDa(id) { return (db.items || []).filter(x => x.configuredFro
 // ═══════════════════════════════════════════════════════════
 //  OPZIONI DEL MODELLO
 // ═══════════════════════════════════════════════════════════
-// Le scelte si scrivono in una riga: «3 = 3 metri; 4 = 4 metri; 5».
-function varScelteTesto(o) {
-  return (o.choices || []).map(c => c.label && c.label !== c.value ? `${c.value} = ${c.label}` : c.value).join('; ');
-}
-function varScelteDaTesto(testo) {
-  const visti = new Set();
-  return String(testo || '').split(';').map(p => {
-    const [v, ...l] = p.split('=');
-    return { value: varValore(v), label: varValore(l.join('=')) };
-  }).filter(c => c.value && !visti.has(c.value.toLowerCase()) && visti.add(c.value.toLowerCase()))
-    .map(c => c.label ? c : { value: c.value, label: '' });
-}
 onPanelClose('varopzioni', () => { window.__varModelloId = null; });
 function varOpzioniModal(id) {
   const it = getItem(id); if (!it || it.type !== 'macchina') return;
@@ -498,22 +494,37 @@ function varOpzioniRefresh() {
   if (activeView === 'bom') renderBom();
   renderInspector();
 }
+// Ogni opzione è un riquadro: codice e nome in testa, sotto le sue scelte,
+// una per riga con il valore (quello che le righe di distinta citano) e
+// l'etichetta (quello che si legge nel configuratore e nel nome della macchina).
 function varOpzioniBody(id) {
   const it = getItem(id); if (!it) return '';
   const scrivibile = canWrite('bom') && !it.configuredFromId;
   const opz = Array.isArray(it.options) ? it.options : [];
-  const tab = opz.length ? `<div class="table-wrap"><table class="price-table"><thead><tr><th scope="col">Codice</th><th scope="col">Opzione</th><th scope="col">Scelte (valore = etichetta; …)</th><th scope="col"></th></tr></thead><tbody>
-    ${opz.map((o, i) => scrivibile ? `<tr>
-        <td><input value="${esc(o.code || '')}" style="width:70px;font-family:var(--mono)" onchange="varOpzioneSet('${id}', ${i}, 'code', this.value)"></td>
-        <td><input value="${esc(o.name || '')}" placeholder="es. Lunghezza" onchange="varOpzioneSet('${id}', ${i}, 'name', this.value)"></td>
-        <td><input value="${esc(varScelteTesto(o))}" placeholder="3 = 3 metri; 4 = 4 metri" style="width:100%" onchange="varOpzioneSet('${id}', ${i}, 'choices', this.value)"></td>
-        <td><button class="mini-btn" title="Togli l'opzione" onclick="varOpzioneTogli('${id}', ${i})">${ico('trash', 'tinted', 'Togli')}</button></td></tr>`
-      : `<tr><td style="font-family:var(--mono)">${esc(o.code || '')}</td><td>${esc(o.name || '')}</td><td>${esc(varScelteTesto(o))}</td><td></td></tr>`).join('')}
-    </tbody></table></div>`
-    : '<p class="empty-text" style="text-align:left;padding:0 0 8px">Nessuna opzione: la macchina non è un modello.</p>';
-  return `${tab}
-    ${scrivibile ? `<div style="margin-top:10px"><button class="add-btn-sm" onclick="varOpzioneAggiungi('${id}')">+ Aggiungi un'opzione</button></div>` : ''}
-    <p class="empty-text" style="text-align:left;padding:12px 0 0">Il codice dell'opzione (es. <code>L</code>) è quello che le righe di distinta citano: «vale solo se» <code>L=3|4</code>, oppure la quantità <code>L*2</code>. Una macchina con almeno un'opzione è un modello: non si mette in un piano, si configura.</p>`;
+  const ro = (v, mono) => `<span${mono ? ' style="font-family:var(--mono)"' : ''}>${esc(v || '')}</span>`;
+  const blocco = (o, i) => {
+    const scelte = Array.isArray(o.choices) ? o.choices : [];
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div class="modal-grid" style="align-items:end">
+        <div class="modal-field"><label>Codice</label>${scrivibile ? `<input value="${esc(o.code || '')}" style="font-family:var(--mono)" onchange="varOpzioneSet('${id}', ${i}, 'code', this.value)">` : ro(o.code, true)}</div>
+        <div class="modal-field"><label>Opzione</label>${scrivibile ? `<input value="${esc(o.name || '')}" placeholder="es. Lunghezza" onchange="varOpzioneSet('${id}', ${i}, 'name', this.value)">` : ro(o.name)}</div>
+      </div>
+      <div class="table-wrap"><table class="price-table"><thead><tr><th scope="col">Valore</th><th scope="col">Etichetta</th><th scope="col"></th></tr></thead><tbody>
+        ${scelte.map((c, j) => scrivibile ? `<tr>
+          <td><input value="${esc(c.value || '')}" placeholder="es. 3" style="width:110px;font-family:var(--mono)" onchange="varSceltaSet('${id}', ${i}, ${j}, 'value', this.value)"></td>
+          <td><input value="${esc(c.label || '')}" placeholder="es. 3 metri" style="width:100%" onchange="varSceltaSet('${id}', ${i}, ${j}, 'label', this.value)"></td>
+          <td><button class="mini-btn" title="Togli la scelta" onclick="varSceltaTogli('${id}', ${i}, ${j})">${ico('trash', 'tinted', 'Togli')}</button></td></tr>`
+          : `<tr><td>${ro(c.value, true)}</td><td>${ro(c.label)}</td><td></td></tr>`).join('')
+          || '<tr><td colspan="3" class="empty-text">Nessuna scelta.</td></tr>'}
+      </tbody></table></div>
+      ${scrivibile ? `<div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn-outline" onclick="varSceltaAggiungi('${id}', ${i})">+ Aggiungi una scelta</button>
+        <button class="btn-ghost" onclick="varOpzioneTogli('${id}', ${i})">${ico('trash', 'tinted', '')} Togli l'opzione</button></div>` : ''}
+    </div>`;
+  };
+  return `${opz.length ? opz.map(blocco).join('') : '<p class="empty-text" style="text-align:left;padding:0 0 8px">Nessuna opzione: la macchina non è un modello.</p>'}
+    ${scrivibile ? `<div><button class="add-btn-sm" onclick="varOpzioneAggiungi('${id}')">+ Aggiungi un'opzione</button></div>` : ''}
+    <p class="empty-text" style="text-align:left;padding:12px 0 0">Il codice dell'opzione (es. <code>L</code>) e il valore della scelta (es. <code>3</code>) sono quelli che le righe di distinta citano: «vale solo se» <code>L=3|4</code>, oppure la quantità <code>L*2</code>. L'etichetta è quella che si legge. Una macchina con almeno un'opzione con delle scelte è un modello: non si mette in un piano, si configura.</p>`;
 }
 function varOpzioniMuta(id, fn) {
   if (!roleGuard('bom')) return;
@@ -543,7 +554,28 @@ function varOpzioneSet(id, i, campo, valore) {
       if (it.options.some((x, j) => j !== i && varCodice(x.code) === k)) { showToast(`C'è già un'opzione ${k}`, 'error'); return false; }
       o.code = k;
     } else if (campo === 'name') o.name = String(valore || '').trim();
-    else o.choices = varScelteDaTesto(valore);
+  });
+}
+function varSceltaAggiungi(id, i) {
+  varOpzioniMuta(id, it => {
+    const o = it.options[i]; if (!o) return false;
+    if (!Array.isArray(o.choices)) o.choices = [];
+    o.choices.push({ value: '', label: '' });
+  });
+}
+function varSceltaTogli(id, i, j) {
+  varOpzioniMuta(id, it => { const o = it.options[i]; if (!o || !o.choices || !o.choices[j]) return false; o.choices.splice(j, 1); });
+}
+function varSceltaSet(id, i, j, campo, valore) {
+  varOpzioniMuta(id, it => {
+    const o = it.options[i]; const c = o && o.choices && o.choices[j];
+    if (!c) return false;
+    const v = varValore(valore);
+    if (campo === 'value') {
+      if (/[|&=!]/.test(v)) { showToast('Il valore non può contenere | & = !: sono i segni delle condizioni', 'error'); return false; }
+      if (v && o.choices.some((x, k) => k !== j && varValore(x.value).toLowerCase() === v.toLowerCase())) { showToast(`C'è già la scelta ${v}`, 'error'); return false; }
+      c.value = v;
+    } else c.label = v;
   });
 }
 
