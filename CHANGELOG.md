@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.119.1 — 2026-10-28
+
+**Varianti: si comincia da Gestione DB.** Con il modulo acceso, ogni macchina ha la striscia sopra l'albero. Su una macchina senza opzioni c'è **Aggiungi opzioni**: prima la striscia compariva solo su una macchina che le aveva già, e da lì non si poteva cominciare. Nella finestra delle opzioni ogni scelta ha **Valore** ed **Etichetta** in due campi separati, al posto della riga unica `3 = 3 m; 4 = 4 m`. Nessun cambio a `supabase/schema.sql` rispetto alla 0.119.0.
+
 ### 0.119.0 — 2026-10-28
 
 **Varianti e configuratore** (secondo modulo). **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor prima di aggiornare l'app sui PC collegati all'archivio condiviso (tabella `item_options`, colonne `items.configured_from_id`, `config_choices`, `config_key`, `config_hash`, `item_components.cond` e `qty_expr`).
