@@ -160,6 +160,8 @@ create table if not exists public.items (
   location text,
   code_manual boolean, code_manual_by uuid, code_manual_at timestamptz, code_note text,
   replaced_by_id uuid references public.items(id) on delete set null deferrable initially deferred,
+  configured_from_id uuid references public.items(id) on delete set null deferrable initially deferred,
+  config_choices jsonb, config_key text, config_hash text,
   child_sets text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
@@ -180,6 +182,13 @@ alter table public.items add column if not exists code_manual_at timestamptz;
 alter table public.items add column if not exists code_note text;
 -- 0.118.0: il sostitutivo di un articolo fuori produzione (modulo Alternativi).
 alter table public.items add column if not exists replaced_by_id uuid references public.items(id) on delete set null deferrable initially deferred;
+-- 0.119.0: da quale modello e con quali scelte è stato generato un articolo
+-- (modulo Varianti). La condizione e la formula delle righe di distinta
+-- stanno sotto, dopo item_components.
+alter table public.items add column if not exists configured_from_id uuid references public.items(id) on delete set null deferrable initially deferred;
+alter table public.items add column if not exists config_choices jsonb;
+alter table public.items add column if not exists config_key text;
+alter table public.items add column if not exists config_hash text;
 -- A6: `unique (code)` va aggiunto dopo la bonifica dei duplicati storici
 -- (Gestione › Backup › codici duplicati). Prima, rifiuterebbe dati veri.
 
@@ -190,7 +199,7 @@ create table if not exists public.item_components (
   id text primary key,
   item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
   child_item_id uuid references public.items(id) deferrable initially deferred,
-  qty numeric, scrap_pct numeric, pos int,
+  qty numeric, scrap_pct numeric, cond text, qty_expr text, pos int,
   synced_at timestamptz not null default clock_timestamp()
 );
 
@@ -225,6 +234,20 @@ create table if not exists public.item_alternatives (
   note text, pos int,
   synced_at timestamptz not null default clock_timestamp()
 );
+
+-- 0.119.0: le opzioni di una macchina modello (modulo Varianti). Quinta
+-- tabella «replace». Le scelte di un'opzione sono un elenco breve che si legge
+-- sempre tutto insieme: jsonb, non un'altra tabella.
+create table if not exists public.item_options (
+  id text primary key,
+  item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
+  code text, name text, choices jsonb, pos int,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- 0.119.0: la condizione («L=3|4») e la formula di quantità («L*2») di una
+-- riga di distinta (modulo Varianti).
+alter table public.item_components add column if not exists cond text;
+alter table public.item_components add column if not exists qty_expr text;
 
 -- ─── Documenti ──────────────────────────────────────────────
 create table if not exists public.production_plans (
@@ -530,6 +553,7 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('item_cycle_rows', 'items', 'item_id', 'replace'),
   ('item_prices', 'items', 'item_id', 'row'),
   ('item_alternatives', 'items', 'item_id', 'replace'),
+  ('item_options', 'items', 'item_id', 'replace'),
   ('production_plans', null, null, 'root'),
   ('production_plan_lines', 'production_plans', 'plan_id', 'row'),
   ('production_plan_substitutions', 'production_plans', 'plan_id', 'row'),
@@ -1044,6 +1068,7 @@ select t, a from (values
   ('item_cycle_rows', 'catalog'), ('item_cycle_rows', 'bom'), ('item_cycle_rows', 'manage'),
   ('item_prices', 'catalog'), ('item_prices', 'bom'), ('item_prices', 'manage'),
   ('item_alternatives', 'catalog'), ('item_alternatives', 'bom'), ('item_alternatives', 'manage'),
+  ('item_options', 'catalog'), ('item_options', 'bom'), ('item_options', 'manage'),
   ('item_revisions', 'catalog'), ('item_revisions', 'bom'),
   ('attachments', 'catalog'), ('attachment_docs', 'catalog'),
   -- Le richieste d'offerta sono documenti (dalla 0.105.6 solo `docs`): la

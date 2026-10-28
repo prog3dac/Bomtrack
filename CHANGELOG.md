@@ -2,6 +2,19 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.119.0 — 2026-10-28
+
+**Varianti e configuratore** (secondo modulo). **Cambia `supabase/schema.sql`**: va rieseguito nel SQL Editor prima di aggiornare l'app sui PC collegati all'archivio condiviso (tabella `item_options`, colonne `items.configured_from_id`, `config_choices`, `config_key`, `config_hash`, `item_components.cond` e `qty_expr`).
+- **Il modello**: una macchina con delle opzioni (codice, nome, scelte). Le righe di distinta, anche dentro i gruppi, possono valere **solo se** (`L=4|5 & M=B`) e avere una **quantità da formula** (`L*2+0,5`). Le formule si leggono con un piccolo parser, senza eval.
+- **Configura**: dalle scelte nasce la macchina concreta `<modello>-V01`, con la sua distinta. I gruppi che cambiano con le scelte diventano gruppi derivati (`<gruppo>-V01`), quelli uguali si riusano, e quelli fissi restano gli articoli del modello. La stessa combinazione non si genera due volte. Con l'archivio condiviso i codici nuovi si impegnano tutti insieme sul server.
+- **Protezioni**: il modello, e un gruppo con righe variabili, non si mettono in un piano. Il costo del modello è quello della parte comune, e la distinta dice l'intervallo da minimo a massimo su tutte le combinazioni.
+- **Il modello cambia**: la macchina generata lo dice, il Riepilogo la segnala (segnale 15) e **Rigenera** riscrive la sua distinta con le stesse scelte, senza cambiarle codice.
+- Scheda **Varianti** nel pannello laterale delle macchine.
+
+**Correzione (0.118.0)**: il sostitutivo di un articolo era dichiarato in `REFS` con il nome di campo sbagliato, e una migrazione degli id l'avrebbe lasciato orfano.
+
+**Manuale** — cap. 13 «Varianti e configuratore», cap. 25 «Moduli», segnale 15 del cap. 5.
+
 ### 0.118.0 — 2026-10-28
 
 **Moduli che si accendono e si spengono.** In *Gestione → Impostazioni* c'è la sezione **Moduli**: le funzioni che non servono a tutti si accendono da lì. Spento vuol dire nascosto e ignorato dai conti, non cancellato: i dati scritti restano, e riaccendendo il modulo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti. Un modulo nuovo nasce spento.

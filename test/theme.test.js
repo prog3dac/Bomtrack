@@ -269,7 +269,7 @@ describe('Ogni variabile di colore ha un valore, non se stessa', () => {
 // conosce, oppure il contenitore `.modal-field`, che i suoi campi li veste tutti.
 describe('I campi data sono tutti vestiti', () => {
   const FILES = ['views-catalog.js', 'views-docs.js', 'views-jobs.js', 'views-mrp.js',
-    'views-stock.js', 'views-bom.js', 'views-item.js', 'worklist.js', 'index.html', 'alternativi.js'];
+    'views-stock.js', 'views-bom.js', 'views-item.js', 'worklist.js', 'index.html', 'alternativi.js', 'varianti.js'];
   // Le classi che il foglio di stile disegna davvero, ricavate da style.css e
   // non elencate a mano: se una sparisce dal CSS, il campo che la usa risulta
   // scoperto qui invece che a schermo.
@@ -336,7 +336,7 @@ describe('I campi data sono tutti vestiti', () => {
 // con la stessa forma, la trova questo controllo invece dello schermo.
 describe('Nessun riquadro inline sborda sulle righe vicine', () => {
   const VISTE = ['views-catalog.js', 'views-docs.js', 'views-jobs.js', 'views-mrp.js',
-    'views-stock.js', 'views-bom.js', 'views-item.js', 'views-home.js', 'worklist.js', 'inspector.js', 'alternativi.js'];
+    'views-stock.js', 'views-bom.js', 'views-item.js', 'views-home.js', 'worklist.js', 'inspector.js', 'alternativi.js', 'varianti.js'];
 
   // I corpi di tutte le regole che nominano quella classe. Serve perché
   // `display` e `padding` possono stare in dichiarazioni diverse.

@@ -246,6 +246,7 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `views-report.js` | costificazione e report |
 | `views-mrp.js` | fabbisogno materiali, programmazione a ritroso delle date (montaggi, fasi, tratte di conto lavoro, acquisti) e carico dei centri |
 | `alternativi.js` | modulo **Alternativi**: equivalenti e sostitutivi degli articoli, le decisioni «usa l'alternativo» di un piano e il loro effetto su esplosione, montaggio, ordini di produzione e conto lavoro |
+| `varianti.js` | modulo **Varianti**: opzioni della macchina modello, righe di distinta condizionate e a formula, il configuratore che genera la macchina concreta e i gruppi derivati, Rigenera quando il modello cambia |
 | `produzione.js` | avanzamento di produzione: le dichiarazioni di pezzi fatti dentro un piano, e il netto che ne discende sulle lavorazioni |
 | `allegati.js` | allegati degli articoli: i documenti d'archivio e i loro collegamenti ai codici; i byte dei vecchi file in IndexedDB |
 | `archivio.js` | la cartella dei PDF: scelta, permesso, lettura, copia e verifica. Impostazione **locale**, un PC alla volta |

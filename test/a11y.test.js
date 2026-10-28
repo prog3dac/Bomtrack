@@ -151,7 +151,7 @@ describe('La schermata di accesso ha etichette vere', () => {
 // numeri senza etichetta.
 describe('Le intestazioni di tabella dichiarano di essere colonne', () => {
   const FILES = ['views-catalog.js', 'views-docs.js', 'views-item.js', 'views-mrp.js',
-    'views-report.js', 'views-stock.js', 'alternativi.js'];
+    'views-report.js', 'views-stock.js', 'alternativi.js', 'varianti.js'];
   it('nessun <th> resta senza scope', () => {
     const nudi = [];
     FILES.forEach(f => {

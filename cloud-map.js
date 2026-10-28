@@ -222,6 +222,7 @@ const CLOUD_TABLES = {
   item_cycle_rows: { parent: 'item_id', rename: { itemId: 'child_item_id' }, id: 'text' },
   item_prices: { parent: 'item_id', rename: { desc: 'description' } },
   item_alternatives: { parent: 'item_id', rename: { itemId: 'alt_item_id' }, id: 'text' },
+  item_options: { parent: 'item_id', id: 'text', types: { choices: 'jsonb' } },
   sub_families: { parent: 'family_id' },
   work_center_suppliers: { parent: 'work_center_id' },
   rfq_lines: { parent: 'rfq_id' },
@@ -246,7 +247,7 @@ const CLOUD_TYPES = (() => {
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'plannedStart', 'plannedEnd'].forEach(k => { t[k] = 'date'; });
   ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt'].forEach(k => { t[k] = 'timestamptz'; });
   ['active', 'favorite', 'obsolete', 'done', 'codeManual'].forEach(k => { t[k] = 'bool'; });
-  ['snapshot', 'record', 'ecoImpact'].forEach(k => { t[k] = 'jsonb'; });
+  ['snapshot', 'record', 'ecoImpact', 'configChoices'].forEach(k => { t[k] = 'jsonb'; });
   ['createdBy', 'updatedBy', 'deletedBy', 'codeManualBy'].forEach(k => { t[k] = 'uuid'; });
   return t;
 })();

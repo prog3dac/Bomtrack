@@ -220,7 +220,7 @@ describe('tablesForChanges', () => {
   it('una collezione porta con sé le tabelle dei suoi figli', () => {
     const a = app(makeDb({ items: [] }));
     const t = JSON.parse(a.eval('JSON.stringify(tablesForChanges({ items: { upsert: ["x"], remove: [] } }))'));
-    assert.deepEqual(t.sort(), ['item_alternatives', 'item_components', 'item_cycle_rows', 'item_operations', 'item_prices', 'items'].sort());
+    assert.deepEqual(t.sort(), ['item_alternatives', 'item_components', 'item_cycle_rows', 'item_operations', 'item_options', 'item_prices', 'items'].sort());
   });
 
   it('collezioni sconosciute e insiemi vuoti non fanno danni', () => {

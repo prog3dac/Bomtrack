@@ -113,7 +113,7 @@ function renderBom() {
   const rows = (it.components || []).map((comp, idx) =>
     renderBomNode(comp, 1, it.id, true, idx, it.id, [it.id], bomPos('', idx))).join('');
   const opsRow = renderOpsBlock(it, true);
-  tree.innerHTML = head + rootRow + (rows || `<div class="empty-text">Nessun componente. Usa "+ Aggiungi componenti".</div>`) + opsRow;
+  tree.innerHTML = varBannerBom(it) + head + rootRow + (rows || `<div class="empty-text">Nessun componente. Usa "+ Aggiungi componenti".</div>`) + opsRow;
   refreshBomPanelIfOpen();
   filtMount('bom');
 }
@@ -168,7 +168,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     <span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${toggle}
       <span class="bom-code">${codeLink(child.id, child.code)}</span>
       <span class="bom-type-tag tt-${typeKey(child.type)}">${typeShort(child.type)}</span>
-      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}${altMarker(child)}</span>
+      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}${altMarker(child)}${varTagRiga(comp)}</span>
     </span>
     <span class="num">${qty}</span>
     <span>${esc(child.uom || '')}</span>
@@ -438,6 +438,11 @@ function editComponentModal(idx) {
       <div class="modal-field"><label id="cmp-qty-label">${labelUom('Quantità', itemUom(getItem(comp.itemId)))}</label><input type="number" id="cmp-qty" min="0" step="0.001" value="${comp.qty}"></div>
       <div class="modal-field"><label>Scarto %</label><input type="number" id="cmp-scrap" min="0" step="0.1" value="${comp.scrapPct || 0}"></div>
     </div>
+    ${varAttivo() ? `<div class="modal-grid">
+      <div class="modal-field"><label>Vale solo se</label><input id="cmp-cond" value="${esc(comp.cond || '')}" placeholder="es. L=3|4 &amp; M=B" style="font-family:var(--mono)"></div>
+      <div class="modal-field"><label>Quantità da formula</label><input id="cmp-qtyexpr" value="${esc(comp.qtyExpr || '')}" placeholder="es. L*2+0,5" style="font-family:var(--mono)"></div>
+    </div>
+    <p class="empty-text" style="text-align:left;padding:0 0 10px">Per le varianti: la riga conta solo con queste scelte del modello, e la formula, se c'è, sostituisce la quantità. Lasciali vuoti per una riga che vale sempre.</p>` : ''}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveComponentEdit(${idx})">Salva</button></div>`);
   updatePickerFamilyOptions('cmp');
@@ -455,6 +460,15 @@ function saveComponentEdit(idx) {
   if (!isAllowedChild(it.type, itemId)) { showToast('Tipo non ammesso in un ' + typeLabel(it.type).toLowerCase(), 'error'); return; }
   if (createsCycle(it.id, itemId)) { showToast('Operazione annullata: creerebbe un ciclo', 'error'); return; }
   if (isNeg('cmp-qty')) { showToast('La quantità non può essere negativa', 'error'); return; }
+  // Condizione e formula (modulo Varianti): si leggono solo se i campi ci sono,
+  // così a modulo spento quelle già scritte restano come sono.
+  if (document.getElementById('cmp-cond')) {
+    const cond = val('cmp-cond'), expr = val('cmp-qtyexpr');
+    const err = varControllaRiga(cond, expr);
+    if (err) { showToast(err, 'error'); return; }
+    if (cond) comp.cond = cond; else delete comp.cond;
+    if (expr) comp.qtyExpr = expr; else delete comp.qtyExpr;
+  }
   comp.itemId = itemId; comp.qty = numVal('cmp-qty', 0); comp.scrapPct = numVal('cmp-scrap', 0, 100);
   touch(it);
   saveDB(); closeModal(); renderBom(); savedToast('Componente aggiornato');

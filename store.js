@@ -363,6 +363,10 @@ const SCHEMA = {
       // ordine di preferenza. Come la distinta: l'elenco è la definizione, le
       // righe non hanno identità propria.
       alternatives: { table: 'item_alternatives', rowId: null, merge: 'replace' },
+      // Le opzioni di una macchina modello (modulo Varianti, dalla 0.119.0):
+      // anche qui l'elenco è la definizione. Le scelte di ciascuna stanno in
+      // `choices`, un elenco che non si interroga mai da solo.
+      options: { table: 'item_options', rowId: null, merge: 'replace' },
     },
   },
   // Le revisioni rilasciate sono fotografie congelate: `snapshot` resta un
@@ -520,10 +524,11 @@ const SCHEMA = {
 const REFS = {
   items: {
     fields: { supplierId: 'supplier', familyId: 'family', subFamilyId: 'subFamily',
-      machineItemId: 'item', groupItemId: 'item', replacedById: 'item' },
+      machineItemId: 'item', groupItemId: 'item', replacedById: 'item', configuredFromId: 'item' },
     children: {
       components: { itemId: 'item' },
       alternatives: { itemId: 'item' },
+      options: {},
       operations: { workCenterId: 'workCenter' },
       cycle: { itemId: 'item', workCenterId: 'workCenter', supplierId: 'supplier' },
       priceList: { supplierId: 'supplier' },

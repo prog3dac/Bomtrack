@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.118.0**
+**Versione dell'app documentata: 0.119.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -620,6 +620,7 @@ Ogni segnale **nomina i codici e i numeri che lo riguardano** (fino a otto, poi 
 | 12 | Backup automatico in pausa o non riuscito — *solo amministratori, solo con il backup automatico attivo* | 🟠 media | **Riprendi** lo salva subito |
 | 13 | Spazio del browser occupato (dal 70%; 🔴 dal 90%) — *solo amministratori*. Con l'archivio in IndexedDB conta lo spazio di tutto il sito, allegati compresi | 🟠 media | a Gestione → Backup |
 | 14 | Distinte che usano un articolo fuori produzione con un sostitutivo — *solo con il modulo Alternativi acceso* (→ [cap. 19](#19-fabbisogno-materiali)) | 🟠 media | alla distinta o al ciclo |
+| 15 | Macchine generate da un modello che è cambiato dopo la generazione — *solo con il modulo Varianti acceso* (→ [cap. 13](#13-tecnico--gestione-db)) | 🟠 media | alla distinta |
 
 **Tre precisazioni** (dalla 0.105.6):
 
@@ -1197,6 +1198,61 @@ Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta ape
   anello**», con i codici del giro (`S1 → S2 → S1`) e il pulsante **Apri distinta**. Costi e
   fabbisogni di quel ramo sono incompleti finché non si toglie una delle righe; tolta la riga,
   l'avviso sparisce da solo.
+
+### Varianti e configuratore (modulo, dalla 0.119.0)
+
+Il modulo si accende in *Gestione → Impostazioni → Moduli*. Serve quando la stessa macchina si
+vende in più versioni: lunghezza 3, 4 o 5 m, motore standard o maggiorato. Invece di tenere a mano
+una distinta per combinazione, se ne tiene una sola, il **modello**, e il configuratore genera la
+macchina di ogni combinazione.
+
+**Il modello.** È una macchina con delle **opzioni**. Le opzioni si scrivono da **Opzioni** sulla
+striscia sopra l'albero, o dalla scheda **Varianti** del pannello laterale. Ogni opzione ha un
+**codice** breve (`L`, `M`), un nome e le sue scelte, scritte in una riga: `3 = 3 m; 4 = 4 m; 5 = 5 m`.
+Prima dell'uguale c'è il valore che le righe citano, dopo l'etichetta che si legge.
+
+**Le righe che cambiano.** Nella finestra *Modifica componente* di una riga, a modulo acceso, ci
+sono due campi in più.
+
+| Campo | Esempio | Cosa fa |
+|---|---|---|
+| **Vale solo se** | `M=B` · `L=4\|5` · `L=5 & M!=S` | La riga conta solo con queste scelte. `\|` vuol dire «oppure», `&` «e», `!=` «diverso da» |
+| **Quantità da formula** | `L*2` · `L*2+0,5` | La quantità si calcola dalla scelta. Si usano numeri, `+ - * /`, parentesi e i codici delle opzioni con valore numerico |
+
+Le righe si possono scrivere anche dentro i gruppi del modello, a qualunque livello. In distinta
+si riconoscono dal segno `se M=B` o `q.tà = L*2` accanto al nome.
+
+**Configura.** Dal pulsante sulla striscia del modello, o dal pannello laterale. Si sceglie un
+valore per ogni opzione, e l'anteprima dice cosa succede prima di farlo:
+
+- la **macchina** nuova, con codice `<codice del modello>-V01`, `-V02`… e il nome del modello
+  seguito dalle scelte;
+- i **gruppi derivati**: un gruppo che ha righe variabili diventa una copia con le righe risolte,
+  per esempio `TEL-S00-V01`;
+- i gruppi **riusati**: se un'altra configurazione ha già prodotto un gruppo con le stesse righe,
+  si usa quello. Un gruppo senza righe variabili resta **lo stesso articolo** del modello.
+
+Se la combinazione esiste già, il configuratore apre quella invece di farne un'altra.
+
+**La macchina generata è una macchina come le altre.** Si mette in un piano, si costifica, si
+revisiona. Il resto dell'app non ha bisogno di sapere che è nata da un modello.
+
+**Il modello non si mette in un piano.** Aggiungerlo a un piano viene rifiutato con un avviso, e
+lo stesso vale per un gruppo con righe variabili. Un piano che ne contiene già uno lo segnala con
+*modello da configurare*. Il **costo** del modello nelle card è quello della **parte comune**, cioè
+delle righe che non dipendono dalle scelte, né per esserci né per la quantità. La striscia sopra l'albero dice **da quanto a quanto** costa su
+tutte le combinazioni, fino a 256 combinazioni.
+
+**Quando il modello cambia.** Ogni macchina generata ricorda com'era il modello quando è nata.
+Se poi cambia il modello o uno dei suoi gruppi con righe variabili, la striscia della macchina
+generata lo dice, il Riepilogo la segnala (segnale 15) e c'è il pulsante **Rigenera**. Rigenera
+riscrive la distinta della macchina con le stesse scelte, sul modello di adesso: il codice resta
+lo stesso, così piani e movimenti non cambiano. Per tenere traccia della distinta di prima,
+rilascia una revisione prima di rigenerare. Un gruppo fisso che cambia non chiede di rigenerare:
+è lo stesso articolo, e la modifica arriva già.
+
+> **A modulo spento** le righe condizionate contano come righe normali e le opzioni restano
+> scritte, senza che nessuno le legga. Riaccendendo il modulo tutto torna com'era.
 
 ---
 
@@ -2787,6 +2843,7 @@ non apre l'app per più giorni di così rientra con la password.
 | Modulo | Di serie |
 |---|---|
 | Alternativi e sostitutivi (→ [cap. 19](#19-fabbisogno-materiali)) | spento |
+| Varianti e configuratore (→ [cap. 13](#13-tecnico--gestione-db)) | spento |
 
 Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. I dati
 già scritti **restano**: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale
