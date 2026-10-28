@@ -249,7 +249,7 @@ const CAT_COLS_PARTE = [
   // Facoltativa dalla 0.117.0: il nome di una parte può essere il solo concetto.
   ['Descrizione', it => it.nameFree || ''],
   ['UM *', it => it.uom || ''],
-  ['Approvvigionamento', it => PART_SOURCING[partSourcing(it)] || ''],
+  ['Approvvigionamento', it => PART_SOURCING[partSourcingScritto(it)] || ''],
 ].concat(CAT_COL_FAMILY, CAT_COL_ALTUOM, CAT_COL_PRICE, CAT_COL_STOCK, [
   ['Obsoleto', it => catSiNoEsplicito(it.obsolete)],
   ['Note', it => it.notes || ''],

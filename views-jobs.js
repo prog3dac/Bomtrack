@@ -453,7 +453,7 @@ function newJob() {
     currentJobId = j.id; jobView = 'edit'; renderJobs();
   });
 }
-function openJobEdit(id) { currentJobId = id; jobView = 'edit'; renderJobs(); }
+function openJobEdit(id) { if (!vistaAttiva('jobs')) return; currentJobId = id; jobView = 'edit'; renderJobs(); }
 function jobBackToList() { jobView = 'list'; currentJobId = null; renderJobs(); }
 function jobSetField(id, field, value) {
   if (!roleGuard('docs')) { renderJobs(); return; }

@@ -305,6 +305,10 @@ function qrApri(letto) {
     showToast(`${letto.tipo ? QR_TIPI[letto.tipo] : 'Codice'} «${letto.codice}» non trovato in archivio`, 'error');
     return false;
   }
+  // Un'ubicazione, un ODP o un ODL di un'area spenta: la scheda porterebbe a
+  // finestre che non ci sono.
+  const vista = { ubi: 'stock', odp: 'odp', odl: 'odl' }[r.tipo];
+  if (vista && !vistaAttiva(vista)) { showToast(`${AREE[areaDiVista(vista)].nome}: area spenta in Gestione → Impostazioni`, 'error'); return false; }
   qrSchedaModal(r.tipo, r.rec);
   return true;
 }
@@ -322,7 +326,7 @@ function qrSchedaHtml(tipo, rec) {
     const it = rec, u = itemUom(it);
     const bottoni = [qrBtn('Scheda completa', 'eye', `itemInfoModal('${it.id}')`)];
     let corpo = '';
-    if (hasStock(it)) {
+    if (hasStock(it) && giacenzeVisibili()) {
       const s = stockOf(it.id);
       const imp = commitsOn(it.id, null).reduce((a, c) => a + c.qty, 0);
       corpo = `<div class="cost-summary" style="margin:8px 0">
@@ -333,6 +337,8 @@ function qrSchedaHtml(tipo, rec) {
       </div>`;
       if (canWriteShop('catalog')) bottoni.unshift(qrBtn('Rettifica giacenza', 'scale', `stockAdjustModal('${it.id}')`, true));
       bottoni.push(qrBtn(`Movimenti (${s.nMov})`, 'clock', `stockMovementsModal('${it.id}')`));
+    } else if (hasStock(it)) {
+      corpo = '';
     } else {
       corpo = '<p class="empty-text" style="text-align:left;padding:4px 0">Articolo senza giacenza (macchina o gruppo).</p>';
     }

@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.120.4';
+const APP_VERSION = '0.121.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -673,7 +673,76 @@ const MODULI = {
 };
 function moduloAttivo(nome) {
   const m = db && db.settings && db.settings.modules;
-  return !!(MODULI[nome] && m && m[nome] === true);
+  if (!(MODULI[nome] && m && m[nome] === true)) return false;
+  // Un modulo che vive dentro un'area si spegne con lei, senza perdere il suo
+  // interruttore: riaccendendo l'area torna com'era.
+  return !MODULI[nome].area || areaAttiva(MODULI[nome].area);
+}
+
+// ─── Aree (dalla 0.121.0) ───
+// La base dell'app è quella di un costruttore che compra tutto: anagrafiche,
+// distinta base, acquisti e listini. Il resto sono **aree** che si spengono
+// da Gestione → Impostazioni, con la stessa regola dei moduli: spenta vuol
+// dire nascosta e ignorata, mai cancellata.
+//
+// Al contrario dei moduli un'area nasce **accesa**: un archivio che non ne
+// sa niente è un archivio di prima della 0.121, dove c'era tutto, e
+// aggiornando non deve sparire niente. Spenta è solo `false` scritto.
+// Stanno nello stesso `settings.modules` dei moduli.
+//
+// `viste` sono le voci di menu dell'area; `richiede` un'area senza la quale
+// questa non sta in piedi (gli ODP nascono dal piano del fabbisogno).
+const AREE = {
+  magazzino: {
+    nome: 'Magazzino',
+    descr: 'Giacenze, movimenti, rettifiche, inventario, scorte minime ed etichette QR di magazzino. Spento, le giacenze non si vedono ma i ricevimenti restano sugli ordini: riaccendendo, il magazzino è già al suo posto.',
+    // Il cruscotto è quasi tutto magazzino: valore, fermi, sotto scorta.
+    viste: ['stock', 'dash'],
+  },
+  pianificazione: {
+    nome: 'Pianificazione',
+    descr: 'Commesse e fabbisogno: i piani, la lista d\'acquisto e gli ordini generati dal piano. Spento, gli ordini fornitore si fanno a mano o dalle richieste d\'offerta.',
+    viste: ['jobs', 'mrp'],
+  },
+  produzione: {
+    nome: 'Produzione interna',
+    descr: 'Parti fatte in casa con distinta parte e ciclo, centri di lavoro, ordini di produzione e di lavoro, conto lavoro, carico centri e avanzamento. Spento, ogni parte vale come acquistata e costa il suo prezzo di listino.',
+    viste: ['cycles', 'load', 'avz', 'odp', 'odl'],
+    richiede: 'pianificazione',
+  },
+};
+// I profili del primo avvio: un punto di partenza, non un vincolo — le aree si
+// cambiano dopo da Gestione → Impostazioni.
+const PROFILI_AREE = {
+  completo: { nome: 'Con produzione interna', descr: 'Tutte le aree: anche parti fatte in casa, cicli, ODP e ODL', aree: {} },
+  costruttore: { nome: 'Costruttore senza produzione interna', descr: 'Distinte, acquisti, magazzino e fabbisogno: ogni parte si compra', aree: { produzione: false } },
+  base: { nome: 'Solo la base', descr: 'Anagrafiche, distinte, acquisti e listini', aree: { magazzino: false, pianificazione: false, produzione: false } },
+};
+function applicaProfiloAree(id) {
+  const p = PROFILI_AREE[id]; if (!p) return;
+  db.settings = db.settings || {};
+  const m = Object.assign({}, db.settings.modules || {});
+  Object.keys(AREE).forEach(k => { m[k] = p.aree[k] !== false; });
+  db.settings.modules = m;
+}
+function areaAttiva(nome) {
+  const a = AREE[nome];
+  if (!a) return true;
+  const m = db && db.settings && db.settings.modules;
+  if (m && m[nome] === false) return false;
+  return !a.richiede || areaAttiva(a.richiede);
+}
+// L'area di una vista, o null per le viste della base.
+// Le giacenze si mostrano solo con il Magazzino acceso. I movimenti si
+// registrano comunque (i ricevimenti degli ordini, i prelievi): il fabbisogno
+// continua a nettare su quello che è arrivato, e riaccendendo è tutto lì.
+function giacenzeVisibili() { return areaAttiva('magazzino'); }
+function areaDiVista(v) {
+  return Object.keys(AREE).find(k => AREE[k].viste.includes(v)) || null;
+}
+function vistaAttiva(v) {
+  const a = areaDiVista(v);
+  return !a || areaAttiva(a);
 }
 // Guardia dei mutatori, sul modello di rfqGuard: blocca e spiega.
 function roleGuard(area) {

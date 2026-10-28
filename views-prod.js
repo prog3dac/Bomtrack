@@ -866,7 +866,7 @@ function odpListRows() {
     });
   }).join('') || `<div class="empty-text">${tutti.length ? 'Nessun ordine di produzione con questi filtri.' : 'Nessun ordine di produzione. Si generano dal Fabbisogno, dalle parti da fabbricare, oppure si scrivono a mano con «+ Nuovo ordine di produzione».'}</div>`;
 }
-function openOdpEdit(id) { currentOdpId = id; odpView = 'edit'; odpUnlockedId = null; renderOdp(); }
+function openOdpEdit(id) { if (!vistaAttiva('odp')) return; currentOdpId = id; odpView = 'edit'; odpUnlockedId = null; renderOdp(); }
 function odpBackToList() { odpView = 'list'; currentOdpId = null; odpUnlockedId = null; renderOdp(); }
 function odpUnlock(id) {
   const o = getOdp(id); if (!o) return;
@@ -1307,7 +1307,7 @@ function opAvviaModal(id, faseId) {
     : 'Questa fase <strong>non muove il magazzino</strong>: i pezzi sono già fuori dallo scaffale da quando è partita la prima fase, e non sono ancora la parte finita. Dove stanno lo dice questa tabella, non una giacenza.';
   const corpo = righe.map((m, i) => `<div class="mgmt-item">
       <span style="width:110px;font-family:var(--mono)">${esc(m.code)}</span>
-      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">${fmtQtyIt(m.perPezzo)} ${esc(m.uom)}/pz · a magazzino ${fmtQtyIt(onHandOf(m.itemId))}</span>${m.gia ? ` <span class="rfq-clavoro-tag">già ${fmtQtyIt(m.gia)}</span>` : ''}</span>
+      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">${fmtQtyIt(m.perPezzo)} ${esc(m.uom)}/pz${giacenzeVisibili() ? ` · a magazzino ${fmtQtyIt(onHandOf(m.itemId))}` : ''}</span>${m.gia ? ` <span class="rfq-clavoro-tag">già ${fmtQtyIt(m.gia)}</span>` : ''}</span>
       <input class="num" type="number" id="op-q-${i}" min="0" step="any" value="${esc(String(+m.residuo.toFixed(4)))}" style="width:110px" oninput="opAvviaAvviso()">
       <span class="empty-text" style="padding:0;width:40px">${esc(m.uom)}</span>
     </div>`).join('');
@@ -1341,7 +1341,7 @@ function opPrelevaRestoModal(id) {
   openModal(`${opTestaModal(o, prima, 'Preleva il resto del materiale')}
     <div style="display:flex;flex-direction:column;gap:6px">${righe.map((m, i) => `<div class="mgmt-item">
       <span style="width:110px;font-family:var(--mono)">${esc(m.code)}</span>
-      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">già uscito ${fmtQtyIt(m.gia)} ${esc(m.uom)} · a magazzino ${fmtQtyIt(onHandOf(m.itemId))}</span></span>
+      <span style="flex:1">${esc(m.name)} <span class="empty-text" style="padding:0">già uscito ${fmtQtyIt(m.gia)} ${esc(m.uom)}${giacenzeVisibili() ? ` · a magazzino ${fmtQtyIt(onHandOf(m.itemId))}` : ''}</span></span>
       <input class="num" type="number" id="op-pr-${i}" min="0" step="any" value="${esc(String(+m.residuo.toFixed(4)))}" style="width:110px" aria-label="Quantità di ${esc(m.code)} che esce">
       <span class="empty-text" style="padding:0;width:40px">${esc(m.uom)}</span>
     </div>`).join('')}</div>

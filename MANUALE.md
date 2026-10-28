@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.120.4**
+**Versione dell'app documentata: 0.121.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -148,6 +148,17 @@ dell'app: copiando la cartella su un altro PC funziona tutto, export compresi.
 
 La prima volta Bomtrack chiede di creare l'**amministratore**: nome e cognome, email e password.
 Quello che si scrive lì è il primo utente, ed è l'unico che all'inizio può entrare in *Gestione*.
+
+Nello stesso modulo si sceglie **come lavora l'azienda** (dalla 0.121.0), cioè quali aree partono
+accese (→ [cap. 25](#25-gestione), *Aree*):
+
+| Profilo | Aree accese |
+|---|---|
+| Con produzione interna | tutte: Magazzino, Pianificazione, Produzione interna |
+| Costruttore senza produzione interna | Magazzino e Pianificazione: ogni parte si compra |
+| Solo la base | nessuna: anagrafiche, distinte, acquisti e listini |
+
+È solo il punto di partenza: le aree si cambiano quando si vuole da *Gestione → Impostazioni*.
 
 Insieme all'amministratore l'app carica dei **dati di esempio** — la macchina «Nastro Trasportatore
 NT-100» con i suoi gruppi, le sue parti e qualche fornitore. Servono a guardarsi intorno senza
@@ -2855,6 +2866,26 @@ nell'import da Excel vengono registrate automaticamente.
 
 La durata si conta dall'**ultimo uso**, e dalla 0.105.4 vale anche con l'archivio condiviso: chi
 non apre l'app per più giorni di così rientra con la password.
+
+**Aree** (dalla 0.121.0)
+
+La **base** c'è sempre: anagrafiche, distinta base con costificazione e revisioni, richieste
+d'offerta, ordini a fornitore e listini, Riepilogo e Gestione. Il resto sta in tre aree che si
+accendono e spengono qui:
+
+| Area | Cosa porta | Spenta |
+|---|---|---|
+| **Magazzino** | la vista Magazzino e il Cruscotto: giacenze, movimenti, rettifiche, inventario, scorte minime, ubicazioni ed etichette QR di magazzino | le giacenze non si vedono da nessuna parte (scheda articolo, pannello laterale, QR, alternativi). I ricevimenti degli ordini si registrano comunque, e il fabbisogno continua a togliere quello che è già arrivato: riaccendendo, il magazzino è già al suo posto |
+| **Pianificazione** | Commesse e Fabbisogno: i piani, la lista d'acquisto, gli ordini generati dal piano | gli ordini si fanno a mano o dalle richieste d'offerta. Si spegne anche la Produzione interna, che dai piani nasce |
+| **Produzione interna** (richiede Pianificazione) | parti fatte in casa con distinta parte e ciclo, Cicli di lavorazione, Centri di lavoro, ODP, ODL e conto lavoro, Carico centri, Avanzamento | **ogni parte vale come comprata**: costa il suo prezzo di listino, nel fabbisogno va fra gli acquisti, e il piano non ha le schede *Da fabbricare*, *Conto lavoro* e *Carico*. Il campo *Approvvigionamento* scritto sulla parte non cambia: riaccendendo, ogni parte torna com'era |
+
+Un'area spenta toglie le sue voci dalla barra (un gruppo rimasto vuoto sparisce), i suoi avvisi
+dal Riepilogo, le sue scadenze e i suoi filtri dal calendario, i suoi documenti dalla ricerca e
+dai *Collegati*. Un link vecchio a una sua vista riporta al Riepilogo con un avviso. I dati
+**restano** tutti. Un archivio già in uso prima della 0.121.0 ha tutte le aree accese.
+
+Il **fabbisogno resta netto** anche col Magazzino spento: le giacenze vengono dai ricevimenti degli
+ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 
 **Moduli** (dalla 0.118.0)
 

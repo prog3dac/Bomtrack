@@ -216,7 +216,7 @@ function altBody(id) {
   const sost = it.replacedById ? getItem(it.replacedById) : null;
   const daChi = altUsatoDa(id);
   const riga = (x, extra) => `<div class="insp-multi-row">${codeLink(x.id, x.code)} <span>${esc(x.name)}</span>${extra || ''}</div>`;
-  const giac = x => hasStock(x) ? ` <span class="empty-text" style="padding:0">· ${fmtUom(onHandOf(x.id), itemUom(x))}</span>` : '';
+  const giac = x => hasStock(x) && giacenzeVisibili() ? ` <span class="empty-text" style="padding:0">· ${fmtUom(onHandOf(x.id), itemUom(x))}</span>` : '';
   return `${it.obsolete ? `<p style="margin:0 0 8px"><strong>Sostituito da:</strong> ${sost ? `${codeLink(sost.id, sost.code)} ${esc(sost.name)}` : '<span class="empty-text" style="padding:0">nessuno indicato</span>'}</p>` : ''}
     <p style="margin:0 0 4px"><strong>Alternativi</strong>, in ordine di preferenza</p>
     ${alt.length ? alt.map((a, i) => riga(a.item, `${giac(a.item)}${a.note ? ` <span class="empty-text" style="padding:0">— ${esc(a.note)}</span>` : ''}`)).join('') : '<p class="empty-text" style="text-align:left;padding:0 0 8px">Nessun alternativo.</p>'}

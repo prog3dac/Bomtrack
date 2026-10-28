@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.121.0 — 2026-10-28
+
+**L'app a moduli: la base e tre aree.** La base c'è sempre: anagrafiche, distinta base con costificazione e revisioni, richieste d'offerta, ordini e listini, Riepilogo e Gestione. In *Gestione → Impostazioni → Aree* si accendono e spengono **Magazzino** (vista Magazzino e Cruscotto), **Pianificazione** (Commesse e Fabbisogno) e **Produzione interna** (cicli, centri, ODP, ODL, conto lavoro, carico e avanzamento; richiede la Pianificazione). Un'area spenta sparisce dalla barra, dal Riepilogo, dal calendario, dalla ricerca e dai documenti collegati; un link vecchio riporta al Riepilogo con un avviso. I dati restano.
+
+**Senza Produzione interna ogni parte si compra.** Costa il suo prezzo di listino, nel fabbisogno va fra gli acquisti, e il piano perde le schede *Da fabbricare*, *Conto lavoro* e *Carico*. Il campo scritto sulla parte non cambia, e riaccendendo torna com'era. È il caso della ditta costruttrice che non ha produzione interna.
+
+**Senza Magazzino le giacenze non si vedono**, ma i ricevimenti si registrano e il fabbisogno resta netto: ignorarle farebbe ricomprare quello che è già arrivato.
+
+**Primo avvio a profili.** Creando l'amministratore si sceglie *Con produzione interna*, *Costruttore senza produzione interna* o *Solo la base*. Gli archivi esistenti hanno tutto acceso. Nessun cambio a `supabase/schema.sql`.
+
+**Manuale**: cap. 2 «Il primo avvio» e cap. 25 «Gestione», sezione *Aree*.
+
 ### 0.120.4 — 2026-10-28
 
 **Varianti: la codifica si allinea da sola.** Una variante generata prima della 0.120.3 non aveva la sigla macchina e la codifica del modello finché non si salvava il modello. Ora le prende appena si apre la sua scheda, o la pagina Varianti del suo modello.

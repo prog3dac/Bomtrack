@@ -965,6 +965,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .login-field{margin-bottom:10px}
 .login-field input{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none}
 .login-field input:focus{border-color:var(--accent)}
+.login-field select{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px}
+.login-profile-descr{font-size:12px;color:var(--text-dim);margin:4px 0 0}
 .login-remember{display:flex;align-items:center;gap:6px;margin:2px 0 12px;font-size:13px;color:var(--text-dim)}
 .login-remember input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}
 .login-remember label{cursor:pointer}

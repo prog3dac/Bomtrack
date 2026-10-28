@@ -19,14 +19,17 @@ const MGMT_TABS = [
   { id: 'fam-materiale', label: ico('package', 'tinted', '') + ' Famiglie materie prime' },
   { id: 'fam-parte', label: ico('wrench', 'tinted', '') + ' Famiglie parti' },
   { id: 'concepts', label: ico('tag', 'tinted', '') + ' Concetti' },
-  { id: 'workcenters', label: ico('wrench', 'tinted', '') + ' Centri di lavoro' },
+  { id: 'workcenters', label: ico('wrench', 'tinted', '') + ' Centri di lavoro', area: 'produzione' },
   { id: 'uoms', label: ico('ruler', 'tinted', '') + ' Unità di misura' },
   { id: 'settings', label: ico('settings', 'tinted', '') + ' Impostazioni' },
   { id: 'import', label: ico('upload', 'tinted', '') + ' Import' },
   { id: 'backup', label: ico('save', 'tinted', '') + ' Backup' },
 ];
 function renderManage() {
-  document.getElementById('mgmt-tabs').innerHTML = MGMT_TABS.map(t =>
+  // Una scheda di un'area spenta sparisce, e chi ci stava torna alle impostazioni.
+  const schede = MGMT_TABS.filter(t => !t.area || areaAttiva(t.area));
+  if (!schede.some(t => t.id === mgmtTab)) mgmtTab = 'settings';
+  document.getElementById('mgmt-tabs').innerHTML = schede.map(t =>
     `<button class="mgmt-tab ${mgmtTab === t.id ? 'active' : ''}" onclick="setMgmtTab('${t.id}')">${t.label}</button>`).join('');
   const c = document.getElementById('mgmt-content');
   if (mgmtTab === 'users') c.innerHTML = renderUsers();
@@ -1034,7 +1037,20 @@ function renderSettings() {
 // Un interruttore per modulo (MODULI in core.js). Spegnere non cancella niente:
 // lo dice la nota, perché è la prima cosa che chi spegne si chiede.
 function renderModuliSettings() {
-  return `<h3 class="settings-group-title">${ico('settings', 'tinted', '')} Moduli</h3>
+  const m = (db.settings && db.settings.modules) || {};
+  // Le aree (core.js): accese finché non c'è scritto false. Un'area che ne
+  // richiede un'altra si spegne da sola quando si toglie quella.
+  const aree = Object.keys(AREE).map(k => {
+    const a = AREE[k], richiesta = a.richiede ? AREE[a.richiede] : null;
+    const bloccata = !!a.richiede && m[a.richiede] === false;
+    return `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0 8px">
+      <input type="checkbox" class="set-area" value="${k}" ${m[k] !== false && !bloccata ? 'checked' : ''} ${bloccata ? 'disabled' : ''} ${a.richiede ? `data-richiede="${a.richiede}"` : ''} onchange="areeSettingsSync()" style="margin-top:3px">
+      <span><strong>${esc(a.nome)}</strong>${richiesta ? ` <span class="empty-text" style="padding:0">(richiede ${esc(richiesta.nome)})</span>` : ''}<br><span class="empty-text" style="padding:0">${esc(a.descr)}</span></span></label>`;
+  }).join('');
+  return `<h3 class="settings-group-title">${ico('settings', 'tinted', '')} Aree</h3>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">La base (anagrafiche, distinta base, acquisti e listini) c'è sempre. Le aree si aggiungono.</p>
+    ${aree}
+    <h3 class="settings-group-title">${ico('settings', 'tinted', '')} Moduli</h3>
     ${Object.keys(MODULI).map(k => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0 8px">
       <input type="checkbox" class="set-modulo" value="${k}" ${moduloAttivo(k) ? 'checked' : ''} style="margin-top:3px">
       <span><strong>${esc(MODULI[k].nome)}</strong><br><span class="empty-text" style="padding:0">${esc(MODULI[k].descr)}</span></span></label>`).join('')}
@@ -1044,7 +1060,21 @@ function readModuliSettings() {
   const prima = (db.settings && db.settings.modules) || {};
   const out = Object.assign({}, prima);
   Array.from(document.querySelectorAll('.set-modulo') || []).forEach(x => { if (MODULI[x.value]) out[x.value] = !!x.checked; });
+  Array.from(document.querySelectorAll('.set-area') || []).forEach(x => { if (AREE[x.value]) out[x.value] = !!x.checked; });
   return out;
+}
+// Un'area che ne richiede una spenta non si può accendere: la casella si
+// spegne e si blocca, così si vede subito perché.
+function areeSettingsSync() {
+  const caselle = Array.from(document.querySelectorAll('.set-area') || []);
+  caselle.forEach(x => {
+    const r = x.getAttribute && x.getAttribute('data-richiede');
+    if (!r) return;
+    const dep = caselle.find(y => y.value === r);
+    const ok = !dep || dep.checked;
+    if (!ok) x.checked = false;
+    x.disabled = !ok;
+  });
 }
 // ─── Calendario di fabbrica ───
 // I giorni in cui si lavora, per la programmazione a ritroso del fabbisogno
@@ -1117,7 +1147,7 @@ function saveSettings() {
   db.settings.codePrefixMateriale = (val('set-pfx-mat') || 'MAT').toUpperCase();
   db.settings.codePrefixParte = (val('set-pfx-prt') || 'PRT').toUpperCase();
   db.settings.sessionDays = numVal('set-session', 0, 365);
-  if (document.querySelector && document.querySelector('.set-modulo')) db.settings.modules = readModuliSettings();
+  if (document.querySelector && (document.querySelector('.set-modulo') || document.querySelector('.set-area'))) db.settings.modules = readModuliSettings();
   // Il calendario si sostituisce intero: calendario.js riconosce il cambio
   // dalla firma, e un oggetto nuovo non lascia dietro di sé pezzi del vecchio.
   let scartati = [];
@@ -1130,6 +1160,8 @@ function saveSettings() {
     scartati = letto.scartati;
   }
   saveDB(); renderManage();
+  // Un'area accesa o spenta cambia la barra dei comandi.
+  if (typeof renderNav === 'function') renderNav();
   // Il resto è salvato; quello che non si è capito si dice dopo, o il toast
   // del salvataggio lo coprirebbe.
   if (scartati.length) showToast('Salvate, ma nel calendario non ho capito: ' + scartati.join(', '), 'error');

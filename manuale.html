@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.120.4</span>
+        <span class="chip">v0.121.0</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -297,6 +297,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 <p><strong>Non serve la rete, mai.</strong> Le librerie che generano i PDF e gli Excel stanno dentro la cartella dell'app: copiando la cartella su un altro PC funziona tutto, export compresi.</p>
 <h3 id="il-primo-avvio">Il primo avvio</h3>
 <p>La prima volta Bomtrack chiede di creare l'<strong>amministratore</strong>: nome e cognome, email e password. Quello che si scrive lì è il primo utente, ed è l'unico che all'inizio può entrare in <em>Gestione</em>.</p>
+<p>Nello stesso modulo si sceglie <strong>come lavora l'azienda</strong> (dalla 0.121.0), cioè quali aree partono accese (→ <a href="#25-gestione">cap. 25</a>, <em>Aree</em>):</p>
+<div class="tw"><table><thead><tr><th>Profilo</th><th>Aree accese</th></tr></thead><tbody><tr><td>Con produzione interna</td><td>tutte: Magazzino, Pianificazione, Produzione interna</td></tr><tr><td>Costruttore senza produzione interna</td><td>Magazzino e Pianificazione: ogni parte si compra</td></tr><tr><td>Solo la base</td><td>nessuna: anagrafiche, distinte, acquisti e listini</td></tr></tbody></table></div>
+<p>È solo il punto di partenza: le aree si cambiano quando si vuole da <em>Gestione → Impostazioni</em>.</p>
 <p>Insieme all'amministratore l'app carica dei <strong>dati di esempio</strong> — la macchina «Nastro Trasportatore NT-100» con i suoi gruppi, le sue parti e qualche fornitore. Servono a guardarsi intorno senza partire dal vuoto. Quando si comincia a lavorare sul serio si azzerano da <em>Gestione → Backup → AZZERA TUTTO</em>.</p>
 <h3 id="gli-avvii-successivi">Gli avvii successivi</h3>
 <p>Si entra con <strong>email e password</strong>. La casella <strong>Ricordami su questo PC</strong> conserva l'email e tiene la sessione aperta fino a <strong>Esci</strong>; quanto duri lo decide l'amministratore in <em>Gestione → Impostazioni → Accesso</em> (0 giorni = non scade mai).</p>
@@ -991,6 +994,11 @@ prezzo vendita = costo totale × (1 + margine %)</code></pre>
 <p><strong>Accesso</strong></p>
 <div class="tw"><table><thead><tr><th>Campo</th><th>Di serie</th></tr></thead><tbody><tr><td>Durata della sessione salvata (giorni)</td><td>30 — <strong>0 = non scade mai</strong></td></tr></tbody></table></div>
 <p>La durata si conta dall'<strong>ultimo uso</strong>, e dalla 0.105.4 vale anche con l'archivio condiviso: chi non apre l'app per più giorni di così rientra con la password.</p>
+<p><strong>Aree</strong> (dalla 0.121.0)</p>
+<p>La <strong>base</strong> c'è sempre: anagrafiche, distinta base con costificazione e revisioni, richieste d'offerta, ordini a fornitore e listini, Riepilogo e Gestione. Il resto sta in tre aree che si accendono e spengono qui:</p>
+<div class="tw"><table><thead><tr><th>Area</th><th>Cosa porta</th><th>Spenta</th></tr></thead><tbody><tr><td><strong>Magazzino</strong></td><td>la vista Magazzino e il Cruscotto: giacenze, movimenti, rettifiche, inventario, scorte minime, ubicazioni ed etichette QR di magazzino</td><td>le giacenze non si vedono da nessuna parte (scheda articolo, pannello laterale, QR, alternativi). I ricevimenti degli ordini si registrano comunque, e il fabbisogno continua a togliere quello che è già arrivato: riaccendendo, il magazzino è già al suo posto</td></tr><tr><td><strong>Pianificazione</strong></td><td>Commesse e Fabbisogno: i piani, la lista d'acquisto, gli ordini generati dal piano</td><td>gli ordini si fanno a mano o dalle richieste d'offerta. Si spegne anche la Produzione interna, che dai piani nasce</td></tr><tr><td><strong>Produzione interna</strong> (richiede Pianificazione)</td><td>parti fatte in casa con distinta parte e ciclo, Cicli di lavorazione, Centri di lavoro, ODP, ODL e conto lavoro, Carico centri, Avanzamento</td><td><strong>ogni parte vale come comprata</strong>: costa il suo prezzo di listino, nel fabbisogno va fra gli acquisti, e il piano non ha le schede <em>Da fabbricare</em>, <em>Conto lavoro</em> e <em>Carico</em>. Il campo <em>Approvvigionamento</em> scritto sulla parte non cambia: riaccendendo, ogni parte torna com'era</td></tr></tbody></table></div>
+<p>Un'area spenta toglie le sue voci dalla barra (un gruppo rimasto vuoto sparisce), i suoi avvisi dal Riepilogo, le sue scadenze e i suoi filtri dal calendario, i suoi documenti dalla ricerca e dai <em>Collegati</em>. Un link vecchio a una sua vista riporta al Riepilogo con un avviso. I dati <strong>restano</strong> tutti. Un archivio già in uso prima della 0.121.0 ha tutte le aree accese.</p>
+<p>Il <strong>fabbisogno resta netto</strong> anche col Magazzino spento: le giacenze vengono dai ricevimenti degli ordini, e ignorarle farebbe ricomprare quello che è già arrivato.</p>
 <p><strong>Moduli</strong> (dalla 0.118.0)</p>
 <div class="tw"><table><thead><tr><th>Modulo</th><th>Di serie</th></tr></thead><tbody><tr><td>Alternativi e sostitutivi (→ <a href="#19-fabbisogno-materiali">cap. 19</a>)</td><td>spento</td></tr><tr><td>Varianti e configuratore (→ <a href="#13-tecnico--gestione-db">cap. 13</a>)</td><td>spento</td></tr></tbody></table></div>
 <p>Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. I dati già scritti <strong>restano</strong>: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti i colleghi.</p>
