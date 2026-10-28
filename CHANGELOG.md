@@ -2,6 +2,30 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.120.4 — 2026-10-28
+
+**Varianti: la codifica si allinea da sola.** Una variante generata prima della 0.120.3 non aveva la sigla macchina e la codifica del modello finché non si salvava il modello. Ora le prende appena si apre la sua scheda, o la pagina Varianti del suo modello.
+
+### 0.120.3 — 2026-10-28
+
+**Varianti: la codifica è quella del modello.** La macchina generata eredita tutta la codifica del modello: macrofamiglia, sottofamiglia, sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati, con una nota che rimanda al modello. Quando si salva il modello, le sue varianti lo seguono (anche Rigenera riallinea). Una variante non conta come un'altra macchina con la stessa sigla, e non compare fra le macchine a cui legare un gruppo: i gruppi stanno sul modello. Il filtro per macchina negli elenchi articoli mostra il modello insieme alle sue varianti.
+
+### 0.120.2 — 2026-10-28
+
+**Varianti: quantità per scelta, ed esempi.** Nella *Quantità da formula* una tabella dà la quantità per ogni scelta, anche di un'opzione a lettere: `M(S=2; B=3)` vale 2 col motore standard e 3 col maggiorato, e una scelta non scritta vale 0. Si combina con il resto della formula (`L*M(S=1; B=2)`). Una scelta che l'opzione non ha si rifiuta subito. Il pulsante **Esempi** della sezione Regole apre una finestra con esempi pratici delle due colonne.
+
+### 0.120.1 — 2026-10-28
+
+**Varianti: la sezione Opzioni è più corta.** Le opzioni stanno due per riga (una sola su schermi stretti), e la sezione si richiude dal titolo: richiusa, dice in una riga le opzioni con le loro scelte.
+
+### 0.120.0 — 2026-10-28
+
+**Varianti: una pagina sola, *Tecnico → Varianti*.** Modello, opzioni, regole, configuratore e macchine generate stanno tutti lì; la voce compare solo con il modulo acceso. Tolti i comandi sparsi: la striscia con i pulsanti in Gestione DB (resta una riga che dice cos'è la macchina, con il link alla pagina), la scheda e le azioni Varianti nel pannello laterale, i campi *Vale solo se* e *Quantità da formula* in *Modifica componente*. **+ Nuovo modello** trasforma in modello una macchina già in archivio; **Rigenera tutte** riallinea insieme le macchine di un modello cambiato. Il segnale 15 del Riepilogo porta alla pagina.
+
+**Le regole si fermano ai gruppi del primo livello.** Le scelte decidono quali gruppi entrano nella macchina e quanti; i gruppi restano articoli fissi. Non si generano più gruppi derivati (`<gruppo>-V01`): la macchina generata usa i gruppi del modello. Le condizioni rimaste dentro i gruppi dalla 0.119 non valgono più (le righe contano sempre) e la pagina le elenca con **Togli le condizioni**. I gruppi derivati già generati con la 0.119 restano articoli normali. Nessun cambio a `supabase/schema.sql`.
+
+**Manuale** — cap. 13 «Varianti e configuratore», riscritto per la pagina.
+
 ### 0.119.1 — 2026-10-28
 
 **Varianti: si comincia da Gestione DB.** Con il modulo acceso, ogni macchina ha la striscia sopra l'albero. Su una macchina senza opzioni c'è **Aggiungi opzioni**: prima la striscia compariva solo su una macchina che le aveva già, e da lì non si poteva cominciare. Nella finestra delle opzioni ogni scelta ha **Valore** ed **Etichetta** in due campi separati, al posto della riga unica `3 = 3 m; 4 = 4 m`. Nessun cambio a `supabase/schema.sql` rispetto alla 0.119.0.

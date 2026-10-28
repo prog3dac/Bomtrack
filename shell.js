@@ -243,7 +243,10 @@ const NAV = [
     { id: 'buy', label: 'Articoli d\'acquisto' },
     { id: 'bom', label: 'Gestione DB' },
     { id: 'report', label: 'Visualizza DB' },
-    { id: 'cycles', label: 'Cicli di lavorazione' }] },
+    { id: 'cycles', label: 'Cicli di lavorazione' },
+    // Modelli, opzioni e macchine generate in una pagina sola (0.120.0): fuori
+    // dal modulo Varianti la voce non c'è.
+    { id: 'varianti', label: 'Varianti', modulo: 'varianti' }] },
   // Dalla commessa a cosa serve e quando: il fabbisogno esplode le distinte, il
   // carico dice se i centri reggono. Il carico aggregato non appartiene a nessun
   // piano, ma è una domanda di pianificazione, non di ciclo.
@@ -301,7 +304,8 @@ function renderNav() {
   // da scegliere e la riga sparisce invece di ripetere il nome del gruppo.
   const sub = document.getElementById('sub-nav');
   if (!sub) return;
-  const voci = attivo && attivo.views.length > 1 ? attivo.views : [];
+  const ammesse = attivo ? attivo.views.filter(w => !w.modulo || moduloAttivo(w.modulo)) : [];
+  const voci = ammesse.length > 1 ? ammesse : [];
   sub.innerHTML = voci.map(w =>
     `<button class="subnav-btn ${activeView === w.id ? 'active' : ''}" onclick="setView('${w.id}')" title="${esc(w.label)}" aria-current="${activeView === w.id ? 'page' : 'false'}">${esc(w.label)}</button>`).join('');
   adattaHeader();
@@ -431,6 +435,7 @@ function setView(v) {
   else if (v === 'buy' || v === 'design') renderCatalog(v);
   else if (v === 'stock') renderStock();
   else if (v === 'cycles') renderCycles();
+  else if (v === 'varianti') renderVarianti();
   else if (v === 'report') renderReport();
   else if (v === 'home') renderHome();
   else if (v === 'dash') renderDash();

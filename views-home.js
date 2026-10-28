@@ -152,7 +152,7 @@ function homeSegnali() {
   if (typeof varGenerateDaAggiornare === 'function') {
     agg(varGenerateDaAggiornare().map(x => voce(x.code,
       `${x.name} — il modello ${(getItem(x.configuredFromId) || {}).code || ''} è cambiato dopo la generazione: rigenerala se deve seguirlo`,
-      `homeApri('bom','${x.id}')`)),
+      `varApri('${x.configuredFromId}')`)),
     'macchina generata da un modello cambiato', 'macchine generate da un modello cambiato', 'design', 'media');
   }
 

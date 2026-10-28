@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.119.1**
+**Versione dell'app documentata: 0.120.4**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1206,56 +1206,71 @@ vende in più versioni: lunghezza 3, 4 o 5 m, motore standard o maggiorato. Inve
 una distinta per combinazione, se ne tiene una sola, il **modello**, e il configuratore genera la
 macchina di ogni combinazione.
 
-**Il modello.** È una macchina con delle **opzioni**. In *Tecnico → Gestione DB*, con il modulo
-acceso, ogni macchina ha una striscia sopra l'albero: su una macchina che non ha ancora opzioni
-c'è il pulsante **Aggiungi opzioni**, su un modello ci sono **Opzioni** e **Configura**. Le opzioni
-si scrivono anche dalla scheda **Varianti** del pannello laterale. Ogni opzione ha un **codice**
-breve (`L`, `M`), un nome e le sue **scelte**, una per riga, in due campi: il **valore** (`3`), che
-è quello che le righe di distinta citano, e l'**etichetta** (`3 metri`), che è quella che si legge
-nel configuratore e nel nome della macchina generata.
+**Tutto in una pagina: *Tecnico → Varianti*** (dalla 0.120.0). La voce compare solo con il modulo
+acceso. In alto si sceglie il modello; sotto ci sono quattro sezioni, nell'ordine in cui si
+lavora: **Opzioni**, **Regole**, **Configura**, **Varianti generate**. Fuori da questa pagina non
+ci sono comandi delle varianti: Gestione DB e Riepilogo mostrano solo dei segni, con un link qui.
 
-**Le righe che cambiano.** Nella finestra *Modifica componente* di una riga, a modulo acceso, ci
-sono due campi in più.
+**Fino ai gruppi del primo livello.** Le scelte decidono **quali gruppi entrano nella macchina, e
+quanti**. Ogni gruppo resta un articolo normale e fisso: se il telaio da 3 m e quello da 4 m sono
+diversi, sono due gruppi, e il modello prende l'uno con `L=3` e l'altro con `L=4`. Dentro i gruppi
+non ci sono regole, e la macchina generata usa i gruppi del modello così come sono, senza copie.
+
+**Nuovo modello.** Il pulsante **+ Nuovo modello** chiede una macchina già in archivio: la sua
+distinta resta com'è, e la macchina diventa modello con la prima opzione. Per tornare indietro si
+toglie l'ultima opzione.
+
+**Opzioni.** Ogni opzione ha un **codice** breve (`L`, `M`), un nome e le sue **scelte**, ognuna
+in due campi: il **valore** (`3`), che è quello che le regole citano, e l'**etichetta**
+(`3 metri`), che si legge nel configuratore e nel nome della macchina generata. Le opzioni stanno due per riga; un clic sul titolo **Opzioni** richiude la sezione, che allora le riassume in una riga.
+
+**Regole.** La tabella elenca le righe della distinta del modello, cioè i gruppi del primo
+livello, con due campi per riga. Una riga con i campi vuoti vale sempre.
 
 | Campo | Esempio | Cosa fa |
 |---|---|---|
 | **Vale solo se** | `M=B` · `L=4\|5` · `L=5 & M!=S` | La riga conta solo con queste scelte. `\|` vuol dire «oppure», `&` «e», `!=` «diverso da» |
-| **Quantità da formula** | `L*2` · `L*2+0,5` | La quantità si calcola dalla scelta. Si usano numeri, `+ - * /`, parentesi e i codici delle opzioni con valore numerico |
+| **Quantità da formula** | `L` · `L*2` · `L+1` · `M(S=2; B=3)` | Quanti gruppi entrano, calcolato dalla scelta. Si usano numeri, `+ - * /`, parentesi e i codici delle opzioni con valore numerico. Per un'opzione a lettere, o per quantità che non seguono un conto, c'è la **tabella per scelta**: `M(S=2; B=3)` vale 2 con S e 3 con B, e una scelta non scritta vale 0 |
 
-Le righe si possono scrivere anche dentro i gruppi del modello, a qualunque livello. In distinta
-si riconoscono dal segno `se M=B` o `q.tà = L*2` accanto al nome.
+Il pulsante **Esempi** della sezione apre una finestra con esempi pratici delle due colonne. Un codice di opzione che il modello non ha, o una regola scritta male, si rifiuta subito. I gruppi
+si aggiungono e si tolgono in *Gestione DB*, come in ogni distinta: la pagina ha il link. In
+distinta le righe con una regola si riconoscono dal segno `se M=B` o `q.tà = L` accanto al nome.
 
-**Configura.** Dal pulsante sulla striscia del modello, o dal pannello laterale. Si sceglie un
-valore per ogni opzione, e l'anteprima dice cosa succede prima di farlo:
+**Configura.** Si sceglie un valore per ogni opzione, e l'anteprima dice cosa nascerà: la
+**macchina** con codice `<codice del modello>-V01`, `-V02`…, il nome del modello seguito dalle
+scelte, il costo e i gruppi che conterrà. Sopra c'è l'intervallo di costo **da quanto a quanto**
+su tutte le combinazioni, fino a 256. **Genera la macchina** la crea; se la combinazione esiste
+già, il pulsante diventa **Apri la macchina**.
 
-- la **macchina** nuova, con codice `<codice del modello>-V01`, `-V02`… e il nome del modello
-  seguito dalle scelte;
-- i **gruppi derivati**: un gruppo che ha righe variabili diventa una copia con le righe risolte,
-  per esempio `TEL-S00-V01`;
-- i gruppi **riusati**: se un'altra configurazione ha già prodotto un gruppo con le stesse righe,
-  si usa quello. Un gruppo senza righe variabili resta **lo stesso articolo** del modello.
-
-Se la combinazione esiste già, il configuratore apre quella invece di farne un'altra.
+**Varianti generate.** Le macchine nate da questo modello, con le scelte, il costo e lo stato:
+*aggiornata* oppure *modello cambiato*.
 
 **La macchina generata è una macchina come le altre.** Si mette in un piano, si costifica, si
-revisiona. Il resto dell'app non ha bisogno di sapere che è nata da un modello.
+revisiona. In Gestione DB una riga sopra l'albero dice da quale modello è nata.
 
-**Il modello non si mette in un piano.** Aggiungerlo a un piano viene rifiutato con un avviso, e
-lo stesso vale per un gruppo con righe variabili. Un piano che ne contiene già uno lo segnala con
-*modello da configurare*. Il **costo** del modello nelle card è quello della **parte comune**, cioè
-delle righe che non dipendono dalle scelte, né per esserci né per la quantità. La striscia sopra l'albero dice **da quanto a quanto** costa su
-tutte le combinazioni, fino a 256 combinazioni.
+**La codifica è quella del modello.** La macchina generata eredita macrofamiglia, sottofamiglia,
+sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati: si
+cambiano sul modello, e salvando il modello le varianti lo seguono. Una variante non conta come
+un'altra macchina con la stessa sigla e non ha gruppi suoi: i gruppi stanno sul modello.
 
-**Quando il modello cambia.** Ogni macchina generata ricorda com'era il modello quando è nata.
-Se poi cambia il modello o uno dei suoi gruppi con righe variabili, la striscia della macchina
-generata lo dice, il Riepilogo la segnala (segnale 15) e c'è il pulsante **Rigenera**. Rigenera
-riscrive la distinta della macchina con le stesse scelte, sul modello di adesso: il codice resta
-lo stesso, così piani e movimenti non cambiano. Per tenere traccia della distinta di prima,
-rilascia una revisione prima di rigenerare. Un gruppo fisso che cambia non chiede di rigenerare:
-è lo stesso articolo, e la modifica arriva già.
+**Il modello non si mette in un piano.** Aggiungerlo a un piano viene rifiutato con un avviso; un
+piano che ne contiene già uno lo segnala con *modello da configurare*. Il **costo** del modello
+nelle card e in Gestione DB è quello della **parte comune**, cioè delle righe senza regole.
 
-> **A modulo spento** le righe condizionate contano come righe normali e le opzioni restano
-> scritte, senza che nessuno le legga. Riaccendendo il modulo tutto torna com'era.
+**Quando il modello cambia.** Ogni macchina generata ricorda com'era il modello quando è nata. Se
+poi cambiano le opzioni o le righe del modello, la macchina risulta *modello cambiato*, il
+Riepilogo la segnala (segnale 15) e nella pagina c'è **Rigenera**, o **Rigenera tutte** quando
+sono più d'una. Rigenera riscrive la distinta della macchina con le stesse scelte, sul modello di
+adesso: il codice resta lo stesso, così piani e movimenti non cambiano. Per tenere traccia della
+distinta di prima, rilascia una revisione prima di rigenerare. Un gruppo che cambia dentro non
+chiede di rigenerare: è lo stesso articolo, e la modifica arriva già.
+
+**Condizioni fuori posto.** Con la 0.119 le regole si potevano scrivere anche dentro i gruppi.
+Dalla 0.120 lì non valgono più e le righe contano sempre: la pagina elenca gli assiemi che ne
+hanno ancora, con il pulsante **Togli le condizioni**.
+
+> **A modulo spento** le regole contano come righe normali e le opzioni restano scritte, senza che
+> nessuno le legga. Riaccendendo il modulo tutto torna com'era.
 
 ---
 
