@@ -149,7 +149,7 @@ function machineSelectOptions(wcId, sel, conTariffa) {
 function renderMachines() {
   const list = machinesAll().slice().sort((a, b) => {
     const wa = getWorkCenter(a.workCenterId), wb = getWorkCenter(b.workCenterId);
-    return String(wa ? wa.name : '').localeCompare(String(wb ? wb.name : '')) || machineLabel(a).localeCompare(machineLabel(b));
+    return confrontaAlfa(wa ? wa.name : '', wb ? wb.name : '') || confrontaAlfa(machineLabel(a), machineLabel(b));
   }).map(m => {
     const wc = getWorkCenter(m.workCenterId);
     const ore = oreMacchinaTotali(m);

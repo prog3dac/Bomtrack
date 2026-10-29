@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.128.0 — 2026-10-29
+
+**Gestione in ordine alfanumerico.** Gli elenchi di tutte le schede di Gestione si mostrano in ordine naturale, senza distinzione fra maiuscole e minuscole: *M2* prima di *M10*, *acciaio* accanto ad *Acciaio*. Utenti, fornitori, clienti, centri di lavoro e famiglie (macrofamiglie e sottofamiglie) per nome; condizioni offerta per voce; concetti per nome; unità di misura per codice; macchine utensili ancora raccolte per centro, ora anch'esse in ordine naturale (prima *T10* veniva prima di *T2*). Cambia solo la vista: l'archivio resta com'è, e i pulsanti che lavorano per posizione (concetti, unità di misura, condizioni) puntano sempre alla voce giusta. Il confronto è `confrontaAlfa` / `inOrdineAlfa` in `core.js`. Nessun cambio a `supabase/schema.sql`.
+
 ### 0.127.1 — 2026-10-29
 
 **Controllo generale prima dei merge.** Correzioni trovate passando l'app intera prima di unire la 0.126.0 e la 0.127.0, senza funzioni nuove. Nessun cambio a `supabase/schema.sql`.

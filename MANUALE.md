@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.127.1**
+**Versione dell'app documentata: 0.128.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2974,6 +2974,12 @@ interventi li registra anche chi ha il ruolo *Officina e magazzino*.
 Le schede stanno in una **colonna a sinistra**, raccolte per argomento (dalla 0.127.0; prima erano
 una fila di pulsanti in alto). La colonna resta ferma mentre la pagina scorre; al telefono diventa
 una riga che scorre di lato.
+
+Gli elenchi delle schede (utenti, fornitori, clienti, condizioni offerta, famiglie e sottofamiglie,
+concetti, unità di misura, centri di lavoro, macchine) sono in **ordine alfanumerico** (dalla
+0.128.0): per nome, o per codice le unità di misura e le macchine (raccolte per centro di lavoro),
+con i numeri contati come numeri, *M2* prima di *M10*, e senza badare a maiuscole e minuscole.
+L'ordine è solo quello a video: una voce nuova va al suo posto nell'elenco.
 
 | Gruppo | Schede |
 |---|---|
