@@ -1586,24 +1586,13 @@ function cycleSourcingNote(it) {
     qui sotto.${vuoto ? ' Finché sono vuoti vale il prezzo a listino.' : ''}${apri}</div>`;
 }
 
-// Un assieme: i componenti stanno nella distinta, qui solo le fasi, e i
-// giorni di montaggio dichiarati (dalla 0.124.0 si scrivono qui, non più
-// nella distinta).
+// Un assieme: i componenti stanno nella distinta, qui solo le fasi. I giorni
+// di montaggio vengono sempre dalle fasi (dalla 0.124.0 non si dichiarano più).
 function cycleAssiemeNote(it) {
   const apri = `<button class="mini-btn" style="margin-left:8px" onclick="apriAnelloDistinta('${it.id}')">${ico('tree', 'tinted', '')} Distinta</button>`;
-  const dich = Math.max(0, Math.round(Number(it.assemblyDays) || 0));
   return `<div class="cycle-note">${ico('wrench', 'tinted')} <span><strong>${esc(typeLabel(it.type))}</strong>: i componenti stanno nella distinta, qui le <strong>fasi di montaggio</strong>.
-    Entrano nel costo come le lavorazioni di una parte, caricano i centri, e con un ciclo l'assieme si può lanciare con un ordine di produzione.</span>${apri}</div>
-    <div class="cycle-note">${ico('clock', 'tinted')} <label for="cyc-asmdays">Giorni di montaggio</label>
-      <input class="num" type="number" id="cyc-asmdays" min="0" max="999" step="1" value="${dich}" style="width:72px" onchange="saveCycleAsmDays()">
-      <span>${dich > 0 ? 'Dichiarati: il fabbisogno toglie dalla consegna questi giorni, non quelli delle fasi.' : '<strong>Zero</strong>: si ricavano dalle fasi, ore ÷ (ore al giorno × operatori) in fila, e i giorni dal terzista per quelle in conto lavoro.'}</span></div>`;
-}
-function saveCycleAsmDays() {
-  const it = currentCycleItem(); if (!it || !isAssembly(it.type)) return;
-  if (!roleGuard('catalog')) { renderCycles(); return; }
-  if (isNeg('cyc-asmdays')) { showToast('I giorni non possono essere negativi', 'error'); renderCycles(); return; }
-  it.assemblyDays = Math.round(numVal('cyc-asmdays', 0, 999));
-  touch(it); saveDB(); renderCycles(); savedToast('Giorni di montaggio aggiornati');
+    Entrano nel costo come le lavorazioni di una parte, caricano i centri, e con un ciclo l'assieme si può lanciare con un ordine di produzione.
+    I giorni di montaggio vengono dalle fasi: ore ÷ (ore al giorno × operatori) in fila, e i giorni dal terzista per quelle in conto lavoro.</span>${apri}</div>`;
 }
 
 // ─── Disegno della vista ───

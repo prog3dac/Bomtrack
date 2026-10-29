@@ -1174,7 +1174,7 @@ lavorazioni. La schermata si intitola **«Distinta Base & Costificazione»**.
 
 **Il ciclo di montaggio.** Sotto l'albero la riga *Ciclo di montaggio* elenca le fasi
 dell'assieme, con ore, operatori e costo, in sola lettura; **Apri ciclo** porta ai *Cicli di
-lavorazione*, dove fasi e giorni di montaggio si scrivono (dalla 0.124.0, → [cap.
+lavorazione*, dove le fasi si scrivono (dalla 0.124.0, → [cap.
 14](#il-ciclo-di-un-assieme-dalla-01240)).
 
 **Filtri.** Ricerca «Cerca codice o nome distinta…»; **livello** (Tutti i livelli · Macchine ·
@@ -1198,8 +1198,8 @@ Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta ape
 - La **percentuale di scarto** di una riga aumenta la quantità che serve davvero: 10 pezzi con
   5% di scarto sono 10,5 pezzi di materiale.
 - I **giorni di montaggio** (quelli che la programmazione a ritroso del fabbisogno toglie dalla
-  data in cui l'assieme serve) si dichiarano nel ciclo dell'assieme; quando ci sono, la riga del
-  ciclo li mostra come **Montaggio: … gg**. **Zero = dalle fasi** del ciclo.
+  data in cui l'assieme serve) vengono **sempre dalle fasi** del ciclo dell'assieme: ore ÷ (ore al
+  giorno × operatori), più attrezzaggio e coda del centro. Dalla 0.124.0 non si dichiarano più a mano.
 - I **riferimenti ciclici** (A contiene B che contiene A) sono rilevati e impediti, sia nella
   distinta sia nel ciclo. Se ne resta uno, un **avviso rosso** nomina l'articolo coinvolto invece
   di far comparire un costo tronco che sembrerebbe buono. **⊞ Espandi tutto** si ferma
@@ -1365,8 +1365,8 @@ i componenti stanno nella distinta, e la sezione *Distinta parte* non c'è (il p
 lavoro, costo fisso o orario, ore o giorni, ordine con ↑↓. Le card dicono il costo delle fasi e
 il costo dell'assieme.
 
-In testa, **Giorni di montaggio**: a zero si ricavano dalle fasi; scritti, il fabbisogno toglie
-dalla consegna quelli (prima si scrivevano nella distinta).
+I **giorni di montaggio** vengono dalle fasi, in fila: non c'è più un numero da dichiarare
+(prima si scriveva nella distinta, e scavalcava le fasi; i valori salvati sono ignorati).
 
 Da lì:
 
@@ -2000,7 +2000,7 @@ consegna del gruppo (ven 16)
 
 | Che cosa | Quanto dura | In che giorni |
 |---|---|---|
-| **Montaggio** di un assieme | i *giorni di montaggio* dell'assieme o, a zero, le fasi del suo ciclo in fila: le interne per le ore sul centro, quelle dal terzista per i giorni più il trasporto (dalla 0.124.0) | lavorativi |
+| **Montaggio** di un assieme | le fasi del suo ciclo in fila: le interne per le ore sul centro, quelle dal terzista per i giorni più il trasporto (dalla 0.124.0) | lavorativi |
 | **Fase interna** | (attrezzaggio del centro + ore/pz × pezzi) ÷ ore al giorno del centro, arrotondato al giorno, + giorni di coda | lavorativi |
 | **Tratta di conto lavoro** (fasi consecutive dello stesso terzista) | somma dei giorni di attraversamento + giorni di trasporto del terzista | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); l'invio cade sempre in un giorno lavorativo |
 | **Acquisto** | giorni di consegna del listino | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); la data d'ordine cade sempre in un giorno lavorativo |

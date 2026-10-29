@@ -261,13 +261,9 @@ function renderOpsBlock(item, editable, padLeft) {
   }).join('');
   if (!ops.length && !editable) return '';
   const label = editable ? 'Ciclo di montaggio' : 'Ciclo (' + esc(item.name) + ')';
-  // I giorni di montaggio dichiarati, se ci sono: tolgono dalla consegna quel
-  // tempo invece di quello delle fasi (assemblyDaysOf in views-mrp.js).
-  const dich = Number(item.assemblyDays) || 0;
-  const gg = dich > 0 ? ` <span class="bom-op-tag">${ico('clock', 'tinted')} Montaggio: ${dich} gg</span>` : '';
   const ciclo = editable && vistaAttiva('cycles')
     ? ` <span class="bom-op-tag"><span style="cursor:pointer" ${clickAttrs(`openCycleFor('${item.id}')`, 'Apri il ciclo di montaggio')}>${ico('edit', 'tinted')} Apri ciclo</span></span>` : '';
-  return `<div class="bom-ops" style="padding-left:${pl}px"><strong style="color:var(--text-dim);font-size:11px">${label}:</strong> ${tags || '<span class="empty-text" style="padding:0">nessuna fase</span>'}${gg}${ciclo}</div>`;
+  return `<div class="bom-ops" style="padding-left:${pl}px"><strong style="color:var(--text-dim);font-size:11px">${label}:</strong> ${tags || '<span class="empty-text" style="padding:0">nessuna fase</span>'}${ciclo}</div>`;
 }
 
 function toggleBom(key) { if (bomExpanded.has(key)) bomExpanded.delete(key); else bomExpanded.add(key); renderBom(); }

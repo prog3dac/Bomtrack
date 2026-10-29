@@ -365,27 +365,21 @@ function schedOps(ops, tratte, qty, due) {
   }
   return { start: fine, end: due || '', fasi, steps };
 }
-// Il montaggio di un assieme: i giorni dichiarati, o le fasi del suo ciclo in
-// fila — le interne per le ore sul centro, le tratte dal terzista per i loro
+// Il montaggio di un assieme: le fasi del suo ciclo in fila — le interne per le ore sul centro, le tratte dal terzista per i loro
 // giorni più il trasporto, come in schedOps.
 function assemblyDaysOf(it, qty) {
-  const dich = Math.max(0, Math.round(Number(it && it.assemblyDays) || 0));
-  if (dich > 0) return dich;
   const ops = cicloFasi(it);
   return clCycleRuns(it).reduce((s, t) => s + (t.esterna
     ? runLeadDays(ops.slice(t.from, t.to + 1).map(r => r.days), t.supplierId)
     : ops.slice(t.from, t.to + 1).reduce((a, r) => a + internalOpDays(getWorkCenter(r.workCenterId), r.hours, qty, r.operators), 0)), 0);
 }
-// Con i giorni dichiarati il montaggio è un blocco solo, e ogni fase ci sta
-// dentro da capo a fondo; senza, le fasi si programmano a ritroso come quelle
-// di una parte (schedPart), e il montaggio comincia con la prima.
+// Le fasi si programmano a ritroso come quelle di una parte (schedPart), e il
+// montaggio comincia con la prima; senza fasi l'assieme si monta il giorno
+// della consegna. I vecchi giorni di montaggio dichiarati (assemblyDays) non
+// contano più: restano nei dati solo per le versioni precedenti.
 function schedAssembly(it, qty, due) {
   const gg = due ? assemblyDaysOf(it, qty) : 0;
-  const dich = Math.max(0, Math.round(Number(it && it.assemblyDays) || 0));
-  if (dich > 0 || !cicloFasi(it).length) {
-    const start = schedBack(due, gg);
-    return { start, end: due || '', days: gg, fasi: cicloFasi(it).map(() => ({ start, end: due || '' })), steps: [] };
-  }
+  if (!cicloFasi(it).length) return { start: schedBack(due, 0), end: due || '', days: 0, fasi: [], steps: [] };
   const prog = schedPart(it, qty, due);
   return { start: due ? prog.start : '', end: due || '', days: gg, fasi: prog.fasi, steps: prog.steps };
 }

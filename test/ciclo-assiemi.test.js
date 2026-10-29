@@ -97,10 +97,10 @@ describe('Ciclo di un assieme: costo e fabbisogno', () => {
     // collaudo dal 18 al 20, montaggio 4 h = un giorno: dal 17
     assert.equal(e.start, '2026-11-17');
   });
-  it('con i giorni dichiarati il montaggio resta un blocco solo', () => {
+  it('i vecchi giorni di montaggio dichiarati non contano più: valgono le fasi', () => {
     const a = app({ grp: { assemblyDays: 5 } });
     const e = js(a, "mrpExplodePlan(getPlan('pl')).asm.find(x => x.item.id === 'grp')");
-    assert.equal(e.start, '2026-11-15');
+    assert.equal(e.start, '2026-11-17');
   });
   it('l assieme con un ciclo si lancia con un ordine di produzione; senza ciclo no', () => {
     const a = app();
@@ -168,10 +168,13 @@ describe('Ciclo di un assieme: interfaccia', () => {
     assert.doesNotMatch(h, /editOperationModal|delOperation/);
     assert.equal(a.eval("typeof addOperationModal"), 'undefined');
   });
-  it('i giorni di montaggio si dichiarano nel ciclo', () => {
-    const a = app();
-    a.eval("openCycleFor('grp'); document.getElementById('cyc-asmdays').value = '4'; saveCycleAsmDays()");
-    assert.equal(a.eval("getItem('grp').assemblyDays"), 4);
+  it('i giorni di montaggio non si dichiarano più, né nel ciclo né nella distinta', () => {
+    const a = app({ grp: { assemblyDays: 5 } });
+    a.eval("openCycleFor('grp')");
+    assert.doesNotMatch(a.html('cyc-body'), /cyc-asmdays/);
+    assert.equal(a.eval("typeof saveCycleAsmDays"), 'undefined');
+    a.eval("currentBomId = 'grp'; setView('bom')");
+    assert.doesNotMatch(a.html('bom-tree'), /Montaggio: 5 gg/);
   });
 });
 
