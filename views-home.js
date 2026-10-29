@@ -224,7 +224,7 @@ function homeSegnali() {
     'ordine di produzione in ritardo a capacità finita', 'ordini di produzione in ritardo a capacità finita', 'odp', 'media');
   }
 
-  // Un'area spenta (Gestione → Impostazioni) non parla: i suoi avvisi
+  // Un'area spenta (Gestione → Aree e moduli) non parla: i suoi avvisi
   // porterebbero a una vista che non c'è.
   return out.filter(s => vistaAttiva(s.vista)).sort((a, b) => CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }

@@ -493,7 +493,7 @@ function renderVarianti() {
   if (!host) return;
   if (!varAttivo()) {
     if (sel) sel.innerHTML = '';
-    host.innerHTML = `<div class="empty-text">Il modulo Varianti è spento. Si accende in <strong>Gestione → Impostazioni → Moduli</strong>.</div>`;
+    host.innerHTML = `<div class="empty-text">Il modulo Varianti è spento. Si accende in <strong>Gestione → Aree e moduli</strong>.</div>`;
     return;
   }
   const modelli = varModelli();

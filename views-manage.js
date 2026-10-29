@@ -2,38 +2,57 @@
 //  BOMTRACK — views-manage.js
 // ═══════════════════════════════════════════════════════════
 // Vista Gestione: utenti, dati azienda, fornitori, clienti, famiglie, centri di lavoro,
-// concetti, unità di misura e impostazioni.
+// concetti, unità di misura e le pagine delle impostazioni.
 // Classic script, scope globale condiviso con gli altri: nessun modulo e
 // nessun build, così index.html continua ad aprirsi con un doppio click.
 
 // ═══════════════════════════════════════════════════════════
 //  VISTA: GESTIONE
 // ═══════════════════════════════════════════════════════════
+// Dalla 0.127.0 le schede stanno in una colonna a sinistra, raccolte per
+// argomento: in riga erano quattordici pulsanti dello stesso peso, che andavano
+// a capo su tre righe e non dicevano quale stava con quale. E «Impostazioni»,
+// che teneva insieme costi, codici, sessione, aree, calendario ed etichette QR,
+// si è divisa nelle sue pagine: ognuna salva solo quello che mostra.
 const MGMT_TABS = [
-  { id: 'users', label: ico('users', 'tinted', '') + ' Utenti' },
-  { id: 'company', label: ico('building', 'tinted', '') + ' Dati azienda' },
-  { id: 'suppliers', label: ico('factory', 'tinted', '') + ' Fornitori' },
-  { id: 'customers', label: ico('contacts', 'tinted', '') + ' Clienti' },
-  { id: 'terms', label: ico('truck', 'tinted', '') + ' Condizioni offerta' },
-  { id: 'fam-acquistato', label: ico('cart', 'tinted', '') + ' Famiglie commerciali' },
-  { id: 'fam-materiale', label: ico('package', 'tinted', '') + ' Famiglie materie prime' },
-  { id: 'fam-parte', label: ico('wrench', 'tinted', '') + ' Famiglie parti' },
-  { id: 'concepts', label: ico('tag', 'tinted', '') + ' Concetti' },
-  { id: 'workcenters', label: ico('wrench', 'tinted', '') + ' Centri di lavoro', area: 'produzione' },
-  { id: 'machines', label: ico('settings', 'tinted', '') + ' Macchine utensili', modulo: 'macchine' },
-  { id: 'uoms', label: ico('ruler', 'tinted', '') + ' Unità di misura' },
-  { id: 'settings', label: ico('settings', 'tinted', '') + ' Impostazioni' },
-  { id: 'import', label: ico('upload', 'tinted', '') + ' Import' },
-  { id: 'backup', label: ico('save', 'tinted', '') + ' Backup' },
+  { id: 'company', gruppo: 'Azienda', label: ico('building', 'tinted', '') + ' Dati azienda' },
+  { id: 'users', gruppo: 'Azienda', label: ico('users', 'tinted', '') + ' Utenti e accesso' },
+  { id: 'suppliers', gruppo: 'Anagrafiche', label: ico('factory', 'tinted', '') + ' Fornitori' },
+  { id: 'customers', gruppo: 'Anagrafiche', label: ico('contacts', 'tinted', '') + ' Clienti' },
+  { id: 'terms', gruppo: 'Anagrafiche', label: ico('truck', 'tinted', '') + ' Condizioni offerta' },
+  { id: 'fam-acquistato', gruppo: 'Classificazione articoli', label: ico('cart', 'tinted', '') + ' Famiglie commerciali' },
+  { id: 'fam-materiale', gruppo: 'Classificazione articoli', label: ico('package', 'tinted', '') + ' Famiglie materie prime' },
+  { id: 'fam-parte', gruppo: 'Classificazione articoli', label: ico('wrench', 'tinted', '') + ' Famiglie parti' },
+  { id: 'concepts', gruppo: 'Classificazione articoli', label: ico('tag', 'tinted', '') + ' Concetti' },
+  { id: 'uoms', gruppo: 'Classificazione articoli', label: ico('ruler', 'tinted', '') + ' Unità di misura' },
+  { id: 'calendario', gruppo: 'Pianificazione e produzione', label: ico('clock', 'tinted', '') + ' Calendario di fabbrica' },
+  { id: 'workcenters', gruppo: 'Pianificazione e produzione', label: ico('wrench', 'tinted', '') + ' Centri di lavoro', area: 'produzione' },
+  { id: 'machines', gruppo: 'Pianificazione e produzione', label: ico('settings', 'tinted', '') + ' Macchine utensili', modulo: 'macchine' },
+  { id: 'moduli', gruppo: 'Configurazione', label: ico('settings', 'tinted', '') + ' Aree e moduli' },
+  { id: 'costi', gruppo: 'Configurazione', label: ico('euro', 'tinted', '') + ' Costi e margini' },
+  { id: 'codifica', gruppo: 'Configurazione', label: ico('tag', 'tinted', '') + ' Codifica articoli' },
+  { id: 'qr', gruppo: 'Configurazione', label: ico('qr', 'tinted', '') + ' Etichette QR' },
+  { id: 'import', gruppo: 'Dati', label: ico('upload', 'tinted', '') + ' Import' },
+  { id: 'backup', gruppo: 'Dati', label: ico('save', 'tinted', '') + ' Backup' },
 ];
+// Le vecchie schede che non ci sono più: chi chiama setMgmtTab('settings')
+// (un link, un'abitudine del codice) arriva dove ora stanno aree e moduli.
+const MGMT_ALIAS = { settings: 'moduli' };
 function renderManage() {
-  // Una scheda di un'area spenta sparisce, e chi ci stava torna alle impostazioni.
+  if (MGMT_ALIAS[mgmtTab]) mgmtTab = MGMT_ALIAS[mgmtTab];
+  // Una scheda di un'area o di un modulo spenti sparisce, e chi ci stava torna ad aree e moduli.
   const schede = MGMT_TABS.filter(t => (!t.area || areaAttiva(t.area)) && (!t.modulo || moduloAttivo(t.modulo)));
-  if (!schede.some(t => t.id === mgmtTab)) mgmtTab = 'settings';
-  document.getElementById('mgmt-tabs').innerHTML = schede.map(t =>
-    `<button class="mgmt-tab ${mgmtTab === t.id ? 'active' : ''}" onclick="setMgmtTab('${t.id}')">${t.label}</button>`).join('');
+  if (!schede.some(t => t.id === mgmtTab)) mgmtTab = 'moduli';
+  const gruppi = [];
+  schede.forEach(t => {
+    const g = gruppi[gruppi.length - 1];
+    if (g && g.nome === t.gruppo) g.schede.push(t); else gruppi.push({ nome: t.gruppo, schede: [t] });
+  });
+  document.getElementById('mgmt-tabs').innerHTML = gruppi.map(g =>
+    `<div class="mgmt-group"><div class="mgmt-group-title">${esc(g.nome)}</div>${g.schede.map(t =>
+      `<button class="mgmt-tab ${mgmtTab === t.id ? 'active' : ''}" onclick="setMgmtTab('${t.id}')" aria-current="${mgmtTab === t.id ? 'page' : 'false'}">${t.label}</button>`).join('')}</div>`).join('');
   const c = document.getElementById('mgmt-content');
-  if (mgmtTab === 'users') c.innerHTML = renderUsers();
+  if (mgmtTab === 'users') c.innerHTML = renderUsers() + renderAccessSettings();
   else if (mgmtTab === 'company') c.innerHTML = renderCompany();
   else if (mgmtTab === 'terms') c.innerHTML = renderTerms();
   else if (mgmtTab === 'suppliers') c.innerHTML = renderSuppliers();
@@ -45,10 +64,25 @@ function renderManage() {
   else if (mgmtTab === 'machines') c.innerHTML = renderMachines();
   else if (mgmtTab === 'concepts') c.innerHTML = renderConcepts();
   else if (mgmtTab === 'uoms') c.innerHTML = renderUoms();
-  else if (mgmtTab === 'settings') c.innerHTML = renderSettings();
+  else if (mgmtTab === 'calendario') c.innerHTML = renderSettingsPage(renderCalendarSettings());
+  else if (mgmtTab === 'moduli') c.innerHTML = renderSettingsPage(renderModuliSettings());
+  else if (mgmtTab === 'costi') c.innerHTML = renderSettingsPage(renderCostSettings());
+  else if (mgmtTab === 'codifica') c.innerHTML = renderSettingsPage(renderCodeSettings());
+  else if (mgmtTab === 'qr') c.innerHTML = renderSettingsPage(renderQrSettings());
   else if (mgmtTab === 'import') c.innerHTML = renderImport();
   else if (mgmtTab === 'backup') c.innerHTML = renderBackup();
   a11yFields(c);
+  mgmtTabInVista();
+}
+// La scheda aperta si vede sempre: al telefono la colonna diventa una riga che
+// scorre di lato, e la scheda scelta poteva restare oltre il bordo.
+function mgmtTabInVista() {
+  const nav = document.getElementById('mgmt-tabs');
+  const att = nav && nav.querySelector && nav.querySelector('.mgmt-tab.active');
+  if (!att || typeof att.getBoundingClientRect !== 'function' || typeof nav.getBoundingClientRect !== 'function') return;
+  const n = nav.getBoundingClientRect(), a = att.getBoundingClientRect();
+  if (a.left < n.left || a.right > n.right) nav.scrollLeft += a.left - n.left - 16;
+  if (a.top < n.top || a.bottom > n.bottom) nav.scrollTop += a.top - n.top - 16;
 }
 function setMgmtTab(t) { mgmtTab = t; renderManage(); }
 
@@ -1004,19 +1038,29 @@ function uomSetDefault(i) {
   saveDB(); renderManage();
 }
 
-function renderSettings() {
+// ─── Le pagine delle impostazioni ───
+// Ogni pagina mostra un argomento solo e ha il suo «Salva»: saveSettings
+// legge i campi che trova a video, e quelli delle altre pagine restano com'erano.
+function renderSettingsPage(corpo) {
+  return `<div class="mgmt-panel">${corpo}
+    <button class="add-btn-sm" onclick="saveSettings()">Salva impostazioni</button></div>`;
+}
+function renderCostSettings() {
   const s = db.settings;
-  return `<div class="mgmt-panel">
-    <h3 class="settings-group-title">${ico('euro', 'tinted', '')} Costi e margini</h3>
+  return `<h3 class="settings-group-title">${ico('euro', 'tinted', '')} Costi e margini</h3>
     <div class="modal-grid">
       <div class="modal-field"><label>Spese generali / overhead (%)</label><input type="number" id="set-ov" min="0" max="1000" step="0.1" value="${s.overheadPct}"></div>
       <div class="modal-field"><label>Margine / markup (%)</label><input type="number" id="set-mg" min="0" max="1000" step="0.1" value="${s.marginPct}"></div>
       <div class="modal-field"><label>Simbolo valuta</label><input id="set-cur" value="${esc(s.currency)}" maxlength="3"></div>
-      <div class="modal-field"><label>Approvvigionamento parte (default)</label><select id="set-partsourcing">${partSourcingOptions(defaultPartSourcing())}</select></div>
+      ${moduloAttivo('costiReali') ? `<div class="modal-field"><label>Valore del magazzino</label>
+      <select id="set-valore-mag"><option value="listino" ${s.valoreMagazzino !== 'medio' ? 'selected' : ''}>A listino (costo unitario in uso)</option>
+      <option value="medio" ${s.valoreMagazzino === 'medio' ? 'selected' : ''}>A costo medio d'acquisto</option></select></div>` : ''}
     </div>
-    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Le percentuali sono i valori di default applicati a tutti i prodotti. Si possono sovrascrivere per singola macchina dalla "Modifica testata".<br>L'approvvigionamento è quello proposto alle <strong>nuove</strong> parti, e da esso dipende anche da dove viene il costo: dal ciclo se prodotta in casa, dal listino se acquistata. Su ciascuna parte resta modificabile nella sua scheda; quelle già a catalogo non si toccano.</p>
-
-    <h3 class="settings-group-title">${ico('tag', 'tinted', '')} Codifica automatica articoli</h3>
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Le percentuali sono i valori di default applicati a tutti i prodotti. Si possono sovrascrivere per singola macchina dalla "Modifica testata".${moduloAttivo('costiReali') ? '<br>Il <strong>valore del magazzino</strong> (modulo Costi reali) decide come si valorizzano giacenze, Cruscotto e differenze d\'inventario.' : ''}</p>`;
+}
+function renderCodeSettings() {
+  const s = db.settings;
+  return `<h3 class="settings-group-title">${ico('tag', 'tinted', '')} Codifica automatica articoli</h3>
     <div class="modal-grid">
       <div class="modal-field"><label>Cifre parte incrementale codice</label><input type="number" id="set-digits" min="1" max="10" step="1" value="${codeDigits()}"></div>
       <div class="modal-field"><label>Prefisso codice — Commerciali</label><input id="set-pfx-acq" maxlength="10" value="${esc(s.codePrefixAcquistato || 'CMM')}" placeholder="CMM"></div>
@@ -1025,19 +1069,20 @@ function renderSettings() {
     </div>
     <p class="empty-text" style="text-align:left;padding:4px 0 12px">Le cifre della parte incrementale determinano lo zero-padding del progressivo (es. 3 → <span style="font-family:var(--mono)">${esc(s.codePrefixMateriale || 'MAT')}-ACC-LAM-001</span>). Il prefisso codice è la sigla iniziale usata nei codici automatici per commerciali, materie prime e parti.<br>Macchine, gruppi, sottogruppi e le parti legate a una macchina usano invece la <strong>codifica gerarchica</strong> (es. <span style="font-family:var(--mono)">TRN-BAS-001</span>), il cui schema si configura sulla singola macchina.</p>
 
-    <h3 class="settings-group-title">${ico('lock', 'tinted', '')} Accesso</h3>
+    <h3 class="settings-group-title">${ico('wrench', 'tinted', '')} Nuove parti</h3>
+    <div class="modal-grid">
+      <div class="modal-field"><label>Approvvigionamento parte (default)</label><select id="set-partsourcing">${partSourcingOptions(defaultPartSourcing())}</select></div>
+    </div>
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">L'approvvigionamento è quello proposto alle <strong>nuove</strong> parti, e da esso dipende anche da dove viene il costo: dal ciclo se prodotta in casa, dal listino se acquistata. Su ciascuna parte resta modificabile nella sua scheda; quelle già a catalogo non si toccano.</p>`;
+}
+// La durata della sessione sta con gli utenti: è una regola d'accesso, non un
+// parametro di calcolo.
+function renderAccessSettings() {
+  return renderSettingsPage(`<h3 class="settings-group-title">${ico('lock', 'tinted', '')} Accesso</h3>
     <div class="modal-grid">
       <div class="modal-field"><label>Durata della sessione salvata (giorni)</label><input type="number" id="set-session" min="0" max="365" step="1" value="${sessionMaxDays()}"></div>
     </div>
-    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Passati questi giorni dall'ultimo accesso, "Ricordami su questo PC" smette di valere e va reinserita la password. <strong>0 = la sessione non scade mai</strong> (com'era fino alla 0.21.0): comodo su un PC personale, meno su una postazione condivisa in officina.</p>
-
-    ${renderModuliSettings()}
-
-    ${renderCalendarSettings()}
-
-    ${renderQrSettings()}
-
-    <button class="add-btn-sm" onclick="saveSettings()">Salva impostazioni</button></div>`;
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Passati questi giorni dall'ultimo accesso, "Ricordami su questo PC" smette di valere e va reinserita la password. <strong>0 = la sessione non scade mai</strong> (com'era fino alla 0.21.0): comodo su un PC personale, meno su una postazione condivisa in officina.</p>`);
 }
 // ─── Moduli ───
 // Un interruttore per modulo (MODULI in core.js). Spegnere non cancella niente:
@@ -1060,10 +1105,7 @@ function renderModuliSettings() {
     ${Object.keys(MODULI).map(k => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0 8px">
       <input type="checkbox" class="set-modulo" value="${k}" ${moduloAttivo(k) ? 'checked' : ''} style="margin-top:3px">
       <span><strong>${esc(MODULI[k].nome)}</strong><br><span class="empty-text" style="padding:0">${esc(MODULI[k].descr)}</span></span></label>`).join('')}
-    ${moduloAttivo('costiReali') ? `<div class="modal-field" style="max-width:420px;margin:4px 0 8px 24px"><label>Valore del magazzino</label>
-      <select id="set-valore-mag"><option value="listino" ${db.settings.valoreMagazzino !== 'medio' ? 'selected' : ''}>A listino (costo unitario in uso)</option>
-      <option value="medio" ${db.settings.valoreMagazzino === 'medio' ? 'selected' : ''}>A costo medio d'acquisto</option></select></div>` : ''}
-    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. <strong>I dati già scritti restano</strong>: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti i colleghi.</p>`;
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne tiene conto. <strong>I dati già scritti restano</strong>: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale per tutti i colleghi.${moduloAttivo('costiReali') ? ' Il valore del magazzino a costo medio si sceglie in <em>Costi e margini</em>.' : ''}</p>`;
 }
 function readModuliSettings() {
   const prima = (db.settings && db.settings.modules) || {};
@@ -1144,18 +1186,27 @@ function saveSettings() {
   // niente, invece di salvare il resto e lasciare quello vecchio senza dirlo.
   const erroreQr = readQrSettings();
   if (erroreQr) { showToast(erroreQr, 'error'); return; }
+  // Si legge solo quello che la pagina mostra (0.127.0): un campo che non è a
+  // video tornerebbe vuoto, e azzererebbe il margine salvando il calendario.
+  const c = id => !!document.getElementById(id);
   // Percentuali riportate dentro 0-1000 in silenzio, come già fa codeDigits qui sotto.
-  db.settings.overheadPct = numVal('set-ov', 0, 1000);
-  db.settings.marginPct = numVal('set-mg', 0, 1000);
-  db.settings.currency = val('set-cur') || '€';
-  const pso = val('set-partsourcing');
-  db.settings.partSourcingDefault = PART_SOURCING[pso] ? pso : 'buy';
-  const d = parseInt(val('set-digits'), 10);
-  db.settings.codeDigits = (d >= 1 && d <= 10) ? d : 3;
-  db.settings.codePrefixAcquistato = (val('set-pfx-acq') || 'CMM').toUpperCase();
-  db.settings.codePrefixMateriale = (val('set-pfx-mat') || 'MAT').toUpperCase();
-  db.settings.codePrefixParte = (val('set-pfx-prt') || 'PRT').toUpperCase();
-  db.settings.sessionDays = numVal('set-session', 0, 365);
+  if (c('set-ov')) {
+    db.settings.overheadPct = numVal('set-ov', 0, 1000);
+    db.settings.marginPct = numVal('set-mg', 0, 1000);
+    db.settings.currency = val('set-cur') || '€';
+  }
+  if (c('set-partsourcing')) {
+    const pso = val('set-partsourcing');
+    db.settings.partSourcingDefault = PART_SOURCING[pso] ? pso : 'buy';
+  }
+  if (c('set-digits')) {
+    const d = parseInt(val('set-digits'), 10);
+    db.settings.codeDigits = (d >= 1 && d <= 10) ? d : 3;
+    db.settings.codePrefixAcquistato = (val('set-pfx-acq') || 'CMM').toUpperCase();
+    db.settings.codePrefixMateriale = (val('set-pfx-mat') || 'MAT').toUpperCase();
+    db.settings.codePrefixParte = (val('set-pfx-prt') || 'PRT').toUpperCase();
+  }
+  if (c('set-session')) db.settings.sessionDays = numVal('set-session', 0, 365);
   if (document.querySelector && (document.querySelector('.set-modulo') || document.querySelector('.set-area'))) db.settings.modules = readModuliSettings();
   if (document.getElementById('set-valore-mag') && val('set-valore-mag')) db.settings.valoreMagazzino = val('set-valore-mag') === 'medio' ? 'medio' : 'listino';
   // Il calendario si sostituisce intero: calendario.js riconosce il cambio

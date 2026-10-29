@@ -166,7 +166,7 @@ describe('Aree: Produzione interna spenta', () => {
   it('i Centri di lavoro escono dalla Gestione', () => {
     const a = conParte({ produzione: false });
     a.eval("mgmtTab = 'workcenters'; renderManage()");
-    assert.equal(a.eval('mgmtTab'), 'settings');
+    assert.equal(a.eval('mgmtTab'), 'moduli');
     assert.ok(!/Centri di lavoro/.test(a.html('mgmt-tabs')));
   });
 });

@@ -2,6 +2,23 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.127.0 — 2026-10-29
+
+**La seconda barra resta ferma in alto.** Le voci del gruppo aperto (per esempio *Articoli di progetto · Articoli d'acquisto · Gestione DB…*) restano sotto la barra dei gruppi anche quando si scorre la pagina: per cambiare voce non serve più tornare in cima. Al telefono le voci non vanno a capo ma scorrono di lato. Gli elenchi accanto ai documenti, che restano fermi anche loro, si mettono sotto la barra invece di finirci coperti.
+
+**Gestione con le schede in colonna.** Le diciotto schede (diciannove con il modulo Macchine utensili) passano da una fila di pulsanti in alto a una **colonna a sinistra**, ferma mentre la pagina scorre e raccolta per argomento: *Azienda* (Dati azienda, Utenti e accesso), *Anagrafiche* (Fornitori, Clienti, Condizioni offerta), *Classificazione articoli* (le tre Famiglie, Concetti, Unità di misura), *Pianificazione e produzione* (Calendario di fabbrica, Centri di lavoro, Macchine utensili), *Configurazione* (Aree e moduli, Costi e margini, Codifica articoli, Etichette QR), *Dati* (Import, Backup). Al telefono la colonna torna una riga che scorre di lato, con la scheda aperta sempre in vista.
+
+**Impostazioni divise per argomento.** La pagina unica, che mescolava costi, codici, sessione, aree, calendario ed etichette QR, diventa:
+- **Aree e moduli**: le aree e i moduli da accendere.
+- **Costi e margini**: spese generali, margine, valuta e, con il modulo Costi reali, il valore del magazzino (prima stava sotto i moduli).
+- **Codifica articoli**: cifre e prefissi dei codici automatici, e l'approvvigionamento proposto alle nuove parti.
+- **Calendario di fabbrica** ed **Etichette QR**, invariati.
+- La **durata della sessione** passa in *Utenti e accesso*.
+
+Ogni pagina ha il suo **Salva impostazioni**, che salva solo i campi che mostra: le altre pagine restano com'erano. Gli avvisi che rimandavano a *Gestione → Impostazioni* ora dicono la pagina giusta.
+
+**Manuale**: cap. 3 «La navigazione a due livelli», cap. 4, cap. 25 «Gestione» riscritto per gruppi e pagine.
+
 ### 0.126.0 — 2026-10-29
 
 **Modulo Macchine utensili.** Il centro di lavoro è il reparto, la macchina la risorsa che ci sta dentro: ogni macchina appartiene a un centro e porta la sua tariffa oraria, la sua manutenzione e i suoi fermi. Si accende in *Gestione → Impostazioni → Moduli* (nasce spento).
