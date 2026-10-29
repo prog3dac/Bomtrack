@@ -67,10 +67,11 @@ function revSnapshot(it) {
   return {
     code: it.code, name: it.name, type: it.type, uom: it.uom || '',
     sourcing: it.sourcing || null,
-    components: JSON.parse(JSON.stringify(it.components || [])),
-    // Di un assieme le fasi, anche quelle di prima della 0.124.0 non ancora
-    // passate al ciclo (cicloFasi): sono la stessa definizione.
-    cycle: JSON.parse(JSON.stringify(isAssembly(it.type) ? cicloFasi(it) : (it.cycle || []))),
+    // La distinta e le fasi, anche quelle non ancora passate dalla migrazione
+    // (distintaRighe, cicloFasi): sono la stessa definizione. Di una parte,
+    // dalla 0.125.0 il materiale sta nella distinta e nel ciclo le sole fasi.
+    components: JSON.parse(JSON.stringify(distintaRighe(it))),
+    cycle: JSON.parse(JSON.stringify(cicloFasi(it))),
     // Il costo del giorno del rilascio: senza, la revisione direbbe *cosa* c'era
     // ma non *quanto* costava, e i prezzi di allora non tornano più.
     cost: { material: c.material, purchased: c.purchased, labor: c.labor,
@@ -237,7 +238,18 @@ function revRowsOf(snapshot) {
   };
   // Ogni riga porta con sé la propria unità: nel confronto «2 → 3» va detto di
   // che cosa, e le lavorazioni si misurano in ore mentre i componenti no.
+  // La distinta di una parte (dalla 0.125.0 nei componenti, prima nel ciclo)
+  // ha la sua chiave: confrontata con una revisione di prima, la stessa
+  // materia prima è la stessa riga.
+  const parte = snapshot.type === 'parte';
+  const rigaParte = r => {
+    const ci = getItem(r.itemId);
+    somma('c:' + r.itemId, ci ? ci.code + ' — ' + ci.name : '(articolo eliminato)', r.qty,
+      { tipo: 'Distinta parte', uom: itemUom(ci), scrapPct: Number(r.scrapPct) || 0,
+        dati: { forzato: r.costOverride != null && r.costOverride !== '' ? Number(r.costOverride) : null } });
+  };
   (snapshot.components || []).forEach(c => {
+    if (parte) { rigaParte(c); return; }
     const ci = getItem(c.itemId);
     somma('i:' + c.itemId, ci ? ci.code + ' — ' + ci.name : '(articolo eliminato)',
       c.qty, { tipo: 'Componente', uom: itemUom(ci), scrapPct: Number(c.scrapPct) || 0 });
@@ -257,11 +269,7 @@ function revRowsOf(snapshot) {
         1, { tipo: 'Fase ciclo', cost: cycleRowCost(r), dati: {
           costo: +(cycleRowCost(r) || 0).toFixed(4), ore: Number(r.hours) || 0, operatori: r.supplierId ? null : faseOperatori(r), giorni: Number(r.days) || 0,
           terzista: r.supplierId ? (supplierName(r.supplierId) || r.supplierId) : 'interna', modo: r.costMode || 'fisso' } });
-    } else {
-      const ci = getItem(r.itemId);
-      somma('c:' + r.itemId, ci ? ci.code + ' — ' + ci.name : '(articolo eliminato)', r.qty,
-        { tipo: 'Distinta parte', uom: itemUom(ci), dati: { forzato: r.costOverride != null && r.costOverride !== '' ? Number(r.costOverride) : null } });
-    }
+    } else rigaParte(r);
   });
   return m;
 }

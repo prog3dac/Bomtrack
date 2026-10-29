@@ -420,7 +420,7 @@ describe('posizione gerarchica delle righe (1, 1.1, 1.1.1…)', () => {
     assert.deepEqual(rows.map(r => r.pos), ['', '1', '1.1', '1.1.1', '1.2', '2']);
   });
 
-  it('la distinta parte continua la numerazione, le lavorazioni restano senza numero', () => {
+  it('la distinta della parte continua la numerazione, le lavorazioni restano senza numero', () => {
     const app = withDb(makeDb({
       items: [
         mat('m', 10), acq('a', 5),
@@ -434,9 +434,10 @@ describe('posizione gerarchica delle righe (1, 1.1, 1.1.1…)', () => {
     }));
     const rows = [];
     app.ref('flattenBom')('mac', 1, 0, 0, rows, []);
-    // La fase in mezzo non consuma un numero: la serie degli articoli resta 2.1, 2.2.
-    assert.deepEqual(rows.map(r => r.pos), ['', '1', '2', '2.1', '', '2.2']);
-    assert.equal(rows[4].type, 'Lavorazione');
+    // Prima la distinta della parte (dalla 0.125.0 sta lì), poi le fasi: la
+    // fase non consuma un numero, la serie degli articoli resta 2.1, 2.2.
+    assert.deepEqual(rows.map(r => r.pos), ['', '1', '2', '2.1', '2.2', '']);
+    assert.equal(rows[5].type, 'Lavorazione');
     // Nessuna riga "costo unitario manuale": il prezzo a listino non si somma
     // più al ciclo, quindi la serie finisce con l'ultimo articolo.
     assert.equal(rows.length, 6);

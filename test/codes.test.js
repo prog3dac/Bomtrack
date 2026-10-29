@@ -325,32 +325,36 @@ describe('createsCycle — copre anche la distinta parte', () => {
   });
 });
 
-describe('pickCycleItem — le guardie stanno accanto alla scrittura', () => {
+// Dalla 0.125.0 il materiale di una parte si aggiunge dalla Distinta, con le
+// stesse guardie degli assiemi: tipo ammesso, anello, ruolo.
+describe('Distinta di una parte — le guardie stanno accanto alla scrittura', () => {
   const conParte = () => makeDb({ items: [parte('p1', { cycle: [] }), acq('c1', 5), asm('g1', 'gruppo')] });
+  const righe = a => (a.snapshot().items.find(x => x.id === 'p1').components || []).length;
+  const inserisci = (a, id) => a.eval(`currentBomId = "p1"; bomPanelQty = new Map([[${JSON.stringify(id)}, 1]]); bomPanelInsertAll()`);
 
-  it('un commerciale entra nella distinta parte', () => {
+  it('un commerciale entra nella distinta della parte', () => {
     const a = app(conParte());
-    a.eval('currentCycleItemId = "p1"; pickCycleItem("c1")');
-    assert.equal(a.snapshot().items.find(x => x.id === 'p1').cycle.length, 1);
+    inserisci(a, 'c1');
+    assert.equal(righe(a), 1);
   });
 
   it('un assieme no, nemmeno chiamando la funzione a mano', () => {
     const a = app(conParte());
-    a.eval('currentCycleItemId = "p1"; pickCycleItem("g1")');
-    assert.equal(a.snapshot().items.find(x => x.id === 'p1').cycle.length, 0);
+    inserisci(a, 'g1');
+    assert.equal(righe(a), 0);
   });
 
   it('un articolo inesistente non aggiunge una riga vuota', () => {
     const a = app(conParte());
-    a.eval('currentCycleItemId = "p1"; pickCycleItem("sparito")');
-    assert.equal(a.snapshot().items.find(x => x.id === 'p1').cycle.length, 0);
+    inserisci(a, 'sparito');
+    assert.equal(righe(a), 0);
   });
 
   it('il ruolo lettore non scrive', () => {
     const a = app(conParte());
     a.asRole('lettore');
-    a.eval('currentCycleItemId = "p1"; pickCycleItem("c1")');
-    assert.equal(a.snapshot().items.find(x => x.id === 'p1').cycle.length, 0);
+    inserisci(a, 'c1');
+    assert.equal(righe(a), 0);
   });
 });
 

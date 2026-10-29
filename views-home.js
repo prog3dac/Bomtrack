@@ -167,10 +167,8 @@ function homeSegnali() {
     // La fase si numera fra le sole lavorazioni, non nell'array intero: è il
     // numero che l'utente legge nella vista Cicli, e nominarne un altro
     // manderebbe a cercare la riga sbagliata.
-    let k = 0;
-    (it.cycle || []).forEach(r => {
-      if (r.kind !== 'op') return;
-      const n = cyclePhaseNumber(k++);
+    cicloFasi(it).forEach((r, k) => {
+      const n = cyclePhaseNumber(k);
       if (r.costMode !== 'orario' || Number(r.hours) > 0) return;
       const wc = getWorkCenter(r.workCenterId);
       senzaOre.push(voce(it.code, `${it.name} — fase ${n} su ${wc ? wc.name : '(centro mancante)'}: ore a zero, la lavorazione non costa nulla`,

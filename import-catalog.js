@@ -642,7 +642,7 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   if (isNew) {
     it = { id: gid(), type, active: true };
     if (isAssembly(type)) { it.components = []; it.operations = []; it.cycle = []; }
-    if (type === 'parte') { it.cycle = []; it.sourcing = defaultPartSourcing(); }
+    if (type === 'parte') { it.components = []; it.cycle = []; it.sourcing = defaultPartSourcing(); }
     if (hasPriceList(it)) { it.priceList = []; it.priceListSeeded = true; }
   }
   // Un articolo che c'è già si modifica su una copia, e la copia entra solo se

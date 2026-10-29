@@ -8,35 +8,43 @@
 // ═══════════════════════════════════════════════════════════
 //  VISTA: DISTINTE BASE
 // ═══════════════════════════════════════════════════════════
-// ─── Filtri dell'elenco distinte ───
-// Oltre il centinaio di assiemi il menu a tendina non si scorre più. I criteri
-// sono gli stessi della vista Cicli: testo, livello e — al posto della famiglia,
-// che gli assiemi non usano — la macchina di appartenenza.
-function bomProducts() { return (db.items || []).filter(i => isAssembly(i.type)); }
-function bomFilteredProducts() {
-  const q = (val('bom-search') || '').toLowerCase();
-  const tipo = val('bom-type');
-  const mac = val('bom-machine');
-  let rows = bomProducts();
-  if (tipo) rows = rows.filter(i => i.type === tipo);
+// ─── Filtri dell'elenco distinte (e dei cicli) ───
+// Dalla 0.125.0 anche le parti hanno una distinta, e Distinte base e Cicli
+// elencano gli stessi articoli: macchine, gruppi, sottogruppi e parti. Le due
+// barre hanno quindi gli stessi filtri, scritti una volta qui: testo, tipo,
+// famiglia e sottofamiglia (delle parti: gli assiemi non ne hanno), macchina e
+// gruppo di appartenenza. `pfx` è il prefisso degli id della vista.
+const DISTINTE_TIPI = ['macchina', 'gruppo', 'sottogruppo', 'parte'];
+function distinteArticoli() { return (db.items || []).filter(i => DISTINTE_TIPI.includes(i.type)); }
+function distinteFiltrate(pfx) {
+  const leggi = k => (document.getElementById(pfx + '-' + k) || {}).value || '';
+  const q = leggi('search').toLowerCase();
+  const ft = leggi('type'), ff = leggi('family'), fsf = leggi('subfamily');
+  const fm = leggi('machine'), fg = leggi('group');
+  let rows = distinteArticoli();
+  if (ft) rows = rows.filter(i => i.type === ft);
+  if (ff) rows = rows.filter(i => usesFamily(i.type) && i.familyId === ff);
+  if (fsf) rows = rows.filter(i => i.subFamilyId === fsf);
   // La macchina stessa vale come "appartenente a sé": filtrando per una macchina
-  // ci si aspetta di trovarci dentro anche lei, non solo i suoi gruppi.
-  if (mac) rows = rows.filter(i => i.id === mac || i.machineItemId === mac);
+  // ci si aspetta di trovarci dentro anche lei, non solo i suoi gruppi. Così il
+  // gruppo, con le sue parti e i suoi sottogruppi.
+  if (fm) rows = rows.filter(i => i.type === 'macchina' ? i.id === fm || i.configuredFromId === fm : i.machineItemId === fm);
+  if (fg) rows = rows.filter(i => i.type === 'gruppo' ? i.id === fg : i.groupItemId === fg);
   if (q) rows = rows.filter(i => (i.code + ' ' + i.name).toLowerCase().includes(q));
-  return rows.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  return rows;
 }
-// Ripopola il menu delle macchine conservando la scelta, se ancora valida
-// (stesso patto di updateCycleFamilyFilters).
-function updateBomMachineFilter() {
-  const sel = document.getElementById('bom-machine'); if (!sel) return;
-  renderInto(sel, () => {
-    const macs = (db.items || []).filter(i => i.type === 'macchina')
-      .sort((a, b) => String(a.code).localeCompare(String(b.code)));
-    const keep = macs.some(m => m.id === sel.value) ? sel.value : '';
-    return `<option value="">Tutte le macchine</option>` +
-      macs.map(m => `<option value="${m.id}" ${m.id === keep ? 'selected' : ''}>${esc(m.code)} — ${esc(m.name)}</option>`).join('');
-  });
+// Ripopola famiglie, macchine e gruppi conservando le scelte ancora valide
+// (stesso patto delle anagrafiche: syncFamilyFilters, syncMachineFilters).
+function syncDistinteFiltri(pfx) {
+  if (!document.getElementById(pfx + '-type')) return;
+  syncFamilyFilters(pfx, DISTINTE_TIPI);
+  syncMachineFilters(pfx);
 }
+function bomProducts() { return distinteArticoli(); }
+function bomFilteredProducts() {
+  return distinteFiltrate('bom').sort((a, b) => String(a.code).localeCompare(String(b.code)));
+}
+function updateBomMachineFilter() { syncDistinteFiltri('bom'); }
 function bomSearchInput() { debounced('bom', renderBom); }
 function onBomFilterChange() { renderBom(); }
 
@@ -46,13 +54,13 @@ function productOptions(selectedId) {
   // altrimenti restringere la ricerca chiuderebbe l'albero sotto le mani.
   const rows = bomFilteredProducts();
   const aperta = getItem(selectedId);
-  if (aperta && isAssembly(aperta.type) && !rows.some(i => i.id === selectedId)) rows.push(aperta);
-  const groups = [['macchina', 'Macchine'], ['gruppo', 'Gruppi'], ['sottogruppo', 'Sottogruppi']];
+  if (aperta && DISTINTE_TIPI.includes(aperta.type) && !rows.some(i => i.id === selectedId)) rows.push(aperta);
+  const groups = [['macchina', 'Macchine'], ['gruppo', 'Gruppi'], ['sottogruppo', 'Sottogruppi'], ['parte', 'Parti']];
   let h = groups.map(([t, lbl]) => {
     const items = rows.filter(i => i.type === t);
     return items.length ? `<optgroup label="${lbl}">${items.map(opt).join('')}</optgroup>` : '';
   }).join('');
-  if (!h) h = '<option value="">— nessun assieme —</option>';
+  if (!h) h = '<option value="">— nessuna distinta —</option>';
   return h;
 }
 // La selezione ricade sui prodotti NON filtrati: i filtri restringono l'elenco,
@@ -72,7 +80,7 @@ function renderBom() {
   // vede sparire qui, al ridisegno: il controllo si rifà solo se l'avviso c'è.
   if (_avvisiFissi.has('anelli')) controllaAnelliDistinta();
   updateBomMachineFilter();
-  filtScopeApply('bom');   // dopo il sync, non prima: vedi nota in renderCatalog (views-catalog.js)
+  filtScopeApply('bom', updateBomMachineFilter);   // dopo il sync, non prima: vedi nota in renderCatalog (views-catalog.js)
   ensureCurrentBom();
   document.getElementById('bom-select').innerHTML = productOptions(currentBomId);
   const conta = document.getElementById('bom-count');
@@ -110,10 +118,15 @@ function renderBom() {
   const head = `<div class="bom-head"><span>Articolo</span><span class="num">Q.tà</span><span>U.M.</span>
     <span class="num">Costo un.</span><span class="num">Scarto %</span><span class="num">Costo riga</span><span style="text-align:right">Azioni</span></div>`;
   const rootRow = renderBomRootNode(it);
-  const rows = (it.components || []).map((comp, idx) =>
+  // Una parte di dati non ancora migrati legge la distinta da distintaRighe:
+  // gli indici delle righe modificabili valgono però su `components`, che è
+  // quello che le modifiche toccano (dopo parteDistintaViva).
+  const rows = distintaRighe(it).map((comp, idx) =>
     renderBomNode(comp, 1, it.id, true, idx, it.id, [it.id], bomPos('', idx))).join('');
   const opsRow = renderOpsBlock(it, true);
-  tree.innerHTML = varRigaBom(it) + head + rootRow + (rows || `<div class="empty-text">Nessun componente. Usa "+ Aggiungi componenti".</div>`) + opsRow;
+  const nota = it.type === 'parte' && partSourcing(it) === 'buy'
+    ? `<div class="empty-text" style="text-align:left;padding:6px 0">${ico('cart', 'tinted')} Questa parte si <strong>acquista</strong>: il suo costo è il prezzo a listino, e la distinta non entra né nel costo né nel fabbisogno finché l'approvvigionamento non passa a produzione interna.</div>` : '';
+  tree.innerHTML = varRigaBom(it) + nota + head + rootRow + (rows || `<div class="empty-text">Nessun componente. Usa "+ Aggiungi componenti".</div>`) + opsRow;
   refreshBomPanelIfOpen();
   filtMount('bom');
 }
@@ -143,22 +156,26 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
   const nodeKey = pathPrefix + '>' + comp.itemId + '#' + idx;
   const cyc = ancestorIds.includes(comp.itemId);
   const isProd = isAssembly(child.type);
-  // Anche una Parte è espandibile: mostra il proprio ciclo di lavorazione (articoli + lavorazioni).
-  // Col calcolo "solo costo unitario" il ciclo non concorre al costo e non va mostrato nell'albero.
-  const hasCycle = child.type === 'parte' && (child.cycle || []).length > 0 && partSourcing(child) !== 'buy';
-  const expandable = !cyc && (hasCycle || (isProd && (child.components || []).length > 0));
+  // Anche una Parte è espandibile: mostra la sua distinta e il suo ciclo (dalla
+  // 0.125.0 stanno separati, come per gli assiemi). Una parte comprata no: la
+  // sua distinta non concorre al costo e non va mostrata nell'albero.
+  const isParte = child.type === 'parte' && partSourcing(child) !== 'buy';
+  const figli = (isProd || isParte) ? distintaRighe(child) : [];
+  const expandable = !cyc && (figli.length > 0 || (isParte && cicloFasi(child).length > 0));
   const expanded = bomExpanded.has(nodeKey);
   const unit = cyc ? 0 : costOf(comp.itemId).total;
   const qty = Number(comp.qty) || 0;
   const factor = qty * (1 + (Number(comp.scrapPct) || 0) / 100);
-  const lineCost = unit * factor;
+  // Il costo di riga forzato, che ha solo la distinta di una parte.
+  const forzato = comp.costOverride != null && comp.costOverride !== '';
+  const lineCost = forzato ? Number(comp.costOverride) || 0 : unit * factor;
   const indent = (level - 1) * 18;
   const toggle = expandable
     ? `<span class="bom-toggle" ${clickAttrs(`toggleBom('${nodeKey}')`, (expanded ? 'Richiudi ' : 'Espandi ') + child.code)}
         aria-expanded="${expanded}">${expanded ? ico('chevronDown') : ico('chevronRight')}</span>`
     : `<span class="bom-toggle leaf">•</span>`;
   const actions = `<button class="mini-btn" title="Dove è usato e impatto costi" onclick="usageModal('${comp.itemId}')">${ico('link', 'tinted', 'Dove è usato e impatto costi')}</button>`
-    + (child.type === 'parte' && vistaAttiva('cycles') ? `<button class="mini-btn" title="Distinta parte e ciclo di lavorazione" onclick="openCycleFor('${comp.itemId}')">${ico('wrench', 'tinted', 'Distinta parte e ciclo di lavorazione')}</button>` : '')
+    + (child.type === 'parte' && vistaAttiva('cycles') ? `<button class="mini-btn" title="Ciclo di lavorazione" onclick="openCycleFor('${comp.itemId}')">${ico('wrench', 'tinted', 'Ciclo di lavorazione')}</button>` : '')
     + (editable
       ? `<button class="mini-btn" title="Modifica" onclick="editComponentModal(${idx})">${ico('edit', 'tinted', 'Modifica')}</button>
          <button class="mini-btn danger" title="Elimina" onclick="delComponent(${idx})">${ico('trash', 'tinted', 'Elimina')}</button>`
@@ -174,57 +191,17 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     <span>${esc(child.uom || '')}</span>
     <span class="num cost">${fmtN(unit)}</span>
     <span class="num">${Number(comp.scrapPct) || 0}</span>
-    <span class="num cost">${fmtN(lineCost)}</span>
+    <span class="num cost"${forzato ? ' title="Costo di riga forzato"' : ''}>${fmtN(lineCost)}${forzato ? '*' : ''}</span>
     <span class="bom-row-actions">${actions}</span>
   </div>`;
 
   if (expandable && expanded) {
-    if (hasCycle) {
-      // Le fasi di lavorazione non prendono posizione: numerata è la distinta parte,
-      // quindi il contatore avanza solo sugli articoli e la serie resta senza buchi.
-      let n = 0;
-      h += (child.cycle || []).map(row =>
-        renderCycleBomNode(row, level + 1, row.kind === 'op' ? '' : bomPos(pos, n++))).join('');
-    } else {
-      h += (child.components || []).map((cc, i) =>
-        renderBomNode(cc, level + 1, child.id, false, i, nodeKey, ancestorIds.concat(child.id), bomPos(pos, i))).join('');
-      if (cicloFasi(child).length) h += renderOpsBlock(child, false, 18 + indent + 18);
-    }
+    h += figli.map((cc, i) =>
+      renderBomNode(cc, level + 1, child.id, false, i, nodeKey, ancestorIds.concat(child.id), bomPos(pos, i))).join('');
+    if (cicloFasi(child).length) h += renderOpsBlock(child, false, 18 + indent + 18);
   }
   return h;
 }
-
-// Riga del ciclo di lavorazione di una Parte, mostrata nell'albero della distinta (sola lettura:
-// distinta parte e ciclo si modificano nella vista Cicli di lavorazione).
-function renderCycleBomNode(row, level, pos) {
-  const indent = (level - 1) * 18;
-  const lineCost = cycleRowCost(row);
-  let name, qtyCell, uom, unit;
-  if (row.kind === 'op') {
-    const wc = getWorkCenter(row.workCenterId);
-    const sup = supplierName(row.supplierId);
-    name = `<span class="bom-type-tag tt-lav">LAV</span>
-      <span class="nm" title="${esc(wc ? wc.name : '?')}">${ico('wrench', 'tinted')} ${esc(wc ? wc.name : '?')}${sup ? ' · ' + esc(sup) : ''}</span>`;
-    qtyCell = '—'; uom = ''; unit = lineCost;
-  } else {
-    const ci = getItem(row.itemId);
-    if (!ci) return `<div class="bom-node" style="padding-left:${18 + indent}px"><span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${ico('warning', 'tinted')} articolo mancante</span></div>`;
-    name = `<span class="bom-code">${codeLink(ci.id, ci.code)}</span>
-      <span class="bom-type-tag tt-${typeKey(ci.type)}">${typeShort(ci.type)}</span>
-      <span class="nm" title="${esc(ci.name)}">${esc(ci.name)}${altMarker(ci)}</span>`;
-    qtyCell = Number(row.qty) || 0; uom = ci.uom || ''; unit = costOf(row.itemId).total;
-  }
-  return `<div class="bom-node bom-node-cycle" style="padding-left:${18 + indent}px">
-    <span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span><span class="bom-toggle leaf">•</span>${name}</span>
-    <span class="num">${qtyCell}</span>
-    <span>${esc(uom)}</span>
-    <span class="num cost">${fmtN(unit)}</span>
-    <span class="num">—</span>
-    <span class="num cost">${fmtN(lineCost)}</span>
-    <span class="bom-row-actions"></span>
-  </div>`;
-}
-
 
 // Riga radice: mostra l'articolo padre (macchina/gruppo selezionata) come prima riga dell'albero.
 function renderBomRootNode(it) {
@@ -246,10 +223,10 @@ function renderBomRootNode(it) {
   </div>`;
 }
 
-// Le fasi del ciclo dell'assieme (dalla 0.124.0), in sola lettura: si
-// scrivono tutte nella vista Cicli, e da qui ci si arriva col link. `editable`
-// dice solo se è la riga della distinta aperta, che il link ce l'ha anche
-// senza fasi.
+// Le fasi del ciclo dell'assieme (dalla 0.124.0) o della parte (dalla
+// 0.125.0), in sola lettura: si scrivono tutte nella vista Cicli, e da qui ci
+// si arriva col link. `editable` dice solo se è la riga della distinta aperta,
+// che il link ce l'ha anche senza fasi.
 function renderOpsBlock(item, editable, padLeft) {
   const ops = cicloFasi(item);
   const pl = padLeft != null ? padLeft : 18;
@@ -260,9 +237,10 @@ function renderOpsBlock(item, editable, padLeft) {
     return `<span class="bom-op-tag"><span><span class="cycle-phase">${cyclePhaseNumber(i)}</span> ${ico('wrench', 'tinted')} ${esc(wc ? wc.name : '?')} · ${tempo} · ${fmtN(cycleRowCost(o))}</span></span>`;
   }).join('');
   if (!ops.length && !editable) return '';
-  const label = editable ? 'Ciclo di montaggio' : 'Ciclo (' + esc(item.name) + ')';
+  const nome = item.type === 'parte' ? 'Ciclo di lavorazione' : 'Ciclo di montaggio';
+  const label = editable ? nome : 'Ciclo (' + esc(item.name) + ')';
   const ciclo = editable && vistaAttiva('cycles')
-    ? ` <span class="bom-op-tag"><span style="cursor:pointer" ${clickAttrs(`openCycleFor('${item.id}')`, 'Apri il ciclo di montaggio')}>${ico('edit', 'tinted')} Apri ciclo</span></span>` : '';
+    ? ` <span class="bom-op-tag"><span style="cursor:pointer" ${clickAttrs(`openCycleFor('${item.id}')`, 'Apri il ' + nome.toLowerCase())}>${ico('edit', 'tinted')} Apri ciclo</span></span>` : '';
   return `<div class="bom-ops" style="padding-left:${pl}px"><strong style="color:var(--text-dim);font-size:11px">${label}:</strong> ${tags || '<span class="empty-text" style="padding:0">nessuna fase</span>'}${ciclo}</div>`;
 }
 
@@ -275,13 +253,13 @@ function expandAllBom(on) {
     // c'era solo per la radice, e un giro chiuso più in basso (S1 dentro S2
     // dentro S1, possibile in archivio condiviso) riempiva lo stack (dalla 0.105.6).
     const walk = (item, prefix, antenati) => {
-      (item.components || []).forEach((comp, idx) => {
+      distintaRighe(item).forEach((comp, idx) => {
         const key = prefix + '>' + comp.itemId + '#' + idx;
         const child = getItem(comp.itemId);
         if (!child || antenati.includes(comp.itemId)) return;
         if (isAssembly(child.type)) { bomExpanded.add(key); walk(child, key, antenati.concat(comp.itemId)); }
-        // Una Parte col ciclo si espande, ma non ha figli da percorrere oltre
-        else if (child.type === 'parte' && (child.cycle || []).length) bomExpanded.add(key);
+        // Una Parte con distinta o ciclo si espande; i suoi figli sono foglie
+        else if (child.type === 'parte' && (distintaRighe(child).length || cicloFasi(child).length)) bomExpanded.add(key);
       });
     };
     const it = getItem(currentBomId); if (it) walk(it, it.id, [it.id]);
@@ -415,16 +393,24 @@ function cmpQtyLabelRefresh() {
 }
 function allowedHint(parentType) {
   const allowed = (ALLOWED_CHILDREN[parentType] || []).map(typeLabel);
-  return allowed.length ? `Tipi ammessi in un ${typeLabel(parentType).toLowerCase()}: ${allowed.join(', ')}.` : '';
+  return allowed.length ? `Tipi ammessi in ${inUn(parentType)}: ${allowed.join(', ')}.` : '';
 }
+// «un gruppo», ma «una parte».
+function inUn(t) { return (t === 'parte' ? 'una ' : 'un ') + typeLabel(t).toLowerCase(); }
 function isAllowedChild(parentType, childId) {
   const child = getItem(childId);
   return !!child && (ALLOWED_CHILDREN[parentType] || []).includes(child.type);
 }
 function editComponentModal(idx) {
   if (!roleGuard('bom')) return;
-  const it = getItem(currentBomId); if (!it) return;
+  const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   const comp = it.components[idx]; if (!comp) return;
+  // Il costo di riga forzato c'è solo nella distinta di una parte (prima stava
+  // nel ciclo): il prezzo concordato per quel pezzo di lamiera, per esempio.
+  const forzato = it.type === 'parte'
+    ? `<div class="modal-field"><label>Costo riga forzato (${esc(cur())})</label><input type="number" id="cmp-ovr" min="0" step="0.01"
+        value="${comp.costOverride != null && comp.costOverride !== '' ? comp.costOverride : ''}" placeholder="${cycleRowComputed(comp).toFixed(2)}"
+        title="Costo della riga intera, non di un'unità. Vuoto = calcolato dall'anagrafica"></div>` : '';
   window.__pickerCandidates = pickerCandidates(it.type, it.id);
   openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica componente</h3>
     <p class="empty-text" style="text-align:left;padding:0 0 10px">${allowedHint(it.type)}</p>
@@ -432,6 +418,7 @@ function editComponentModal(idx) {
     <div class="modal-grid">
       <div class="modal-field"><label id="cmp-qty-label">${labelUom('Quantità', itemUom(getItem(comp.itemId)))}</label><input type="number" id="cmp-qty" min="0" step="0.001" value="${comp.qty}"></div>
       <div class="modal-field"><label>Scarto %</label><input type="number" id="cmp-scrap" min="0" step="0.1" value="${comp.scrapPct || 0}"></div>
+      ${forzato}
     </div>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveComponentEdit(${idx})">Salva</button></div>`);
@@ -440,23 +427,25 @@ function editComponentModal(idx) {
 }
 function saveComponentEdit(idx) {
   if (!roleGuard('bom')) return;
-  const it = getItem(currentBomId); if (!it) return;
+  const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   const comp = it.components[idx]; if (!comp) return;
   const itemId = val('cmp-item');
   // Senza questo controllo, il picker lasciato senza selezione salvava
   // itemId '' e la distinta si ritrovava una riga orfana, che il report
   // stampa vuota e il costo non sa valorizzare.
   if (!itemId) { showToast('Seleziona un articolo', 'error'); return; }
-  if (!isAllowedChild(it.type, itemId)) { showToast('Tipo non ammesso in un ' + typeLabel(it.type).toLowerCase(), 'error'); return; }
+  if (!isAllowedChild(it.type, itemId)) { showToast('Tipo non ammesso in ' + inUn(it.type), 'error'); return; }
   if (createsCycle(it.id, itemId)) { showToast('Operazione annullata: creerebbe un ciclo', 'error'); return; }
   if (isNeg('cmp-qty')) { showToast('La quantità non può essere negativa', 'error'); return; }
+  if (it.type === 'parte' && isNeg('cmp-ovr')) { showToast('Il costo non può essere negativo', 'error'); return; }
   comp.itemId = itemId; comp.qty = numVal('cmp-qty', 0); comp.scrapPct = numVal('cmp-scrap', 0, 100);
+  if (it.type === 'parte') { const o = val('cmp-ovr'); comp.costOverride = o === '' || o == null ? null : numVal('cmp-ovr', 0); }
   touch(it);
   saveDB(); closeModal(); renderBom(); savedToast('Componente aggiornato');
 }
 function delComponent(idx) {
   if (!roleGuard('bom')) return;
-  const it = getItem(currentBomId); if (!it) return;
+  const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   askConfirm('Eliminare questo componente dalla distinta?', () => {
     it.components.splice(idx, 1); touch(it); saveDB(); renderBom(); savedToast('Componente eliminato');
   });
@@ -640,7 +629,7 @@ function bomPanelUpdateInsertBtn() {
 }
 function bomPanelInsertAll() {
   if (!roleGuard('bom')) return;
-  const it = getItem(currentBomId); if (!it) return;
+  const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   if (!bomPanelQty.size) { showToast('Imposta una quantità per almeno un articolo', 'error'); return; }
   let added = 0, skipped = 0;
   bomPanelQty.forEach((qty, itemId) => {
@@ -648,7 +637,9 @@ function bomPanelInsertAll() {
     // Un articolo che c'è già non fa una seconda riga: se ne aumenta la
     // quantità (dalla 0.105.7). Due righe dello stesso codice si leggevano
     // come due voci diverse, e chi correggeva la quantità ne vedeva una sola.
-    const gia = it.components.find(c => c.itemId === itemId);
+    // Non una riga col costo forzato: quello vale per la riga intera, e
+    // aumentandone la quantità il pezzo in più resterebbe gratis.
+    const gia = it.components.find(c => c.itemId === itemId && (c.costOverride == null || c.costOverride === ''));
     if (gia) gia.qty = Math.round(((Number(gia.qty) || 0) + qty) * 1e6) / 1e6;
     else it.components.push({ itemId, qty, scrapPct: 0 });
     added++;
@@ -663,13 +654,12 @@ function bomPanelInsertAll() {
 // Verifica se aggiungere childId dentro parentId creerebbe un ciclo.
 //
 // La discesa segue entrambe le strade con cui un articolo ne contiene un altro:
-// i `components` degli assiemi e le righe di distinta nel `cycle` di una parte
-// (`kind !== 'op'`, la stessa regola di parentIndex() e del motore di costo).
+// i `components` degli assiemi e la distinta di una parte (distintaRighe, la
+// stessa regola di parentIndex() e del motore di costo).
 // Fino alla 0.22.0 guardava solo i componenti e usciva subito se il figlio non
-// era un assieme: la vista Cicli non aveva alcun controllo, e l'anello per
-// quella strada era impossibile solo perché CYCLE_CHILD_TYPES ammette le sole
-// foglie — una difesa che nessuno aveva scritto, e che sarebbe caduta il giorno
-// in cui si fosse allargato quell'elenco.
+// era un assieme: l'anello passando per una parte era impossibile solo perché
+// lì entravano le sole foglie — una difesa che nessuno aveva scritto, e che
+// sarebbe caduta il giorno in cui si fosse allargato quell'elenco.
 //
 // Vale la pena ricordare perché è importante: un anello in distinta manda
 // costOf() in ricorsione, e il flag `cycle` che risale fino alla UI è
@@ -683,8 +673,7 @@ function createsCycle(parentId, childId) {
     visited.add(id);
     const node = getItem(id);
     if (!node) return false;
-    if (isAssembly(node.type)) return (node.components || []).some(c => dfs(c.itemId));
-    if (node.type === 'parte') return (node.cycle || []).some(r => r.kind !== 'op' && dfs(r.itemId));
+    if (isAssembly(node.type) || node.type === 'parte') return distintaRighe(node).some(c => dfs(c.itemId));
     return false;
   };
   return dfs(childId);
@@ -704,8 +693,7 @@ function createsCycle(parentId, childId) {
 function anelliDistinta() {
   const items = db.items || [];
   const perId = new Map(items.map(i => [i.id, i]));
-  const figli = it => (isAssembly(it.type) ? (it.components || []).map(c => c.itemId)
-    : it.type === 'parte' ? (it.cycle || []).filter(r => r.kind !== 'op').map(r => r.itemId) : []);
+  const figli = it => (isAssembly(it.type) || it.type === 'parte' ? distintaRighe(it).map(c => c.itemId) : []);
   const stato = new Map();   // 1 = sul cammino aperto, 2 = già esplorato fino in fondo
   const cammino = [], anelli = [], visti = new Set();
   const visita = id => {
@@ -740,8 +728,15 @@ function controllaAnelliDistinta() {
 }
 function apriAnelloDistinta(id) {
   const it = getItem(id); if (!it) return;
-  if (isAssembly(it.type)) { currentBomId = it.id; bomExpanded = new Set(); setView('bom'); }
+  if (DISTINTE_TIPI.includes(it.type)) openBomFor(it.id);
   else { setView(scopeOf(it.type)); editItemModal(it.id); }
+}
+// Apre la distinta di un assieme o (dalla 0.125.0) di una parte. I filtri
+// restano: productOptions tiene in elenco la distinta aperta anche se non li
+// passa.
+function openBomFor(id) {
+  const it = getItem(id); if (!it || !DISTINTE_TIPI.includes(it.type)) return;
+  currentBomId = it.id; bomExpanded = new Set(); setView('bom');
 }
 
 function supplierName(id) { const s = getSupplier(id); return s ? s.name : ''; }
@@ -791,7 +786,7 @@ function editCurrentItemModal() {
     </div>
     <div class="modal-field"><label>Descrizione</label><input value="${esc(it.name)}" disabled></div>
     <div class="modal-grid">
-      <div class="modal-field"><label>Spese generali % (override)</label><input type="number" id="mac-ov" step="0.1" value="${it.overheadPctOverride != null ? it.overheadPctOverride : ''}" placeholder="default ${db.settings.overheadPct}%"></div>
+      ${it.type === 'parte' ? '' /* le spese generali si applicano agli assiemi, non alle parti */ : `<div class="modal-field"><label>Spese generali % (override)</label><input type="number" id="mac-ov" step="0.1" value="${it.overheadPctOverride != null ? it.overheadPctOverride : ''}" placeholder="default ${db.settings.overheadPct}%"></div>`}
       <div class="modal-field"><label>Margine % (override)</label><input type="number" id="mac-mg" step="0.1" value="${it.marginPctOverride != null ? it.marginPctOverride : ''}" placeholder="default ${db.settings.marginPct}%"></div>
     </div>
     <div class="modal-field"><label>Note</label><textarea id="mac-notes" rows="2">${esc(it.notes || '')}</textarea></div>
@@ -804,7 +799,7 @@ function saveCurrentItem() {
   it.notes = val('mac-notes');
   // Vuoto = nessuna sovrascrittura (si usa l'impostazione globale); un valore
   // fuori scala viene riportato dentro l'intervallo, come per le impostazioni.
-  const ov = val('mac-ov'); it.overheadPctOverride = ov === '' ? null : clampNum(parseFloat(ov), 0, 1000);
+  if (it.type !== 'parte') { const ov = val('mac-ov'); it.overheadPctOverride = ov === '' ? null : clampNum(parseFloat(ov), 0, 1000); }
   const mg = val('mac-mg'); it.marginPctOverride = mg === '' ? null : clampNum(parseFloat(mg), 0, 1000);
   touch(it);
   saveDB(); closeModal(); renderBom(); savedToast('Testata aggiornata');
@@ -850,18 +845,10 @@ function usedBy(itemId) {
 // Un componente può comparire più volte nella stessa distinta: si sommano.
 function usageQty(parent, childId) {
   let q = 0;
-  if (isAssembly(parent.type)) {
-    (parent.components || []).forEach(c => {
+  // La distinta di una parte comprata non conta: il suo costo è il listino.
+  if (isAssembly(parent.type) || (parent.type === 'parte' && partSourcing(parent) !== 'buy')) {
+    distintaRighe(parent).forEach(c => {
       if (c.itemId === childId) q += (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
-    });
-  }
-  // Nel ciclo di lavorazione una riga con override non dipende più dal costo
-  // dell'articolo: conta come impiego, ma non propaga la variazione di prezzo.
-  if (parent.type === 'parte' && partSourcing(parent) !== 'buy') {
-    // kind assente vale 'item', come nel motore di costo: una riga di ciclo è
-    // una lavorazione solo se lo dice esplicitamente.
-    (parent.cycle || []).forEach(r => {
-      if (r.kind !== 'op' && r.itemId === childId) q += Number(r.qty) || 0;
     });
   }
   return q;
@@ -909,9 +896,9 @@ function costField(it) {
   if (!it) return null;
   if (it.type === 'acquistato') return 'purchasePrice';
   if (it.type === 'materiale') return 'unitCost';
-  // Una parte prodotta in casa ha il costo derivato dal ciclo: non c'è un campo
-  // da scrivere. Senza righe di ciclo il costo torna a essere il prezzo a listino.
-  if (it.type === 'parte') return (partSourcing(it) === 'buy' || !(it.cycle || []).length) ? 'unitCost' : null;
+  // Una parte prodotta in casa ha il costo derivato da distinta e ciclo: non
+  // c'è un campo da scrivere. Senza righe il costo torna il prezzo a listino.
+  if (it.type === 'parte') return (partSourcing(it) === 'buy' || !(distintaRighe(it).length || cicloFasi(it).length)) ? 'unitCost' : null;
   return null;
 }
 // Esegue `fn` come se l'articolo costasse `valore`, poi rimette tutto a posto.

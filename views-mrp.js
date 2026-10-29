@@ -135,8 +135,7 @@ function mrpLotti(lines) {
     tot.set(itemId, (tot.get(itemId) || 0) + qty);
     rami.set(itemId, (rami.get(itemId) || 0) + 1);
     const next = new Set(ancestors); next.add(itemId);
-    if (it.type === 'parte') (it.cycle || []).forEach(r => { if (r.kind !== 'op') giu(r.itemId, qty * (Number(r.qty) || 0), next); });
-    else varRigheComuni(it).forEach(c => giu(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next));
+    (it.type === 'parte' ? distintaRighe(it) : varRigheComuni(it)).forEach(c => giu(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next));
   };
   (lines || []).forEach(l => giu(l.itemId, Number(l.qty) || 0, new Set()));
   const lotti = new Map();
@@ -170,26 +169,21 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
     // fase **comincia**, non in quella in cui il pezzo serve.
     const prog = schedPart(it, mrpLotto(acc, it, qty), due);
     mrpAdd(acc.make, it, qty, due, prog.start);
-    // Le righe di ciclo non hanno scarto e il fattore resta la quantità secca —
-    // asimmetria rispetto agli assiemi qui sotto, e **voluta**: introdurlo
-    // cambierebbe anche il costo, ed è un'altra discussione.
+    // Dalla 0.125.0 il materiale sta nella distinta della parte, e come quella
+    // degli assiemi ha lo scarto: entra nella quantità come nel costo.
     const perFigli = schedChildDue(prog.start);
-    let opIndex = 0;
-    (it.cycle || []).forEach(r => {
-      if (r.kind === 'op') {
-        const k = opIndex++;
-        const f = prog.fasi[k] || { start: due, end: due };
-        // Con un fornitore la fase si compra; senza, si fa in casa — e allora
-        // non è un acquisto, è un'ora di macchina da qualche parte.
-        if (r.supplierId) mrpAddPhase(acc.phases, it, r, k, qty, f.end, f.start);
-        else {
-          mrpAddLoad(acc.load, r.workCenterId, f.start, Number(r.hours) || 0, qty, it, cyclePhaseNumber(k));
-          mrpAddPhase(acc.intOps, it, r, k, qty, f.end, f.start);
-        }
-        return;
+    cicloFasi(it).forEach((r, k) => {
+      const f = prog.fasi[k] || { start: due, end: due };
+      // Con un fornitore la fase si compra; senza, si fa in casa — e allora
+      // non è un acquisto, è un'ora di macchina da qualche parte.
+      if (r.supplierId) mrpAddPhase(acc.phases, it, r, k, qty, f.end, f.start);
+      else {
+        mrpAddLoad(acc.load, r.workCenterId, f.start, Number(r.hours) || 0, qty, it, cyclePhaseNumber(k));
+        mrpAddPhase(acc.intOps, it, r, k, qty, f.end, f.start);
       }
-      mrpDescend(r.itemId, qty * (Number(r.qty) || 0), next, acc, perFigli);
     });
+    distintaRighe(it).forEach(c =>
+      mrpDescend(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next, acc, perFigli));
     return;
   }
   // assieme: il montaggio finisce quando l'assieme serve e comincia prima dei
@@ -413,9 +407,8 @@ function schedTree(itemId, qty, due, ancestors, lotti) {
     const prog = schedPart(it, mrpLotto({ lotti }, it, qty), due);
     const figli = [];
     const perFigli = schedChildDue(prog.start);
-    (it.cycle || []).forEach(r => {
-      if (r.kind === 'op') return;
-      const n = schedTree(r.itemId, qty * (Number(r.qty) || 0), perFigli, next, lotti);
+    distintaRighe(it).forEach(c => {
+      const n = schedTree(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), perFigli, next, lotti);
       if (n) figli.push(n);
     });
     return { item: it, kind: 'make', qty, start: prog.start, end: due || '', days: 0,

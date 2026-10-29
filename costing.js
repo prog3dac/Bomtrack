@@ -46,20 +46,23 @@ function computeCost(it, itemId, visited) {
     // costa quello che serve per farla. Senza righe di ciclo non c'è niente da
     // calcolare, quindi anche lì resta il prezzo a listino.
     const prezzo = Number(it.unitCost) || 0;
-    if (partSourcing(it) === 'buy' || !(it.cycle || []).length) {
+    const righe = distintaRighe(it), fasi = cicloFasi(it);
+    if (partSourcing(it) === 'buy' || !(righe.length || fasi.length)) {
       return { ...zero, parts: prezzo, base: prezzo, total: prezzo };
     }
     // Prodotta in casa: il costo è derivato e ogni riga confluisce nella propria
     // voce: materie prime → Materiale, commerciali → Commerciali, lavorazioni → Lavorazioni.
+    // Dalla 0.125.0 il materiale viene dalla distinta della parte, le
+    // lavorazioni dal ciclo.
     const next = new Set(visited); next.add(itemId);
     let material = 0, purchased = 0, labor = 0;
     const parts = 0;   // il prezzo a listino non concorre: qui la parte la facciamo noi
     // Accumulatore: raccoglie l'eventuale anello incontrato dalle righe del ciclo.
     // Senza, un troncamento da ricorsione passerebbe per un costo valido.
     const out = { cycle: false };
-    it.cycle.forEach(row => {
+    fasi.forEach(row => { labor += cycleRowCost(row); });
+    righe.forEach(row => {
       const rowCost = cycleRowCost(row, next, out);
-      if (row.kind === 'op') { labor += rowCost; return; }
       const ci = getItem(row.itemId);
       if (!ci) return;
       if (ci.type === 'materiale') material += rowCost;
@@ -106,7 +109,7 @@ function assiemeCost(it, righe, costoFiglio) {
 // Unica domanda da cui dipende tutto: la parte la facciamo o la compriamo?
 // Da lì discendono sia il costo sia il fabbisogno, senza un secondo interruttore
 // da tenere allineato a mano.
-//   make → il costo lo determinano distinta parte e ciclo; il fabbisogno scende
+//   make → il costo lo determinano distinta della parte e ciclo; il fabbisogno scende
 //          nella distinta e compra quello che serve per farla.
 //   buy  → il costo è il prezzo scelto a listino; nel fabbisogno la parte è una
 //          foglia d'acquisto come un commerciale, e la distinta non si esplode.
@@ -147,12 +150,13 @@ function partSourcingOptions(sel) {
 // anello, ci finisce dentro `out.cycle = true`. Serve a costOf per non spacciare
 // per valido un costo troncato dalla ricorsione; i chiamanti dell'interfaccia
 // possono ignorarlo.
-// Costo calcolato di una riga articolo (q.tà × costo unitario), ignorando l'eventuale override.
+// Costo calcolato di una riga articolo (q.tà × costo unitario, con lo scarto se la riga
+// è di distinta), ignorando l'eventuale override.
 function cycleRowComputed(row, visited, out) {
   if (!row || row.kind === 'op') return 0;
   const c = costOf(row.itemId, visited);
   if (out && c.cycle) out.cycle = true;
-  return c.total * (Number(row.qty) || 0);
+  return c.total * (Number(row.qty) || 0) * (1 + (Number(row.scrapPct) || 0) / 100);
 }
 // Costo effettivo della riga.
 // Lavorazione: fisso di default (`cost`), oppure orario (`hours × rate`) se la

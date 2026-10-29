@@ -102,8 +102,8 @@ function opFreezePhases(part) {
   });
   return out;
 }
-// Il materiale che l'ordine consuma: le righe di distinta parte del ciclo per i
-// pezzi lanciati. Congelarlo significa che una modifica al ciclo non riscrive
+// Il materiale che l'ordine consuma: la distinta della parte per i pezzi
+// lanciati. Congelarlo significa che una modifica alla distinta non riscrive
 // retroattivamente quanto è già uscito dal magazzino.
 // Con `planId` valgono le sostituzioni decise sul piano (alternativi.js): la
 // quota di materiale passata all'alternativo si congela come alternativo.

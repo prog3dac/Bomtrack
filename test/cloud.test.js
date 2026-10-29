@@ -91,7 +91,10 @@ describe('Archivio condiviso — il lotto da inviare', () => {
     a.eval(`{ const it = db.items.find(i => i.code === 'PRT-001'); it.cycle = []; touch(it); saveDB(); }`);
     const p = ev(a, `cloudPayload(Store.pendingChanges(), null, true).payload`);
     assert.deepEqual(p.upsert.item_cycle_rows, []);
-    assert.equal(p.upsert.item_components, undefined, 'una parte non ha distinta: niente da rifare');
+    // Dalla 0.125.0 la parte ha la sua distinta (il materiale, migrato dal
+    // ciclo): l'insieme si rifà intero, ed è solo quello di questa parte.
+    const part = a.eval(`db.items.find(i => i.code === 'PRT-001').id`);
+    assert.ok((p.upsert.item_components || []).every(r => r.item_id === part));
   });
 
   it('le impostazioni partono solo con la gestione', () => {

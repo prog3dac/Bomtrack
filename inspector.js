@@ -79,7 +79,8 @@ function inspAzioniArticolo(it) {
     cmd('edit', 'Modifica articolo', `editItemModal('${it.id}')`, { write: true }),
     cmd('copy', 'Duplica', `duplicateItemModal('${it.id}')`, { write: true }),
     hasPriceList(it) ? cmd('euro', 'Listino fornitori', `priceListModal('${it.id}')`) : null,
-    it.type === 'parte' && vistaAttiva('cycles') ? cmd('wrench', 'Distinta parte e ciclo', `openCycleFor('${it.id}')`) : null,
+    it.type === 'parte' && vistaAttiva('bom') ? cmd('tree', 'Distinta', `openBomFor('${it.id}')`) : null,
+    it.type === 'parte' && vistaAttiva('cycles') ? cmd('wrench', 'Ciclo di lavorazione', `openCycleFor('${it.id}')`) : null,
     // Il conteggio nell'etichetta, come per i movimenti qui sotto: dice se c'è
     // un disegno senza doverlo aprire per scoprirlo. Non è marcato `write`
     // perché la scheda si apre e si scarica anche in sola lettura — chi va in

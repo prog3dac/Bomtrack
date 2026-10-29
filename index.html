@@ -178,13 +178,23 @@
       <div class="filt-fields" id="filt-fields-bom">
         <input type="text" class="search" id="bom-search" placeholder="Cerca codice o nome distinta..." oninput="bomSearchInput()">
         <select id="bom-type" onchange="onBomFilterChange()">
-          <option value="">Tutti i livelli</option>
+          <option value="">Tutti i tipi</option>
           <option value="macchina">Macchine</option>
           <option value="gruppo">Gruppi</option>
           <option value="sottogruppo">Sottogruppi</option>
+          <option value="parte">Parti</option>
+        </select>
+        <select id="bom-family" onchange="filtScopeChange('bom','family');onBomFilterChange()">
+          <option value="">Tutte le famiglie</option>
+        </select>
+        <select id="bom-subfamily" onchange="filtScopeChange('bom','subfamily');onBomFilterChange()">
+          <option value="">Tutte le sottofamiglie</option>
         </select>
         <select id="bom-machine" onchange="filtScopeChange('bom','machine');onBomFilterChange()">
           <option value="">Tutte le macchine</option>
+        </select>
+        <select id="bom-group" onchange="filtScopeChange('bom','group');onBomFilterChange()">
+          <option value="">Tutti i gruppi</option>
         </select>
       </div>
       <select id="bom-select" class="cyc-part-select" onchange="onBomSelect()"></select>
@@ -355,7 +365,7 @@
     <div class="table-wrap" id="stk-table"></div>
   </div>
 
-  <!-- CICLI DI LAVORAZIONE (distinta parte + fasi di una Parte) -->
+  <!-- CICLI DI LAVORAZIONE (le fasi di parti e assiemi) -->
   <div id="view-cycles" class="view-panel">
     <div class="bom-toolbar">
       <h2 class="section-title"><svg class="ico ic-wrench tinted pill" aria-hidden="true"><use href="#ic-wrench"></use></svg> Cicli di lavorazione</h2>
@@ -374,11 +384,24 @@
       </div>
       <div class="filt-fields" id="filt-fields-cycles">
         <input type="text" class="search" id="cyc-search" placeholder="Cerca codice o nome..." oninput="cycleSearchInput()">
+        <select id="cyc-type" onchange="onCycleFilterChange()">
+          <option value="">Tutti i tipi</option>
+          <option value="macchina">Macchine</option>
+          <option value="gruppo">Gruppi</option>
+          <option value="sottogruppo">Sottogruppi</option>
+          <option value="parte">Parti</option>
+        </select>
         <select id="cyc-family" onchange="filtScopeChange('cycles','family');onCycleFilterChange()">
           <option value="">Tutte le famiglie</option>
         </select>
         <select id="cyc-subfamily" onchange="filtScopeChange('cycles','subfamily');onCycleFilterChange()">
           <option value="">Tutte le sottofamiglie</option>
+        </select>
+        <select id="cyc-machine" onchange="filtScopeChange('cycles','machine');onCycleFilterChange()">
+          <option value="">Tutte le macchine</option>
+        </select>
+        <select id="cyc-group" onchange="filtScopeChange('cycles','group');onCycleFilterChange()">
+          <option value="">Tutti i gruppi</option>
         </select>
       </div>
       <select id="cyc-part" class="cyc-part-select" onchange="onCyclePartSelect()"></select>

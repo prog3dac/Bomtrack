@@ -201,7 +201,7 @@ create table if not exists public.item_components (
   id text primary key,
   item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
   child_item_id uuid references public.items(id) deferrable initially deferred,
-  qty numeric, scrap_pct numeric, cond text, qty_expr text, pos int,
+  qty numeric, scrap_pct numeric, cond text, qty_expr text, cost_override numeric, pos int,
   synced_at timestamptz not null default clock_timestamp()
 );
 
@@ -252,6 +252,9 @@ create table if not exists public.item_options (
 -- riga di distinta (modulo Varianti).
 alter table public.item_components add column if not exists cond text;
 alter table public.item_components add column if not exists qty_expr text;
+-- 0.125.0: anche le parti hanno la distinta (il materiale che prima stava nel
+-- ciclo), e una riga di distinta di una parte può forzare il costo di riga.
+alter table public.item_components add column if not exists cost_override numeric;
 
 -- ─── Documenti ──────────────────────────────────────────────
 create table if not exists public.production_plans (

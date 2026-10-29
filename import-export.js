@@ -268,7 +268,8 @@ function importBom(rows) {
     if (!pCode && !cCode) { report.skipped++; return; } // riga vuota
     const parent = findByCode(pCode);
     if (!parent) { report.errors.push(`Riga ${ln}: padre "${esc(pCode)}" non trovato in catalogo`); return; }
-    if (!isAssembly(parent.type)) { report.errors.push(`Riga ${ln}: "${esc(pCode)}" è ${typeLabel(parent.type)}, non può avere una distinta`); return; }
+    if (!isAssembly(parent.type) && parent.type !== 'parte') { report.errors.push(`Riga ${ln}: "${esc(pCode)}" è ${typeLabel(parent.type)}, non può avere una distinta`); return; }
+    parteDistintaViva(parent);
     const child = findByCode(cCode);
     if (!child) { report.errors.push(`Riga ${ln}: figlio "${esc(cCode)}" non trovato in catalogo`); return; }
     if (!isAllowedChild(parent.type, child.id)) {
@@ -315,13 +316,13 @@ function downloadBomTemplate() {
   const info = XLSX.utils.aoa_to_sheet([
     ['ISTRUZIONI — Import Distinte'],
     [],
-    ['Ogni riga collega un padre (assieme) a un suo componente figlio.'],
+    ['Ogni riga collega un padre (assieme o parte) a un suo componente figlio.'],
     ['I codici di padre e figlio devono già esistere in catalogo (importa prima gli Articoli).'],
     ['Per ogni padre presente nel file i componenti vengono SOSTITUITI (le lavorazioni restano).'],
     ['Le relazioni non ammesse o cicliche vengono segnalate e saltate.'],
     [],
     ['Colonna', 'Descrizione'],
-    ['CodicePadre', 'Codice dell\'assieme (macchina/gruppo/sottogruppo).'],
+    ['CodicePadre', 'Codice dell\'assieme (macchina/gruppo/sottogruppo) o della parte (materie prime e commerciali per farla).'],
     ['CodiceFiglio', 'Codice del componente contenuto.'],
     ['Qta', 'Quantità del figlio dentro il padre, nell\'UM del figlio (default 1).'],
     ['Scarto%', 'Percentuale di scarto, in % (default 0).'],

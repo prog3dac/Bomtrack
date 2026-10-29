@@ -611,8 +611,9 @@ function siglaLibera(name, base, prese) {
 }
 function isAssembly(t) { return t === 'macchina' || t === 'gruppo' || t === 'sottogruppo'; }
 // Le fasi del ciclo di un articolo: le sole righe di lavorazione, nell'ordine
-// in cui si eseguono. Una parte le ha accanto alla distinta parte, un assieme
-// (dalla 0.124.0) ha solo quelle.
+// in cui si eseguono. Nel ciclo di un assieme (dalla 0.124.0) e di una parte
+// (dalla 0.125.0, quando il materiale è passato alla distinta) ci sono solo
+// quelle.
 //
 // Le lavorazioni di un assieme di prima (`operations`) si leggono come fasi
 // anche se la migrazione non è passata — un archivio scritto a mano, un dato
@@ -626,6 +627,36 @@ function asmCicloVivo(it) {
   if (!it || !isAssembly(it.type)) return it;
   if (!Array.isArray(it.cycle)) it.cycle = [];
   if ((it.operations || []).length) { it.cycle = it.cycle.concat(it.operations.map(asmOpInCiclo)); it.operations = []; }
+  return it;
+}
+// Le righe di distinta di un articolo: i componenti. Dalla 0.125.0 anche una
+// parte ha la sua distinta (il materiale che serve per farla), e nel ciclo
+// restano solo le fasi, come per gli assiemi.
+//
+// Come cicloFasi, si legge anche un dato che la migrazione non ha visto: le
+// righe materiale ancora nel ciclo di una parte vengono in coda, come le
+// metterebbe lei. Chi deve *modificare* la distinta passa prima da
+// parteDistintaViva, che le sposta davvero.
+function distintaRighe(it) {
+  if (!it) return [];
+  const comp = it.components || [];
+  const vecchie = (it.cycle || []).filter(r => r && r.kind !== 'op');
+  return vecchie.length ? comp.concat(vecchie.map(parteRigaInDistinta)) : comp;
+}
+// Una riga materiale del ciclo di prima come componente: stessa quantità,
+// nessuno scarto (non c'era), e il costo di riga forzato se c'era.
+function parteRigaInDistinta(r) {
+  const forz = r.costOverride != null && r.costOverride !== '' ? Number(r.costOverride) || 0 : null;
+  return { itemId: r.itemId || null, qty: Number(r.qty) || 0, scrapPct: 0, costOverride: forz };
+}
+function parteDistintaViva(it) {
+  if (!it || it.type !== 'parte') return it;
+  if (!Array.isArray(it.components)) it.components = [];
+  const cyc = Array.isArray(it.cycle) ? it.cycle : [];
+  if (cyc.some(r => r && r.kind !== 'op')) {
+    it.components = it.components.concat(cyc.filter(r => r && r.kind !== 'op').map(parteRigaInDistinta));
+    it.cycle = cyc.filter(r => r && r.kind === 'op');
+  }
   return it;
 }
 // Un assieme con almeno una fase: si monta con un ordine di produzione.
@@ -1073,7 +1104,14 @@ function migrateDB() {
       // ciclo dell'assieme, sul calendario dei centri.
       if (it.assemblyDays == null) it.assemblyDays = 0;
     }
-    if (it.type === 'parte' && !it.cycle) it.cycle = [];
+    if (it.type === 'parte') {
+      if (!it.cycle) it.cycle = [];
+      // Dalla 0.125.0 il materiale di una parte sta nella sua distinta, come i
+      // componenti di un assieme, e nel ciclo restano le fasi. Stesso patto
+      // della migrazione degli assiemi: deterministica, nessun id nuovo, si
+      // ripete senza danni finché il server ha ancora le righe vecchie.
+      parteDistintaViva(it);
+    }
     // Listino fornitori: lo stesso articolo può essere quotato da più fornitori,
     // e le quotazioni si accumulano nel tempo. I campi singoli dell'articolo
     // (supplierId, purchasePrice/unitCost, supplierCode, supplierDesc) restano
@@ -1126,7 +1164,7 @@ function migrateDB() {
         delete it.costMode;
       } else if (it.sourcing == null) {
         // Parte mai passata dal modo di calcolo: col ciclo la si fa, senza la si compra
-        it.sourcing = (it.cycle || []).length ? 'make' : 'buy';
+        it.sourcing = ((it.cycle || []).length || (it.components || []).length) ? 'make' : 'buy';
       }
     }
     // Righe lavorazione del ciclo. Le ore sono un attributo di **tempo**, presenti

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.124.0**
+**Versione dell'app documentata: 0.125.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -384,7 +384,7 @@ indipendenti: è **una catena**, e ogni anello ha bisogno di quello prima.
                │                            │
                ▼                            ▼
  2.   CICLI DI LAVORAZIONE          DISTINTA BASE (albero)
-      distinta parte + fasi   ────▶  macchina › gruppi › parti
+      le fasi                 ────▶  macchina › gruppi › parti › materiale
                │                            │
                └────────────┬───────────────┘
                             ▼
@@ -454,12 +454,12 @@ nasce un prezzo d'acquisto, e il campo nella scheda articolo è di sola lettura 
 
 - **Acquisto da fornitore** — la parte si compra già fatta. Il suo costo è il prezzo a listino, e
   nel fabbisogno è una foglia d'acquisto come un commerciale.
-- **Produzione interna** — la parte si fa in casa. Il suo costo è la somma della **distinta parte**
+- **Produzione interna** — la parte si fa in casa. Il suo costo è la somma della sua **distinta**
   (il materiale) più il **ciclo di lavorazione** (le fasi), e nel fabbisogno l'app scende dentro e
   compra il materiale invece della parte.
 
-**c) I cicli** — *Cicli di lavorazione*. Per ogni parte a produzione interna: la **distinta parte**
-(cosa serve: 2,4 kg di quella barra) e il **ciclo** (fasi 10, 20, 30…: tornitura al centro Torni,
+**c) Distinta e ciclo** — per ogni parte a produzione interna, la **distinta** in *Gestione DB*
+(cosa serve: 2,4 kg di quella barra) e il **ciclo** in *Cicli di lavorazione* (fasi 10, 20, 30…: tornitura al centro Torni,
 2 ore; zincatura da Beta, 5 giorni). Una fase **senza fornitore** è interna e carica un centro;
 una fase **con fornitore** è conto lavoro e diventerà un ordine di lavoro.
 
@@ -784,7 +784,7 @@ le stesse colonne ma si guardano per motivi diversi.
 | **Macchina** | `MAC`, rossa | Il prodotto finito | Sì, l'albero completo |
 | **Gruppo** | `GRP`, verde | Un assieme di primo livello | Sì |
 | **Sottogruppo** | `SGR`, gialla | Un assieme dentro un gruppo; può contenerne altri, senza limite | Sì |
-| **Parte (lavorato)** | `PRT`, viola | La foglia: il pezzo che si fa o si compra | Sì: **distinta parte + ciclo** |
+| **Parte (lavorato)** | `PRT`, viola | Il pezzo che si fa o si compra | Sì: **distinta (materiale) + ciclo** |
 
 L'etichetta colorata accompagna il tipo ovunque compaia: elenchi, ricerche, distinta, scheda
 articolo. Gruppo e sottogruppo hanno colori diversi apposta, per non confonderli a colpo d'occhio.
@@ -799,7 +799,7 @@ cambia due cose insieme:
 
 | Approvvigionamento | Il costo viene da… | Nel fabbisogno… |
 |---|---|---|
-| **Produzione interna** | distinta parte + ciclo di lavorazione | l'app **scende dentro** e compra il materiale |
+| **Produzione interna** | distinta della parte + ciclo di lavorazione | l'app **scende dentro** e compra il materiale |
 | **Acquisto da fornitore** | il prezzo scelto a listino | la parte è una **foglia d'acquisto**, la distinta non si esplode |
 
 Le parti **nuove** nascono con l'impostazione predefinita (*Gestione → Impostazioni →
@@ -831,7 +831,7 @@ un costo che non c'è.
 | **Fornitore e prezzo d'acquisto** | — | **Riquadro in sola lettura.** Mostra la quotazione in uso; il pulsante accanto apre il **listino**. |
 | **Macrofamiglia** / **Sottofamiglia** | consigliato | Servono ai filtri, ai raggruppamenti e ai codici automatici. |
 | **Macchina di appartenenza** / **Gruppo** / **Sigla** | codifica gerarchica | Dicono dove sta l'articolo nella struttura di prodotto, e da lì nasce il suo codice. |
-| **Distinta parte e ciclo** | solo parti | Non si compila qui: c'è la nota e il pulsante **Apri il ciclo**. |
+| **Distinta e ciclo** | solo parti | Non si compilano qui: la distinta in *Gestione DB*, il ciclo con il pulsante **Apri il ciclo**. |
 | **★ Preferito** | facoltativo | Ha un filtro dedicato nelle anagrafiche. |
 | **⛔ Obsoleto** | facoltativo | Non più utilizzabile; resta visibile, spento. |
 | **U.M. d'acquisto (se diversa)** + **Fattore di conversione** | quando si compra in un'unità e si usa in un'altra | Si compra la barra a pezzi da 6 m e la si consuma a metri. |
@@ -1106,7 +1106,7 @@ riepilogo dell'articolo scelto (costo, giacenza, impieghi) e sotto i comandi e l
 
 **I comandi — su un articolo (Acquisti, Progetto):**
 
-- Modifica articolo · Duplica · Listino fornitori · **Distinta parte e ciclo** (solo parti) ·
+- Modifica articolo · Duplica · Listino fornitori · **Ciclo di lavorazione** (solo parti) ·
   Dove è usato e impatto costi · Scheda completa · Elimina articolo.
 
 **I comandi — su una giacenza (Magazzino):**
@@ -1149,7 +1149,9 @@ Larghezza, apertura e scheda scelta restano fra una sessione e l'altra.
 ## 13. Tecnico → Gestione DB
 
 **A cosa serve.** Costruire l'albero della macchina: cosa contiene, in che quantità, con quali
-lavorazioni. La schermata si intitola **«Distinta Base & Costificazione»**.
+lavorazioni. La schermata si intitola **«Distinta Base & Costificazione»**. Dalla 0.125.0 si
+apre anche la distinta di una **parte**: il materiale che serve per farla (→ *La distinta di una
+parte*, sotto).
 
 **Come ci si arriva.** 🌳 *Tecnico → Gestione DB*.
 
@@ -1172,13 +1174,36 @@ lavorazioni. La schermata si intitola **«Distinta Base & Costificazione»**.
 | **⊞ Espandi tutto** / **⊟ Comprimi tutto** | Apre e chiude tutti i rami |
 | **⇄ Confronta con…** *(barra revisioni)* | Mette la distinta a fianco di un'altra qualsiasi, su tutti i livelli (→ [cap. 15](#confrontare-due-distinte-diverse)) |
 
-**Il ciclo di montaggio.** Sotto l'albero la riga *Ciclo di montaggio* elenca le fasi
-dell'assieme, con ore, operatori e costo, in sola lettura; **Apri ciclo** porta ai *Cicli di
-lavorazione*, dove le fasi si scrivono (dalla 0.124.0, → [cap.
+**Il ciclo di montaggio.** Sotto l'albero la riga *Ciclo di montaggio* (di una parte: *Ciclo di
+lavorazione*) elenca le fasi, con ore, operatori e costo, in sola lettura; **Apri ciclo** porta
+ai *Cicli di lavorazione*, dove le fasi si scrivono (dalla 0.124.0, → [cap.
 14](#il-ciclo-di-un-assieme-dalla-01240)).
 
-**Filtri.** Ricerca «Cerca codice o nome distinta…»; **livello** (Tutti i livelli · Macchine ·
-Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta aperta; il contatore.
+**Filtri** (dalla 0.125.0 gli stessi dei *Cicli di lavorazione*). Ricerca «Cerca codice o nome
+distinta…»; **tipo** (Macchine · Gruppi · Sottogruppi · Parti); **famiglia** e **sottofamiglia**
+(delle parti: gli assiemi non ne hanno); **macchina** e **gruppo** di appartenenza; il menu della
+distinta aperta, con le parti in un gruppo a sé; il contatore. Famiglia, sottofamiglia, macchina e
+gruppo sono condivisi con le altre viste che li hanno.
+
+### La distinta di una parte (dalla 0.125.0)
+
+Il materiale e i commerciali che servono a fare il pezzo stanno nella distinta della parte, come i
+componenti di un assieme: **distinta = cosa serve, ciclo = come si fa**, per parti, gruppi e
+macchine. Si apre dal menu (gruppo *Parti*), dal pulsante **Distinta** nei *Cicli di
+lavorazione*, o espandendo la parte nell'albero di un gruppo, dove si vedono la sua distinta e le
+sue fasi.
+
+- **+ Aggiungi componenti** propone solo **materie prime e commerciali**: una parte non contiene
+  assiemi né altre parti.
+- Ogni riga ha **quantità** e **scarto %** come quelle degli assiemi; lo scarto entra nel costo,
+  nel fabbisogno e nel materiale dell'ordine di produzione.
+- In più c'è il **costo riga forzato**: il costo della riga intera al posto di quello calcolato
+  (vuoto = calcolato). Nell'albero la riga forzata ha un asterisco. Inserendo un articolo che è già
+  in distinta la quantità si somma, ma non su una riga forzata: lì nasce una riga nuova.
+- Una parte **acquistata** ha la distinta documentale: non entra né nel costo né nel fabbisogno, e
+  la vista lo dice in testa.
+- Fino alla 0.124 il materiale si scriveva nella sezione *Distinta parte* del ciclo. All'avvio
+  l'app lo sposta nella distinta, nello stesso ordine e con lo stesso costo.
 
 > **La distinta aperta resta sempre raggiungibile**, anche quando il filtro la escluderebbe: non
 > sparisce sotto le mani mentre ci si lavora.
@@ -1188,7 +1213,7 @@ Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta ape
 | Campo | Note |
 |---|---|
 | Codice · U.M. · Descrizione | **Bloccati**: si modificano in 🌳 *Tecnico → Articoli di progetto* |
-| **Spese generali % (override)** | Sostituisce la percentuale globale, solo per questa macchina |
+| **Spese generali % (override)** | Sostituisce la percentuale globale, solo per questa macchina. Non c'è per una parte: le spese generali si applicano agli assiemi |
 | **Margine % (override)** | Idem |
 | Note | Testo libero |
 
@@ -1291,9 +1316,10 @@ hanno ancora, con il pulsante **Togli le condizioni**.
 
 ## 14. Cicli di lavorazione
 
-**A cosa serve.** Dire come si fa una **parte**: che materiale consuma e quali fasi attraversa.
-È da qui che nasce il costo di una parte a produzione interna, il carico dei centri e gli ordini
-di lavoro ai terzisti. Dalla 0.124.0 anche **macchine, gruppi e sottogruppi** hanno qui il loro
+**A cosa serve.** Dire come si fa una **parte**: quali fasi attraversa. Il materiale che consuma
+sta nella sua **distinta** (dalla 0.125.0, → [cap. 13](#13-tecnico--gestione-db)). È da qui che
+nascono le lavorazioni nel costo di una parte a produzione interna, il carico dei centri e gli
+ordini di lavoro ai terzisti. Dalla 0.124.0 anche **macchine, gruppi e sottogruppi** hanno qui il loro
 ciclo, con le sole fasi di montaggio (→ [Il ciclo di un assieme](#il-ciclo-di-un-assieme-dalla-01240)).
 
 **Come ci si arriva.** 🌳 *Tecnico → Cicli di lavorazione*.
@@ -1302,26 +1328,17 @@ ciclo, con le sole fasi di montaggio (→ [Il ciclo di un assieme](#il-ciclo-di-
 
 - I filtri e il **menu di scelta della parte**;
 - la **barra revisioni** della parte;
-- le card: *Distinta parte* · *Lavorazioni* · *Costo unitario a mano* · **Costo parte**;
+- le card: *Distinta* · *Lavorazioni* · *Costo unitario a mano* · **Costo parte**;
 - una nota in testa che dice **da dove viene il costo** di quella parte, secondo il suo
-  approvvigionamento;
-- le due sezioni: **Distinta parte** e **Ciclo di lavorazione**.
+  approvvigionamento, quante righe ha la sua distinta, e il pulsante **Distinta** che la apre;
+- la sezione **Ciclo di lavorazione**.
 
-**Filtri.** Ricerca, famiglia, sottofamiglia, e il menu della parte.
+**Filtri** (dalla 0.125.0 gli stessi di *Gestione DB*). Ricerca; **tipo** (Macchine · Gruppi ·
+Sottogruppi · Parti); **famiglia** e **sottofamiglia** delle parti; **macchina** e **gruppo** di
+appartenenza; il menu della parte. Le parti vengono prima degli assiemi.
 
-### La distinta parte
-
-Il materiale e i commerciali che servono a fare il pezzo. Pulsante **+ Articolo**. Un articolo che
-è già nella distinta parte prende una unità in più invece di una seconda riga (dalla 0.105.7);
-fa eccezione la riga con il costo forzato, che vale per la riga intera: lì nasce una riga nuova.
-
-| Colonna | Note |
-|---|---|
-| Voce | L'articolo |
-| Fornitore | Da chi si compra |
-| U.M. · Q.tà | Quanto ne serve per **un** pezzo |
-| **Costo (€/U.M.)** | Il costo a listino, **sovrascrivibile** sulla riga |
-| Costo riga | Q.tà × costo |
+**L'export** del ciclo porta ancora due fogli, *Distinta* e *Ciclo di lavorazione*: è il foglio
+che si dà a chi fa il pezzo, e il materiale gli serve.
 
 ### Il ciclo di lavorazione
 
@@ -1360,8 +1377,8 @@ orario** dichiara anche le ore, che lì sono le ore che il terzista fattura.
 ### Il ciclo di un assieme (dalla 0.124.0)
 
 Macchine, gruppi e sottogruppi compaiono nel menu dopo le parti. Il loro ciclo ha **solo fasi**:
-i componenti stanno nella distinta, e la sezione *Distinta parte* non c'è (il pulsante
-**Distinta** ci porta). Le fasi si scrivono come quelle di una parte: centro, interna o conto
+i componenti stanno nella distinta (il pulsante **Distinta** ci porta), come il materiale di una
+parte. Le fasi si scrivono come quelle di una parte: centro, interna o conto
 lavoro, costo fisso o orario, ore o giorni, ordine con ↑↓. Le card dicono il costo delle fasi e
 il costo dell'assieme.
 
@@ -1492,7 +1509,7 @@ Le due percentuali stanno in *Gestione → Impostazioni* (di serie: **12%** di s
 Sono ammessi valori da 0 a 1000%.
 
 **Il costo si calcola per ricorsione**: il costo di un gruppo è la somma dei suoi figli, e il costo
-di una parte è la somma della sua distinta parte più il suo ciclo. Non ci sono costi «congelati» da
+di una parte è la somma della sua distinta più il suo ciclo. Non ci sono costi «congelati» da
 aggiornare a mano: cambiando il prezzo di una vite, il costo della macchina cambia subito.
 
 ---
@@ -3014,7 +3031,7 @@ accendono e spengono qui:
 |---|---|---|
 | **Magazzino** | la vista Magazzino e il Cruscotto: giacenze, movimenti, rettifiche, inventario, scorte minime, ubicazioni ed etichette QR di magazzino | le giacenze non si vedono da nessuna parte (scheda articolo, pannello laterale, QR, alternativi). I ricevimenti degli ordini si registrano comunque, e il fabbisogno continua a togliere quello che è già arrivato: riaccendendo, il magazzino è già al suo posto |
 | **Pianificazione** | Commesse e Fabbisogno: i piani, la lista d'acquisto, gli ordini generati dal piano | gli ordini si fanno a mano o dalle richieste d'offerta. Si spegne anche la Produzione interna, che dai piani nasce |
-| **Produzione interna** (richiede Pianificazione) | parti fatte in casa con distinta parte e ciclo, Cicli di lavorazione, Centri di lavoro, ODP, ODL e conto lavoro, Carico centri, Avanzamento | **ogni parte vale come comprata**: costa il suo prezzo di listino, nel fabbisogno va fra gli acquisti, e il piano non ha le schede *Da fabbricare*, *Conto lavoro* e *Carico*. Il campo *Approvvigionamento* scritto sulla parte non cambia: riaccendendo, ogni parte torna com'era |
+| **Produzione interna** (richiede Pianificazione) | parti fatte in casa con distinta e ciclo, Cicli di lavorazione, Centri di lavoro, ODP, ODL e conto lavoro, Carico centri, Avanzamento | **ogni parte vale come comprata**: costa il suo prezzo di listino, nel fabbisogno va fra gli acquisti, e il piano non ha le schede *Da fabbricare*, *Conto lavoro* e *Carico*. Il campo *Approvvigionamento* scritto sulla parte non cambia: riaccendendo, ogni parte torna com'era |
 
 Un'area spenta toglie le sue voci dalla barra (un gruppo rimasto vuoto sparisce), i suoi avvisi
 dal Riepilogo, le sue scadenze e i suoi filtri dal calendario, i suoi documenti dalla ricerca e
@@ -3921,7 +3938,7 @@ dentro**: uscendo e rientrando, il documento torna bloccato.
 | **Passata** | Un giro di uscita e rientro dallo stesso terzista. Due passate dallo stesso terzista = due ODL |
 | **Fase** | Un passo del ciclo di lavorazione (10, 20, 30…) |
 | **Ciclo di lavorazione** | La sequenza di fasi che trasforma il materiale in una parte |
-| **Distinta parte** | Il materiale che una parte consuma (non i suoi sotto-assiemi: una parte è una foglia) |
+| **Distinta di una parte** | Il materiale che una parte consuma: materie prime e commerciali, mai assiemi o altre parti. Dalla 0.125.0 sta in *Gestione DB* come quella degli assiemi |
 | **Concetto** | L'oggetto nel nome di una parte: `ALBERO`, `FLANGIA`. Sempre maiuscolo, scelto da un elenco |
 | **Sigla** | L'abbreviazione di una macchina o di un gruppo, che entra nei codici |
 | **Approvvigionamento** | Come si ottiene una parte: *Produzione interna* o *Acquisto da fornitore* |
@@ -3962,8 +3979,8 @@ modificare solo la colonna Ricevuto. Se serve davvero, **🔓 Sblocca per modifi
 
 **Il costo di una parte è zero.**
 Tre possibilità: (a) è a *Acquisto da fornitore* e non ha nessuna quotazione a listino →
-[cap. 10](#10-listino-fornitori); (b) è a *Produzione interna* e non ha né distinta parte né ciclo
-→ [cap. 14](#14-cicli-di-lavorazione); (c) i suoi componenti non hanno prezzo.
+[cap. 10](#10-listino-fornitori); (b) è a *Produzione interna* e non ha né distinta né ciclo
+→ [cap. 13](#13-tecnico--gestione-db) e [cap. 14](#14-cicli-di-lavorazione); (c) i suoi componenti non hanno prezzo.
 Il Riepilogo elenca gli «articoli d'acquisto senza prezzo».
 
 **Il costo della macchina non torna / compare un avviso rosso.**
@@ -4154,9 +4171,11 @@ Ogni record porta `id` (UUID), `createdAt` / `updatedAt`, `createdBy` / `updated
 `macchina` · `gruppo` · `sottogruppo` · `parte` · `materiale` (materia prima) ·
 `acquistato` (commerciale).
 
-**Le righe di ciclo** (`cycle[]`) hanno due forme: `kind: 'item'` (una riga di distinta parte, con
-`itemId`, `qty`, `costOverride`) e `kind: 'op'` (una fase, con `workCenterId`, `supplierId`,
-`costMode`, `hours`, `days`, `rate` o `cost`).
+**La distinta** (`components[]`) di assiemi e parti: righe con `itemId`, `qty`, `scrapPct`, e
+per una parte `costOverride` (il costo di riga forzato). **Le righe di ciclo** (`cycle[]`) sono
+fasi, `kind: 'op'`, con `workCenterId`, `supplierId`, `costMode`, `hours`, `operators`, `days`,
+`rate` o `cost`. Fino alla 0.124 il ciclo di una parte conteneva anche le righe materiale
+(`kind: 'item'`): la migrazione le sposta nella distinta.
 
 **I movimenti** portano `kind` (uno dei sette tipi), `qty` con segno, e per il conto lavoro
 `supplierId` (dove va) e `fromSupplierId` (da dove viene).

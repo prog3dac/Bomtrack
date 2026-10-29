@@ -30,24 +30,24 @@ function flattenBom(itemId, qty, scrap, level, rows, ancestors, pos, mult) {
   // così la somma dei figli coincide col costo riga della Parte.
   // (una parte comprata non si esplode: il suo costo è il prezzo del fornitore)
   if (it.type === 'parte' && !cyc && partSourcing(it) !== 'buy') {
-    // Le fasi di lavorazione non prendono posizione: il contatore avanza solo sugli
-    // articoli della distinta parte, come nell'albero della distinta.
-    let n = 0;
-    (it.cycle || []).forEach(row => {
+    // Le fasi di lavorazione non prendono posizione: numerata è la sola
+    // distinta, come nell'albero della distinta.
+    // Prima la distinta della parte (dalla 0.125.0 sta lì), poi le fasi.
+    distintaRighe(it).forEach((row, n) => {
       const rowCost = cycleRowCost(row);
-      if (row.kind === 'op') {
-        const wc = getWorkCenter(row.workCenterId);
-        const sup = supplierName(row.supplierId);
-        rows.push({ level: level + 1, pos: '', code: '', name: '🔧 ' + (wc ? wc.name : '?') + (sup ? ' · ' + sup : ''),
-          type: 'Lavorazione', qty: 1, uom: '', unit: rowCost, line: rowCost * factor,
-          qtyTot: factor * mult, tot: rowCost * factor * mult });
-      } else {
-        const rowPos = bomPos(pos, n++);
-        const ci = getItem(row.itemId); if (!ci) return;
-        rows.push({ level: level + 1, pos: rowPos, itemId: ci.id, code: ci.code, name: ci.name, type: typeLabel(ci.type),
-          qty: Number(row.qty) || 0, uom: ci.uom || '', unit: costOf(row.itemId).total, line: rowCost * factor,
-          qtyTot: (Number(row.qty) || 0) * factor * mult, tot: rowCost * factor * mult });
-      }
+      const ci = getItem(row.itemId); if (!ci) return;
+      const q = (Number(row.qty) || 0) * (1 + (Number(row.scrapPct) || 0) / 100);
+      rows.push({ level: level + 1, pos: bomPos(pos, n), itemId: ci.id, code: ci.code, name: ci.name, type: typeLabel(ci.type),
+        qty: Number(row.qty) || 0, uom: ci.uom || '', unit: costOf(row.itemId).total, line: rowCost * factor,
+        qtyTot: q * factor * mult, tot: rowCost * factor * mult });
+    });
+    cicloFasi(it).forEach(row => {
+      const rowCost = cycleRowCost(row);
+      const wc = getWorkCenter(row.workCenterId);
+      const sup = supplierName(row.supplierId);
+      rows.push({ level: level + 1, pos: '', code: '', name: '🔧 ' + (wc ? wc.name : '?') + (sup ? ' · ' + sup : ''),
+        type: 'Lavorazione', qty: 1, uom: '', unit: rowCost, line: rowCost * factor,
+        qtyTot: factor * mult, tot: rowCost * factor * mult });
     });
   }
 }
@@ -141,7 +141,7 @@ function costContributors(itemId) {
     // stessa spesa. Una parte prodotta in casa che esplode il proprio ciclo
     // conta con le sue righe, non con se stessa — stessa regola.
     const esplode = it && (isAssembly(it.type)
-      || (it.type === 'parte' && partSourcing(it) !== 'buy' && (it.cycle || []).length));
+      || (it.type === 'parte' && partSourcing(it) !== 'buy' && (distintaRighe(it).length || cicloFasi(it).length)));
     if (esplode) return;
     const e = per.get(r.itemId) || { id: r.itemId, code: r.code, name: r.name, type: r.type, qty: 0, line: 0 };
     // Riportati alla radice: il costo riga nel suo padre non basta quando il
