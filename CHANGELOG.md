@@ -2,6 +2,16 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.124.0 — 2026-10-29
+
+**Il ciclo anche per macchine, gruppi e sottogruppi.** Le lavorazioni di un assieme diventano le **fasi del suo ciclo**, con tutto quello che ha una fase di una parte: centro, interna o conto lavoro, costo fisso o orario, ore o giorni, ordine delle fasi.
+- Si scrivono in *Tecnico → Cicli di lavorazione*, dove gli assiemi compaiono dopo le parti senza la distinta parte; dalla distinta, **+ Aggiungi fase di montaggio** aggiunge una fase interna e **Ciclo completo** apre il resto.
+- **Fabbisogno**: le fasi interne caricano i centri con il loro numero, quelle dal terzista sono conto lavoro con il loro ordine di lavoro, e il montaggio comincia con la prima fase (o dura i *giorni di montaggio* dichiarati). Le ore degli assiemi già montati escono dal carico.
+- **Ordine di produzione di un assieme**: dal fabbisogno (scheda *Da montare*) o a mano. Fasi dal ciclo, materiale dai componenti diretti a magazzino; gli assiemi montati sull'ultima fase contano come fatti nel piano, senza movimenti. Con un ODP nel piano il montaggio non si dichiara più da *Da montare*. Reparto, timbrature, capacità finita e consuntivo valgono anche qui.
+- **Migrazione**: le vecchie lavorazioni (centro, ore, nota) passano al ciclo a costo orario con la tariffa del centro, senza cambiare il costo; revisioni e impronte delle macchine modello le riconoscono come le stesse. Nessuna modifica allo schema Supabase. Conviene aggiornare tutti i PC dell'archivio condiviso: una versione vecchia non vede le fasi.
+
+**Manuale**: cap. 13 (comandi della distinta), cap. 14 «Il ciclo di un assieme», cap. 19 «Il montaggio», cap. 22 «Da dove nasce».
+
 ### 0.123.0 — 2026-10-28
 
 **Modulo Officina** (area Produzione interna).

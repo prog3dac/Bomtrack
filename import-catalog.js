@@ -641,7 +641,7 @@ function catApplyItemRow(row, def, ctx, ln, st) {
   if (isNew && code && codicePresoAltrove(code)) { err(`codice "${esc(code)}" appena preso da un collega sull'archivio condiviso`); return; }
   if (isNew) {
     it = { id: gid(), type, active: true };
-    if (isAssembly(type)) { it.components = []; it.operations = []; }
+    if (isAssembly(type)) { it.components = []; it.operations = []; it.cycle = []; }
     if (type === 'parte') { it.cycle = []; it.sourcing = defaultPartSourcing(); }
     if (hasPriceList(it)) { it.priceList = []; it.priceListSeeded = true; }
   }

@@ -92,10 +92,9 @@ function assiemeCost(it, righe, costoFiglio) {
     parts += cc.parts * factor;
     childOverhead += cc.overhead * factor;
   });
-  (it.operations || []).forEach(o => {
-    const wc = getWorkCenter(o.workCenterId);
-    labor += (Number(o.hours) || 0) * (wc ? (Number(wc.hourlyRate) || 0) : 0);
-  });
+  // Le fasi del ciclo dell'assieme (dalla 0.124.0), con lo stesso costo di
+  // riga di una parte: fisso, o ore × tariffa; interne o in conto lavoro.
+  cicloFasi(it).forEach(r => { labor += cycleRowCost(r); });
   const base = material + purchased + labor + parts;  // costo puro (figli a costo + manodopera)
   const ovPct = it.overheadPctOverride != null ? it.overheadPctOverride : (db.settings.overheadPct || 0);
   const ownOverhead = base * (Number(ovPct) || 0) / 100;

@@ -2481,7 +2481,7 @@ function odlAddPhaseModal(id) {
     titolo: '+ Lavorazione da ciclo',
     // Solo gli articoli che una lavorazione ce l'hanno: gli altri aprirebbero
     // una scheda vuota, e scoprirlo dopo averli scelti è il modo peggiore.
-    filtro: i => (i.cycle || []).some(r => r.kind === 'op'),
+    filtro: i => cicloFasi(i).length > 0,
     vuoto: 'Nessun articolo ha un ciclo di lavorazione. Le fasi si scrivono nella scheda dell’articolo, sotto <em>Ciclo</em>.',
   });
 }
@@ -2491,7 +2491,7 @@ function odlAddPhaseModal(id) {
 // invece di impedirlo.
 function odlPhasePickModal(id, ids) {
   const o = getOdl(id); if (!o) return;
-  const parti = (ids || []).map(getItem).filter(it => it && (it.cycle || []).some(r => r.kind === 'op'));
+  const parti = (ids || []).map(getItem).filter(it => it && cicloFasi(it).length > 0);
   if (!parti.length) { showToast('Nessun articolo con un ciclo di lavorazione', 'error'); return; }
   const blocchi = parti.map((it, pi) => {
     const righe = clCycleRuns(it).map(t => {
@@ -2525,10 +2525,7 @@ function odlPhasePickModal(id, ids) {
 // I centri di lavoro toccati da una tratta, nell'ordine del ciclo.
 function odlRunNomi(it, t) {
   const nomi = [];
-  let k = 0;
-  (it.cycle || []).forEach(r => {
-    if (r.kind !== 'op') return;
-    const i = k++;
+  cicloFasi(it).forEach((r, i) => {
     if (i < t.from || i > t.to) return;
     const wc = getWorkCenter(r.workCenterId);
     nomi.push(wc ? wc.name : '(centro mancante)');

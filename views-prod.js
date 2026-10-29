@@ -63,6 +63,8 @@ const ODP_LOCK = { bozza: 'full', lanciato: 'reception', corso: 'reception',
 const ODP_APERTI = ['lanciato', 'corso'];
 
 function getOdp(id) { return (db.prodOrders || []).find(o => o.id === id); }
+// L'ordine monta un assieme (dalla 0.124.0) invece di fabbricare una parte.
+function odpDiAssieme(o) { const it = o && getItem(o.itemId); return !!it && isAssembly(it.type); }
 function odpMode(o) { return (o && odpUnlockedId === o.id) ? 'full' : ((o && ODP_LOCK[o.status]) || 'full'); }
 
 // ═══════════════════════════════════════════════════════════
@@ -76,10 +78,7 @@ function odpMode(o) { return (o && odpUnlockedId === o.id) ? 'full' : ((o && ODP
 function opFreezePhases(part) {
   const runs = clCycleRuns(part);
   const out = [];
-  let opIndex = 0;
-  ((part && part.cycle) || []).forEach(r => {
-    if (r.kind !== 'op') return;
-    const k = opIndex++;
+  cicloFasi(part).forEach((r, k) => {
     const t = runs.find(x => k >= x.from && k <= x.to) || { from: k, to: k, passata: 0 };
     const wc = getWorkCenter(r.workCenterId);
     out.push({
@@ -107,7 +106,15 @@ function opFreezePhases(part) {
 // retroattivamente quanto è già uscito dal magazzino.
 // Con `planId` valgono le sostituzioni decise sul piano (alternativi.js): la
 // quota di materiale passata all'alternativo si congela come alternativo.
+// Di un assieme (dalla 0.124.0) sono i componenti diretti che stanno a
+// magazzino, gli stessi che preleverebbe un montaggio dichiarato
+// (montaggioComponenti, che le sostituzioni del piano le applica già): i
+// sottoassiemi si montano ciascuno col suo ordine.
 function opFreezeMaterials(part, qty, planId) {
+  if (part && isAssembly(part.type)) {
+    return montaggioComponenti(part, Number(qty) || 0, planId).stock.map(x => ({ id: newId(), itemId: x.item.id,
+      code: x.item.code || '', name: x.item.name || '', uom: itemUom(x.item), perPezzo: x.perPezzo, qty: x.qty }));
+  }
   let righe = clMaterialsOf(part, Number(qty) || 0).map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo, qty: x.qty }));
   if (planId && typeof sostituzioniPrelievo === 'function') {
     const orig = new Map(righe.map(r => [r.itemId, r]));
@@ -338,8 +345,14 @@ function opMaterialeResiduo(odp) {
     { gia: gia.get(m.itemId) || 0, residuo: Math.max(0, (Number(m.qty) || 0) - (gia.get(m.itemId) || 0)) }));
 }
 function opMaterialePrelevato(odp) { return opRegistrato(odp, opPrima(odp), 'out').size > 0; }
+// Un assieme non ha giacenza (hasStock), e il suo versamento non scrive
+// movimenti: i pezzi fatti sono i buoni dichiarati sull'ultima fase.
 function opVersato(odp) {
   let n = 0;
+  if (odpDiAssieme(odp)) {
+    const f = opUltima(odp);
+    return f ? opDecls(odp.id, f.id).filter(d => d.kind === 'avanzamento').reduce((s, d) => s + (Number(d.qty) || 0), 0) : 0;
+  }
   opMovimentiDi(odp.id).forEach(x => {
     if (x.orderId !== odp.id || x.itemId !== odp.itemId) return;
     if (x.kind === 'clIn' || x.kind === 'versamento') n += Number(x.qty) || 0;
@@ -988,7 +1001,7 @@ function renderOdpEdit(id) {
     ${docStepperHtml('odp', o)}${docLinksHtml('odp', o)}
     ${lockBanner}
     <div class="modal-grid">
-      <div class="modal-field"><label>Parte</label>
+      <div class="modal-field"><label>${part && isAssembly(part.type) ? esc(typeLabel(part.type)) : 'Parte'}</label>
         <div class="odp-part">${part ? codeLink(part.id, part.code) : esc(o.code || '')} ${esc(o.name || '')}</div></div>
       <div class="modal-field"><label>Pezzi da produrre</label>
         <input type="number" class="num lock-contract" min="0" step="any" value="${esc(String(o.qty || 0))}" onchange="odpSetField('${id}','qty',this.value)"></div>
@@ -1082,7 +1095,7 @@ function odpPhaseActions(o, f, st, legame) {
     if (blocco.fase) cmd.push(link(`opForzaModal('${id}','${f.id}')`, 'forza avvio', 'Avvia comunque, dichiarando il motivo: resta scritto nello storico'));
   } else if (st === 'corso') {
     cmd.push(link(`opDichiaraModal('${id}','${f.id}')`, 'dichiara',
-      opEUltima(o, f) ? 'Dichiara i pezzi buoni e gli scarti: i buoni entrano a magazzino col codice della parte'
+      opEUltima(o, f) ? (odpDiAssieme(o) ? 'Dichiara gli assiemi montati e gli scarti: è la fine del montaggio' : 'Dichiara i pezzi buoni e gli scarti: i buoni entrano a magazzino col codice della parte')
         : 'Dichiara i pezzi buoni e gli scarti di questa fase'));
     cmd.push(link(`opChiudiModal('${id}','${f.id}')`, 'chiudi', 'Chiudi la fase anche se i pezzi non la coprono'));
   } else if (st === 'chiusa') {
@@ -1101,7 +1114,7 @@ function odpMaterialBlock(o) {
   const righe = opMaterialeResiduo(o);
   if (!righe.length) {
     return `<div class="mrp-section"><div class="cycle-section-head"><h3>${ico('package', 'tinted pill', '')} Materiale del ciclo</h3></div>
-      <p class="empty-text" style="text-align:left">Il ciclo di questa parte non ha materiale a magazzino: lo mette chi la lavora. Non c'è niente da prelevare, e infatti non c'è niente da scaricare.</p></div>`;
+      <p class="empty-text" style="text-align:left">${odpDiAssieme(o) ? "Questo assieme non ha componenti diretti a magazzino: i suoi sottoassiemi si montano ciascuno col proprio ordine." : "Il ciclo di questa parte non ha materiale a magazzino: lo mette chi la lavora."} Non c'è niente da prelevare, e infatti non c'è niente da scaricare.</p></div>`;
   }
   const prima = opPrima(o);
   const resto = opPuoPrelevareResto(o) && canWriteShop('docs')
@@ -1378,7 +1391,8 @@ function opDichiaraModal(id, faseId) {
         <input class="num" type="number" id="op-d-scrap" min="0" step="any" value="0"></div>
     </div>
     <p class="empty-text" style="text-align:left;padding:8px 0">${ultima
-    ? `È l'<strong>ultima fase</strong>: i pezzi buoni <strong>entrano a magazzino</strong> col codice <strong>${esc(o.code || '')}</strong>, ed è l'unico punto in cui quel codice si carica.`
+    ? (odpDiAssieme(o) ? `È l'<strong>ultima fase</strong>: i buoni sono gli assiemi <strong>${esc(o.code || '')}</strong> montati, e contano come fatti nel piano. Un assieme non ha giacenza: il magazzino non si muove.`
+      : `È l'<strong>ultima fase</strong>: i pezzi buoni <strong>entrano a magazzino</strong> col codice <strong>${esc(o.code || '')}</strong>, ed è l'unico punto in cui quel codice si carica.`)
     : 'Questa fase <strong>non muove il magazzino</strong>. Gli scarti non proseguono: la fase successiva lavorerà i soli pezzi buoni.'}</p>
     <div class="modal-field"><label>Nota</label><input id="op-d-note" autocomplete="off"></div>
     <div class="modal-actions">
@@ -1442,7 +1456,8 @@ function opDichiaraTrattaModal(id, faseId) {
         <input class="num" type="number" id="op-d-scrap" min="0" step="any" value="0"></div>
     </div>
     <p class="empty-text" style="text-align:left;padding:8px 0">I pezzi tornati sono passati da tutte le fasi della tratta: si dichiarano su ciascuna, e gli scarti sull'ultima. ${ultimaDelCiclo
-    ? `È la <strong>fine del ciclo</strong>: i pezzi buoni <strong>entrano a magazzino</strong> col codice <strong>${esc(o.code || '')}</strong>.`
+    ? (odpDiAssieme(o) ? `È la <strong>fine del montaggio</strong>: i buoni sono gli assiemi <strong>${esc(o.code || '')}</strong> montati.`
+      : `È la <strong>fine del ciclo</strong>: i pezzi buoni <strong>entrano a magazzino</strong> col codice <strong>${esc(o.code || '')}</strong>.`)
     : 'Il magazzino <strong>non si muove</strong>: il codice della parte si carica alla fine del ciclo.'}</p>
     <div class="modal-field"><label>Nota</label><input id="op-d-note" placeholder="es. bolla 412" autocomplete="off"></div>
     <div class="modal-actions">
@@ -1581,8 +1596,8 @@ function newOdpModal() {
     // Un ciclo senza fasi non ha una successione da seguire, e un ordine su una
     // parte così sarebbe una scheda vuota: si scopre dopo averla scelta, ed è
     // il modo peggiore.
-    filtro: i => i.type === 'parte' && (i.cycle || []).some(r => r.kind === 'op'),
-    vuoto: 'Nessuna parte ha un ciclo di lavorazione. Le fasi si scrivono in <em>Cicli di lavorazione</em>.',
+    filtro: i => (i.type === 'parte' || isAssembly(i.type)) && cicloFasi(i).length > 0,
+    vuoto: 'Nessuna parte e nessun assieme ha un ciclo di lavorazione. Le fasi si scrivono in <em>Cicli di lavorazione</em>.',
   });
 }
 function odpNewFromPick(ids) {

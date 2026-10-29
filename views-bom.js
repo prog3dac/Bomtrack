@@ -188,7 +188,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     } else {
       h += (child.components || []).map((cc, i) =>
         renderBomNode(cc, level + 1, child.id, false, i, nodeKey, ancestorIds.concat(child.id), bomPos(pos, i))).join('');
-      if ((child.operations || []).length) h += renderOpsBlock(child, false, 18 + indent + 18);
+      if (cicloFasi(child).length) h += renderOpsBlock(child, false, 18 + indent + 18);
     }
   }
   return h;
@@ -246,19 +246,22 @@ function renderBomRootNode(it) {
   </div>`;
 }
 
+// Le fasi del ciclo dell'assieme (dalla 0.124.0), in ordine. Qui si
+// aggiungono e si correggono quelle semplici — centro, ore, nota — e il ciclo
+// intero (conto lavoro, costo fisso, ordine delle fasi) si apre dal pulsante.
 function renderOpsBlock(item, editable, padLeft) {
-  const ops = item.operations || [];
+  const ops = cicloFasi(item);
   const pl = padLeft != null ? padLeft : 18;
   const tags = ops.map((o, i) => {
     const wc = getWorkCenter(o.workCenterId);
-    const cost = (Number(o.hours) || 0) * (wc ? (Number(wc.hourlyRate) || 0) : 0);
     const nome = wc ? wc.name : 'lavorazione';
+    const tempo = o.supplierId ? `${Number(o.days) || 0} gg da ${esc(supplierName(o.supplierId) || 'terzista')}` : `${Number(o.hours) || 0}h`;
     const del = editable ? ` <span style="cursor:pointer;color:var(--red)" title="Elimina" ${clickAttrs(`delOperation(${i})`, 'Elimina ' + nome)}>${ico('close')}</span>` : '';
     const ed = editable ? `<span style="cursor:pointer" ${clickAttrs(`editOperationModal(${i})`, 'Modifica ' + nome)}>` : '<span>';
-    return `<span class="bom-op-tag">${ed}${ico('wrench', 'tinted')} ${esc(wc ? wc.name : '?')} · ${(Number(o.hours) || 0)}h · ${fmtN(cost)}</span>${del}</span>`;
+    return `<span class="bom-op-tag">${ed}<span class="cycle-phase">${cyclePhaseNumber(i)}</span> ${ico('wrench', 'tinted')} ${esc(wc ? wc.name : '?')} · ${tempo} · ${fmtN(cycleRowCost(o))}</span>${del}</span>`;
   }).join('');
   if (!ops.length && !editable) return '';
-  const label = editable ? 'Lavorazioni' : 'Lavorazioni (' + esc(item.name) + ')';
+  const label = editable ? 'Ciclo di montaggio' : 'Ciclo (' + esc(item.name) + ')';
   // I giorni di montaggio: dichiarati, o ricavati dalle ore delle lavorazioni
   // (assemblyDaysOf in views-mrp.js, per un pezzo). È il tempo che la
   // programmazione a ritroso toglie dalla consegna per sapere quando i
@@ -268,7 +271,9 @@ function renderOpsBlock(item, editable, padLeft) {
   const gg = editable
     ? ` <span class="bom-op-tag"><span style="cursor:pointer" ${clickAttrs('editAssemblyDaysModal()', 'Giorni di montaggio')}>${ico('clock', 'tinted')} Montaggio: ${esc(ggTxt)}</span></span>`
     : (dich > 0 ? ` <span class="bom-op-tag">${ico('clock', 'tinted')} Montaggio: ${esc(ggTxt)}</span>` : '');
-  return `<div class="bom-ops" style="padding-left:${pl}px"><strong style="color:var(--text-dim);font-size:11px">${label}:</strong> ${tags || '<span class="empty-text" style="padding:0">nessuna</span>'}${gg}</div>`;
+  const ciclo = editable && vistaAttiva('cycles')
+    ? ` <span class="bom-op-tag"><span style="cursor:pointer" ${clickAttrs(`openCycleFor('${item.id}')`, 'Apri il ciclo completo')}>${ico('edit', 'tinted')} Ciclo completo</span></span>` : '';
+  return `<div class="bom-ops" style="padding-left:${pl}px"><strong style="color:var(--text-dim);font-size:11px">${label}:</strong> ${tags || '<span class="empty-text" style="padding:0">nessuna fase</span>'}${gg}${ciclo}</div>`;
 }
 
 function toggleBom(key) { if (bomExpanded.has(key)) bomExpanded.delete(key); else bomExpanded.add(key); renderBom(); }
@@ -784,16 +789,20 @@ function wcOptions(selectedId) {
   return wcScelti(selectedId)
     .map(w => `<option value="${w.id}" ${w.id === selectedId ? 'selected' : ''}>${esc(w.name)} (${fmtN(w.hourlyRate)}/h)${wcSospeso(w)}</option>`).join('');
 }
+// L'indice è fra le sole fasi, come nella vista Cicli: nel ciclo di un
+// assieme ci sono solo fasi, ma la riga si cerca lo stesso per quello che è.
+function asmFaseAt(it, k) { return cicloFasi(asmCicloVivo(it))[k] || null; }
 function addOperationModal() {
   if (!roleGuard('bom')) return;
   const it = getItem(currentBomId); if (!it) return;
   if (!db.workCenters.length) { showToast('Aggiungi prima un centro di lavoro in Gestione', 'error'); return; }
-  openModal(`<h3>${ico('wrench', 'tinted pill', '')} Aggiungi lavorazione</h3>
+  openModal(`<h3>${ico('wrench', 'tinted pill', '')} Aggiungi fase di montaggio</h3>
     <div class="modal-field"><label>Centro di lavoro</label><select id="op-wc">${wcOptions(null)}</select></div>
     <div class="modal-grid">
-      <div class="modal-field"><label>Ore (h)</label><input type="number" id="op-hours" min="0" step="0.25" value="1"></div>
+      <div class="modal-field"><label>Ore per pezzo (h)</label><input type="number" id="op-hours" min="0" step="0.25" value="1"></div>
       <div class="modal-field"><label>Nota</label><input type="text" id="op-note" placeholder="opzionale"></div>
     </div>
+    <p class="empty-text" style="text-align:left;padding:4px 0 0">Una fase interna, a costo orario con la tariffa del centro, in coda al ciclo. Conto lavoro, costo fisso e ordine delle fasi si scelgono nel ciclo completo.</p>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveNewOperation()">Aggiungi</button></div>`);
 }
@@ -801,38 +810,43 @@ function saveNewOperation() {
   if (!roleGuard('bom')) return;
   const it = getItem(currentBomId); if (!it) return;
   if (isNeg('op-hours')) { showToast('Le ore non possono essere negative', 'error'); return; }
-  it.operations.push({ workCenterId: val('op-wc'), hours: numVal('op-hours', 0), note: val('op-note') });
+  asmCicloVivo(it);
+  it.cycle.push(asmOpInCiclo({ workCenterId: val('op-wc'), hours: numVal('op-hours', 0), note: val('op-note') }));
   touch(it);
-  saveDB(); closeModal(); renderBom(); savedToast('Lavorazione aggiunta');
+  saveDB(); closeModal(); renderBom(); savedToast('Fase aggiunta');
 }
 function editOperationModal(idx) {
   if (!roleGuard('bom')) return;
   const it = getItem(currentBomId); if (!it) return;
-  const op = it.operations[idx]; if (!op) return;
-  openModal(`<h3>${ico('wrench', 'tinted pill', '')} Modifica lavorazione</h3>
+  const op = asmFaseAt(it, idx); if (!op) return;
+  const orario = op.costMode === 'orario';
+  openModal(`<h3>${ico('wrench', 'tinted pill', '')} Modifica fase ${cyclePhaseNumber(idx)}</h3>
     <div class="modal-field"><label>Centro di lavoro</label><select id="op-wc">${wcOptions(op.workCenterId)}</select></div>
     <div class="modal-grid">
-      <div class="modal-field"><label>Ore (h)</label><input type="number" id="op-hours" min="0" step="0.25" value="${op.hours}"></div>
+      <div class="modal-field"><label>${op.supplierId ? 'Ore fatturate per pezzo (h)' : 'Ore per pezzo (h)'}</label><input type="number" id="op-hours" min="0" step="0.25" value="${Number(op.hours) || 0}"></div>
       <div class="modal-field"><label>Nota</label><input type="text" id="op-note" value="${esc(op.note || '')}"></div>
     </div>
+    <p class="empty-text" style="text-align:left;padding:4px 0 0">${op.supplierId ? `In conto lavoro da <strong>${esc(supplierName(op.supplierId) || '')}</strong>. ` : ''}${orario ? 'A costo orario: cambiando centro si propone la sua tariffa.' : 'A costo fisso: le ore servono al carico del centro.'} Il resto si cambia nel ciclo completo.</p>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveOperationEdit(${idx})">Salva</button></div>`);
 }
 function saveOperationEdit(idx) {
   if (!roleGuard('bom')) return;
   const it = getItem(currentBomId); if (!it) return;
-  const op = it.operations[idx]; if (!op) return;
+  const op = asmFaseAt(it, idx); if (!op) return;
   if (isNeg('op-hours')) { showToast('Le ore non possono essere negative', 'error'); return; }
-  op.workCenterId = val('op-wc'); op.hours = numVal('op-hours', 0); op.note = val('op-note');
+  const wcId = val('op-wc');
+  if (wcId !== op.workCenterId && op.costMode === 'orario') op.rate = wcRateFor(getWorkCenter(wcId), op.supplierId);
+  op.workCenterId = wcId; op.hours = numVal('op-hours', 0); op.note = val('op-note');
   touch(it);
-  saveDB(); closeModal(); renderBom(); savedToast('Lavorazione aggiornata');
+  saveDB(); closeModal(); renderBom(); savedToast('Fase aggiornata');
 }
 function editAssemblyDaysModal() {
   if (!roleGuard('bom')) return;
   const it = getItem(currentBomId); if (!it) return;
   openModal(`<h3>${ico('clock', 'tinted pill', '')} Giorni di montaggio</h3>
     <div class="modal-field"><label>Giorni lavorativi</label><input type="number" id="asm-days" min="0" max="999" step="1" value="${Number(it.assemblyDays) || 0}"></div>
-    <p class="empty-text" style="text-align:left;padding:4px 0 0">Quanto dura il montaggio di <strong>${esc(it.name || it.code || '')}</strong>: il fabbisogno lo toglie dalla data in cui l'assieme serve per sapere quando devono essere pronti i suoi componenti. <strong>Zero = si ricava dalle ore delle lavorazioni</strong>, sulle ore al giorno di ciascun centro.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0 0">Quanto dura il montaggio di <strong>${esc(it.name || it.code || '')}</strong>: il fabbisogno lo toglie dalla data in cui l'assieme serve per sapere quando devono essere pronti i suoi componenti. <strong>Zero = si ricava dalle fasi del ciclo</strong>: le ore sulle ore al giorno di ciascun centro, i giorni del terzista per quelle in conto lavoro.</p>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveAssemblyDays()">Salva</button></div>`);
 }
@@ -847,8 +861,11 @@ function saveAssemblyDays() {
 function delOperation(idx) {
   if (!roleGuard('bom')) return;
   const it = getItem(currentBomId); if (!it) return;
-  askConfirm('Eliminare questa lavorazione?', () => {
-    it.operations.splice(idx, 1); touch(it); saveDB(); renderBom(); savedToast('Lavorazione eliminata');
+  const op = asmFaseAt(it, idx); if (!op) return;
+  askConfirm('Eliminare questa fase di montaggio?', () => {
+    const i = it.cycle.indexOf(op);
+    if (i >= 0) it.cycle.splice(i, 1);
+    touch(it); saveDB(); renderBom(); savedToast('Fase eliminata');
   });
 }
 

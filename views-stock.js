@@ -1060,10 +1060,7 @@ function clPhaseKeys(l) {
 // fasi 20 e 40 di Beta in due ordini di lavoro distinti.
 function clCycleRuns(part) {
   const runs = [];
-  let opIndex = 0;
-  ((part && part.cycle) || []).forEach(r => {
-    if (r.kind !== 'op') return;
-    const k = opIndex++;
+  cicloFasi(part).forEach((r, k) => {
     const sup = r.supplierId || '';
     const ultima = runs[runs.length - 1];
     // Consecutive **e** dallo stesso terzista: basta una fase interna in mezzo

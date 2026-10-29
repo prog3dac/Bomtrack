@@ -68,8 +68,9 @@ function revSnapshot(it) {
     code: it.code, name: it.name, type: it.type, uom: it.uom || '',
     sourcing: it.sourcing || null,
     components: JSON.parse(JSON.stringify(it.components || [])),
-    operations: JSON.parse(JSON.stringify(it.operations || [])),
-    cycle: JSON.parse(JSON.stringify(it.cycle || [])),
+    // Di un assieme le fasi, anche quelle di prima della 0.124.0 non ancora
+    // passate al ciclo (cicloFasi): sono la stessa definizione.
+    cycle: JSON.parse(JSON.stringify(isAssembly(it.type) ? cicloFasi(it) : (it.cycle || []))),
     // Il costo del giorno del rilascio: senza, la revisione direbbe *cosa* c'era
     // ma non *quanto* costava, e i prezzi di allora non tornano più.
     cost: { material: c.material, purchased: c.purchased, labor: c.labor,
@@ -241,15 +242,14 @@ function revRowsOf(snapshot) {
     somma('i:' + c.itemId, ci ? ci.code + ' — ' + ci.name : '(articolo eliminato)',
       c.qty, { tipo: 'Componente', uom: itemUom(ci), scrapPct: Number(c.scrapPct) || 0 });
   });
-  (snapshot.operations || []).forEach(o => {
-    const w = getWorkCenter(o.workCenterId);
-    somma('o:' + o.workCenterId, '🔧 ' + (w ? w.name : '(centro eliminato)'), o.hours, { tipo: 'Lavorazione', uom: 'h' });
-  });
   // Le fasi si riconoscono per posizione e centro (dalla 0.105.5): due fasi
   // sullo stesso centro senza nota erano una riga sola. E portano quello che
   // ne fa il costo e il tempo, perché anche quello è una modifica.
+  // Le lavorazioni d'assieme di una revisione di prima della 0.124.0 si leggono
+  // come fasi, nello stesso modo della migrazione (asmOpInCiclo): confrontata
+  // con una revisione nuova, la stessa lavorazione è la stessa fase.
   let fase = 0;
-  (snapshot.cycle || []).forEach(r => {
+  (snapshot.cycle || []).concat((snapshot.operations || []).map(asmOpInCiclo)).forEach(r => {
     if (r.kind === 'op') {
       const w = getWorkCenter(r.workCenterId);
       const k = fase++;

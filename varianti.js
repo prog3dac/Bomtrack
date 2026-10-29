@@ -241,12 +241,23 @@ function varHash(testo) {
   for (let i = 0; i < testo.length; i++) h = ((h << 5) + h + testo.charCodeAt(i)) >>> 0;
   return h.toString(16).padStart(8, '0');
 }
+// Una fase nell'impronta. Le lavorazioni di prima della 0.124.0 erano centro,
+// ore e nota, e diventate fasi (asmOpInCiclo) devono dare la stessa impronta:
+// se no ogni macchina generata risulterebbe da aggiornare il giorno
+// dell'aggiornamento. Il resto entra solo quando dice qualcosa di diverso.
+function varFirmaFase(o) {
+  const base = [o.workCenterId, Number(o.hours) || 0, o.note || ''];
+  const wc = getWorkCenter(o.workCenterId);
+  const tariffa = wc ? (Number(wc.hourlyRate) || 0) : 0;
+  const diversa = o.supplierId || o.costMode !== 'orario' || Number(o.days) > 0 || (Number(o.rate) || 0) !== tariffa;
+  return diversa ? base.concat([o.supplierId || '', o.costMode || '', Number(o.rate) || 0, Number(o.cost) || 0, Number(o.days) || 0]) : base;
+}
 // L'impronta della definizione di un assieme: quello che il generato copia.
 function varFirma(it) {
   return varHash(JSON.stringify({
     o: varOpzioni(it).map(o => [varCodice(o.code), o.choices.map(c => varValore(c.value))]),
     c: (it.components || []).map(c => [c.itemId, Number(c.qty) || 0, Number(c.scrapPct) || 0, c.cond || '', c.qtyExpr || '']),
-    p: (it.operations || []).map(o => [o.workCenterId, Number(o.hours) || 0, o.note || '']),
+    p: cicloFasi(it).map(varFirmaFase),
   }));
 }
 
@@ -298,7 +309,7 @@ function varPrepara(modelloId, scelteDate, macchina) {
   const righe = varRigheScelte(t, norm.scelte, out.errori);
   if (!righe.length && !out.errori.length) out.errori.push('Con queste scelte la distinta resta vuota');
   if (out.errori.length) return out;
-  const dati = { components: righe, operations: (t.operations || []).map(o => Object.assign({}, o)), configHash: varFirma(t) };
+  const dati = { components: righe, cycle: cicloFasi(t).map(o => Object.assign({}, o)), operations: [], configHash: varFirma(t) };
   if (macchina) out.macchina = Object.assign({}, macchina, dati);
   else {
     out.macchina = Object.assign({ id: gid(), type: 'macchina', uom: t.uom, notes: t.notes || '', active: true,
@@ -363,7 +374,8 @@ function varRigenera(id) {
   const prep = varPrepara(m.configuredFromId, m.configChoices || {}, m);
   if (prep.errori.length) { showToast(`${m.code}: ${prep.errori[0]}`, 'error'); return null; }
   m.components = prep.macchina.components;
-  m.operations = prep.macchina.operations;
+  m.cycle = prep.macchina.cycle;
+  m.operations = [];
   m.configHash = prep.macchina.configHash;
   varCopiaCodifica(getItem(m.configuredFromId), m);
   touch(m);

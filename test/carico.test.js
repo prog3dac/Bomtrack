@@ -290,11 +290,11 @@ describe('Carico: i codici da produrre', () => {
     assert.ok(!codici(conDb()).find(x => x.code === 'PERNO').fasi.some(f => f.wc === 'CDL zin'));
   });
 
-  it('un assieme entra con le sue operazioni, che non hanno numero di fase', () => {
+  it('un assieme entra con le fasi del suo ciclo, numerate come quelle di una parte', () => {
     const grp = codici(conDb()).find(x => x.code === 'GRP');
     assert.equal(grp.qty, 2);
     approx(grp.hours, 4, '2 h di montaggio per due gruppi');
-    assert.deepEqual(grp.fasi.map(f => f.no), [''], 'un assieme ha operazioni, non un ciclo numerato');
+    assert.deepEqual(grp.fasi.map(f => f.no), [10], 'dalla 0.124.0 il montaggio è la fase 10 del ciclo dell assieme');
   });
 
   it('il filtro per centro restringe i codici alle sue fasi', () => {

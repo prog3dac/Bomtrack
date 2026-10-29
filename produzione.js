@@ -226,6 +226,11 @@ function montaggioDichiara(planId, asmId, qty, righe, note) {
   if (!roleGuardShop('docs')) return null;
   const p = getPlan(planId), asm = getItem(asmId);
   if (!p || !asm || !isAssembly(asm.type)) return null;
+  // Con un ordine di produzione nel piano il montaggio passa da lì: i
+  // componenti escono all'avvio della sua prima fase, e una dichiarazione qui
+  // li farebbe uscire una seconda volta (dalla 0.124.0).
+  const odp = odpDelPiano(planId, asmId);
+  if (odp.length) { showToast(`${asm.code || 'Questo assieme'} si monta con ${odp.map(o => o.number).join(', ')}: le fasi si dichiarano lì`, 'error'); return null; }
   const q = Number(qty) || 0;
   if (!(q > 0)) { showToast('Scrivi quanti ne sono stati montati', 'error'); return null; }
   const lista = righe || montaggioComponenti(asm, q, planId).stock.map(x => ({ itemId: x.item.id, qty: x.qty }));
