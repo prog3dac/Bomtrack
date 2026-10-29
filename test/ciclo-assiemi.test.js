@@ -159,12 +159,54 @@ describe('Ciclo di un assieme: interfaccia', () => {
     assert.match(h, /Ciclo di montaggio/);
     assert.doesNotMatch(h, /Distinta parte/);
   });
-  it('dalla distinta una fase nuova va in coda al ciclo', () => {
+  it('la distinta mostra il ciclo in sola lettura, con il link al ciclo', () => {
     const a = app();
-    a.eval("currentBomId = 'grp'; setView('bom'); addOperationModal(); document.getElementById('op-hours').value = '1.5'; saveNewOperation()");
-    const c = js(a, "getItem('grp').cycle.map(r => [r.workCenterId, r.hours, r.costMode])");
-    assert.equal(c.length, 3);
-    assert.equal(c[2][1], 1.5);
-    assert.equal(c[2][2], 'orario');
+    a.eval("currentBomId = 'grp'; setView('bom')");
+    const h = a.html('bom-tree');
+    assert.match(h, /Ciclo di montaggio/);
+    assert.match(h, /openCycleFor\('grp'\)/);
+    assert.doesNotMatch(h, /editOperationModal|delOperation/);
+    assert.equal(a.eval("typeof addOperationModal"), 'undefined');
+  });
+  it('i giorni di montaggio si dichiarano nel ciclo', () => {
+    const a = app();
+    a.eval("openCycleFor('grp'); document.getElementById('cyc-asmdays').value = '4'; saveCycleAsmDays()");
+    assert.equal(a.eval("getItem('grp').assemblyDays"), 4);
+  });
+});
+
+describe('Operatori sulla fase', () => {
+  it('i giorni sono le ore divise per le ore di un operatore per gli operatori', () => {
+    const a = app();
+    // 80 h, 2 operatori da 8 h: 5 giorni; da soli 10.
+    assert.equal(a.eval("internalOpDays(getWorkCenter('mon'), 80, 1, 2)"), 5);
+    assert.equal(a.eval("internalOpDays(getWorkCenter('mon'), 80, 1)"), 10);
+  });
+  it('le ore al giorno a zero sono otto, non più la capacità divisa per i giorni', () => {
+    const a = app();
+    a.eval("Object.assign(getWorkCenter('mon'), { hoursPerDay: 0, capacityHours: 200 })");
+    assert.equal(a.eval("wcHoursPerDay(getWorkCenter('mon'))"), 8);
+  });
+  it('il fabbisogno e l ordine di produzione usano gli operatori', () => {
+    const a = app({ cycle: [fase({ hours: 16, operators: 2 })] });
+    const e = js(a, "mrpExplodePlan(getPlan('pl')).asm.find(x => x.item.id === 'grp')");
+    // 2 gruppi × 16 h = 32 h, a 16 h al giorno: 2 giorni prima del 20
+    assert.equal(e.start, '2026-11-18');
+    a.eval(`(() => { const o = odpNew(getItem('grp'), 2, '2026-11-20'); db.prodOrders.push(o); window.__o = o.id; })()`);
+    assert.equal(a.eval('getOdp(window.__o).phases[0].operators'), 2);
+  });
+  it('nella capacità finita una fase non fa più delle ore dei suoi operatori', () => {
+    const a = app({ cycle: [fase({ hours: 16, operators: 1 })] });
+    a.eval(`(() => { db.settings.modules = { capacita: true }; getWorkCenter('mon').capacityHours = 280;
+      const o = odpNew(getItem('grp'), 2, '2026-11-20'); db.prodOrders.push(o); window.__o = o.id; opLancia(o.id); invalidateCaches(); })()`);
+    const f = js(a, "capFase(getOdp(window.__o).phases[0].id)");
+    // 32 h a 8 al giorno per un operatore: quattro giorni, anche se il centro ne dà 40
+    assert.equal((Date.parse(f.end) - Date.parse(f.start)) / 864e5, 3);
+  });
+  it('il campo Operatori si scrive dalla vista Cicli', () => {
+    const a = app();
+    a.eval("openCycleFor('grp'); document.getElementById('cyc-opop-0').value = '3'; updateCycleRow(0)");
+    assert.equal(a.eval("getItem('grp').cycle[0].operators"), 3);
+    assert.match(a.html('cyc-body'), /1 pz: 1 gg/);
   });
 });

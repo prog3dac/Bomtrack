@@ -93,6 +93,7 @@ function opFreezePhases(part) {
       runFrom: t.from, runTo: t.to, passata: t.passata || 0,
       costMode: r.costMode === 'orario' ? 'orario' : 'fisso',
       hours: Number(r.hours) || 0,
+      operators: faseOperatori(r),
       days: Number(r.days) || 0,
       rate: Number(r.rate) || 0,
       cost: Number(r.cost) || 0,

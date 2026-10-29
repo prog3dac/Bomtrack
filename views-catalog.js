@@ -1586,13 +1586,24 @@ function cycleSourcingNote(it) {
     qui sotto.${vuoto ? ' Finché sono vuoti vale il prezzo a listino.' : ''}${apri}</div>`;
 }
 
-// Un assieme: i componenti stanno nella distinta, qui solo le fasi.
+// Un assieme: i componenti stanno nella distinta, qui solo le fasi, e i
+// giorni di montaggio dichiarati (dalla 0.124.0 si scrivono qui, non più
+// nella distinta).
 function cycleAssiemeNote(it) {
   const apri = `<button class="mini-btn" style="margin-left:8px" onclick="apriAnelloDistinta('${it.id}')">${ico('tree', 'tinted', '')} Distinta</button>`;
-  const dich = Number(it.assemblyDays) || 0;
+  const dich = Math.max(0, Math.round(Number(it.assemblyDays) || 0));
   return `<div class="cycle-note">${ico('wrench', 'tinted')} <span><strong>${esc(typeLabel(it.type))}</strong>: i componenti stanno nella distinta, qui le <strong>fasi di montaggio</strong>.
-    Entrano nel costo come le lavorazioni di una parte, caricano i centri, e con un ciclo l'assieme si può lanciare con un ordine di produzione.
-    ${dich > 0 ? `I giorni di montaggio sono dichiarati (${dich} gg): il fabbisogno usa quelli, non le ore delle fasi.` : ''}</span>${apri}</div>`;
+    Entrano nel costo come le lavorazioni di una parte, caricano i centri, e con un ciclo l'assieme si può lanciare con un ordine di produzione.</span>${apri}</div>
+    <div class="cycle-note">${ico('clock', 'tinted')} <label for="cyc-asmdays">Giorni di montaggio</label>
+      <input class="num" type="number" id="cyc-asmdays" min="0" max="999" step="1" value="${dich}" style="width:72px" onchange="saveCycleAsmDays()">
+      <span>${dich > 0 ? 'Dichiarati: il fabbisogno toglie dalla consegna questi giorni, non quelli delle fasi.' : '<strong>Zero</strong>: si ricavano dalle fasi, ore ÷ (ore al giorno × operatori) in fila, e i giorni dal terzista per quelle in conto lavoro.'}</span></div>`;
+}
+function saveCycleAsmDays() {
+  const it = currentCycleItem(); if (!it || !isAssembly(it.type)) return;
+  if (!roleGuard('catalog')) { renderCycles(); return; }
+  if (isNeg('cyc-asmdays')) { showToast('I giorni non possono essere negativi', 'error'); renderCycles(); return; }
+  it.assemblyDays = Math.round(numVal('cyc-asmdays', 0, 999));
+  touch(it); saveDB(); renderCycles(); savedToast('Giorni di montaggio aggiornati');
 }
 
 // ─── Disegno della vista ───
@@ -1722,9 +1733,13 @@ function cycleOpsTable(opRows) {
       ? `<span class="cycle-op-time"><input class="num" type="number" min="0" step="1" value="${Number(r.days) || 0}"
           title="Giorni di attraversamento dal terzista: da qui si ricava entro quando mandargli l'ordine di lavoro"
           onchange="updateCycleRow(${i})" id="cyc-opdays-${i}"><em>gg</em></span>`
-      : `<span class="cycle-op-time"><input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}"
-          title="Ore per pezzo${orario ? '' : ' — non entra nel costo, serve al carico del centro'}"
-          onchange="updateCycleRow(${i})" id="cyc-ophours-${i}"><em>h</em></span>`;
+      : `<span class="cycle-op-time cycle-op-time-int"><span><input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}"
+          title="Ore-uomo per pezzo${orario ? '' : ' — non entrano nel costo, servono al carico del centro'}"
+          onchange="updateCycleRow(${i})" id="cyc-ophours-${i}"><em>h</em></span>
+          <span><input class="num" type="number" min="1" step="1" value="${faseOperatori(r)}"
+          title="Operatori che lavorano insieme sulla fase: i giorni sono le ore divise per le ore al giorno di un operatore per gli operatori"
+          onchange="updateCycleRow(${i})" id="cyc-opop-${i}"><em>op</em></span>
+          <em id="cyc-opgg-${i}" title="Giorni lavorativi per un pezzo, con l'attrezzaggio e la coda del centro">${cycleOpGiorni(r)}</em></span>`;
     return `<div class="cycle-row cycle-op-row">
       <span class="cycle-phase">${cyclePhaseNumber(k)}</span>
       <span class="cycle-name">${cycleRowLabel(r)}</span>
@@ -1743,6 +1758,11 @@ function cycleOpsTable(opRows) {
       <button class="mini-btn danger" title="Elimina" onclick="delCycleRow(${i})">${ico('trash', 'tinted', 'Elimina')}</button>
     </div>`;
   }).join('');
+}
+// I giorni di una fase interna per un pezzo, come li conta il fabbisogno.
+function cycleOpGiorni(r) {
+  const gg = internalOpDays(getWorkCenter(r.workCenterId), r.hours, 1, r.operators);
+  return `1 pz: ${gg} gg`;
 }
 // ─── Export del ciclo aperto ───
 // I Cicli non sono un elenco ma una scheda: si esporta la parte che si sta
@@ -1819,6 +1839,8 @@ function refreshCycleCosts(it) {
     if (el) el.textContent = fmtN(cycleRowCost(row));
     const ovr = document.getElementById('cyc-ovr-' + i);
     if (ovr) ovr.placeholder = cycleRowComputed(row).toFixed(2);
+    const gg = document.getElementById('cyc-opgg-' + i);
+    if (gg && row.kind === 'op') gg.textContent = cycleOpGiorni(row);
   });
   renderCycleSummary(it);
 }
@@ -1842,7 +1864,10 @@ function updateCycleRow(idx) {
     const eraEsterna = !!row.supplierId;
     row.supplierId = val('cyc-sup-' + idx);
     if (eraEsterna) row.days = numVal('cyc-opdays-' + idx, 0);
-    else row.hours = numVal('cyc-ophours-' + idx, 0);
+    else {
+      row.hours = numVal('cyc-ophours-' + idx, 0);
+      row.operators = Math.max(1, Math.round(numVal('cyc-opop-' + idx, 1)));
+    }
     if (row.costMode === 'orario') {
       row.rate = numVal('cyc-oprate-' + idx, 0);
       // Su una fase esterna a costo orario le ore sono quelle **fatturate**, e
@@ -1982,8 +2007,10 @@ function addCycleOpRow() {
     <div class="modal-grid">
       <div class="modal-field"><label>Costo</label><select id="cyc-opmode" onchange="onCycleOpModeChange()">
         <option value="fisso">Fisso</option><option value="orario">Orario</option></select></div>
-      <div class="modal-field" id="cyc-optime-h"><label>Ore (h)</label><input type="number" id="cyc-ophours" min="0" step="0.25" value="1"
+      <div class="modal-field" id="cyc-optime-h"><label>Ore-uomo per pezzo (h)</label><input type="number" id="cyc-ophours" min="0" step="0.25" value="1"
         title="Ore di occupazione del centro. A costo fisso non entrano nel costo: servono al Carico centri"></div>
+      <div class="modal-field" id="cyc-optime-op"><label>Operatori</label><input type="number" id="cyc-opop" min="1" step="1" value="1"
+        title="Quanti lavorano insieme sulla fase: i giorni sono le ore divise per le ore al giorno di un operatore per gli operatori"></div>
       <div class="modal-field" id="cyc-optime-gg" style="display:none"><label>Giorni (gg)</label><input type="number" id="cyc-opdays" min="0" step="1" value="0"
         title="Giorni di attraversamento dal terzista: da qui si ricava entro quando mandargli l'ordine di lavoro"></div>
     </div>
@@ -2018,6 +2045,7 @@ function onCycleOpModeChange() {
   // vuole le ore, ma come base del costo: lì si chiedono entrambi.
   mostra('cyc-optime-h', !esterna || orario);
   mostra('cyc-optime-gg', esterna);
+  mostra('cyc-optime-op', !esterna);
   if (orario) {
     const rateEl = document.getElementById('cyc-oprate');
     if (rateEl) rateEl.value = wcRateFor(getWorkCenter(val('cyc-wc')), val('cyc-opsup'));
@@ -2041,6 +2069,7 @@ function pickCycleOp() {
     costMode: orario ? 'orario' : 'fisso',
     hours: (!esterna || orario) ? numVal('cyc-ophours', 0) : 0,
     days: esterna ? numVal('cyc-opdays', 0) : 0, note: '' };
+  if (!esterna) row.operators = Math.max(1, Math.round(numVal('cyc-opop', 1)));
   if (orario) row.rate = numVal('cyc-oprate', 0);
   else row.cost = numVal('cyc-opcost', 0);
   it.cycle.push(row);

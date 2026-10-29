@@ -710,7 +710,7 @@ function delSubFamily(familyId, subId) {
 function renderWorkCenters() {
   const list = db.workCenters.map(w => `<div class="mgmt-item">
     <span class="mgmt-item-name">${esc(w.name)}</span>
-    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}</span>
+    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}</span>
     ${activeBadge(w)}
     <div class="mgmt-item-actions">
       ${activeBtn('workCenters', w, 'Centro di lavoro')}
@@ -720,7 +720,7 @@ function renderWorkCenters() {
     <div class="mgmt-form">
       <input id="wc-name" placeholder="Nome (es. Tornitura)">
       <input id="wc-rate" type="number" min="0" step="0.5" placeholder="Tariffa ${esc(cur())}/h" title="Tariffa oraria del centro di lavoro, in ${esc(cur())} per ora">
-      <input id="wc-cap" type="number" min="0" step="1" placeholder="Capacità h/sett" title="Ore disponibili a settimana. Lasciandolo a zero il carico si vede lo stesso, ma nessun sovraccarico viene segnalato">
+      <input id="wc-cap" type="number" min="0" step="1" placeholder="Capacità h/sett" title="Ore totali disponibili a settimana, tutti gli operatori insieme. Lasciandolo a zero il carico si vede lo stesso, ma nessun sovraccarico viene segnalato">
       <button class="add-btn-sm" onclick="addWc()">+ Aggiungi</button></div></div>`;
 }
 function addWc() {
@@ -739,16 +739,16 @@ function editWcModal(id) {
   openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica centro di lavoro</h3>
     <div class="modal-field"><label>Nome</label><input id="ew-name" value="${esc(w.name)}"></div>
     <div class="modal-field"><label>Tariffa (${cur()}/h)</label><input id="ew-rate" type="number" min="0" step="0.5" value="${w.hourlyRate}"></div>
-    <div class="modal-field"><label>Capacità (h/settimana)</label>
+    <div class="modal-field"><label>Capacità (h/settimana, tutti gli operatori)</label>
       <input id="ew-cap" type="number" min="0" step="1" value="${Number(w.capacityHours) || 0}">
-      <p class="empty-text" style="text-align:left;padding:4px 0 0">Ore disponibili a settimana, per il <strong>Carico centri</strong>. <strong>Zero significa «non dichiarata»</strong>, non «nessuna capacità»: il carico si vede lo stesso, ma nessun sovraccarico viene segnalato — altrimenti ogni centro risulterebbe sfondato dal primo giorno.</p></div>
+      <p class="empty-text" style="text-align:left;padding:4px 0 0">Le ore <strong>totali</strong> che il centro dà in una settimana, tutti gli operatori insieme: tre montatori per 40 ore sono 120. Le usa il <strong>Carico centri</strong>, e la capacità finita ne ricava le ore di un giorno. <strong>Zero significa «non dichiarata»</strong>, non «nessuna capacità»: il carico si vede lo stesso, ma nessun sovraccarico viene segnalato — altrimenti ogni centro risulterebbe sfondato dal primo giorno.</p></div>
     <div class="settings-group-title">${ico('clock', 'tinted', '')} Tempi per la programmazione</div>
     <div class="modal-grid">
-      <div class="modal-field"><label>Ore lavorate al giorno</label><input id="ew-hpd" type="number" min="0" max="24" step="0.5" value="${Number(w.hoursPerDay) || 0}"></div>
+      <div class="modal-field"><label>Ore al giorno di un operatore</label><input id="ew-hpd" type="number" min="0" max="24" step="0.5" value="${Number(w.hoursPerDay) || 0}"></div>
       <div class="modal-field"><label>Attrezzaggio per lotto (h)</label><input id="ew-setup" type="number" min="0" step="0.25" value="${Number(w.setupHours) || 0}"></div>
       <div class="modal-field"><label>Giorni di coda</label><input id="ew-queue" type="number" min="0" max="99" step="1" value="${Number(w.queueDays) || 0}"></div>
     </div>
-    <p class="empty-text" style="text-align:left;padding:4px 0 0">Da qui il fabbisogno ricava quanti <strong>giorni lavorativi</strong> dura una fase interna: (attrezzaggio + ore/pz × pezzi) ÷ ore al giorno, arrotondato al giorno, più i giorni di coda (il tempo in cui il pezzo aspetta il suo turno). <strong>Ore al giorno a zero</strong> = ricavate dalla capacità settimanale sui giorni lavorativi del calendario, o 8 se anche quella non è dichiarata.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0 0">Da qui il fabbisogno ricava quanti <strong>giorni lavorativi</strong> dura una fase interna: (attrezzaggio + ore/pz × pezzi) ÷ (ore al giorno di un operatore × operatori della fase), arrotondato al giorno, più i giorni di coda (il tempo in cui il pezzo aspetta il suo turno). Gli operatori si scrivono sulla fase, nel ciclo. La capacità qui non entra: è la coda a capacità finita a dividere le ore del centro fra le fasi. <strong>Ore al giorno a zero</strong> = 8.</p>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveWc('${id}')">Salva</button></div>
     <div class="settings-group-title">${ico('factory', 'tinted', '')} Fornitori conto lavoro</div>

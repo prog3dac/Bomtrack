@@ -255,7 +255,7 @@ function revRowsOf(snapshot) {
       const k = fase++;
       somma('f:' + k + ':' + r.workCenterId, '🔧 ' + cyclePhaseNumber(k) + ' ' + (w ? w.name : '(centro eliminato)') + (r.note ? ' · ' + r.note : ''),
         1, { tipo: 'Fase ciclo', cost: cycleRowCost(r), dati: {
-          costo: +(cycleRowCost(r) || 0).toFixed(4), ore: Number(r.hours) || 0, giorni: Number(r.days) || 0,
+          costo: +(cycleRowCost(r) || 0).toFixed(4), ore: Number(r.hours) || 0, operatori: r.supplierId ? null : faseOperatori(r), giorni: Number(r.days) || 0,
           terzista: r.supplierId ? (supplierName(r.supplierId) || r.supplierId) : 'interna', modo: r.costMode || 'fisso' } });
     } else {
       const ci = getItem(r.itemId);
@@ -265,7 +265,7 @@ function revRowsOf(snapshot) {
   });
   return m;
 }
-const REV_DATI = { costo: 'costo', ore: 'ore', giorni: 'giorni', terzista: 'terzista', modo: 'modo di costo', forzato: 'costo forzato' };
+const REV_DATI = { costo: 'costo', ore: 'ore', operatori: 'operatori', giorni: 'giorni', terzista: 'terzista', modo: 'modo di costo', forzato: 'costo forzato' };
 // Che cosa è cambiato, oltre alla quantità: «costo 3 → 4; terzista interna → Beta».
 function revCambiDati(a, b) {
   const x = a || {}, y = b || {};

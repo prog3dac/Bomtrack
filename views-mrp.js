@@ -230,8 +230,9 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
 //
 // I tempi vengono da tre posti, e senza dati valgono zero — una fase senza ore
 // e senza giorni non sposta niente, come prima:
-//   - fase **interna**: (attrezzaggio + ore/pz × pezzi) / ore al giorno del
-//     centro, arrotondato al giorno intero, più i giorni di coda del centro;
+//   - fase **interna**: (attrezzaggio + ore/pz × pezzi) / (ore al giorno di un
+//     operatore × operatori della fase), arrotondato al giorno intero, più i
+//     giorni di coda del centro;
 //     in giorni **lavorativi** (calendario.js);
 //   - tratta **di conto lavoro** (fasi consecutive dello stesso terzista): la
 //     somma dei giorni di attraversamento più il trasporto del terzista, in
@@ -240,23 +241,47 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
 //     giorno lavorativo;
 //   - **montaggio** di un assieme: i giorni dichiarati sull'assieme o, senza,
 //     le ore delle sue lavorazioni come fasi interne in sequenza.
-// Ore lavorate in un giorno da un centro: dichiarate, o ricavate dalla
-// capacità settimanale sui giorni lavorativi del calendario, o otto.
+// Dalla 0.124.0 i due numeri del centro dicono due cose diverse:
+//   - **ore al giorno** (`hoursPerDay`): quanto lavora in un giorno **un
+//     operatore**; zero = otto;
+//   - **capacità** (`capacityHours`): le ore **totali** che il centro dà in una
+//     settimana, tutti gli operatori insieme. Le legge il Carico centri, e la
+//     capacità finita ne ricava il tetto di un giorno.
+// Prima le ore al giorno a zero si ricavavano dalla capacità, che però è del
+// centro intero: con due montatori una fase sembrava durare la metà.
 const SCHED_ORE_GIORNO = 8;
 function wcHoursPerDay(wc) {
   const h = wc ? Number(wc.hoursPerDay) || 0 : 0;
-  if (h > 0) return h;
+  return h > 0 ? h : SCHED_ORE_GIORNO;
+}
+// Le ore che il centro intero dà in un giorno lavorativo: la capacità
+// settimanale sui giorni lavorativi del calendario, o senza capacità
+// dichiarata un operatore solo.
+function wcOreGiornoCentro(wc) {
   const cap = wc ? Number(wc.capacityHours) || 0 : 0;
   const gg = typeof workDaysPerWeek === 'function' ? workDaysPerWeek() : 5;
-  return cap > 0 && gg > 0 ? cap / gg : SCHED_ORE_GIORNO;
+  return cap > 0 && gg > 0 ? cap / gg : wcHoursPerDay(wc);
 }
-// Giorni lavorativi di una fase interna per `pezzi` pezzi.
-function internalOpDays(wc, oreUnit, pezzi) {
+// Quanti operatori lavorano insieme su una fase (dalla 0.124.0): uno, se non
+// è detto.
+function faseOperatori(r) { return Math.max(1, Math.round(Number(r && r.operators) || 0) || 1); }
+// Le ore che una fase può fare in un giorno: un operatore per gli operatori
+// della fase. La capacità del centro qui non entra: la programmazione a
+// ritroso è a capacità infinita, e il tetto del centro lo mette la coda a
+// capacità finita (capacita.js), dove le fasi se lo dividono.
+function faseOreGiorno(wc, operatori) {
+  return wcHoursPerDay(wc) * faseOperatori({ operators: operatori });
+}
+// Giorni lavorativi di una fase interna per `pezzi` pezzi: le ore-uomo
+// (attrezzaggio + ore/pz × pezzi) divise per le ore che la fase fa in un
+// giorno, più la coda del centro. 80 ore con due operatori a 8 ore sono 5
+// giorni.
+function internalOpDays(wc, oreUnit, pezzi, operatori) {
   const ore = (wc ? Number(wc.setupHours) || 0 : 0) + (Number(oreUnit) || 0) * (Number(pezzi) || 0);
   const coda = wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0;
   // Il millesimo toglie l'errore del float: 16 ore a 8 al giorno sono due
   // giorni, non tre.
-  return (ore > 0 ? Math.ceil(ore / wcHoursPerDay(wc) - 1e-9) : 0) + coda;
+  return (ore > 0 ? Math.ceil(ore / faseOreGiorno(wc, operatori) - 1e-9) : 0) + coda;
 }
 // Il trasporto da e verso un terzista, andata più ritorno.
 function supplierTransitDays(supplierId) {
@@ -330,7 +355,7 @@ function schedOps(ops, tratte, qty, due) {
       continue;
     }
     for (let k = run.to; k >= run.from; k--) {
-      const gg = internalOpDays(getWorkCenter(ops[k].workCenterId), ops[k].hours, qty);
+      const gg = internalOpDays(getWorkCenter(ops[k].workCenterId), ops[k].hours, qty, ops[k].operators);
       const inizio = due ? schedBack(fine, gg) : '';
       if (due) fasi[k] = { start: inizio, end: fine, days: gg, esterna: false, run };
       steps.unshift({ esterna: false, from: k, to: k, supplierId: '', workCenterId: ops[k].workCenterId || '',
@@ -349,7 +374,7 @@ function assemblyDaysOf(it, qty) {
   const ops = cicloFasi(it);
   return clCycleRuns(it).reduce((s, t) => s + (t.esterna
     ? runLeadDays(ops.slice(t.from, t.to + 1).map(r => r.days), t.supplierId)
-    : ops.slice(t.from, t.to + 1).reduce((a, r) => a + internalOpDays(getWorkCenter(r.workCenterId), r.hours, qty), 0)), 0);
+    : ops.slice(t.from, t.to + 1).reduce((a, r) => a + internalOpDays(getWorkCenter(r.workCenterId), r.hours, qty, r.operators), 0)), 0);
 }
 // Con i giorni dichiarati il montaggio è un blocco solo, e ogni fase ci sta
 // dentro da capo a fondo; senza, le fasi si programmano a ritroso come quelle

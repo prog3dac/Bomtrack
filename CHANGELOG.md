@@ -8,9 +8,16 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Si scrivono in *Tecnico → Cicli di lavorazione*, dove gli assiemi compaiono dopo le parti senza la distinta parte; dalla distinta, **+ Aggiungi fase di montaggio** aggiunge una fase interna e **Ciclo completo** apre il resto.
 - **Fabbisogno**: le fasi interne caricano i centri con il loro numero, quelle dal terzista sono conto lavoro con il loro ordine di lavoro, e il montaggio comincia con la prima fase (o dura i *giorni di montaggio* dichiarati). Le ore degli assiemi già montati escono dal carico.
 - **Ordine di produzione di un assieme**: dal fabbisogno (scheda *Da montare*) o a mano. Fasi dal ciclo, materiale dai componenti diretti a magazzino; gli assiemi montati sull'ultima fase contano come fatti nel piano, senza movimenti. Con un ODP nel piano il montaggio non si dichiara più da *Da montare*. Reparto, timbrature, capacità finita e consuntivo valgono anche qui.
-- **Migrazione**: le vecchie lavorazioni (centro, ore, nota) passano al ciclo a costo orario con la tariffa del centro, senza cambiare il costo; revisioni e impronte delle macchine modello le riconoscono come le stesse. Nessuna modifica allo schema Supabase. Conviene aggiornare tutti i PC dell'archivio condiviso: una versione vecchia non vede le fasi.
+- **Distinta**: le fasi non si scrivono più lì. Resta la riga *Ciclo di montaggio* in sola lettura con **Apri ciclo**; i *giorni di montaggio* si dichiarano nel ciclo dell'assieme.
+- **Migrazione**: le vecchie lavorazioni (centro, ore, nota) passano al ciclo a costo orario con la tariffa del centro, senza cambiare il costo; revisioni e impronte delle macchine modello le riconoscono come le stesse. Conviene aggiornare tutti i PC dell'archivio condiviso: una versione vecchia non vede le fasi.
 
-**Manuale**: cap. 13 (comandi della distinta), cap. 14 «Il ciclo di un assieme», cap. 19 «Il montaggio», cap. 22 «Da dove nasce».
+**Operatori sulla fase.** Ogni fase interna (di parti e assiemi) dichiara quanti **operatori** ci lavorano insieme, di serie 1. Le ore restano ore-uomo (costo e carico); i giorni sono ore ÷ (ore al giorno di un operatore × operatori): 80 h con 2 operatori a 8 h sono 5 giorni. Il ciclo mostra i giorni di un pezzo. Lo usano fabbisogno, Gantt, ODP e capacità finita.
+
+**Centri di lavoro, i due numeri ridefiniti.** *Capacità* = le ore **totali** del centro in una settimana, tutti gli operatori; *Ore al giorno* = quelle di **un operatore**. A zero valgono 8: non si ricavano più dalla capacità, che è del centro intero. Un centro con le ore al giorno a zero e la capacità dichiarata vede quindi le fasi durare in base a 8 ore per operatore. La coda a capacità finita usa la capacità come tetto del giorno del centro, e gli operatori come tetto della fase.
+
+**Schema Supabase**: una colonna nuova, `operators`, in `item_cycle_rows` e `production_order_phases`. Va eseguita `supabase/schema.sql` prima di aggiornare l'app sui PC collegati all'archivio condiviso.
+
+**Manuale**: cap. 13 (la distinta), cap. 14 «Il ciclo di lavorazione» e «Il ciclo di un assieme», cap. 19 «Il montaggio», cap. 22 «Da dove nasce», cap. 24 «Coda a capacità finita», cap. 25 «Centri di lavoro».
 
 ### 0.123.0 — 2026-10-28
 

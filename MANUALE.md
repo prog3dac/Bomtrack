@@ -1169,9 +1169,13 @@ lavorazioni. La schermata si intitola **«Distinta Base & Costificazione»**.
 | **Modifica testata** | Le proprietà della distinta (vedi sotto) |
 | **Elimina** | Cancella la distinta |
 | **+ Aggiungi componenti** | Apre il pannello laterale ridimensionabile per pescare dagli archivi. Un articolo già in distinta non fa una seconda riga: la quantità inserita si somma a quella che c'è (dalla 0.105.7) |
-| **+ Aggiungi fase di montaggio** | Aggiunge in coda al **ciclo dell'assieme** una fase interna su un centro, a costo orario con la tariffa del centro. Sotto l'albero le fasi si correggono o si tolgono con un clic; **Ciclo completo** apre l'assieme nei *Cicli di lavorazione* per il conto lavoro, il costo fisso e l'ordine delle fasi (→ [cap. 14](#il-ciclo-di-un-assieme-dalla-01240)) |
 | **⊞ Espandi tutto** / **⊟ Comprimi tutto** | Apre e chiude tutti i rami |
 | **⇄ Confronta con…** *(barra revisioni)* | Mette la distinta a fianco di un'altra qualsiasi, su tutti i livelli (→ [cap. 15](#confrontare-due-distinte-diverse)) |
+
+**Il ciclo di montaggio.** Sotto l'albero la riga *Ciclo di montaggio* elenca le fasi
+dell'assieme, con ore, operatori e costo, in sola lettura; **Apri ciclo** porta ai *Cicli di
+lavorazione*, dove fasi e giorni di montaggio si scrivono (dalla 0.124.0, → [cap.
+14](#il-ciclo-di-un-assieme-dalla-01240)).
 
 **Filtri.** Ricerca «Cerca codice o nome distinta…»; **livello** (Tutti i livelli · Macchine ·
 Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta aperta; il contatore.
@@ -1193,9 +1197,9 @@ Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta ape
 - I sottogruppi possono contenere altri sottogruppi, **senza limite di profondità**.
 - La **percentuale di scarto** di una riga aumenta la quantità che serve davvero: 10 pezzi con
   5% di scarto sono 10,5 pezzi di materiale.
-- Accanto alle **Lavorazioni** dell'assieme c'è **Montaggio: … gg**: cliccandolo si dichiarano i
-  giorni lavorativi di montaggio, che la programmazione a ritroso del fabbisogno toglie dalla data
-  in cui l'assieme serve. **Zero = dalle ore** delle lavorazioni.
+- I **giorni di montaggio** (quelli che la programmazione a ritroso del fabbisogno toglie dalla
+  data in cui l'assieme serve) si dichiarano nel ciclo dell'assieme; quando ci sono, la riga del
+  ciclo li mostra come **Montaggio: … gg**. **Zero = dalle fasi** del ciclo.
 - I **riferimenti ciclici** (A contiene B che contiene A) sono rilevati e impediti, sia nella
   distinta sia nel ciclo. Se ne resta uno, un **avviso rosso** nomina l'articolo coinvolto invece
   di far comparire un costo tronco che sembrerebbe buono. **⊞ Espandi tutto** si ferma
@@ -1329,7 +1333,8 @@ posto per infilarne una in mezzo).
 | **Centro di lavoro** | Dall'elenco di *Gestione → Centri di lavoro* |
 | **Interna / Conto lavoro** | Se conto lavoro, si sceglie il **fornitore** |
 | **Costo** | *Fisso* oppure *Orario* |
-| **Ore (h)** | Fase **interna**: le ore che il pezzo occupa il centro |
+| **Ore (h)** | Fase **interna**: le ore-uomo per pezzo, cioè le ore che il pezzo occupa il centro sommate su tutti quelli che ci lavorano. Entrano nel costo (a costo orario) e nel carico |
+| **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda del centro: 80 h con 2 operatori a 8 h al giorno sono 5 giorni. Sotto si legge quanti giorni fa un pezzo |
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
 | **Costo (€)** o **Tariffa (€/h)** | Secondo il modo scelto |
 | Nota | Testo libero, finisce sull'ordine di lavoro |
@@ -1359,6 +1364,9 @@ i componenti stanno nella distinta, e la sezione *Distinta parte* non c'è (il p
 **Distinta** ci porta). Le fasi si scrivono come quelle di una parte: centro, interna o conto
 lavoro, costo fisso o orario, ore o giorni, ordine con ↑↓. Le card dicono il costo delle fasi e
 il costo dell'assieme.
+
+In testa, **Giorni di montaggio**: a zero si ricavano dalle fasi; scritti, il fabbisogno toglie
+dalla consegna quelli (prima si scrivevano nella distinta).
 
 Da lì:
 
@@ -2835,8 +2843,9 @@ finita**: il conto fatto in avanti, da oggi.
 - Entrano le fasi **interne** non chiuse degli ODP **lanciati e in corso**, ordine per ordine
   **per data di consegna** (la più vicina prima).
 - Ogni fase occupa il suo centro per le ore del ciclo sui pezzi ancora da fare, più
-  l'attrezzaggio se non è partita, senza superare le **ore al giorno** del centro (*Ore lavorate
-  al giorno*, o la capacità settimanale divisa per i giorni lavorativi), nei giorni lavorativi del
+  l'attrezzaggio se non è partita, senza superare le ore che il centro intero dà in un giorno (la
+  capacità settimanale divisa per i giorni lavorativi, o senza capacità le ore di un operatore) né
+  quelle dei suoi operatori (ore al giorno di un operatore × operatori della fase), nei giorni lavorativi del
   calendario di fabbrica e **fuori dai fermi** registrati in manutenzione.
 - Una fase comincia il giorno lavorativo dopo la fine della precedente. Una fase esterna non
   occupa centri: dura i suoi giorni dal terzista più il trasporto.
@@ -2949,8 +2958,8 @@ così i nomi già composti non cambiano da soli.
 |---|---|
 | **Nome** | Torni, Fresatura, Saldatura… |
 | **Tariffa (€/h)** | Entra nel costo delle fasi interne a costo orario |
-| **Capacità (h/settimana)** | Il metro del Carico centri. **0 = non dichiarata** |
-| **Ore lavorate al giorno** | Per la durata delle fasi interne. **0 = capacità settimanale ÷ giorni lavorativi**, o 8 |
+| **Capacità (h/settimana, tutti gli operatori)** | Le ore **totali** del centro in una settimana: tre montatori per 40 ore sono 120. Il metro del Carico centri, e il tetto di un giorno della capacità finita. **0 = non dichiarata** |
+| **Ore al giorno di un operatore** | Per la durata delle fasi interne: giorni = ore ÷ (queste ore × gli **operatori** della fase). **0 = 8**. Fino alla 0.123 a zero si ricavavano dalla capacità (dalla 0.124.0) |
 | **Attrezzaggio per lotto (h)** | Si aggiunge alle ore di ogni fase su questo centro |
 | **Giorni di coda** | L'attesa prima di ogni fase su questo centro, in giorni lavorativi |
 

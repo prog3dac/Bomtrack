@@ -414,9 +414,12 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 /* Le lavorazioni hanno la fase in testa, il modo (fisso/orario) prima del
    costo — la cui cella si impila in due campi (ore, tariffa) quando è orario
    — e le frecce di riordino in coda. */
-.cycle-op-row{grid-template-columns:52px minmax(126px,2fr) minmax(92px,1fr) 68px 76px 92px 80px 56px 32px}
+.cycle-op-row{grid-template-columns:52px minmax(126px,2fr) minmax(92px,1fr) 68px 84px 92px 80px 56px 32px}
 .cycle-op-time{display:flex;align-items:center;gap:4px}
 .cycle-op-time em{font-style:normal;font-size:11px;color:var(--text-dim)}
+.cycle-op-time-int{flex-direction:column;align-items:stretch;gap:3px}
+.cycle-op-time-int>span{display:flex;align-items:center;gap:4px}
+.cycle-op-time-int>em{white-space:nowrap}
 .cycle-op-cost{display:flex;flex-direction:column;gap:3px}
 .cycle-row:last-child{border-bottom:none}
 .cycle-head{font-size:10.5px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em}

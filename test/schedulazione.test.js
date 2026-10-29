@@ -130,12 +130,14 @@ describe('Programmazione: la catena a ritroso', () => {
 });
 
 describe('Programmazione: i tempi', () => {
-  it('le ore al giorno si ricavano dalla capacità settimanale', () => {
-    // 20 h a settimana su 5 giorni = 4 h al giorno: 16 h di fresatura sono 4 giorni.
+  it('le ore al giorno a zero sono quelle di un operatore, otto: la capacità è del centro intero', () => {
+    // Dalla 0.124.0 la capacità sono le ore di tutti gli operatori: non dice
+    // quanto dura una fase. 16 h di fresatura a 8 al giorno sono 2 giorni, con
+    // o senza 20 h di capacità (prima: 20 ÷ 5 = 4 h al giorno, 4 giorni).
     const app = conDb();
     app.eval("Object.assign(getWorkCenter('fre'), { hoursPerDay: 0, capacityHours: 20 }); invalidateCaches();");
     const m = esplodi(app).phases[0];
-    assert.equal(m.due, '2026-10-08', 'la fresatura comincia giovedì 8');
+    assert.equal(m.due, '2026-10-12', 'la fresatura comincia lunedì 12');
   });
 
   it('attrezzaggio e coda allungano la fase interna', () => {

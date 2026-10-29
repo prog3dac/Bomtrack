@@ -9,7 +9,8 @@
 // fosse libero. Qui si fa il conto **in avanti**, da oggi: le fasi interne
 // degli ODP lanciati e in corso si mettono in fila sul loro centro, per data
 // di consegna, senza superare le ore che il centro lavora in un giorno, nei
-// giorni lavorativi del calendario e fuori dai fermi di manutenzione. Ne esce
+// giorni lavorativi del calendario e fuori dai fermi di manutenzione. Una fase
+// in un giorno non fa più delle ore dei suoi operatori (faseOreGiorno). Ne esce
 // la **data fattibile** di ogni ordine, accanto a quella richiesta.
 //
 // Propone e non comanda: le date pianificate restano quelle di prima, e un
@@ -35,7 +36,7 @@ function capOreFase(o, f) {
 function capOreGiorno(wc, iso) {
   if (!isWorkDay(iso)) return 0;
   if (typeof centroFermo === 'function' && centroFermo(wc.id, iso)) return 0;
-  return wcHoursPerDay(wc);
+  return wcOreGiornoCentro(wc);
 }
 // → { fasi: Map faseId → { start, end, ore }, ordini: Map odpId → { fattibile, ritardo } }
 function capSchedula(oggi) {
@@ -67,7 +68,8 @@ function capSchedula(oggi) {
         const k = wc.id + '|' + d;
         const libero = cap - (usato.get(k) || 0);
         if (!(libero > 1e-9)) continue;
-        const preso = Math.min(libero, resta);
+        // Una fase non fa più delle ore dei suoi operatori in un giorno.
+        const preso = Math.min(libero, resta, faseOreGiorno(wc, f.operators));
         usato.set(k, (usato.get(k) || 0) + preso);
         resta -= preso;
         if (!start) start = d;
@@ -116,7 +118,7 @@ function capCodaHtml() {
   const blocchi = Array.from(perCentro.entries()).map(([wcId, l]) => {
     const wc = getWorkCenter(wcId);
     l.sort((a, b) => a.x.start.localeCompare(b.x.start));
-    return `<h4 class="settings-group-title">${esc(wc ? wc.name : '(centro mancante)')} · ${fmtQtyIt(+wcHoursPerDay(wc).toFixed(2))} h al giorno</h4>
+    return `<h4 class="settings-group-title">${esc(wc ? wc.name : '(centro mancante)')} · ${fmtQtyIt(+wcOreGiornoCentro(wc).toFixed(2))} h al giorno</h4>
       <div class="table-wrap"><table class="dash-table"><thead><tr><th>Ordine</th><th>Fase</th><th class="num">Ore</th><th>Dal</th><th>Al</th><th>Serve il</th></tr></thead><tbody>
       ${l.map(({ o, f, x }) => { const r = (s.ordini.get(o.id) || {}).ritardo; return `<tr><td><span class="code-link" ${clickAttrs(`homeApri('odp','${o.id}')`, 'Apri ' + (o.number || ''))}>${esc(o.number || '')}</span> ${esc(o.code || '')}</td>
         <td>${esc(String(f.seq))}</td><td class="num">${fmtQtyIt(+x.ore.toFixed(2))}</td><td>${esc(fmtDateIt(x.start))}</td>
