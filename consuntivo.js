@@ -137,10 +137,7 @@ function consReale(jobId) {
   }));
   o.montaggi.forEach(r => {
     const asm = getItem(r.itemId); if (!asm) return;
-    const v = (asm.operations || []).reduce((a, op) => {
-      const wc = getWorkCenter(op.workCenterId);
-      return a + (Number(op.hours) || 0) * (wc ? (Number(wc.hourlyRate) || 0) : 0);
-    }, 0) * (Number(r.qty) || 0);
+    const v = cicloFasi(asm).reduce((a, op) => a + cycleRowCost(op), 0) * (Number(r.qty) || 0);
     if (!v) return;
     lavorazioni += v;
     dettaglio.push({ voce: 'lavorazioni', testo: `Montaggio ${asm.code || ''} — ${fmtQtyIt(Number(r.qty) || 0)} pz`, valore: v });

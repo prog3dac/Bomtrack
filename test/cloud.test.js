@@ -271,7 +271,9 @@ describe('Archivio condiviso — più PC contro Supabase (finto, con Postgres ve
     assert.equal(srv.db.sql(`select count(*) from item_cycle_rows where kind = 'item'`), '0');
     A.eval(`{ const it = db.items.find(i => i.code === 'PRT-001'); it.cycle = []; touch(it); saveDB(); }`);
     await giro(A); await giro(A);
-    assert.equal(srv.db.sql('select count(*) from item_cycle_rows'), '0', 'il server ha rifatto il ciclo vuoto');
+    // Solo le righe di questa parte: dalla 0.124.0 anche gli assiemi hanno un ciclo.
+    const id = A.eval(`db.items.find(i => i.code === 'PRT-001').id`);
+    assert.equal(srv.db.sql(`select count(*) from item_cycle_rows where item_id = '${id}'`), '0', 'il server ha rifatto il ciclo vuoto');
     assert.equal(A.eval(`db.items.find(i => i.code === 'PRT-001').cycle.length`), 0, 'e il pull non lo riporta');
     await giro(B);
     assert.equal(B.eval(`db.items.find(i => i.code === 'PRT-001').cycle.length`), 0, 'il collega lo riceve vuoto');

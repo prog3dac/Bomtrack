@@ -232,11 +232,12 @@ describe('Confronto fra revisioni', () => {
       items: [asm('g1', 'gruppo', { components: [], operations: [{ workCenterId: 'w1', hours: 2 }] })],
     }));
     rilascia(a, 'g1');
-    a.eval('const it = getItem("g1"); it.operations[0].hours = 5; touch(it); saveDB();');
+    a.eval('const it = asmCicloVivo(getItem("g1")); it.cycle[0].hours = 5; touch(it); saveDB();');
     const d = diffConAttuale(a);
     assert.equal(d.cambiate.length, 1);
-    assert.equal(d.cambiate[0].qtyPrima, 2);
-    assert.equal(d.cambiate[0].tipo, 'Lavorazione');
+    // Dalla 0.124.0 è una fase del ciclo dell'assieme: cambia il dato, non la quantità.
+    assert.equal(d.cambiate[0].tipo, 'Fase ciclo');
+    assert.ok(JSON.stringify(d.cambiate[0]).includes('ore 2 → 5'));
   });
 
   it('il ciclo di una parte si confronta come una distinta', () => {

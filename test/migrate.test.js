@@ -59,7 +59,9 @@ describe('migrateV2 — id legacy → UUID', () => {
     assert.equal(a.subFamilyId, fam.subs[0].id, 'sottofamiglia');
     assert.equal(g.components[0].itemId, m.id, 'componente 1');
     assert.equal(g.components[1].itemId, a.id, 'componente 2');
-    assert.equal(g.operations[0].workCenterId, db.workCenters[0].id, 'centro di lavoro');
+    // Dalla 0.124.0 le lavorazioni dell'assieme sono fasi del suo ciclo.
+    assert.equal(g.operations.length, 0, 'lavorazioni passate al ciclo');
+    assert.equal(g.cycle[0].workCenterId, db.workCenters[0].id, 'centro di lavoro');
   });
 
   it('il costo calcolato non cambia attraversando la migrazione', () => {

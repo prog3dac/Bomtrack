@@ -258,7 +258,7 @@ function itemInfoMagazzino(it) {
 function itemInfoComposizione(it) {
   if (isAssembly(it.type)) {
     const comps = it.components || [];
-    const ops = it.operations || [];
+    const ops = cicloFasi(it);
     if (!comps.length && !ops.length) return itemInfoSection(ico('tree', 'tinted', '') + ' Composizione', '<div class="empty-text">Distinta vuota.</div>');
     const righe = comps.map(c => {
       const ci = getItem(c.itemId);
@@ -270,13 +270,15 @@ function itemInfoComposizione(it) {
         <td style="font-family:var(--mono);text-align:right">${c.scrapPct ? fmtQtyIt(c.scrapPct) + '%' : '—'}</td>
         <td style="font-family:var(--mono);text-align:right">${fmtN(costOf(ci.id).total * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100))}</td></tr>`;
     }).join('');
-    const righeOp = ops.map(o => {
+    const righeOp = ops.map((o, k) => {
       const wc = getWorkCenter(o.workCenterId);
-      return `<tr><td>${ico('wrench', 'tinted')}</td><td>${esc(wc ? wc.name : '?')}</td>
-        <td style="font-family:var(--mono);text-align:right">${fmtUom(o.hours, 'h')}</td><td>—</td>
-        <td style="font-family:var(--mono);text-align:right">${fmtN((Number(o.hours) || 0) * (wc ? (Number(wc.hourlyRate) || 0) : 0))}</td></tr>`;
+      const sup = o.supplierId ? supplierName(o.supplierId) : '';
+      const tempo = o.supplierId ? fmtUom(Number(o.days) || 0, 'gg') : fmtUom(o.hours, 'h');
+      return `<tr><td><span class="cycle-phase">${cyclePhaseNumber(k)}</span></td><td>${ico('wrench', 'tinted')} ${esc(wc ? wc.name : '?')}${sup ? ' · ' + esc(sup) : ''}</td>
+        <td style="font-family:var(--mono);text-align:right">${tempo}</td><td>—</td>
+        <td style="font-family:var(--mono);text-align:right">${fmtN(cycleRowCost(o))}</td></tr>`;
     }).join('');
-    return itemInfoSection(`${ico('tree', 'tinted', '')} Composizione (${comps.length} ${comps.length === 1 ? 'componente' : 'componenti'}${ops.length ? ' · ' + ops.length + (ops.length === 1 ? ' lavorazione' : ' lavorazioni') : ''})`,
+    return itemInfoSection(`${ico('tree', 'tinted', '')} Composizione (${comps.length} ${comps.length === 1 ? 'componente' : 'componenti'}${ops.length ? ' · ' + ops.length + (ops.length === 1 ? ' fase' : ' fasi') : ''})`,
       `<div class="table-wrap"><table>
         <thead><tr><th scope="col">Codice</th><th scope="col">Componente</th><th scope="col" style="text-align:right">Q.tà</th>
           <th scope="col" style="text-align:right">Scarto</th><th scope="col" style="text-align:right">Costo riga</th></tr></thead>

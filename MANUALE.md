@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.123.0**
+**Versione dell'app documentata: 0.124.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1169,9 +1169,13 @@ lavorazioni. La schermata si intitola **«Distinta Base & Costificazione»**.
 | **Modifica testata** | Le proprietà della distinta (vedi sotto) |
 | **Elimina** | Cancella la distinta |
 | **+ Aggiungi componenti** | Apre il pannello laterale ridimensionabile per pescare dagli archivi. Un articolo già in distinta non fa una seconda riga: la quantità inserita si somma a quella che c'è (dalla 0.105.7) |
-| **+ Aggiungi lavorazione** | Aggiunge una fase all'assieme (il montaggio) |
 | **⊞ Espandi tutto** / **⊟ Comprimi tutto** | Apre e chiude tutti i rami |
 | **⇄ Confronta con…** *(barra revisioni)* | Mette la distinta a fianco di un'altra qualsiasi, su tutti i livelli (→ [cap. 15](#confrontare-due-distinte-diverse)) |
+
+**Il ciclo di montaggio.** Sotto l'albero la riga *Ciclo di montaggio* elenca le fasi
+dell'assieme, con ore, operatori e costo, in sola lettura; **Apri ciclo** porta ai *Cicli di
+lavorazione*, dove le fasi si scrivono (dalla 0.124.0, → [cap.
+14](#il-ciclo-di-un-assieme-dalla-01240)).
 
 **Filtri.** Ricerca «Cerca codice o nome distinta…»; **livello** (Tutti i livelli · Macchine ·
 Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta aperta; il contatore.
@@ -1193,9 +1197,9 @@ Gruppi · Sottogruppi); **macchina di appartenenza**; il menu della distinta ape
 - I sottogruppi possono contenere altri sottogruppi, **senza limite di profondità**.
 - La **percentuale di scarto** di una riga aumenta la quantità che serve davvero: 10 pezzi con
   5% di scarto sono 10,5 pezzi di materiale.
-- Accanto alle **Lavorazioni** dell'assieme c'è **Montaggio: … gg**: cliccandolo si dichiarano i
-  giorni lavorativi di montaggio, che la programmazione a ritroso del fabbisogno toglie dalla data
-  in cui l'assieme serve. **Zero = dalle ore** delle lavorazioni.
+- I **giorni di montaggio** (quelli che la programmazione a ritroso del fabbisogno toglie dalla
+  data in cui l'assieme serve) vengono **sempre dalle fasi** del ciclo dell'assieme: ore ÷ (ore al
+  giorno × operatori), più attrezzaggio e coda del centro. Dalla 0.124.0 non si dichiarano più a mano.
 - I **riferimenti ciclici** (A contiene B che contiene A) sono rilevati e impediti, sia nella
   distinta sia nel ciclo. Se ne resta uno, un **avviso rosso** nomina l'articolo coinvolto invece
   di far comparire un costo tronco che sembrerebbe buono. **⊞ Espandi tutto** si ferma
@@ -1289,7 +1293,8 @@ hanno ancora, con il pulsante **Togli le condizioni**.
 
 **A cosa serve.** Dire come si fa una **parte**: che materiale consuma e quali fasi attraversa.
 È da qui che nasce il costo di una parte a produzione interna, il carico dei centri e gli ordini
-di lavoro ai terzisti.
+di lavoro ai terzisti. Dalla 0.124.0 anche **macchine, gruppi e sottogruppi** hanno qui il loro
+ciclo, con le sole fasi di montaggio (→ [Il ciclo di un assieme](#il-ciclo-di-un-assieme-dalla-01240)).
 
 **Come ci si arriva.** 🌳 *Tecnico → Cicli di lavorazione*.
 
@@ -1328,7 +1333,8 @@ posto per infilarne una in mezzo).
 | **Centro di lavoro** | Dall'elenco di *Gestione → Centri di lavoro* |
 | **Interna / Conto lavoro** | Se conto lavoro, si sceglie il **fornitore** |
 | **Costo** | *Fisso* oppure *Orario* |
-| **Ore (h)** | Fase **interna**: le ore che il pezzo occupa il centro |
+| **Ore (h)** | Fase **interna**: le ore-uomo per pezzo, cioè le ore che il pezzo occupa il centro sommate su tutti quelli che ci lavorano. Entrano nel costo (a costo orario) e nel carico |
+| **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda del centro: 80 h con 2 operatori a 8 h al giorno sono 5 giorni. Sotto si legge quanti giorni fa un pezzo, comprese le ore di attrezzaggio del centro: passandoci sopra col mouse si vede il calcolo completo |
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
 | **Costo (€)** o **Tariffa (€/h)** | Secondo il modo scelto |
 | Nota | Testo libero, finisce sull'ordine di lavoro |
@@ -1350,6 +1356,34 @@ orario** dichiara anche le ore, che lì sono le ore che il terzista fattura.
 **Ogni modifica si salva subito.** Non c'è un pulsante Salva in questa vista.
 
 ---
+
+### Il ciclo di un assieme (dalla 0.124.0)
+
+Macchine, gruppi e sottogruppi compaiono nel menu dopo le parti. Il loro ciclo ha **solo fasi**:
+i componenti stanno nella distinta, e la sezione *Distinta parte* non c'è (il pulsante
+**Distinta** ci porta). Le fasi si scrivono come quelle di una parte: centro, interna o conto
+lavoro, costo fisso o orario, ore o giorni, ordine con ↑↓. Le card dicono il costo delle fasi e
+il costo dell'assieme.
+
+I **giorni di montaggio** vengono dalle fasi, in fila: non c'è più un numero da dichiarare
+(prima si scriveva nella distinta, e scavalcava le fasi; i valori salvati sono ignorati).
+
+Da lì:
+
+- **costo**: ogni fase entra nelle *Lavorazioni* dell'assieme come una riga di ciclo;
+- **fabbisogno**: le fasi interne caricano i centri nella settimana in cui cominciano, numerate
+  10, 20…; quelle dal terzista sono **conto lavoro** da commissionare, con il loro ordine di
+  lavoro; il montaggio comincia con la prima fase, a meno che l'assieme abbia i *giorni di
+  montaggio* dichiarati;
+- **ordine di produzione**: un assieme con un ciclo si lancia con un ODP (→
+  [cap. 22](#22-ordini-di-produzione-odp)), e da lì passano reparto, timbrature, capacità finita
+  e consuntivo.
+
+> **Da sapere passando alla 0.124.0.** Le vecchie *lavorazioni* degli assiemi (centro, ore, nota)
+> diventano da sole fasi del ciclo, a costo orario con la tariffa del centro: il costo resta
+> quello. Nell'archivio condiviso ogni PC le converte allo stesso modo finché l'assieme non viene
+> salvato; conviene aggiornare l'app su tutti i PC, perché una versione vecchia non vede le fasi.
+> Da qui la tariffa sta sulla fase: cambiare quella del centro non la cambia più da sola.
 
 ## 15. Revisioni
 
@@ -1853,7 +1887,7 @@ In alto, sempre visibili, stanno le righe **Da produrre** e i **KPI**. Il resto 
 | **Da acquistare (N)** | La lista consolidata del materiale | Genera richieste · Genera ordini |
 | **Conto lavoro (N)** | Le fasi *Da far lavorare fuori* | Genera richieste · Genera ordini di lavoro |
 | **Da fabbricare (N)** | Le parti a produzione interna, con l'avanzamento; sotto, quelle prese **dal magazzino** | Genera ordini di produzione |
-| **Da montare (N)** | Gli assiemi del piano, con i montaggi dichiarati | **Dichiara montaggio** su ogni riga |
+| **Da montare (N)** | Gli assiemi del piano, con i montaggi dichiarati o l'ODP che li monta | **Dichiara montaggio** su ogni riga; **Genera ordini di produzione** per gli assiemi con un ciclo |
 | **Programma** | L'agenda del piano in ordine di data | — |
 | **Gantt** | Il programma disegnato, riga per riga | — |
 | **Carico** | Le ore che questo piano chiede ai centri | — |
@@ -1966,7 +2000,7 @@ consegna del gruppo (ven 16)
 
 | Che cosa | Quanto dura | In che giorni |
 |---|---|---|
-| **Montaggio** di un assieme | i *giorni di montaggio* dell'assieme o, a zero, le ore delle sue lavorazioni come fasi interne in fila | lavorativi |
+| **Montaggio** di un assieme | le fasi del suo ciclo in fila: le interne per le ore sul centro, quelle dal terzista per i giorni più il trasporto (dalla 0.124.0) | lavorativi |
 | **Fase interna** | (attrezzaggio del centro + ore/pz × pezzi) ÷ ore al giorno del centro, arrotondato al giorno, + giorni di coda | lavorativi |
 | **Tratta di conto lavoro** (fasi consecutive dello stesso terzista) | somma dei giorni di attraversamento + giorni di trasporto del terzista | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); l'invio cade sempre in un giorno lavorativo |
 | **Acquisto** | giorni di consegna del listino | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); la data d'ordine cade sempre in un giorno lavorativo |
@@ -2200,6 +2234,12 @@ assiemi (che non stanno a magazzino).
 
 ### Il montaggio (dalla 0.100.0)
 
+Un assieme che ha un **ciclo** (dalla 0.124.0) si può montare anche con un **ordine di
+produzione**: *Genera ordini di produzione* compare in testa alla scheda, e la riga di un assieme
+con un ODP nel piano mostra il numero dell'ordine al posto di *Dichiara montaggio*. Da lì le fasi
+si seguono come quelle di una parte, e i componenti escono all'avvio della prima. Dichiarare il
+montaggio qui è bloccato, per non farli uscire due volte.
+
 La scheda **Da montare** elenca gli assiemi del piano — macchine, gruppi, sottogruppi — con la
 quantità, le date di montaggio, i componenti, quanti ne sono già stati **montati** e quanti
 **restano**. **Dichiara montaggio** apre la finestra:
@@ -2412,9 +2452,17 @@ manuale* scritto a mano.
 Due strade, e producono lo stesso documento:
 
 - dal **fabbisogno**, col pulsante **Genera ordini di produzione**: dalla sezione *Da fabbricare*,
-  **uno per parte**;
-- **a mano**, con *+ Nuovo ordine di produzione*: si sceglie la parte fra quelle che un ciclo ce
-  l'hanno, i pezzi e la data. Un ordine così **non è legato a nessun piano**, e nel fabbisogno
+  **uno per parte**, e dalla 0.124.0 anche dalla sezione *Da montare*, uno per assieme con un ciclo;
+- **a mano**, con *+ Nuovo ordine di produzione*: si sceglie la parte o l'assieme fra quelli che un
+  ciclo ce l'hanno, i pezzi e la data.
+
+**L'ODP di un assieme** (dalla 0.124.0) ha per fasi quelle del ciclo di montaggio e per materiale
+i **componenti diretti a magazzino** della distinta, con lo scarto e le sostituzioni del piano,
+come un montaggio dichiarato: i sottoassiemi non escono, si montano col loro ordine. Un assieme non
+ha giacenza: sull'ultima fase i buoni dichiarati sono gli assiemi **montati**, contano come fatti
+nel piano e nell'avanzamento, e il magazzino non si muove. Fasi interne in reparto, timbrature,
+capacità finita, ordini di lavoro per le fasi dal terzista e consuntivo funzionano come per una
+parte. Un ordine così **non è legato a nessun piano**, e nel fabbisogno
   quella parte continuerà a risultare da fabbricare.
 
 ### Bozza e lancio
@@ -2795,8 +2843,9 @@ finita**: il conto fatto in avanti, da oggi.
 - Entrano le fasi **interne** non chiuse degli ODP **lanciati e in corso**, ordine per ordine
   **per data di consegna** (la più vicina prima).
 - Ogni fase occupa il suo centro per le ore del ciclo sui pezzi ancora da fare, più
-  l'attrezzaggio se non è partita, senza superare le **ore al giorno** del centro (*Ore lavorate
-  al giorno*, o la capacità settimanale divisa per i giorni lavorativi), nei giorni lavorativi del
+  l'attrezzaggio se non è partita, senza superare le ore che il centro intero dà in un giorno (la
+  capacità settimanale divisa per i giorni lavorativi, o senza capacità le ore di un operatore) né
+  quelle dei suoi operatori (ore al giorno di un operatore × operatori della fase), nei giorni lavorativi del
   calendario di fabbrica e **fuori dai fermi** registrati in manutenzione.
 - Una fase comincia il giorno lavorativo dopo la fine della precedente. Una fase esterna non
   occupa centri: dura i suoi giorni dal terzista più il trasporto.
@@ -2909,8 +2958,8 @@ così i nomi già composti non cambiano da soli.
 |---|---|
 | **Nome** | Torni, Fresatura, Saldatura… |
 | **Tariffa (€/h)** | Entra nel costo delle fasi interne a costo orario |
-| **Capacità (h/settimana)** | Il metro del Carico centri. **0 = non dichiarata** |
-| **Ore lavorate al giorno** | Per la durata delle fasi interne. **0 = capacità settimanale ÷ giorni lavorativi**, o 8 |
+| **Capacità (h/settimana, tutti gli operatori)** | Le ore **totali** del centro in una settimana: tre montatori per 40 ore sono 120. Il metro del Carico centri, e il tetto di un giorno della capacità finita. **0 = non dichiarata** |
+| **Ore al giorno di un operatore** | Per la durata delle fasi interne: giorni = ore ÷ (queste ore × gli **operatori** della fase). **0 = 8**. Fino alla 0.123 a zero si ricavavano dalla capacità (dalla 0.124.0) |
 | **Attrezzaggio per lotto (h)** | Si aggiunge alle ore di ogni fase su questo centro |
 | **Giorni di coda** | L'attesa prima di ogni fase su questo centro, in giorni lavorativi |
 

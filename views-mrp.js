@@ -196,11 +196,18 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
   // suoi giorni; i componenti servono all'inizio del montaggio.
   const prog = schedAssembly(it, mrpLotto(acc, it, qty), due);
   mrpAdd(acc.asm, it, qty, due, prog.start);
-  // le sue lavorazioni caricano i centri come le fasi interne di una parte.
-  // Vanno raccolte qui e non a posteriori: `make` contiene solo parti, e le
-  // quantità esplose degli assiemi non le conserva nessuno.
-  (it.operations || []).forEach(o => {
-    mrpAddLoad(acc.load, o.workCenterId, prog.start, Number(o.hours) || 0, qty, it, '');
+  // Le fasi del suo ciclo (dalla 0.124.0) fanno quello che fanno le fasi di
+  // una parte: le interne caricano i centri nella settimana in cui
+  // cominciano, quelle con un terzista sono conto lavoro da commissionare.
+  // Vanno raccolte qui e non a posteriori: le quantità esplose degli assiemi
+  // non le conserva nessuno.
+  cicloFasi(it).forEach((r, k) => {
+    const f = prog.fasi[k] || { start: prog.start, end: due };
+    if (r.supplierId) mrpAddPhase(acc.phases, it, r, k, qty, f.end, f.start);
+    else {
+      mrpAddLoad(acc.load, r.workCenterId, f.start, Number(r.hours) || 0, qty, it, cyclePhaseNumber(k));
+      mrpAddPhase(acc.intOps, it, r, k, qty, f.end, f.start);
+    }
   });
   const perFigli = schedChildDue(prog.start);
   // la quantità di riga porta con sé lo scarto, come nel rollup. Di un
@@ -223,8 +230,9 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
 //
 // I tempi vengono da tre posti, e senza dati valgono zero — una fase senza ore
 // e senza giorni non sposta niente, come prima:
-//   - fase **interna**: (attrezzaggio + ore/pz × pezzi) / ore al giorno del
-//     centro, arrotondato al giorno intero, più i giorni di coda del centro;
+//   - fase **interna**: (attrezzaggio + ore/pz × pezzi) / (ore al giorno di un
+//     operatore × operatori della fase), arrotondato al giorno intero, più i
+//     giorni di coda del centro;
 //     in giorni **lavorativi** (calendario.js);
 //   - tratta **di conto lavoro** (fasi consecutive dello stesso terzista): la
 //     somma dei giorni di attraversamento più il trasporto del terzista, in
@@ -233,23 +241,47 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
 //     giorno lavorativo;
 //   - **montaggio** di un assieme: i giorni dichiarati sull'assieme o, senza,
 //     le ore delle sue lavorazioni come fasi interne in sequenza.
-// Ore lavorate in un giorno da un centro: dichiarate, o ricavate dalla
-// capacità settimanale sui giorni lavorativi del calendario, o otto.
+// Dalla 0.124.0 i due numeri del centro dicono due cose diverse:
+//   - **ore al giorno** (`hoursPerDay`): quanto lavora in un giorno **un
+//     operatore**; zero = otto;
+//   - **capacità** (`capacityHours`): le ore **totali** che il centro dà in una
+//     settimana, tutti gli operatori insieme. Le legge il Carico centri, e la
+//     capacità finita ne ricava il tetto di un giorno.
+// Prima le ore al giorno a zero si ricavavano dalla capacità, che però è del
+// centro intero: con due montatori una fase sembrava durare la metà.
 const SCHED_ORE_GIORNO = 8;
 function wcHoursPerDay(wc) {
   const h = wc ? Number(wc.hoursPerDay) || 0 : 0;
-  if (h > 0) return h;
+  return h > 0 ? h : SCHED_ORE_GIORNO;
+}
+// Le ore che il centro intero dà in un giorno lavorativo: la capacità
+// settimanale sui giorni lavorativi del calendario, o senza capacità
+// dichiarata un operatore solo.
+function wcOreGiornoCentro(wc) {
   const cap = wc ? Number(wc.capacityHours) || 0 : 0;
   const gg = typeof workDaysPerWeek === 'function' ? workDaysPerWeek() : 5;
-  return cap > 0 && gg > 0 ? cap / gg : SCHED_ORE_GIORNO;
+  return cap > 0 && gg > 0 ? cap / gg : wcHoursPerDay(wc);
 }
-// Giorni lavorativi di una fase interna per `pezzi` pezzi.
-function internalOpDays(wc, oreUnit, pezzi) {
+// Quanti operatori lavorano insieme su una fase (dalla 0.124.0): uno, se non
+// è detto.
+function faseOperatori(r) { return Math.max(1, Math.round(Number(r && r.operators) || 0) || 1); }
+// Le ore che una fase può fare in un giorno: un operatore per gli operatori
+// della fase. La capacità del centro qui non entra: la programmazione a
+// ritroso è a capacità infinita, e il tetto del centro lo mette la coda a
+// capacità finita (capacita.js), dove le fasi se lo dividono.
+function faseOreGiorno(wc, operatori) {
+  return wcHoursPerDay(wc) * faseOperatori({ operators: operatori });
+}
+// Giorni lavorativi di una fase interna per `pezzi` pezzi: le ore-uomo
+// (attrezzaggio + ore/pz × pezzi) divise per le ore che la fase fa in un
+// giorno, più la coda del centro. 80 ore con due operatori a 8 ore sono 5
+// giorni.
+function internalOpDays(wc, oreUnit, pezzi, operatori) {
   const ore = (wc ? Number(wc.setupHours) || 0 : 0) + (Number(oreUnit) || 0) * (Number(pezzi) || 0);
   const coda = wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0;
   // Il millesimo toglie l'errore del float: 16 ore a 8 al giorno sono due
   // giorni, non tre.
-  return (ore > 0 ? Math.ceil(ore / wcHoursPerDay(wc) - 1e-9) : 0) + coda;
+  return (ore > 0 ? Math.ceil(ore / faseOreGiorno(wc, operatori) - 1e-9) : 0) + coda;
 }
 // Il trasporto da e verso un terzista, andata più ritorno.
 function supplierTransitDays(supplierId) {
@@ -291,7 +323,7 @@ function schedChildDue(start) {
 // lavorazioni, come mrpPhaseKey) l'inizio e la fine, e l'inizio della prima.
 // A ritroso dall'ultima: la fine di una fase è l'inizio di quella che segue.
 function schedPart(it, qty, due) {
-  const ops = ((it && it.cycle) || []).filter(r => r.kind === 'op');
+  const ops = cicloFasi(it);
   const tratte = typeof clCycleRuns === 'function' ? clCycleRuns(it)
     : ops.map((r, k) => ({ from: k, to: k, supplierId: r.supplierId || '', esterna: !!r.supplierId }));
   return schedOps(ops, tratte, qty, due);
@@ -323,7 +355,7 @@ function schedOps(ops, tratte, qty, due) {
       continue;
     }
     for (let k = run.to; k >= run.from; k--) {
-      const gg = internalOpDays(getWorkCenter(ops[k].workCenterId), ops[k].hours, qty);
+      const gg = internalOpDays(getWorkCenter(ops[k].workCenterId), ops[k].hours, qty, ops[k].operators);
       const inizio = due ? schedBack(fine, gg) : '';
       if (due) fasi[k] = { start: inizio, end: fine, days: gg, esterna: false, run };
       steps.unshift({ esterna: false, from: k, to: k, supplierId: '', workCenterId: ops[k].workCenterId || '',
@@ -333,16 +365,23 @@ function schedOps(ops, tratte, qty, due) {
   }
   return { start: fine, end: due || '', fasi, steps };
 }
-// Il montaggio di un assieme: i giorni dichiarati, o le sue lavorazioni in fila.
+// Il montaggio di un assieme: le fasi del suo ciclo in fila — le interne per le ore sul centro, le tratte dal terzista per i loro
+// giorni più il trasporto, come in schedOps.
 function assemblyDaysOf(it, qty) {
-  const dich = Math.max(0, Math.round(Number(it && it.assemblyDays) || 0));
-  if (dich > 0) return dich;
-  return ((it && it.operations) || []).reduce((s, o) =>
-    s + internalOpDays(getWorkCenter(o.workCenterId), o.hours, qty), 0);
+  const ops = cicloFasi(it);
+  return clCycleRuns(it).reduce((s, t) => s + (t.esterna
+    ? runLeadDays(ops.slice(t.from, t.to + 1).map(r => r.days), t.supplierId)
+    : ops.slice(t.from, t.to + 1).reduce((a, r) => a + internalOpDays(getWorkCenter(r.workCenterId), r.hours, qty, r.operators), 0)), 0);
 }
+// Le fasi si programmano a ritroso come quelle di una parte (schedPart), e il
+// montaggio comincia con la prima; senza fasi l'assieme si monta il giorno
+// della consegna. I vecchi giorni di montaggio dichiarati (assemblyDays) non
+// contano più: restano nei dati solo per le versioni precedenti.
 function schedAssembly(it, qty, due) {
   const gg = due ? assemblyDaysOf(it, qty) : 0;
-  return { start: schedBack(due, gg), end: due || '', days: gg };
+  if (!cicloFasi(it).length) return { start: schedBack(due, 0), end: due || '', days: 0, fasi: [], steps: [] };
+  const prog = schedPart(it, qty, due);
+  return { start: due ? prog.start : '', end: due || '', days: gg, fasi: prog.fasi, steps: prog.steps };
 }
 
 // ─── L'albero del programma ───
@@ -862,8 +901,9 @@ function mrpLoadEntries(plans) {
   (plans || []).forEach(p => {
     const exp = mrpExplodePlan(p);
     // Le parti già fatte non caricano più i centri (0.105.5): le loro ore si
-    // tolgono in proporzione ai pezzi che restano. Gli assiemi non hanno fatti.
-    const lordo = new Map(exp.make.map(m => [m.item.id, m.qty]));
+    // tolgono in proporzione ai pezzi che restano. Dalla 0.124.0 anche gli
+    // assiemi, i cui montati sono le dichiarazioni e i loro ODP (prodottiDi).
+    const lordo = new Map(exp.make.concat(exp.asm).map(m => [m.item.id, m.qty]));
     const quota = new Map();
     const resto = itemId => {
       if (!quota.has(itemId)) {
@@ -1426,7 +1466,7 @@ function mrpMakeRow(entry, planId) {
   // diventeranno ordini di lavoro. Sono due conti diversi e vanno detti
   // entrambi: «tre fasi, una in conto lavoro» dice cosa ci si aspetta di dover
   // commissionare, e «tre fasi» da solo no.
-  const nFasi = ((it.cycle || []).filter(r => r.kind === 'op')).length;
+  const nFasi = cicloFasi(it).length;
   const tratte = clCycleRuns(it);
   // Quanti lanciarne: il **residuo**, non il lordo. I pezzi già dichiarati fatti
   // in «Da fabbricare» sono gli stessi che il netto delle lavorazioni toglie già
@@ -1444,7 +1484,7 @@ function mrpMakeRow(entry, planId) {
   const daLanciareQui = quantitaDaOrdinare(resta + scorta, itemUom(it));
   const qtyOrder = quantitaDaOrdinare(netRequirement(daLanciareQui, 0, 0, 0, lotSizeOf(it), 0, lotModeOf(it)), itemUom(it));
   return {
-    item: it, isMake: true, makeKey: 'make#' + it.id,
+    item: it, isMake: true, isAsm: isAssembly(it.type), makeKey: 'make#' + it.id,
     qty: entry.qty, qtyOrder, uom: itemUom(it),
     scorta, lotSize: lotSizeOf(it), lotMode: lotModeOf(it), arrotondato: qtyOrder > daLanciareQui + 0.000001,
     // Entro quando lanciarla: l'inizio della prima fase del ciclo, che la
@@ -1459,7 +1499,14 @@ function mrpMakeRow(entry, planId) {
     noPrice: !(costOf(it.id).total > 0),
   };
 }
-function mrpMakeRows(plan) { return mrpExplodePlan(plan).make.map(e => mrpMakeRow(e, plan.id)); }
+function mrpMakeRows(plan) { return mrpDaProdurre(mrpExplodePlan(plan)).map(e => mrpMakeRow(e, plan.id)); }
+// Quello che si lancia con un ordine di produzione: le parti da fabbricare, e
+// dalla 0.124.0 gli assiemi che hanno un ciclo — il loro ODP porta le fasi di
+// montaggio e preleva i componenti. Senza Produzione interna nessuno dei due.
+function mrpDaProdurre(exp) {
+  if (typeof areaAttiva === 'function' && !areaAttiva('produzione')) return exp.make;
+  return exp.make.concat(exp.asm.filter(e => asmHaCiclo(e.item)));
+}
 function mrpBuyRows(plan, netMode) { return mrpExplodePlan(plan).buy.map(e => mrpBuyRow(e, netMode, plan.id)); }
 // `.map(mrpBuyRow)` passerebbe l'indice dell'array come secondo argomento, e
 // dalla seconda riga in poi il netto si accenderebbe da solo. Le viste passano
@@ -1772,7 +1819,7 @@ function planRowIndex(plan) {
   // diversa da quella spuntata un attimo prima manderebbe al terzista un ordine
   // per pezzi che sono già stati fatti.
   mrpPhaseRuns(mrpPhaseRowsNette(plan.id, exp.phases)).forEach(r => map.set(r.phaseKey, r));
-  exp.make.map(e => mrpMakeRow(e, plan.id)).forEach(r => map.set(r.makeKey, r));
+  mrpDaProdurre(exp).map(e => mrpMakeRow(e, plan.id)).forEach(r => map.set(r.makeKey, r));
   return map;
 }
 // Il tipo di documento si sceglie **prima**, dal pulsante che si preme: sono
@@ -2431,6 +2478,9 @@ function renderPlanEdit(id) {
           ${mrpStockTable(exp.stock)}
         </div>` : ''}` },
       { id: 'asm', label: 'Da montare', n: exp.asm.length, html: `
+        ${prodInterna && exp.asm.some(e => asmHaCiclo(e.item)) ? `<div class="plan-genera">
+          ${planDocButton(p, 'odp', ico('factory', 'tinted', '') + ' Genera ordini di produzione')}
+        </div>` : ''}
         <div class="mrp-section">
           <div class="cycle-section-head"><h3>${ico('wrench', 'tinted pill', '')} Da montare</h3></div>
           ${mrpAsmTable(exp.asm, id)}
@@ -3053,9 +3103,15 @@ function mrpAsmTable(asm, planId) {
     const nComp = montaggioComponenti(e.item, 1).stock.length;
     const statoFatti = fatti <= 0 ? '<span class="empty-text" style="padding:0">—</span>'
       : resta > 0 ? `<span class="mrp-warn">${fmtQtyIt(fatti)}</span>` : `<span class="price-best">${fmtQtyIt(fatti)}</span>`;
-    const azione = puoScrivere
-      ? `<button class="mini-btn" title="Dichiara il montaggio: i componenti escono dal magazzino" onclick="montaggioModal('${planId}','${e.item.id}',${e.qty})">${ico('wrench', 'tinted', 'Montaggio')}</button>`
-      : '';
+    // Un assieme con un ordine di produzione nel piano si monta da lì: fasi,
+    // prelievo dei componenti e pezzi fatti passano dall'ordine, e dichiararlo
+    // anche qui farebbe uscire i componenti due volte (montaggioDichiara).
+    const odp = odpDelPiano(planId, e.item.id);
+    const azione = odp.length
+      ? odp.map(o => `<span class="code-link" ${clickAttrs(`openOdpFromPlan('${o.id}')`, 'Apri ' + o.number)}>${ico('factory', 'tinted', '')} ${esc(o.number)}</span>`).join(' ')
+      : puoScrivere
+        ? `<button class="mini-btn" title="Dichiara il montaggio: i componenti escono dal magazzino" onclick="montaggioModal('${planId}','${e.item.id}',${e.qty})">${ico('wrench', 'tinted', 'Montaggio')}</button>`
+        : '';
     return `<tr>
       <td style="font-family:var(--mono)">${codeLink(e.item.id, e.item.code)}</td>
       <td>${esc(e.item.name)}<span class="bom-type-tag tt-${typeKey(e.item.type)}" style="margin-left:6px">${typeShort(e.item.type)}</span></td>
@@ -3066,7 +3122,7 @@ function mrpAsmTable(asm, planId) {
       <td style="font-family:var(--mono);text-align:right">${resta > 0 ? fmtQtyIt(resta) : '<span class="price-best">montati</span>'}</td>
       <td class="row-actions" style="text-align:right">${azione}</td></tr>`;
   }).join('');
-  return `<p class="empty-text" style="text-align:left;padding:0 0 8px">Dichiarare un montaggio <strong>scarica i componenti diretti</strong> dell'assieme che stanno a magazzino — commerciali, parti, materiali — come consumo di produzione per questo piano. I sottoassiemi si dichiarano ciascuno per sé.</p>
+  return `<p class="empty-text" style="text-align:left;padding:0 0 8px">Dichiarare un montaggio <strong>scarica i componenti diretti</strong> dell'assieme che stanno a magazzino — commerciali, parti, materiali — come consumo di produzione per questo piano. I sottoassiemi si dichiarano ciascuno per sé. Un assieme che ha un <strong>ciclo</strong> si può invece lanciare con un ordine di produzione: le fasi di montaggio si seguono da lì, in reparto, e i componenti escono all'avvio della prima.</p>
     <div class="table-wrap"><table>
     <thead><tr><th scope="col">Codice</th><th scope="col">Assieme</th>
       <th scope="col" style="text-align:right">Q.tà</th>

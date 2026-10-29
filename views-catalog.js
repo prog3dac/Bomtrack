@@ -780,7 +780,7 @@ function catalogMeta(i) {
   let meta = '';
   if (i.type === 'acquistato') { const s = getSupplier(i.supplierId); meta = s ? s.name : '—'; }
   else if (i.type === 'materiale' && priceRows(i).length) meta = '';
-  else if (isAssembly(i.type)) meta = (i.components || []).length + ' comp. / ' + (i.operations || []).length + ' lav.';
+  else if (isAssembly(i.type)) meta = (i.components || []).length + ' comp. / ' + cicloFasi(i).length + ' fasi';
   else if (i.type === 'parte') {
     // Una parte comprata si riconosce dal fornitore, non dal suo ciclo
     meta = partSourcing(i) === 'buy'
@@ -1515,7 +1515,8 @@ function cycleRowLabel(row) {
     <span class="cycle-code">${codeLink(it.id, it.code)}</span> ${esc(it.name)}${itemBadges(it)}`;
 }
 // ─── Selezione della parte (filtri in cima alla vista) ───
-function partItems() { return (db.items || []).filter(i => i.type === 'parte'); }
+// Dalla 0.124.0 anche gli assiemi: il loro ciclo sono le fasi di montaggio.
+function partItems() { return (db.items || []).filter(i => i.type === 'parte' || isAssembly(i.type)); }
 // Famiglie e sottofamiglie delle parti, con le selezioni preservate se ancora
 // valide (stesso patto di updateCatFamilyFilters nelle anagrafiche).
 function updateCycleFamilyFilters() {
@@ -1539,7 +1540,8 @@ function cycleFilteredParts() {
   if (fam) rows = rows.filter(i => i.familyId === fam);
   if (sub) rows = rows.filter(i => i.subFamilyId === sub);
   if (q) rows = rows.filter(i => (i.code + ' ' + i.name).toLowerCase().includes(q));
-  return rows.sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  // Prima le parti, poi gli assiemi: chi apre i cicli cerca quasi sempre una parte.
+  return rows.sort((a, b) => (isAssembly(a.type) - isAssembly(b.type)) || String(a.code).localeCompare(String(b.code)));
 }
 function cycleSearchInput() { debounced('cyc-sel', renderCycles); }
 function onCycleFilterChange() { renderCycles(); }
@@ -1553,7 +1555,7 @@ function ensureCurrentCycleItem(parts) {
 // filtri si azzerano, altrimenti la parte appena scelta potrebbe non comparire.
 function openCycleFor(id) {
   const it = getItem(id);
-  if (!it || it.type !== 'parte') return;
+  if (!it || (it.type !== 'parte' && !isAssembly(it.type))) return;
   if (!vistaAttiva('cycles')) { setView('cycles'); return; }   // avvisa e resta al Riepilogo
   currentCycleItemId = id;
   setVal('cyc-search', ''); setVal('cyc-family', ''); setVal('cyc-subfamily', '');
@@ -1565,7 +1567,7 @@ function openCycleFor(id) {
 }
 function currentCycleItem() {
   const it = getItem(currentCycleItemId);
-  return it && it.type === 'parte' ? it : null;
+  return it && (it.type === 'parte' || isAssembly(it.type)) ? it : null;
 }
 
 // Da dove viene il costo di questa parte, detto qui perché è la vista in cui si
@@ -1584,6 +1586,15 @@ function cycleSourcingNote(it) {
     qui sotto.${vuoto ? ' Finché sono vuoti vale il prezzo a listino.' : ''}${apri}</div>`;
 }
 
+// Un assieme: i componenti stanno nella distinta, qui solo le fasi. I giorni
+// di montaggio vengono sempre dalle fasi (dalla 0.124.0 non si dichiarano più).
+function cycleAssiemeNote(it) {
+  const apri = `<button class="mini-btn" style="margin-left:8px" onclick="apriAnelloDistinta('${it.id}')">${ico('tree', 'tinted', '')} Distinta</button>`;
+  return `<div class="cycle-note">${ico('wrench', 'tinted')} <span><strong>${esc(typeLabel(it.type))}</strong>: i componenti stanno nella distinta, qui le <strong>fasi di montaggio</strong>.
+    Entrano nel costo come le lavorazioni di una parte, caricano i centri, e con un ciclo l'assieme si può lanciare con un ordine di produzione.
+    I giorni di montaggio vengono dalle fasi: ore ÷ (ore al giorno × operatori) in fila, e i giorni dal terzista per quelle in conto lavoro.</span>${apri}</div>`;
+}
+
 // ─── Disegno della vista ───
 function renderCycles() {
   invalidateCaches();   // la cache dei costi vive dentro un singolo disegno
@@ -1593,7 +1604,7 @@ function renderCycles() {
   ensureCurrentCycleItem(parts);
   const partSel = document.getElementById('cyc-part');
   if (partSel) partSel.innerHTML = parts.length
-    ? parts.map(p => `<option value="${p.id}" ${p.id === currentCycleItemId ? 'selected' : ''}>${esc(itemBadgesTxt(p) + p.code + ' — ' + p.name)}</option>`).join('')
+    ? parts.map(p => `<option value="${p.id}" ${p.id === currentCycleItemId ? 'selected' : ''}>${esc(itemBadgesTxt(p) + (isAssembly(p.type) ? typeShort(p.type) + ' · ' : '') + p.code + ' — ' + p.name)}</option>`).join('')
     : `<option value="">— nessuna parte —</option>`;
 
   const body = document.getElementById('cyc-body');
@@ -1611,19 +1622,20 @@ function renderCycles() {
   const rows = (it.cycle || []).map((r, i) => ({ r, i }));
   const bomRows = rows.filter(x => x.r.kind !== 'op');
   const opRows = rows.filter(x => x.r.kind === 'op');
+  const assieme = isAssembly(it.type);
   body.innerHTML = `
-    ${cycleSourcingNote(it)}
-    <div class="cycle-section">
+    ${assieme ? cycleAssiemeNote(it) : cycleSourcingNote(it)}
+    ${assieme ? '' : `<div class="cycle-section">
       <div class="cycle-section-head">
         <h3>${ico('package', 'tinted pill', '')} Distinta parte <span class="cycle-dim">${bomRows.length} ${bomRows.length === 1 ? 'articolo' : 'articoli'}</span></h3>
         <button class="add-btn-sm" onclick="addCycleItemRow()">+ Articolo</button>
       </div>
       <div class="cycle-box">${cycleBomTable(bomRows)}</div>
       <div id="picker-bom"></div>
-    </div>
+    </div>`}
     <div class="cycle-section">
       <div class="cycle-section-head">
-        <h3>${ico('wrench', 'tinted pill', '')} Ciclo di lavorazione <span class="cycle-dim">${opRows.length} ${opRows.length === 1 ? 'fase' : 'fasi'}</span></h3>
+        <h3>${ico('wrench', 'tinted pill', '')} ${assieme ? 'Ciclo di montaggio' : 'Ciclo di lavorazione'} <span class="cycle-dim">${opRows.length} ${opRows.length === 1 ? 'fase' : 'fasi'}</span></h3>
         <button class="add-btn-sm" onclick="addCycleOpRow()">+ Lavorazione</button>
       </div>
       <div class="cycle-box">${cycleOpsTable(opRows)}</div>
@@ -1640,12 +1652,15 @@ function renderCycleSummary(it) {
   const opsTot = rows.filter(r => r.kind === 'op').reduce((s, r) => s + cycleRowCost(r), 0);
   const c = costOf(it.id);
   const u = itemUom(it);
-  el.innerHTML = [
+  el.innerHTML = (isAssembly(it.type) ? [
+    kpi('Fasi di montaggio', fmtPer(opsTot, u), 'green'),
+    kpi('Costo ' + typeLabel(it.type).toLowerCase(), fmtPer(c.total, u), ''),
+  ] : [
     kpi('Distinta parte', fmtPer(bomTot, u), 'orange'),
     kpi('Lavorazioni', fmtPer(opsTot, u), 'green'),
     kpi('Costo unitario a mano', fmtPer(Number(it.unitCost) || 0, u), 'purple'),
     kpi('Costo parte', fmtPer(c.total, u), ''),
-  ].join('') + (c.cycle ? '<div class="empty-text" style="color:var(--red)">' + ico('warning', 'tinted') + ' Rilevato riferimento ciclico: una riga risale a questa stessa parte.</div>' : '');
+  ]).join('') + (c.cycle ? '<div class="empty-text" style="color:var(--red)">' + ico('warning', 'tinted') + ' Rilevato riferimento ciclico: una riga risale a questa stessa parte.</div>' : '');
 }
 function cycleBomTable(bomRows) {
   if (!bomRows.length) return '<div class="empty-text" style="padding:8px 0">Nessun articolo. Usa "+ Articolo" per aggiungere commerciali e materie prime.</div>';
@@ -1707,9 +1722,13 @@ function cycleOpsTable(opRows) {
       ? `<span class="cycle-op-time"><input class="num" type="number" min="0" step="1" value="${Number(r.days) || 0}"
           title="Giorni di attraversamento dal terzista: da qui si ricava entro quando mandargli l'ordine di lavoro"
           onchange="updateCycleRow(${i})" id="cyc-opdays-${i}"><em>gg</em></span>`
-      : `<span class="cycle-op-time"><input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}"
-          title="Ore per pezzo${orario ? '' : ' — non entra nel costo, serve al carico del centro'}"
-          onchange="updateCycleRow(${i})" id="cyc-ophours-${i}"><em>h</em></span>`;
+      : `<span class="cycle-op-time cycle-op-time-int"><span><input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}"
+          title="Ore-uomo per pezzo${orario ? '' : ' — non entrano nel costo, servono al carico del centro'}"
+          onchange="updateCycleRow(${i})" id="cyc-ophours-${i}"><em>h</em></span>
+          <span><input class="num" type="number" min="1" step="1" value="${faseOperatori(r)}"
+          title="Operatori che lavorano insieme sulla fase: i giorni sono le ore divise per le ore al giorno di un operatore per gli operatori"
+          onchange="updateCycleRow(${i})" id="cyc-opop-${i}"><em>op</em></span>
+          <em id="cyc-opgg-${i}" title="${esc(cycleOpGiorniDettaglio(r))}">${cycleOpGiorni(r)}</em></span>`;
     return `<div class="cycle-row cycle-op-row">
       <span class="cycle-phase">${cyclePhaseNumber(k)}</span>
       <span class="cycle-name">${cycleRowLabel(r)}</span>
@@ -1728,6 +1747,29 @@ function cycleOpsTable(opRows) {
       <button class="mini-btn danger" title="Elimina" onclick="delCycleRow(${i})">${ico('trash', 'tinted', 'Elimina')}</button>
     </div>`;
   }).join('');
+}
+// I giorni di una fase interna per un pezzo, come li conta il fabbisogno.
+function cycleOpGiorni(r) {
+  const gg = internalOpDays(getWorkCenter(r.workCenterId), r.hours, 1, r.operators);
+  return `1 pz: ${gg} gg`;
+}
+// Da dove vengono i giorni della fase, per il tooltip: attrezzaggio e coda
+// sono del centro e non si vedono nella riga del ciclo.
+function cycleOpGiorniDettaglio(r) {
+  const wc = getWorkCenter(r.workCenterId);
+  const n = v => numIt(v, v % 1 ? 2 : 0);
+  const setup = wc ? Number(wc.setupHours) || 0 : 0;
+  const coda = wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0;
+  const ore = Number(r.hours) || 0;
+  const giorno = faseOreGiorno(wc, r.operators);
+  const tot = setup + ore;
+  const lav = tot > 0 ? Math.ceil(tot / giorno - 1e-9) : 0;
+  const righe = [`Giorni lavorativi per un pezzo: ${lav + coda}`,
+    `Ore: ${n(ore)} h${setup ? ` + attrezzaggio ${n(setup)} h = ${n(tot)} h` : ''}`,
+    `Al giorno: ${n(wcHoursPerDay(wc))} h × ${faseOperatori(r)} op = ${n(giorno)} h`,
+    `Lavorazione: ${n(tot)} ÷ ${n(giorno)} = ${lav} gg (al giorno intero)`];
+  if (coda) righe.push(`Coda del centro: + ${coda} gg`);
+  return righe.join('\n');
 }
 // ─── Export del ciclo aperto ───
 // I Cicli non sono un elenco ma una scheda: si esporta la parte che si sta
@@ -1804,6 +1846,8 @@ function refreshCycleCosts(it) {
     if (el) el.textContent = fmtN(cycleRowCost(row));
     const ovr = document.getElementById('cyc-ovr-' + i);
     if (ovr) ovr.placeholder = cycleRowComputed(row).toFixed(2);
+    const gg = document.getElementById('cyc-opgg-' + i);
+    if (gg && row.kind === 'op') { gg.textContent = cycleOpGiorni(row); gg.title = cycleOpGiorniDettaglio(row); }
   });
   renderCycleSummary(it);
 }
@@ -1827,7 +1871,10 @@ function updateCycleRow(idx) {
     const eraEsterna = !!row.supplierId;
     row.supplierId = val('cyc-sup-' + idx);
     if (eraEsterna) row.days = numVal('cyc-opdays-' + idx, 0);
-    else row.hours = numVal('cyc-ophours-' + idx, 0);
+    else {
+      row.hours = numVal('cyc-ophours-' + idx, 0);
+      row.operators = Math.max(1, Math.round(numVal('cyc-opop-' + idx, 1)));
+    }
     if (row.costMode === 'orario') {
       row.rate = numVal('cyc-oprate-' + idx, 0);
       // Su una fase esterna a costo orario le ore sono quelle **fatturate**, e
@@ -1967,8 +2014,10 @@ function addCycleOpRow() {
     <div class="modal-grid">
       <div class="modal-field"><label>Costo</label><select id="cyc-opmode" onchange="onCycleOpModeChange()">
         <option value="fisso">Fisso</option><option value="orario">Orario</option></select></div>
-      <div class="modal-field" id="cyc-optime-h"><label>Ore (h)</label><input type="number" id="cyc-ophours" min="0" step="0.25" value="1"
+      <div class="modal-field" id="cyc-optime-h"><label>Ore-uomo per pezzo (h)</label><input type="number" id="cyc-ophours" min="0" step="0.25" value="1"
         title="Ore di occupazione del centro. A costo fisso non entrano nel costo: servono al Carico centri"></div>
+      <div class="modal-field" id="cyc-optime-op"><label>Operatori</label><input type="number" id="cyc-opop" min="1" step="1" value="1"
+        title="Quanti lavorano insieme sulla fase: i giorni sono le ore divise per le ore al giorno di un operatore per gli operatori"></div>
       <div class="modal-field" id="cyc-optime-gg" style="display:none"><label>Giorni (gg)</label><input type="number" id="cyc-opdays" min="0" step="1" value="0"
         title="Giorni di attraversamento dal terzista: da qui si ricava entro quando mandargli l'ordine di lavoro"></div>
     </div>
@@ -2003,6 +2052,7 @@ function onCycleOpModeChange() {
   // vuole le ore, ma come base del costo: lì si chiedono entrambi.
   mostra('cyc-optime-h', !esterna || orario);
   mostra('cyc-optime-gg', esterna);
+  mostra('cyc-optime-op', !esterna);
   if (orario) {
     const rateEl = document.getElementById('cyc-oprate');
     if (rateEl) rateEl.value = wcRateFor(getWorkCenter(val('cyc-wc')), val('cyc-opsup'));
@@ -2026,6 +2076,7 @@ function pickCycleOp() {
     costMode: orario ? 'orario' : 'fisso',
     hours: (!esterna || orario) ? numVal('cyc-ophours', 0) : 0,
     days: esterna ? numVal('cyc-opdays', 0) : 0, note: '' };
+  if (!esterna) row.operators = Math.max(1, Math.round(numVal('cyc-opop', 1)));
   if (orario) row.rate = numVal('cyc-oprate', 0);
   else row.cost = numVal('cyc-opcost', 0);
   it.cycle.push(row);
@@ -2263,13 +2314,13 @@ function saveNewItem() {
   const dupErr = validateItemCode(val('it-code'), null, null);
   if (dupErr) { showToast(dupErr, 'error'); return; }
   const it = { id: gid(), type: val('it-type') };
-  if (isAssembly(it.type)) { it.components = []; it.operations = []; }
+  if (isAssembly(it.type)) { it.components = []; it.operations = []; it.cycle = []; }
   if (it.type === 'parte') { it.cycle = []; it.sourcing = defaultPartSourcing(); }
   readItemForm(it);
   const src = window.__dupSourceId ? getItem(window.__dupSourceId) : null;
   if (src && isAssembly(it.type)) {
     it.components = (src.components || []).map(c => Object.assign({}, c));
-    it.operations = (src.operations || []).map(o => Object.assign({}, o));
+    it.cycle = cicloFasi(src).map(o => Object.assign({}, o));
   }
   // Duplicando una parte si porta dietro distinta e ciclo, come gli assiemi coi componenti
   if (src && it.type === 'parte') {

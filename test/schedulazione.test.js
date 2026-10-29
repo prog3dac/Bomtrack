@@ -6,7 +6,7 @@
 // 2026 davanti: è il punto di questi casi.
 //
 // Il caso di riferimento:
-//   gruppo A, 2 pezzi, serve ven 16/10; montaggio 2 gg → comincia mer 14/10
+//   gruppo A, 2 pezzi, serve ven 16/10; montaggio 6 h/pz × 2 = 12 h = 2 gg → comincia mer 14/10
 //   perno P, 4 per gruppo = 8 pezzi, serve mer 14/10:
 //     fase 40 fresatura interna, 2 h/pz × 8 = 16 h a 8 h/gg = 2 gg → lun 12 – mer 14
 //     fasi 20-30 zincatura da Beta, 3 + 1 gg + 2 di trasporto = 6 gg di calendario
@@ -29,6 +29,7 @@ function conDb(over, settings) {
       Object.assign(wc('tor', 40), { hoursPerDay: 8 }),
       Object.assign(wc('zin', 30), {}),
       Object.assign(wc('fre', 45), { hoursPerDay: 8 }),
+      Object.assign(wc('mon', 30), { hoursPerDay: 8 }),
     ],
     items: [
       Object.assign(mat('tondo', 5), { supplierId: 'beta', activePriceId: 'q1',
@@ -40,7 +41,7 @@ function conDb(over, settings) {
         { kind: 'op', workCenterId: 'zin', supplierId: 'beta', costMode: 'fisso', cost: 1, hours: 0, days: 1, note: '' },
         { kind: 'op', workCenterId: 'fre', supplierId: '', costMode: 'fisso', cost: 1, hours: 2, days: 0, note: '' },
       ] }),
-      asm('grp', 'gruppo', { components: [comp('perno', 4)], assemblyDays: 2 }),
+      asm('grp', 'gruppo', { components: [comp('perno', 4)], operations: [{ workCenterId: 'mon', hours: 6, note: '' }] }),
     ],
     plans: [{ id: 'pl1', number: 'FAB-2026-001', title: '', date: '2026-09-01', notes: '', active: true,
       lines: [{ id: 'l1', itemId: 'grp', qty: 2, dueDate: '2026-10-16' }] }],
@@ -125,17 +126,19 @@ describe('Programmazione: la catena a ritroso', () => {
 
   it('il carico va nella settimana in cui la fase comincia', () => {
     const l = esplodi(conDb()).load.map(x => [x.wc, x.week, x.hours]).sort();
-    assert.deepEqual(l, [['fre', '2026-W42', 16], ['tor', '2026-W41', 8]]);
+    assert.deepEqual(l, [['fre', '2026-W42', 16], ['mon', '2026-W42', 12], ['tor', '2026-W41', 8]]);
   });
 });
 
 describe('Programmazione: i tempi', () => {
-  it('le ore al giorno si ricavano dalla capacità settimanale', () => {
-    // 20 h a settimana su 5 giorni = 4 h al giorno: 16 h di fresatura sono 4 giorni.
+  it('le ore al giorno a zero sono quelle di un operatore, otto: la capacità è del centro intero', () => {
+    // Dalla 0.124.0 la capacità sono le ore di tutti gli operatori: non dice
+    // quanto dura una fase. 16 h di fresatura a 8 al giorno sono 2 giorni, con
+    // o senza 20 h di capacità (prima: 20 ÷ 5 = 4 h al giorno, 4 giorni).
     const app = conDb();
     app.eval("Object.assign(getWorkCenter('fre'), { hoursPerDay: 0, capacityHours: 20 }); invalidateCaches();");
     const m = esplodi(app).phases[0];
-    assert.equal(m.due, '2026-10-08', 'la fresatura comincia giovedì 8');
+    assert.equal(m.due, '2026-10-12', 'la fresatura comincia lunedì 12');
   });
 
   it('attrezzaggio e coda allungano la fase interna', () => {
@@ -145,11 +148,10 @@ describe('Programmazione: i tempi', () => {
     assert.equal(esplodi(app).make[0].start, '2026-10-01');
   });
 
-  it('i giorni di montaggio, se non dichiarati, vengono dalle lavorazioni dell assieme', () => {
-    // 6 h × 2 gruppi = 12 h a 8 h/gg = 2 giorni: lo stesso risultato dei due dichiarati.
+  it('i giorni di montaggio vengono dalle fasi dell assieme, non dai vecchi dichiarati', () => {
+    // 6 h × 2 gruppi = 12 h a 8 h/gg = 2 giorni, anche con 9 giorni dichiarati.
     const app = conDb();
-    app.eval(`Object.assign(getItem('grp'), { assemblyDays: 0, operations: [{ workCenterId: 'tor', hours: 6, note: '' }] });
-      invalidateCaches();`);
+    app.eval(`getItem('grp').assemblyDays = 9; invalidateCaches();`);
     assert.equal(esplodi(app).make[0].due, '2026-10-14');
   });
 
@@ -185,7 +187,7 @@ describe('Programmazione: più domande e dati mancanti', () => {
   it('senza tempi dichiarati le date restano quelle della consegna, come prima', () => {
     const app = conDb();
     app.eval(`getItem('perno').cycle.forEach(r => { if (r.kind === 'op') { r.hours = 0; r.days = 0; } });
-      getItem('grp').assemblyDays = 0; getSupplier('beta').transitDays = 0; invalidateCaches();`);
+      asmCicloVivo(getItem('grp')).cycle.forEach(r => { r.hours = 0; }); getSupplier('beta').transitDays = 0; invalidateCaches();`);
     const e = esplodi(app);
     assert.equal(e.make[0].due, '2026-10-16');
     assert.equal(e.make[0].start, '2026-10-16');
@@ -256,7 +258,7 @@ describe('Programmazione: le schede', () => {
     const app = conDb();
     app.eval('delete db.settings.calendar; db.workCenters.forEach(w => { delete w.queueDays; }); migrateDB();');
     const r = ev(app, '[db.settings.calendar.workDays, db.settings.scheduleBufferDays, getWorkCenter(\'tor\').queueDays, getItem(\'grp\').assemblyDays]');
-    assert.deepEqual(r, [[1, 2, 3, 4, 5], 0, 0, 2]);
+    assert.deepEqual(r, [[1, 2, 3, 4, 5], 0, 0, 0]);
   });
 });
 
@@ -357,6 +359,7 @@ describe('Programma: l agenda del piano', () => {
       ['2026-10-06', 'invia', 'PERNO', 'da fare'],
       ['2026-10-12', 'rientro', 'PERNO', 'previsto'],
       ['2026-10-12', 'lavora', 'PERNO', 'previsto'],
+      ['2026-10-14', 'lavora', 'GRP', 'previsto'],
       ['2026-10-14', 'montaggio', 'GRP', 'previsto'],
       ['2026-10-16', 'consegna', 'GRP', 'previsto'],
     ]);
@@ -377,7 +380,7 @@ describe('Programma: l agenda del piano', () => {
     const app = oggi(conDb(), '2026-09-21');
     app.eval("currentPlanId = 'pl1';");
     const spec = ev(app, 'planAgendaExportSpec()');
-    assert.equal(spec.sezioni[0].righe.length, 8);
+    assert.equal(spec.sezioni[0].righe.length, 9);
     assert.equal(spec.sezioni[0].righe[0][1], 'Ordinare');
     assert.match(app.eval("renderPlanEdit('pl1')"), /Programma/);
   });

@@ -610,6 +610,33 @@ function siglaLibera(name, base, prese) {
   return proposta || 'XXX';
 }
 function isAssembly(t) { return t === 'macchina' || t === 'gruppo' || t === 'sottogruppo'; }
+// Le fasi del ciclo di un articolo: le sole righe di lavorazione, nell'ordine
+// in cui si eseguono. Una parte le ha accanto alla distinta parte, un assieme
+// (dalla 0.124.0) ha solo quelle.
+//
+// Le lavorazioni di un assieme di prima (`operations`) si leggono come fasi
+// anche se la migrazione non è passata — un archivio scritto a mano, un dato
+// arrivato per un'altra strada: le tiene in coda, come farebbe lei. Chi deve
+// *modificare* le fasi passa prima da asmCicloVivo, che le sposta davvero.
+function cicloFasi(it) {
+  const fasi = ((it && it.cycle) || []).filter(r => r && r.kind === 'op');
+  return it && isAssembly(it.type) && (it.operations || []).length ? fasi.concat(it.operations.map(asmOpInCiclo)) : fasi;
+}
+function asmCicloVivo(it) {
+  if (!it || !isAssembly(it.type)) return it;
+  if (!Array.isArray(it.cycle)) it.cycle = [];
+  if ((it.operations || []).length) { it.cycle = it.cycle.concat(it.operations.map(asmOpInCiclo)); it.operations = []; }
+  return it;
+}
+// Un assieme con almeno una fase: si monta con un ordine di produzione.
+function asmHaCiclo(it) { return !!it && isAssembly(it.type) && cicloFasi(it).length > 0; }
+// Una lavorazione d'assieme di prima della 0.124.0 come fase di ciclo.
+function asmOpInCiclo(o) {
+  const wc = (db.workCenters || []).find(w => w.id === o.workCenterId);
+  return { kind: 'op', itemId: null, workCenterId: o.workCenterId || null, supplierId: null,
+    costMode: 'orario', hours: Number(o.hours) || 0, rate: wc ? (Number(wc.hourlyRate) || 0) : 0,
+    days: 0, note: o.note || '' };
+}
 
 // ── Caricamento e migrazioni ────────────────────────────────
 // L'esito dell'ultimo caricamento, per chi deve dirlo all'utente. `null` = tutto
@@ -1030,9 +1057,20 @@ function migrateDB() {
     }
     if (isAssembly(it.type)) {
       if (!it.components) it.components = [];
-      if (!it.operations) it.operations = [];
-      // Giorni di montaggio dichiarati. Zero = si ricavano dalle ore delle
-      // lavorazioni dell'assieme, sul calendario dei centri.
+      // Dalla 0.124.0 anche un assieme ha un **ciclo**, come una parte: le
+      // lavorazioni di montaggio sono fasi con centro, terzista, modo di costo,
+      // ore o giorni, e da lì nascono l'ordine di produzione, il reparto, la
+      // capacità. Nel ciclo di un assieme stanno solo righe di lavorazione: i
+      // componenti restano nella distinta.
+      // Le vecchie lavorazioni (centro, ore, nota) passano in coda al ciclo,
+      // a costo orario con la tariffa del centro: lo stesso costo di prima.
+      // È deterministica (nessun id nuovo) e si ripete senza danni: finché il
+      // server ha ancora le righe vecchie ogni PC le riconverte allo stesso
+      // modo, e la prima modifica dell'assieme le porta su come fasi.
+      asmCicloVivo(it);
+      it.operations = [];
+      // Giorni di montaggio dichiarati. Zero = si ricavano dalle fasi del
+      // ciclo dell'assieme, sul calendario dei centri.
       if (it.assemblyDays == null) it.assemblyDays = 0;
     }
     if (it.type === 'parte' && !it.cycle) it.cycle = [];
