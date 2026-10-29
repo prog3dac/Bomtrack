@@ -100,7 +100,7 @@ function renderLogin() {
 }
 function loginProfiloDescr() {
   const p = PROFILI_AREE[val('login-profile')], el = document.getElementById('login-profile-descr');
-  if (p && el) el.textContent = p.descr + '. Le aree si cambiano poi da Gestione → Impostazioni.';
+  if (p && el) el.textContent = p.descr + '. Le aree si cambiano poi da Gestione → Aree e moduli.';
 }
 function submitLogin() {
   if (cloudInUso()) return submitLoginCloud();

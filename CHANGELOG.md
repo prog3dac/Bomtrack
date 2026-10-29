@@ -2,6 +2,23 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.127.0 — 2026-10-29
+
+**La seconda barra resta ferma in alto.** Le voci del gruppo aperto (per esempio *Articoli di progetto · Articoli d'acquisto · Gestione DB…*) restano sotto la barra dei gruppi anche quando si scorre la pagina: per cambiare voce non serve più tornare in cima. Al telefono le voci non vanno a capo ma scorrono di lato. Gli elenchi accanto ai documenti, che restano fermi anche loro, si mettono sotto la barra invece di finirci coperti.
+
+**Gestione con le schede in colonna.** Le diciotto schede passano da una fila di pulsanti in alto a una **colonna a sinistra**, ferma mentre la pagina scorre e raccolta per argomento: *Azienda* (Dati azienda, Utenti e accesso), *Anagrafiche* (Fornitori, Clienti, Condizioni offerta), *Classificazione articoli* (le tre Famiglie, Concetti, Unità di misura), *Pianificazione e produzione* (Calendario di fabbrica, Centri di lavoro), *Configurazione* (Aree e moduli, Costi e margini, Codifica articoli, Etichette QR), *Dati* (Import, Backup). Al telefono la colonna torna una riga che scorre di lato, con la scheda aperta sempre in vista.
+
+**Impostazioni divise per argomento.** La pagina unica, che mescolava costi, codici, sessione, aree, calendario ed etichette QR, diventa:
+- **Aree e moduli**: le aree e i moduli da accendere.
+- **Costi e margini**: spese generali, margine, valuta e, con il modulo Costi reali, il valore del magazzino (prima stava sotto i moduli).
+- **Codifica articoli**: cifre e prefissi dei codici automatici, e l'approvvigionamento proposto alle nuove parti.
+- **Calendario di fabbrica** ed **Etichette QR**, invariati.
+- La **durata della sessione** passa in *Utenti e accesso*.
+
+Ogni pagina ha il suo **Salva impostazioni**, che salva solo i campi che mostra: le altre pagine restano com'erano. Gli avvisi che rimandavano a *Gestione → Impostazioni* ora dicono la pagina giusta.
+
+**Manuale**: cap. 3 «La navigazione a due livelli», cap. 4, cap. 25 «Gestione» riscritto per gruppi e pagine.
+
 ### 0.125.0 — 2026-10-29
 
 **Distinta = cosa serve, ciclo = come si fa, anche per le parti.** Il materiale che serve per fare una parte (materie prime e commerciali) passa dalla sezione *Distinta parte* dei Cicli alla **distinta della parte**, in *Tecnico → Gestione DB*, come i componenti di un assieme. Nel ciclo restano le sole fasi.

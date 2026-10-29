@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.125.0**
+**Versione dell'app documentata: 0.127.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -158,7 +158,7 @@ accese (→ [cap. 25](#25-gestione), *Aree*):
 | Costruttore senza produzione interna | Magazzino e Pianificazione: ogni parte si compra |
 | Solo la base | nessuna: anagrafiche, distinte, acquisti e listini |
 
-È solo il punto di partenza: le aree si cambiano quando si vuole da *Gestione → Impostazioni*.
+È solo il punto di partenza: le aree si cambiano quando si vuole da *Gestione → Aree e moduli*.
 
 Insieme all'amministratore l'app carica dei **dati di esempio** — la macchina «Nastro Trasportatore
 NT-100» con i suoi gruppi, le sue parti e qualche fornitore. Servono a guardarsi intorno senza
@@ -169,7 +169,7 @@ partire dal vuoto. Quando si comincia a lavorare sul serio si azzerano da
 
 Si entra con **email e password**. La casella **Ricordami su questo PC** conserva l'email e tiene
 la sessione aperta fino a **Esci**; quanto duri lo decide l'amministratore in
-*Gestione → Impostazioni → Accesso* (0 giorni = non scade mai).
+*Gestione → Utenti e accesso* (0 giorni = non scade mai).
 
 ### La versione
 
@@ -243,7 +243,9 @@ scegliendo una voce.
 
 La barra dei comandi ha **sette gruppi**, ordinati come il lavoro scorre: dall'ufficio tecnico
 alla pianificazione, agli acquisti, all'officina, al magazzino. Cliccando un gruppo, le sue voci
-compaiono su una seconda riga; il gruppo con una voce sola non mostra la seconda riga. **Ogni gruppo
+compaiono su una seconda riga; il gruppo con una voce sola non mostra la seconda riga. Dalla 0.127.0
+la seconda riga **resta ferma in alto** sotto la barra dei gruppi anche quando si scorre la pagina
+(al telefono le voci che non ci stanno scorrono di lato). **Ogni gruppo
 ricorda l'ultima voce usata**: tornando su *Acquisti* si riapre dove si era rimasti.
 
 | Gruppo | Voci |
@@ -429,8 +431,8 @@ compilare la successiva:
 5. **Clienti** — l'anagrafica a monte delle commesse.
 6. **Centri di lavoro** — nome, **tariffa €/h** e **capacità in ore/settimana**; sotto ciascuno,
    i **fornitori di conto lavoro** che sanno fare quella lavorazione, con la loro tariffa.
-7. **Impostazioni** — spese generali %, margine %, valuta, approvvigionamento predefinito delle
-   parti, e i prefissi della codifica automatica.
+7. **Costi e margini** e **Codifica articoli** — spese generali %, margine %, valuta; i prefissi
+   della codifica automatica e l'approvvigionamento predefinito delle parti.
 
 > Saltare questo passo non blocca niente, ma costringe a tornare indietro: si scopre di non poter
 > scegliere l'unità di misura mentre si crea il primo articolo, o di non avere il centro di
@@ -802,7 +804,7 @@ cambia due cose insieme:
 | **Produzione interna** | distinta della parte + ciclo di lavorazione | l'app **scende dentro** e compra il materiale |
 | **Acquisto da fornitore** | il prezzo scelto a listino | la parte è una **foglia d'acquisto**, la distinta non si esplode |
 
-Le parti **nuove** nascono con l'impostazione predefinita (*Gestione → Impostazioni →
+Le parti **nuove** nascono con l'impostazione predefinita (*Gestione → Codifica articoli →
 Approvvigionamento parte*; di serie: *Acquisto da fornitore*). Cambiare quell'impostazione vale
 **solo per le prossime**: le parti già a catalogo restano come sono, perché cambiare
 retroattivamente riscriverebbe il fabbisogno di lavori già avviati.
@@ -1005,8 +1007,8 @@ CMM-MEC-CUS-001     commerciale   · famiglia MEC(canica) · sottofamiglia CUS(c
 PRT-…               parte non legata a una macchina
 ```
 
-I **prefissi** e il **numero di cifre** si cambiano in *Gestione → Impostazioni → Codifica
-automatica articoli*: di serie `CMM` per i commerciali, `MAT` per le materie prime, `PRT` per le
+I **prefissi** e il **numero di cifre** si cambiano in *Gestione → Codifica
+articoli*: di serie `CMM` per i commerciali, `MAT` per le materie prime, `PRT` per le
 parti, con 3 cifre.
 
 **Maiuscole e spazi non contano** (dalla 0.105.6). Per trovare il prossimo numero libero l'app
@@ -1241,7 +1243,7 @@ sue fasi.
 
 ### Varianti e configuratore (modulo, dalla 0.119.0)
 
-Il modulo si accende in *Gestione → Impostazioni → Moduli*. Serve quando la stessa macchina si
+Il modulo si accende in *Gestione → Aree e moduli*. Serve quando la stessa macchina si
 vende in più versioni: lunghezza 3, 4 o 5 m, motore standard o maggiorato. Invece di tenere a mano
 una distinta per combinazione, se ne tiene una sola, il **modello**, e il configuratore genera la
 macchina di ogni combinazione.
@@ -1504,7 +1506,7 @@ costo totale  = costo + spese generali (overhead %)
 prezzo vendita = costo totale × (1 + margine %)
 ```
 
-Le due percentuali stanno in *Gestione → Impostazioni* (di serie: **12%** di spese generali,
+Le due percentuali stanno in *Gestione → Costi e margini* (di serie: **12%** di spese generali,
 **20%** di margine), e si possono sovrascrivere per singola macchina da *Modifica testata*.
 Sono ammessi valori da 0 a 1000%.
 
@@ -1711,7 +1713,7 @@ fotocamera dentro l'app. Sotto c'è un campo di testo: accetta il codice scritto
 preme Invio.
 
 **L'indirizzo dentro il QR.** Il telefono deve sapere dove aprire l'app. Bomtrack usa l'indirizzo
-da cui è aperta, oppure quello scritto in *Gestione → Impostazioni → Etichette QR*. Se l'app è
+da cui è aperta, oppure quello scritto in *Gestione → Etichette QR*. Se l'app è
 aperta **dal disco** (doppio click su `index.html`) un indirizzo non c'è: le etichette funzionano
 lo stesso con **Scansiona**, ma non con la fotocamera del telefono, e la finestra lo dice prima di
 stampare.
@@ -2026,7 +2028,7 @@ consegna del gruppo (ven 16)
 terzisti: i giorni di consegna a listino, l'attraversamento e il trasporto del terzista e i ritardi
 confermati sugli ordini si contano **di serie in giorni lavorativi** del calendario di fabbrica,
 come li indica quasi ogni fornitore («10 gg lav.»). Se i tuoi fornitori dichiarano invece giorni di
-calendario, in *Gestione → Impostazioni → Calendario di fabbrica* scegli **Giorni di consegna di
+calendario, in *Gestione → Calendario di fabbrica* scegli **Giorni di consegna di
 fornitori e terzisti: Di calendario**: allora valgono pieni, sabati, domeniche e festivi compresi,
 come fino alla 0.109. In tutti e due i casi la data d'ordine o d'invio cade in un giorno lavorativo
 (se no si anticipa) e un arrivo previsto in un giorno di chiusura si riceve il primo giorno
@@ -2039,7 +2041,7 @@ lavorativo dopo. I dati salvati non cambiano: cambia solo come si contano.
 - Una fase **senza tempi** (zero ore, zero giorni) non sposta niente: senza dati le date restano
   quelle della consegna, come prima della 0.88.0.
 - Lo stesso articolo chiesto da due rami con date diverse tiene **la data più vicina**.
-- Un **margine fra livelli** (*Gestione → Impostazioni → Calendario di fabbrica*) anticipa ancora
+- Un **margine fra livelli** (*Gestione → Calendario di fabbrica*) anticipa ancora
   di qualche giorno lavorativo la data in cui un componente deve essere pronto.
 
 **Dove si vede.** In *Da acquistare* «Serve per» e «Ordinare entro» sono già scalati; in *Da far
@@ -2288,7 +2290,7 @@ consultabile, smette solo di impegnare. Si riapre quando serve.
 
 ### Alternativi e sostitutivi (modulo, dalla 0.118.0)
 
-Si accende in *Gestione → Impostazioni → Moduli*. Spento, non si vede niente di quanto segue e il
+Si accende in *Gestione → Aree e moduli*. Spento, non si vede niente di quanto segue e il
 fabbisogno lo ignora; i dati già scritti restano e riaccendendolo tornano com'erano.
 
 **Due cose diverse.** Un **alternativo** è un articolo equivalente, da usare al posto del
@@ -2921,14 +2923,39 @@ interventi li registra anche chi ha il ruolo *Officina e magazzino*.
 
 **Come ci si arriva.** ⚙️ *Gestione*. **La voce è visibile ai soli amministratori.**
 
-Quattordici schede. Sono gli archivi che alimentano i menu a tendina di tutto il resto dell'app.
+Le schede stanno in una **colonna a sinistra**, raccolte per argomento (dalla 0.127.0; prima erano
+una fila di pulsanti in alto). La colonna resta ferma mentre la pagina scorre; al telefono diventa
+una riga che scorre di lato.
 
-### 👥 Utenti
+| Gruppo | Schede |
+|---|---|
+| **Azienda** | Dati azienda · Utenti e accesso |
+| **Anagrafiche** | Fornitori · Clienti · Condizioni offerta |
+| **Classificazione articoli** | Famiglie commerciali · Famiglie materie prime · Famiglie parti · Concetti · Unità di misura |
+| **Pianificazione e produzione** | Calendario di fabbrica · Centri di lavoro |
+| **Configurazione** | Aree e moduli · Costi e margini · Codifica articoli · Etichette QR |
+| **Dati** | Import · Backup |
+
+Fino alla 0.126 *Impostazioni* era una pagina sola con costi, codifica, sessione, aree e moduli,
+calendario ed etichette QR. Ora ogni argomento ha la sua pagina, e il suo **Salva impostazioni**
+salva solo i campi di quella pagina. Sono gli archivi e le regole che alimentano tutto il resto
+dell'app.
+
+### 👥 Utenti e accesso
 
 Elenco con nome, email, ruolo e stato *Attivo / Sospeso*. Azioni per riga: **Modifica**,
 **Imposta password**, **Sospendi / Riattiva**, **Elimina**.
 Form del nuovo utente: Nome e cognome · Email · Username (facoltativo) · **Ruolo** · **Colore** ·
 Password iniziale. → [cap. 26](#26-utenti-e-ruoli)
+
+Sotto l'elenco, la **durata della sessione** (era in *Impostazioni → Accesso*):
+
+| Campo | Di serie |
+|---|---|
+| Durata della sessione salvata (giorni) | 30 — **0 = non scade mai** |
+
+La durata si conta dall'**ultimo uso**, e dalla 0.105.4 vale anche con l'archivio condiviso: chi
+non apre l'app per più giorni di così rientra con la password.
 
 ### 🏢 Dati azienda
 
@@ -2992,34 +3019,7 @@ Di serie: `pz, n, set, conf, kg, g, t, m, mm, m2, m3, l, h`.
 U.M. **in uso non si elimina** (il pannello mostra il numero di utilizzi). Le U.M. incontrate
 nell'import da Excel vengono registrate automaticamente.
 
-### ⚙️ Impostazioni
-
-**Costi e margini**
-
-| Campo | Di serie |
-|---|---|
-| Spese generali / overhead (%) | 12 |
-| Margine / markup (%) | 20 |
-| Simbolo valuta | € |
-| Approvvigionamento parte (predefinito) | Acquisto da fornitore |
-
-**Codifica automatica articoli**
-
-| Campo | Di serie |
-|---|---|
-| Cifre della parte incrementale | 3 |
-| Prefisso Commerciali | `CMM` |
-| Prefisso Materie prime | `MAT` |
-| Prefisso Parti | `PRT` |
-
-**Accesso**
-
-| Campo | Di serie |
-|---|---|
-| Durata della sessione salvata (giorni) | 30 — **0 = non scade mai** |
-
-La durata si conta dall'**ultimo uso**, e dalla 0.105.4 vale anche con l'archivio condiviso: chi
-non apre l'app per più giorni di così rientra con la password.
+### ⚙️ Aree e moduli
 
 **Aree** (dalla 0.121.0)
 
@@ -3055,7 +3055,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
 ricevute (gli ordini annullati non contano), nell'unità di gestione; non si salva, si ricalcola
 dagli ordini, e un articolo mai ricevuto vale il listino. Si vede nella scheda articolo, sezione
-Magazzino. Con il modulo acceso compare qui sotto la scelta **Valore del magazzino**: *a listino*
+Magazzino. Con il modulo acceso compare in *Costi e margini* la scelta **Valore del magazzino**: *a listino*
 (come prima) o *a costo medio*; vale per il Magazzino, il Cruscotto e le differenze d'inventario.
 Il modulo vive nella Pianificazione: spegnendo l'area si spegne anche lui.
 
@@ -3063,7 +3063,34 @@ Un modulo spento sparisce da schede, colonne e pulsanti, e il fabbisogno non ne 
 già scritti **restano**: riaccendendolo tornano com'erano. Con l'archivio condiviso la scelta vale
 per tutti i colleghi.
 
-**Calendario di fabbrica**
+### 💶 Costi e margini
+
+
+| Campo | Di serie |
+|---|---|
+| Spese generali / overhead (%) | 12 |
+| Margine / markup (%) | 20 |
+| Simbolo valuta | € |
+| Valore del magazzino (solo con il modulo Costi reali) | A listino |
+
+### 🏷 Codifica articoli
+
+**Codifica automatica articoli**
+
+| Campo | Di serie |
+|---|---|
+| Cifre della parte incrementale | 3 |
+| Prefisso Commerciali | `CMM` |
+| Prefisso Materie prime | `MAT` |
+| Prefisso Parti | `PRT` |
+
+**Nuove parti**
+
+| Campo | Di serie |
+|---|---|
+| Approvvigionamento parte (predefinito) | Acquisto da fornitore |
+
+### 🕒 Calendario di fabbrica
 
 | Campo | Di serie |
 |---|---|
@@ -3081,7 +3108,7 @@ ultimi si contano pieni. Le date d'ordine e d'invio che cadono su un giorno chiu
 lavorativo precedente, gli arrivi si spostano al lavorativo dopo. La soglia «da ordinare» del
 fabbisogno e del Riepilogo è di **5 giorni lavorativi**. Il santo patrono si scrive fra le chiusure.
 
-**Etichette QR**
+### 🔳 Etichette QR
 
 | Campo | Di serie |
 |---|---|
@@ -3744,7 +3771,7 @@ serie in *Gestione → Backup* li elenca) e si riesegue il file.
 
 Alcuni casi particolari:
 
-- **Le impostazioni** (*Gestione → Impostazioni*, unità di misura, condizioni d'offerta…) le
+- **Le impostazioni** (*Gestione → Aree e moduli*, *Costi e margini*, unità di misura, condizioni d'offerta…) le
   cambia solo l'amministratore. Una modifica fatta da un altro ruolo resta sul suo PC, e glielo
   si dice.
 - **Due amministratori sulle impostazioni** (dalla 0.105.6). Le impostazioni partono intere, e

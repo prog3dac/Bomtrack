@@ -236,7 +236,7 @@ function qrEtichetteModal(ids, tipo) {
   }
   window.__qrEtichette = { tipo: t, ids: recs.map(r => r.id) };
   const s = qrSettings();
-  const avviso = qrBaseUrl() ? '' : `<div class="rfq-warn">${ico('warning', 'tinted', '')} L'app è aperta dal disco: il QR non contiene un indirizzo, quindi la fotocamera del telefono non saprà dove andare. Si leggerà solo con <strong>Scansiona</strong> dentro Bomtrack. Per i telefoni, scrivi l'indirizzo dell'app in <em>Gestione › Impostazioni › Etichette QR</em>.</div>`;
+  const avviso = qrBaseUrl() ? '' : `<div class="rfq-warn">${ico('warning', 'tinted', '')} L'app è aperta dal disco: il QR non contiene un indirizzo, quindi la fotocamera del telefono non saprà dove andare. Si leggerà solo con <strong>Scansiona</strong> dentro Bomtrack. Per i telefoni, scrivi l'indirizzo dell'app in <em>Gestione › Etichette QR</em>.</div>`;
   const elenco = recs.slice(0, 200).map((r, i) => {
     const e = qrEtichettaTesti(t, r);
     return `<div class="mgmt-item">
@@ -308,7 +308,7 @@ function qrApri(letto) {
   // Un'ubicazione, un ODP o un ODL di un'area spenta: la scheda porterebbe a
   // finestre che non ci sono.
   const vista = { ubi: 'stock', odp: 'odp', odl: 'odl' }[r.tipo];
-  if (vista && !vistaAttiva(vista)) { showToast(`${AREE[areaDiVista(vista)].nome}: area spenta in Gestione → Impostazioni`, 'error'); return false; }
+  if (vista && !vistaAttiva(vista)) { showToast(`${AREE[areaDiVista(vista)].nome}: area spenta in Gestione → Aree e moduli`, 'error'); return false; }
   qrSchedaModal(r.tipo, r.rec);
   return true;
 }
