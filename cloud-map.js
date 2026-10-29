@@ -244,7 +244,8 @@ const CLOUD_TYPES = (() => {
     'unitCost', 'purchasePrice', 'altFactor', 'overheadPctOverride', 'marginPctOverride', 'hourlyRate',
     'capacityHours', 'hoursPerDay', 'operators', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size'].forEach(k => { t[k] = 'numeric'; });
   ['pos', 'runFrom', 'runTo', 'seq', 'opIndex', 'passata', 'page', 'incrDigitsN', 'incrDigitsS', 'gCodeLen'].forEach(k => { t[k] = 'int'; });
-  ['everyDays', 'everyHours'].forEach(k => { t[k] = 'numeric'; });
+  ['everyDays', 'everyHours', 'machineRate', 'hoursStart'].forEach(k => { t[k] = 'numeric'; });
+  t.year = 'int';
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'plannedStart', 'plannedEnd', 'downFrom', 'downTo'].forEach(k => { t[k] = 'date'; });
   ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt', 'startedAt', 'endedAt'].forEach(k => { t[k] = 'timestamptz'; });
   ['active', 'favorite', 'obsolete', 'done', 'codeManual'].forEach(k => { t[k] = 'bool'; });

@@ -48,7 +48,7 @@ function timbraInizia(odpId, faseId) {
   if (logApertoDiFase(odpId, faseId, chi)) return true;
   const aperto = logAperto(chi);
   if (aperto) Store.update('timeLogs', aperto.id, { endedAt: nowISO() });
-  Store.insert('timeLogs', { id: gid(), odpId, phaseId: faseId, workCenterId: f.workCenterId || null, userId: chi,
+  Store.insert('timeLogs', { id: gid(), odpId, phaseId: faseId, workCenterId: f.workCenterId || null, machineId: f.machineId || null, userId: chi,
     startedAt: nowISO(), endedAt: null, note: '', active: true });
   saveDB();
   return true;
@@ -82,7 +82,8 @@ function repartoFasi(centroId) {
     if (!ODP_APERTI.includes(o.status)) return;
     (o.phases || []).forEach(f => {
       if (f.supplierId) return;
-      if (centroId && f.workCenterId !== centroId) return;
+      // Il filtro è un centro, o una macchina («m:<id>», modulo Macchine utensili).
+      if (centroId && (String(centroId).startsWith('m:') ? f.machineId !== centroId.slice(2) : f.workCenterId !== centroId)) return;
       const stato = opStatoFase(o, f);
       if (stato !== 'avviabile' && stato !== 'corso') return;
       out.push({ o, f, stato });
@@ -119,7 +120,8 @@ function renderReparto() {
   invalidateCaches();
   const centri = (db.workCenters || []).filter(w => w.active !== false);
   let centro = repartoCentroScelto();
-  if (centro && !centri.some(w => w.id === centro)) centro = '';
+  const conMacchine = moduloAttivo('macchine');
+  if (centro && !(centro.startsWith('m:') ? conMacchine && machines().some(m => 'm:' + m.id === centro) : centri.some(w => w.id === centro))) centro = '';
   const fasi = repartoFasi(centro);
   const chi = utenteId();
   const mio = logAperto(chi);
@@ -135,7 +137,7 @@ function renderReparto() {
       : `<button class="add-btn-sm reparto-btn" onclick="repartoInizia('${o.id}','${f.id}')">${ico('factory', '', '')} ${stato === 'corso' && ore > 0 ? 'Riprendi' : 'Inizia'}</button>
          ${stato === 'corso' ? `<button class="btn-outline reparto-btn" onclick="opDichiaraModal('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Dichiara</button>` : ''}`;
     return `<div class="reparto-card${aperto ? ' attiva' : ''}">
-      <div class="reparto-testa"><strong>${esc(o.number || '')}</strong> · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}
+      <div class="reparto-testa"><strong>${esc(o.number || '')}</strong> · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}${conMacchine && f.machineId ? ' · ' + esc(machineLabel(getMachine(f.machineId)) || f.machineName || '') : ''}
         <span class="doc-badge">${aperto ? 'In lavorazione' : esc(ODP_FASE_LABELS[stato] || stato)}</span></div>
       <div>${esc(o.code || '')} ${esc(o.name || '')}${o.dueDate ? ` <span class="empty-text" style="padding:0">· serve il ${esc(fmtDateIt(o.dueDate))}</span>` : ''}</div>
       <div class="empty-text" style="text-align:left;padding:4px 0">Da fare ${fmtQtyIt(opResidua(o, f))} di ${fmtQtyIt(opDaFare(o, f))} pz · timbrate ${fmtOre(ore)}${previste > 0 ? ` su ${fmtOre(previste)} previste` : ''}${altri ? ` · ${altri === 1 ? 'un collega ci sta lavorando' : altri + ' colleghi ci stanno lavorando'}` : ''}</div>
@@ -148,11 +150,12 @@ function renderReparto() {
     <div class="catalog-filters">
       <select onchange="repartoSetCentro(this.value)" aria-label="Centro di lavoro">
         <option value="">Tutti i centri</option>
-        ${centri.map(w => `<option value="${esc(w.id)}" ${w.id === centro ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}
+        ${centri.map(w => `<option value="${esc(w.id)}" ${w.id === centro ? 'selected' : ''}>${esc(w.name)}</option>`
+          + (conMacchine ? macchineDelCentro(w.id).filter(m => m.active !== false).map(m => `<option value="m:${esc(m.id)}" ${'m:' + m.id === centro ? 'selected' : ''}>&nbsp;&nbsp;↳ ${esc(machineLabel(m))}</option>`).join('') : '')).join('')}
       </select>
     </div>
     ${mio && !fasi.some(x => x.o.id === mio.odpId && x.f.id === mio.phaseId) ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Hai una timbratura aperta su un'altra fase: ${esc((getOdp(mio.odpId) || {}).number || '')}. Cominciando questa, quella va in pausa.</div>` : ''}
-    <div class="reparto-lista">${fasi.length ? fasi.map(card).join('') : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? ' su questo centro' : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
+    <div class="reparto-lista">${fasi.length ? fasi.map(card).join('') : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
   </div>`;
 }
 
@@ -178,15 +181,20 @@ function maintStato(p, oggi) {
   const dal = ult ? String(ult.date).slice(0, 10) : String(p.createdAt || g).slice(0, 10);
   const giorni = Number(p.everyDays) || 0, ore = Number(p.everyHours) || 0;
   const scadenza = giorni > 0 ? addDays(dal, giorni) : '';
-  const oreFatte = ore > 0 ? oreCentroDal(p.workCenterId, dal) : 0;
+  // Un piano di una macchina conta le ore di quella macchina, non del reparto.
+  const perMacchina = p.machineId && moduloAttivo('macchine');
+  const oreFatte = ore > 0 ? (perMacchina ? oreMacchinaDal(p.machineId, dal) : oreCentroDal(p.workCenterId, dal)) : 0;
   const perOre = ore > 0 && oreFatte >= ore;
   const perData = !!scadenza && scadenza <= g;
   const vicino = !!scadenza && !perData && scadenza <= addDays(g, 7) || (ore > 0 && !perOre && oreFatte >= ore * 0.9);
   return { dal, scadenza, oreFatte, scaduto: perOre || perData, vicino, ultimo: ult };
 }
 // I giorni di fermo di un centro: gli interventi registrati con un fermo.
+// Con il modulo Macchine utensili il fermo di una macchina ferma lei sola
+// (macchinaFerma, quotaCentroAttiva in macchine.js); senza, ferma il centro.
 function fermiCentro(workCenterId) {
-  return maintEvents().filter(e => e.workCenterId === workCenterId && e.downFrom)
+  const perMacchina = moduloAttivo('macchine');
+  return maintEvents().filter(e => e.workCenterId === workCenterId && e.downFrom && !(perMacchina && e.machineId))
     .map(e => ({ from: String(e.downFrom).slice(0, 10), to: String(e.downTo || e.downFrom).slice(0, 10) }));
 }
 function centroFermo(workCenterId, iso) {
@@ -197,11 +205,11 @@ function centroFermo(workCenterId, iso) {
 function maintPlanModal(id) {
   if (!roleGuard('manage')) return;
   const p = id ? getMaintPlan(id) : null;
-  const centri = (db.workCenters || []).filter(w => w.active !== false || (p && w.id === p.workCenterId));
   const ric = (p && p.ricambi || []).map(r => { const it = getItem(r.itemId); return it ? `${it.code} ${r.qty}` : ''; }).filter(Boolean).join('\n');
+  const conMacchine = moduloAttivo('macchine');
   openModal(`<h3>${ico('wrench', 'tinted pill', '')} ${p ? 'Piano di manutenzione' : 'Nuovo piano di manutenzione'}</h3>
     <div class="modal-grid">
-      <div class="modal-field"><label>Centro di lavoro</label><select id="mp-wc">${centri.map(w => `<option value="${esc(w.id)}" ${p && p.workCenterId === w.id ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select></div>
+      <div class="modal-field"><label>${conMacchine ? 'Centro o macchina' : 'Centro di lavoro'}</label><select id="mp-wc">${doveOptions(doveValore(p))}</select></div>
       <div class="modal-field"><label>Intervento</label><input id="mp-title" value="${esc(p ? p.title : '')}" placeholder="es. cambio olio mandrino"></div>
       <div class="modal-field"><label>Ogni (giorni)</label><input id="mp-days" type="number" min="0" step="1" value="${p && p.everyDays ? esc(String(p.everyDays)) : ''}"></div>
       <div class="modal-field"><label>Ogni (ore lavorate)</label><input id="mp-hours" type="number" min="0" step="1" value="${p && p.everyHours ? esc(String(p.everyHours)) : ''}"></div>
@@ -209,7 +217,7 @@ function maintPlanModal(id) {
         <textarea id="mp-ric" rows="3">${esc(ric)}</textarea></div>
       <div class="modal-field" style="grid-column:1/-1"><label>Note</label><input id="mp-notes" value="${esc(p ? p.notes || '' : '')}"></div>
     </div>
-    <p class="empty-text" style="text-align:left;padding:4px 0">Scade quando passano i giorni o quando il centro ha lavorato le ore, la prima delle due. Le ore sono quelle timbrate dal terminale di reparto.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0">Scade quando passano i giorni o quando ${conMacchine ? 'il centro (o la macchina)' : 'il centro'} ha lavorato le ore, la prima delle due. Le ore sono quelle timbrate dal terminale di reparto${conMacchine ? '; per una macchina, divise per gli operatori della fase' : ''}.</p>
     <div class="modal-actions">
       ${p ? `<button class="btn-ghost" style="margin-right:auto;color:var(--red)" onclick="maintPlanElimina('${p.id}')">Elimina</button>` : ''}
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
@@ -235,7 +243,9 @@ function maintPlanSave(id) {
   const everyDays = numVal('mp-days', 0), everyHours = numVal('mp-hours', 0);
   if (!(everyDays > 0) && !(everyHours > 0)) { showToast('Serve una scadenza: ogni quanti giorni o quante ore', 'error'); return; }
   const { ricambi, scartate } = leggiRicambi(val('mp-ric'));
-  const dati = { workCenterId: val('mp-wc') || null, title, everyDays, everyHours, ricambi, notes: val('mp-notes') };
+  const dove = leggiDove(val('mp-wc'));
+  if (!dove.workCenterId) { showToast('Scegli il centro', 'error'); return; }
+  const dati = { workCenterId: dove.workCenterId, machineId: dove.machineId, title, everyDays, everyHours, ricambi, notes: val('mp-notes') };
   if (id) Store.update('maintPlans', id, dati);
   else Store.insert('maintPlans', Object.assign({ id: gid(), active: true }, dati));
   saveDB(); closeModal(); renderManutenzione();
@@ -248,13 +258,16 @@ function maintPlanElimina(id) {
     Store.update('maintPlans', id, { active: false }); saveDB(); closeModal(); renderManutenzione();
   });
 }
-function maintEventModal(planId, workCenterId) {
+// `dove` è un centro o una macchina, come nella tendina (leggiDove): «wc:…»,
+// «m:…», o l'id nudo di un centro.
+function maintEventModal(planId, dove) {
   if (!roleGuardShop('docs')) return;
   const p = planId ? getMaintPlan(planId) : null;
-  const wc = getWorkCenter(p ? p.workCenterId : workCenterId);
+  const d = p ? { workCenterId: p.workCenterId, machineId: moduloAttivo('macchine') ? p.machineId || null : null } : leggiDove(dove);
+  const wc = getWorkCenter(d.workCenterId);
   const ric = (p && p.ricambi || []).map(r => { const it = getItem(r.itemId); return it ? `${it.code} ${r.qty}` : ''; }).filter(Boolean).join('\n');
   openModal(`<h3>${ico('wrench', 'tinted pill', '')} Registra intervento</h3>
-    <p><strong>${esc(wc ? wc.name : '')}</strong>${p ? ' — ' + esc(p.title) : ''}</p>
+    <p><strong>${esc(dovePlanLabel(d))}</strong>${p ? ' — ' + esc(p.title) : ''}</p>
     <div class="modal-grid">
       <div class="modal-field"><label>Data</label><input id="me-date" type="date" value="${esc(oggiISO())}"></div>
       <div class="modal-field"></div>
@@ -263,24 +276,26 @@ function maintEventModal(planId, workCenterId) {
       <div class="modal-field" style="grid-column:1/-1"><label>Ricambi usati (escono dal magazzino)</label><textarea id="me-ric" rows="3">${esc(ric)}</textarea></div>
       <div class="modal-field" style="grid-column:1/-1"><label>Nota</label><input id="me-note" placeholder="cosa si è fatto"></div>
     </div>
-    <p class="empty-text" style="text-align:left;padding:4px 0">Un fermo anche futuro si scrive qui: la capacità finita non mette fasi su quel centro in quei giorni.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0">Un fermo anche futuro si scrive qui: la capacità finita non mette fasi su ${d.machineId ? 'quella macchina' : 'quel centro'} in quei giorni${d.machineId ? ', e il centro lavora con le altre' : ''}.</p>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
-      <button class="add-btn-sm" onclick="maintEventSave('${p ? p.id : ''}','${esc(wc ? wc.id : '')}')">Registra</button>
+      <button class="add-btn-sm" onclick="maintEventSave('${p ? p.id : ''}','${esc(d.machineId ? 'm:' + d.machineId : wc ? 'wc:' + wc.id : '')}')">Registra</button>
     </div>`, false, 'form');
 }
-function maintEventSave(planId, workCenterId) {
+function maintEventSave(planId, dove) {
   if (!roleGuardShop('docs')) return;
   const date = val('me-date') || oggiISO();
   const downFrom = val('me-from'), downTo = val('me-to');
   if (downTo && !downFrom) { showToast('Il fermo ha bisogno della data d\'inizio', 'error'); return; }
   if (downFrom && downTo && downTo < downFrom) { showToast('Il fermo finisce prima di cominciare', 'error'); return; }
   const { ricambi, scartate } = leggiRicambi(val('me-ric'));
-  const ev = Store.insert('maintEvents', { id: gid(), planId: planId || null, workCenterId: workCenterId || null, date,
+  // Un intervento di un piano sta dove sta il piano.
+  const p = planId ? getMaintPlan(planId) : null;
+  const d = p ? { workCenterId: p.workCenterId || null, machineId: p.machineId || null } : leggiDove(dove);
+  const ev = Store.insert('maintEvents', { id: gid(), planId: planId || null, workCenterId: d.workCenterId, machineId: d.machineId, date,
     downFrom: downFrom || null, downTo: downTo || downFrom || null, ricambi, note: val('me-note'), active: true });
   if (!ev) return;
-  const wc = getWorkCenter(workCenterId);
-  ricambi.forEach(r => addMovement(r.itemId, 'scarico', -r.qty, `Manutenzione ${wc ? wc.name : ''}`.trim(), { orderId: ev.id }));
+  ricambi.forEach(r => addMovement(r.itemId, 'scarico', -r.qty, `Manutenzione ${dovePlanLabel(d)}`.trim(), { orderId: ev.id }));
   saveDB(); closeModal(); renderManutenzione();
   if (scartate.length) showToast('Registrato, ma questi ricambi non li ho trovati: ' + scartate.join(', '), 'error');
   else savedToast('Intervento registrato');
@@ -294,15 +309,15 @@ function renderManutenzione() {
     .sort((a, b) => (b.s.scaduto - a.s.scaduto) || String(a.s.scadenza || '9999').localeCompare(String(b.s.scadenza || '9999')));
   const gestisce = canWrite('manage'), registra = canWriteShop('docs');
   const righe = piani.map(({ p, s, wc }) => `<tr>
-      <td>${esc(wc ? wc.name : '(centro mancante)')}</td><td>${esc(p.title)}</td>
+      <td>${esc(dovePlanLabel(p))}</td><td>${esc(p.title)}</td>
       <td>${[p.everyDays ? `ogni ${p.everyDays} gg` : '', p.everyHours ? `ogni ${p.everyHours} h` : ''].filter(Boolean).join(' o ')}</td>
       <td>${s.ultimo ? esc(fmtDateIt(s.ultimo.date)) : '<span class="empty-text" style="padding:0">mai</span>'}</td>
       <td style="color:${s.scaduto ? 'var(--red)' : s.vicino ? 'var(--orange)' : 'inherit'}">${s.scaduto ? 'Scaduto' : s.scadenza ? esc(fmtDateIt(s.scadenza)) : '—'}${p.everyHours ? ` · ${fmtQtyIt(+s.oreFatte.toFixed(1))} / ${p.everyHours} h` : ''}</td>
       <td style="white-space:nowrap">${registra ? `<button class="btn-outline" onclick="maintEventModal('${p.id}')">Registra</button>` : ''}
         ${gestisce ? `<button class="btn-ghost" onclick="maintPlanModal('${p.id}')">${ico('edit', 'tinted', 'Modifica')}</button>` : ''}</td></tr>`).join('');
   const storico = maintEvents().slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 30).map(e => {
-    const wc = getWorkCenter(e.workCenterId), p = getMaintPlan(e.planId);
-    return `<tr><td>${esc(fmtDateIt(e.date))}</td><td>${esc(wc ? wc.name : '')}</td><td>${esc(p ? p.title : 'fuori piano')}</td>
+    const p = getMaintPlan(e.planId);
+    return `<tr><td>${esc(fmtDateIt(e.date))}</td><td>${esc(dovePlanLabel(e))}</td><td>${esc(p ? p.title : 'fuori piano')}</td>
       <td>${e.downFrom ? `${esc(fmtDateIt(e.downFrom))}${e.downTo && e.downTo !== e.downFrom ? ' → ' + esc(fmtDateIt(e.downTo)) : ''}` : '—'}</td>
       <td>${(e.ricambi || []).map(r => { const it = getItem(r.itemId); return it ? esc(it.code) + ' ×' + fmtQtyIt(r.qty) : ''; }).filter(Boolean).join(', ') || '—'}</td>
       <td>${esc(e.note || '')}</td></tr>`;
@@ -315,7 +330,7 @@ function renderManutenzione() {
       ${righe ? `<div class="table-wrap"><table class="dash-table"><thead><tr><th>Centro</th><th>Intervento</th><th>Frequenza</th><th>Ultimo</th><th>Prossimo</th><th></th></tr></thead><tbody>${righe}</tbody></table></div>`
         : '<div class="empty-text">Nessun piano di manutenzione. Uno per intervento ricorrente su un centro: ogni quanti giorni, o ogni quante ore lavorate.</div>'}</div>
     <div class="mrp-section"><div class="cycle-section-head"><h3>Interventi registrati</h3>
-      ${registra && (db.workCenters || []).length ? `<select onchange="if(this.value){maintEventModal('', this.value); this.value='';}" aria-label="Intervento fuori piano"><option value="">+ Intervento fuori piano…</option>${(db.workCenters || []).filter(w => w.active !== false).map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select>` : ''}</div>
+      ${registra && (db.workCenters || []).length ? `<select onchange="if(this.value){maintEventModal('', this.value); this.value='';}" aria-label="Intervento fuori piano"><option value="">+ Intervento fuori piano…</option>${doveOptions('')}</select>` : ''}</div>
       ${storico ? `<div class="table-wrap"><table class="dash-table"><thead><tr><th>Data</th><th>Centro</th><th>Intervento</th><th>Fermo</th><th>Ricambi</th><th>Nota</th></tr></thead><tbody>${storico}</tbody></table></div>`
         : '<div class="empty-text">Nessun intervento registrato.</div>'}</div>
   </div>`;
