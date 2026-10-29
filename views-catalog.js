@@ -841,7 +841,7 @@ function catalogRow(i, scope) {
     ${scope === 'design' ? catalogDesignCells(i) : ''}
     <td class="row-actions" style="text-align:right;white-space:nowrap">
       ${hasPriceList(i) ? `<button class="mini-btn" title="Listino fornitori e storico prezzi" onclick="priceListModal('${i.id}')">${ico('euro', 'tinted', 'Listino fornitori e storico prezzi')}</button>` : ''}
-      ${i.type === 'parte' ? `<button class="mini-btn" title="Distinta parte e ciclo di lavorazione" onclick="openCycleFor('${i.id}')">${ico('wrench', 'tinted', 'Distinta parte e ciclo di lavorazione')}</button>` : ''}
+      ${i.type === 'parte' && vistaAttiva('cycles') ? `<button class="mini-btn" title="Distinta parte e ciclo di lavorazione" onclick="openCycleFor('${i.id}')">${ico('wrench', 'tinted', 'Distinta parte e ciclo di lavorazione')}</button>` : ''}
       <button class="mini-btn" title="Apri documento" onclick="allegatoApriPrimo('${i.id}')">${ico('file', 'tinted', 'Apri documento')}</button>
       <button class="mini-btn" title="Allegati: disegni e schede tecniche" onclick="allegatiModal('${i.id}')">${ico('folder', 'tinted', 'Allegati')}${allegatiCount(i.id) ? '<span class="mini-count">' + allegatiCount(i.id) + '</span>' : ''}</button>
       <button class="mini-btn" title="Dove è usato e impatto costi" onclick="usageModal('${i.id}')">${ico('link', 'tinted', 'Dove è usato e impatto costi')}</button>
@@ -1075,7 +1075,7 @@ const CATALOG_EXPORT_COLS = {
   notes: { h: 'Note', w: 30, v: i => i.notes || '' },
   autore: { h: 'Creato/aggiornato da', w: 24, v: i => recordAuthorShort(i) },
   concept: { h: 'Concetto', w: 20, v: i => (i.type === 'parte' ? conceptName(i.conceptId) || '' : '') },
-  sourcing: { h: 'Approvvigionamento', w: 16, v: i => (i.type === 'parte' ? PART_SOURCING[partSourcing(i)] || '' : '') },
+  sourcing: { h: 'Approvvigionamento', w: 16, v: i => (i.type === 'parte' ? PART_SOURCING[partSourcingScritto(i)] || '' : '') },
 };
 // Etichette del menu "Tipo" (l'elenco è ristretto ai tipi della vista di provenienza)
 const TYPE_OPTION_LABELS = {
@@ -1158,7 +1158,7 @@ function itemModalBody(it, scope) {
     <div class="modal-grid">
       <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()" ${dis(lock.structLocked)} title="${lock.structLocked ? 'Articolo già usato: cambiare l\'unità reinterpreterebbe giacenza, distinte e costi' : ''}">${uomOptions(it ? (it.uom || defaultUom()) : defaultUom())}</select></div>
       <div class="modal-field" id="fld-sourcing"><label>Approvvigionamento</label>
-        <select id="it-sourcing">${partSourcingOptions(it ? partSourcing(it) : defaultPartSourcing())}</select></div>
+        <select id="it-sourcing">${partSourcingOptions(it ? partSourcingScritto(it) : defaultPartSourcing())}</select></div>
       <div class="modal-field" id="fld-assembly-note" style="grid-column:1/-1"><label>Composizione</label><span class="empty-text" style="padding:0">La distinta (componenti e lavorazioni) si gestisce in <strong>Tecnico → Gestione DB</strong>.</span></div>
     </div>
     <div class="modal-field" id="fld-pricing">
@@ -1423,11 +1423,11 @@ function toggleItemFields() {
   if (t === 'parte') updatePartNamePreview();
   // Prezzo e fornitore: riepilogo in sola lettura, si modificano solo dal listino
   mostra('fld-pricing', hasPriceList({ type: t }));
-  mostra('fld-sourcing', t === 'parte');
+  mostra('fld-sourcing', t === 'parte' && areaAttiva('produzione'));
   const showFam = usesFamily(t);
   mostra('fld-family', showFam);
   mostra('fld-assembly-note', isAssembly(t));
-  mostra('fld-cycle', t === 'parte');
+  mostra('fld-cycle', t === 'parte' && areaAttiva('produzione'));
   // Flag: preferito su commerciali e materie prime, obsoleto su qualunque tipo
   // — è l'unico modo per ritirare un codice già usato e sbagliato, senza
   // eliminarlo e perdere lo storico che lo referenzia.
@@ -1436,7 +1436,7 @@ function toggleItemFields() {
   mostra('fld-flags', true);
   // Magazzino: solo su ciò che si tiene a scorta. Un assieme si produce, e la
   // sua giacenza sarebbe quella dei componenti contata due volte.
-  mostra('fld-stock', hasStock({ type: t }));
+  mostra('fld-stock', hasStock({ type: t }) && giacenzeVisibili());
   // Doppia unità: solo dove esiste un listino, perché è il prezzo del fornitore
   // che può essere espresso in un'altra unità.
   mostra('fld-altuom', hasPriceList({ type: t }));
@@ -1554,6 +1554,7 @@ function ensureCurrentCycleItem(parts) {
 function openCycleFor(id) {
   const it = getItem(id);
   if (!it || it.type !== 'parte') return;
+  if (!vistaAttiva('cycles')) { setView('cycles'); return; }   // avvisa e resta al Riepilogo
   currentCycleItemId = id;
   setVal('cyc-search', ''); setVal('cyc-family', ''); setVal('cyc-subfamily', '');
   // Anche lo scope condiviso (filters.js), altrimenti setView lo riscriverebbe
@@ -2100,7 +2101,7 @@ function applyItemSource(id) {
     setVal('it-altfactor', src.altFactor != null ? src.altFactor : '');
     if (typeof itemUomLabelsRefresh === 'function') itemUomLabelsRefresh();
   }
-  if (src.type === 'parte') setVal('it-sourcing', partSourcing(src));
+  if (src.type === 'parte') setVal('it-sourcing', partSourcingScritto(src));
   setVal('it-notes', src.notes || '');
   setVal('it-code', '');
   refreshItemCode();
@@ -2147,7 +2148,12 @@ function readItemForm(it) {
   // L'approvvigionamento prima del listino: la quotazione in uso si applica
   // solo a una parte comprata, e passando da «fabbrica» a «compra» il costo
   // restava quello vecchio (dalla 0.105.5).
-  if (it.type === 'parte') { const s = val('it-sourcing'); if (PART_SOURCING[s]) it.sourcing = s; }
+  // Con la Produzione interna spenta il campo è nascosto: una parte nuova
+  // nasce «compra», una esistente resta com'era scritta.
+  if (it.type === 'parte') {
+    const s = areaAttiva('produzione') ? val('it-sourcing') : (it.sourcing || 'buy');
+    if (PART_SOURCING[s]) it.sourcing = s;
+  }
   // Parametri di scorta: solo su ciò che si tiene a magazzino. Vuoto resta
   // vuoto — zero e "non impostato" qui vogliono dire la stessa cosa, ma un
   // campo lasciato in bianco non deve comparire come 0 alla riapertura.

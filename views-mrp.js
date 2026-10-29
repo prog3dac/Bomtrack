@@ -1560,7 +1560,7 @@ function delPlan(id) {
     removeConUndo('plans', id, `Piano ${p.number} eliminato`, renderMrp);
   }));
 }
-function openPlanEdit(id) { currentPlanId = id; mrpView = 'edit'; renderMrp(); }
+function openPlanEdit(id) { if (!vistaAttiva('mrp')) return; currentPlanId = id; mrpView = 'edit'; renderMrp(); }
 // Aperto / chiuso. È l'unico stato che un piano ha, ed esiste per una ragione
 // sola: un piano aperto **impegna** materiale a magazzino, uno chiuso no.
 // Senza questo interruttore ogni piano mai creato continuerebbe a promettere
@@ -2302,6 +2302,7 @@ function planListRows() {
 function renderPlanEdit(id) {
   const p = getPlan(id);
   const exp = mrpExplodePlan(p);
+  const prodInterna = areaAttiva('produzione');
   const buy = mrpRowsOf(exp.buy, id);
   // Al netto dei pezzi già fatti, come i documenti che ne nascono (0.105.5).
   const fasi = mrpPhaseRowsNette(id, exp.phases);
@@ -2383,9 +2384,9 @@ function renderPlanEdit(id) {
       ${kpi('Totale acquisti', fmtN(totale), 'accent')}
       ${kpi('Articoli da comprare', String(buy.length), 'orange')}
       ${kpi('Fornitori coinvolti', String(fornitori), '')}
-      ${kpi('Parti da fabbricare', String(exp.make.length), 'purple')}
-      ${fasi.length ? kpi('Conto lavoro', fmtN(totaleCl), 'green') : ''}
-      ${planAvanzamentoKpi(id, exp.make)}
+      ${prodInterna ? kpi('Parti da fabbricare', String(exp.make.length), 'purple') : ''}
+      ${prodInterna && fasi.length ? kpi('Conto lavoro', fmtN(totaleCl), 'green') : ''}
+      ${prodInterna ? planAvanzamentoKpi(id, exp.make) : ''}
     </div>
     ${exp.cycle ? '<div class="empty-text" style="color:var(--red)">' + ico('warning', 'tinted', '') + ' Rilevato riferimento ciclico nelle distinte: il fabbisogno è troncato su quel ramo.</div>' : ''}
 
@@ -2442,7 +2443,9 @@ function renderPlanEdit(id) {
           ${loadTableHtml(mrpLoad(p), id)}
         </div>` },
       { id: 'docs', label: 'Documenti', n: planDocsCount(id), html: planDocsList(id) || '<p class="empty-text">Nessun documento generato da questo piano: si creano dai pulsanti «Genera» delle altre schede.</p>' },
-    ])}</div>`;
+    // Senza Produzione interna non c'è niente da fabbricare né da far lavorare
+    // fuori, e nessun centro da caricare: restano acquisti e montaggio.
+    ].filter(t => prodInterna || !PLAN_TAB_PRODUZIONE.includes(t.id)))}</div>`;
 }
 // ─── Le schede del piano ───
 // Fino alla 0.91 le sezioni stavano una sotto l'altra — acquisti, conto
@@ -2458,6 +2461,7 @@ function renderPlanEdit(id) {
 // La scheda scelta vale per tutti i piani e dura quanto la sessione, come la
 // memoria dei gruppi della barra.
 let planTab = 'buy';
+const PLAN_TAB_PRODUZIONE = ['cl', 'make', 'load'];
 function planDocsCount(planId) {
   const d = planDocs(planId);
   return d.rfqs.length + d.orders.length + d.workOrders.length + d.prodOrders.length;

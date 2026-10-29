@@ -97,6 +97,11 @@
         <label class="sr-only" for="login-password">Password</label>
         <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()">
       </div>
+      <div class="login-field" id="login-setup-profile" style="display:none">
+        <label for="login-profile" style="display:block;font-size:13px;color:var(--text-dim);margin-bottom:4px">Come lavora l'azienda</label>
+        <select id="login-profile" onchange="loginProfiloDescr()"></select>
+        <p class="login-profile-descr" id="login-profile-descr">Le aree si cambiano poi da Gestione → Impostazioni.</p>
+      </div>
       <div class="login-remember" id="login-remember-row">
         <label><input type="checkbox" id="login-remember"> Ricordami su questo PC</label>
       </div>

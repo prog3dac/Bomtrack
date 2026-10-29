@@ -126,8 +126,17 @@ function defaultPartSourcing() {
 // parte senza il campo è una parte di prima di questa funzione, e va lasciata
 // com'era: cambiare l'impostazione deve valere per le prossime, non riscrivere
 // il fabbisogno di quelle già a catalogo.
-function partSourcing(it) {
+//
+// Con la Produzione interna spenta (core.js, AREE) ogni parte si compra: costo
+// di listino, niente ciclo, nel fabbisogno va negli acquisti. Il campo scritto
+// sull'articolo non cambia — lo leggono partSourcingScritto(), la scheda e gli
+// export, così riaccendendo l'area ogni parte torna com'era.
+function partSourcingScritto(it) {
   return (it && PART_SOURCING[it.sourcing]) ? it.sourcing : 'make';
+}
+function partSourcing(it) {
+  if (typeof areaAttiva === 'function' && !areaAttiva('produzione')) return 'buy';
+  return partSourcingScritto(it);
 }
 function partSourcingOptions(sel) {
   return Object.entries(PART_SOURCING)

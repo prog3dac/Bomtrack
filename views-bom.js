@@ -158,7 +158,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
         aria-expanded="${expanded}">${expanded ? ico('chevronDown') : ico('chevronRight')}</span>`
     : `<span class="bom-toggle leaf">•</span>`;
   const actions = `<button class="mini-btn" title="Dove è usato e impatto costi" onclick="usageModal('${comp.itemId}')">${ico('link', 'tinted', 'Dove è usato e impatto costi')}</button>`
-    + (child.type === 'parte' ? `<button class="mini-btn" title="Distinta parte e ciclo di lavorazione" onclick="openCycleFor('${comp.itemId}')">${ico('wrench', 'tinted', 'Distinta parte e ciclo di lavorazione')}</button>` : '')
+    + (child.type === 'parte' && vistaAttiva('cycles') ? `<button class="mini-btn" title="Distinta parte e ciclo di lavorazione" onclick="openCycleFor('${comp.itemId}')">${ico('wrench', 'tinted', 'Distinta parte e ciclo di lavorazione')}</button>` : '')
     + (editable
       ? `<button class="mini-btn" title="Modifica" onclick="editComponentModal(${idx})">${ico('edit', 'tinted', 'Modifica')}</button>
          <button class="mini-btn danger" title="Elimina" onclick="delComponent(${idx})">${ico('trash', 'tinted', 'Elimina')}</button>`

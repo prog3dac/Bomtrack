@@ -79,7 +79,7 @@ function inspAzioniArticolo(it) {
     cmd('edit', 'Modifica articolo', `editItemModal('${it.id}')`, { write: true }),
     cmd('copy', 'Duplica', `duplicateItemModal('${it.id}')`, { write: true }),
     hasPriceList(it) ? cmd('euro', 'Listino fornitori', `priceListModal('${it.id}')`) : null,
-    it.type === 'parte' ? cmd('wrench', 'Distinta parte e ciclo', `openCycleFor('${it.id}')`) : null,
+    it.type === 'parte' && vistaAttiva('cycles') ? cmd('wrench', 'Distinta parte e ciclo', `openCycleFor('${it.id}')`) : null,
     // Il conteggio nell'etichetta, come per i movimenti qui sotto: dice se c'è
     // un disegno senza doverlo aprire per scoprirlo. Non è marcato `write`
     // perché la scheda si apre e si scarica anche in sola lettura — chi va in
@@ -302,7 +302,7 @@ function inspectorSommario(it) {
     ['Articolo', esc(it.name)],
     ['Tipo', `<span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span> ${esc(typeLabel(it.type))}`],
     ['Costo unitario', `<strong>${fmtPer(itemUnitCost(it), u)}</strong>`],
-    hasStock(it) ? ['Giacenza', `${fmtUom(st.onHand, u)}${st.incoming ? ' · in arrivo ' + fmtUom(st.incoming, u) : ''}`] : null,
+    hasStock(it) && giacenzeVisibili() ? ['Giacenza', `${fmtUom(st.onHand, u)}${st.incoming ? ' · in arrivo ' + fmtUom(st.incoming, u) : ''}`] : null,
     ['Dove è usato', usi ? `${usi} ${usi === 1 ? 'impiego diretto' : 'impieghi diretti'}` : 'nessun impiego'],
   ].filter(Boolean);
   return `<div class="insp-sum">${righe.map(([k, v]) =>

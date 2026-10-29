@@ -28,6 +28,8 @@ La barra dei comandi ha **sette gruppi**, ordinati per processo (dalla 0.91.0); 
 | 📦 **Magazzino** | — |
 | ⚙ **Gestione** | — (solo amministratori) |
 
+Dalla 0.121.0 l'app è **a moduli**: la base (anagrafiche, distinte, acquisti e listini) c'è sempre, e le aree **Magazzino**, **Pianificazione** e **Produzione interna** si accendono e spengono da *Gestione → Impostazioni*. Un'area spenta toglie le sue voci dalla barra; senza Produzione interna ogni parte si compra. Al primo avvio si sceglie il profilo di partenza.
+
 Fino alla 0.90 i gruppi seguivano il tipo di dato (Anagrafica, Cicli di lavorazione, Distinta base, Documenti), e «Documenti» teneva insieme pianificazione, acquisti e produzione. Le voci qui sotto citano ancora, in qualche caso, il gruppo di allora.
 
 - **🌳 Distinta base → Gestione DB** — albero multi-livello espandibile della macchina selezionata, con **numerazione di posizione** (1, 1.1, 1.1.1, 1.2, 2…), costo unitario e di riga per ogni componente, lavorazioni interne e card di riepilogo costi. Aggiunta/modifica/eliminazione di componenti e lavorazioni. I sottogruppi possono contenere altri sottogruppi, senza limite di profondità. Una **barra filtri** (testo, livello, macchina di appartenenza) restringe l'elenco delle distinte; la distinta aperta resta sempre raggiungibile anche quando il filtro la escluderebbe.

@@ -63,7 +63,8 @@ function globalSearchModal() {
 function renderGlobalSearch() {
   const box = document.getElementById('gs-results'); if (!box) return;
   const q = val('gs-input');
-  gsHits = globalSearchHits(q); gsDisegnata = q;
+  // I documenti di un'area spenta non si trovano: aprirli porterebbe al vuoto.
+  gsHits = globalSearchHits(q).filter(h => !HOME_APRI_VISTA[h.kind] || vistaAttiva(HOME_APRI_VISTA[h.kind])); gsDisegnata = q;
   if (gsSel >= gsHits.length) gsSel = 0;
   if (!q) { box.innerHTML = ''; return; }
   box.innerHTML = gsHits.map((h, i) =>
@@ -275,7 +276,10 @@ const NAV = [
   { id: 'manage', icon: 'settings', label: 'Gestione', views: [
     { id: 'manage', label: 'Gestione' }] },
 ];
-function navGroups() { return NAV.filter(g => g.id !== 'manage' || isAdmin()); }
+// Le voci che si vedono: quelle delle aree accese (core.js) e dei moduli accesi.
+function navVoci(g) { return g.views.filter(w => vistaAttiva(w.id) && (!w.modulo || moduloAttivo(w.modulo))); }
+// Un gruppo con tutte le voci spente sparisce: Produzione senza la sua area.
+function navGroups() { return NAV.filter(g => (g.id !== 'manage' || isAdmin()) && navVoci(g).length); }
 function groupOfView(v) { return NAV.find(g => g.views.some(x => x.id === v)) || null; }
 function viewLabel(v) {
   const g = groupOfView(v);
@@ -288,7 +292,9 @@ const lastViewOfGroup = {};
 function openNavGroup(gid) {
   const g = NAV.find(x => x.id === gid); if (!g) return;
   headerMenuChiudi();
-  setView(lastViewOfGroup[gid] || g.views[0].id);
+  const voci = navVoci(g);
+  const ultima = voci.find(w => w.id === lastViewOfGroup[gid]);
+  if (voci.length) setView((ultima || voci[0]).id);
 }
 function renderNav() {
   const attivo = groupOfView(activeView);
@@ -304,7 +310,7 @@ function renderNav() {
   // da scegliere e la riga sparisce invece di ripetere il nome del gruppo.
   const sub = document.getElementById('sub-nav');
   if (!sub) return;
-  const ammesse = attivo ? attivo.views.filter(w => !w.modulo || moduloAttivo(w.modulo)) : [];
+  const ammesse = attivo ? navVoci(attivo) : [];
   const voci = ammesse.length > 1 ? ammesse : [];
   sub.innerHTML = voci.map(w =>
     `<button class="subnav-btn ${activeView === w.id ? 'active' : ''}" onclick="setView('${w.id}')" title="${esc(w.label)}" aria-current="${activeView === w.id ? 'page' : 'false'}">${esc(w.label)}</button>`).join('');
@@ -409,6 +415,9 @@ function viewIniziale() { return viewDaHash() || 'home'; }
 function setView(v) {
   // La Gestione è riservata agli amministratori: chi non lo è torna alle distinte
   if (v === 'manage' && !isAdmin()) { showToast('Sezione riservata agli amministratori', 'error'); v = 'bom'; }
+  // Una vista di un'area spenta (un link vecchio, la ricerca, un segnale) non
+  // si apre: si torna al Riepilogo dicendo perché.
+  if (!vistaAttiva(v)) { showToast(`${AREE[areaDiVista(v)].nome}: area spenta in Gestione → Impostazioni`, 'error'); v = 'home'; }
   scriviHash(v);
   // Si lascia un documento aperto (dalla 0.105.3): quel che era in sospeso si
   // salva, come quando si apre un altro documento. Restava «da salvare» anche

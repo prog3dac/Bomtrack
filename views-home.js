@@ -106,7 +106,7 @@ function homeSegnali() {
   // Il calendario e il cruscotto saltavano già le righe chiuse.
   const tardi = d => d.status !== 'annullato' && d.status !== 'evaso' && orderWorstOpenDelay(d) != null;
   const ordTardi = [].concat((db.orders || []).filter(tardi).map(o => ({ o, tipo: 'order' })),
-    (db.workOrders || []).filter(tardi).map(o => ({ o, tipo: 'odl' })))
+    (vistaAttiva('odl') ? db.workOrders || [] : []).filter(tardi).map(o => ({ o, tipo: 'odl' })))
     .sort((a, b) => orderWorstOpenDelay(b.o) - orderWorstOpenDelay(a.o));
   agg(ordTardi.map(({ o, tipo }) => {
     const g = orderWorstOpenDelay(o);
@@ -213,7 +213,9 @@ function homeSegnali() {
   // Prima i più gravi (dalla 0.105.6), come promette il manuale: l'allarme
   // rosso del backup o dello spazio stava in fondo, sotto le informazioni.
   // L'ordinamento è stabile: a parità di gravità resta l'ordine di sopra.
-  return out.sort((a, b) => CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
+  // Un'area spenta (Gestione → Impostazioni) non parla: i suoi avvisi
+  // porterebbero a una vista che non c'è.
+  return out.filter(s => vistaAttiva(s.vista)).sort((a, b) => CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }
 // Il ritardo peggiore fra le righe **ancora da ricevere** di un ordine o di un
 // ODL: quello che può ancora far slittare qualcosa.
@@ -225,7 +227,11 @@ function orderWorstOpenDelay(o) {
 // Aprire ciò che l'avviso nomina. Stessa strada della ricerca globale: prima la
 // vista, poi il documento — l'ordine inverso disegnerebbe la vista giusta e poi
 // la rimpiazzerebbe con quella di partenza.
+const HOME_APRI_VISTA = { job: 'jobs', plan: 'mrp', rfq: 'rfq', order: 'orders', odl: 'odl', odp: 'odp', cycle: 'cycles' };
 function homeApri(tipo, id) {
+  // Area spenta: setView() avvisa e resta al Riepilogo, l'editor non si apre.
+  const v = HOME_APRI_VISTA[tipo];
+  if (v && !vistaAttiva(v)) { setView(v); return; }
   if (tipo === 'job') { setView('jobs'); openJobEdit(id); }
   else if (tipo === 'plan') { setView('mrp'); openPlanEdit(id); }
   else if (tipo === 'rfq') { setView('rfq'); openRfqEdit(id); }
@@ -486,7 +492,7 @@ function homeEventi() {
   });
 
   out.forEach(e => { delete e.numero; delete e.n; });
-  return out.sort((a, b) => a.data.localeCompare(b.data) || CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
+  return out.filter(calEventoAttivo).sort((a, b) => a.data.localeCompare(b.data) || CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }
 
 // ─── Filtri per tipo ───
@@ -494,14 +500,15 @@ function homeEventi() {
 // griglia si riempie: i filtri lasciano guardare una cosa alla volta. Valgono
 // per tutto il calendario (scadute, griglia, giorno, prossimi 14 giorni) e
 // solo per chi guarda: si ricordano in questo browser, non nel database.
+// vista: la vista da cui il tipo dipende; con la sua area spenta il filtro sparisce.
 const CAL_FILTRI = [
-  { id: 'commesse', label: 'Commesse', tipi: ['commessa'] },
-  { id: 'piani', label: 'Piani e programma', tipi: ['piano', 'programma'] },
-  { id: 'ordinare', label: 'Da ordinare', tipi: ['fabbisogno'] },
+  { id: 'commesse', label: 'Commesse', tipi: ['commessa'], vista: 'jobs' },
+  { id: 'piani', label: 'Piani e programma', tipi: ['piano', 'programma'], vista: 'mrp' },
+  { id: 'ordinare', label: 'Da ordinare', tipi: ['fabbisogno'], vista: 'mrp' },
   { id: 'consegne', label: 'Consegne e rientri', tipi: ['ordine'] },
   { id: 'richieste', label: 'Richieste', tipi: ['richiesta'] },
-  { id: 'fasi', label: 'Avvio fasi ODP', tipi: ['fase'] },
-  { id: 'produzione', label: 'Fine produzione', tipi: ['produzione'] },
+  { id: 'fasi', label: 'Avvio fasi ODP', tipi: ['fase'], vista: 'odp' },
+  { id: 'produzione', label: 'Fine produzione', tipi: ['produzione'], vista: 'odp' },
   { id: 'promemoria', label: 'Promemoria', tipi: ['promemoria'] },
 ];
 const CAL_FILTRI_KEY = 'bomtrack_cal_nascosti';
@@ -518,6 +525,13 @@ function calNascosti() {
 function calFiltroSalva() {
   try { localStorage.setItem(CAL_FILTRI_KEY, JSON.stringify(Array.from(calNascosti()))); } catch (e) { /* niente da rompere */ }
 }
+// Le scadenze di un'area spenta non entrano nel calendario. I rientri ODL
+// condividono il tipo «ordine» con le consegne: li distingue l'azione.
+function calEventoAttivo(e) {
+  if (e.tipo === 'ordine') return !/homeApri\('odl'/.test(e.azione || '') || vistaAttiva('odl');
+  const f = calFiltroDi(e.tipo);
+  return !f || !f.vista || vistaAttiva(f.vista);
+}
 function calFiltroDi(tipo) { return CAL_FILTRI.find(f => f.tipi.includes(tipo)) || null; }
 function calVisibile(e) { const f = calFiltroDi(e.tipo); return !f || !calNascosti().has(f.id); }
 function homeCalFiltro(id) {
@@ -530,7 +544,7 @@ function calFiltriHtml(eventi) {
   const n = calNascosti();
   const conta = new Map();
   eventi.forEach(e => { const f = calFiltroDi(e.tipo); if (f) conta.set(f.id, (conta.get(f.id) || 0) + 1); });
-  const chips = CAL_FILTRI.map(f => {
+  const chips = CAL_FILTRI.filter(f => !f.vista || vistaAttiva(f.vista)).map(f => {
     const on = !n.has(f.id);
     return `<button type="button" class="cal-filtro${on ? ' on' : ''}" aria-pressed="${on}" onclick="homeCalFiltro('${f.id}')" title="${on ? 'Nascondi' : 'Mostra'} ${esc(f.label.toLowerCase())}">${esc(f.label)} <span class="cal-filtro-n">${conta.get(f.id) || 0}</span></button>`;
   }).join('');
@@ -742,7 +756,7 @@ function renderHome() {
   const kpiRiga = [
     kpi('Articoli', String((db.items || []).length), ''),
     kpi('Distinte', String((db.items || []).filter(i => isAssembly(i.type)).length), 'purple', { azione: "setView('bom')", titolo: 'Apri le distinte' }),
-    kpi('Commesse aperte', String((db.jobs || []).filter(j => j.status === 'aperta' || j.status === 'produzione').length), 'accent', { azione: "setView('jobs')", titolo: 'Apri le commesse' }),
+    vistaAttiva('jobs') ? kpi('Commesse aperte', String((db.jobs || []).filter(j => j.status === 'aperta' || j.status === 'produzione').length), 'accent', { azione: "setView('jobs')", titolo: 'Apri le commesse' }) : '',
     kpi('Ordini da evadere', String((db.orders || []).filter(o => o.status === 'inviato' || o.status === 'confermato' || o.status === 'parziale').length), 'orange', { azione: 'homeOrdiniDaEvadere()', titolo: 'Apri gli ordini a fornitore da evadere' }),
   ].join('');
 
@@ -766,8 +780,8 @@ function renderHome() {
       <div class="cycle-section-head"><h3>${ico('refresh', 'tinted pill', '')} Riprendi</h3></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-outline" onclick="setView('bom')">${ico('tree', 'tinted', '')} Distinta base</button>
-        <button class="btn-outline" onclick="setView('stock')">${ico('package', 'tinted', '')} Magazzino</button>
-        <button class="btn-outline" onclick="setView('mrp')">${ico('list', 'tinted', '')} Fabbisogno</button>
+        ${vistaAttiva('stock') ? `<button class="btn-outline" onclick="setView('stock')">${ico('package', 'tinted', '')} Magazzino</button>` : ''}
+        ${vistaAttiva('mrp') ? `<button class="btn-outline" onclick="setView('mrp')">${ico('list', 'tinted', '')} Fabbisogno</button>` : ''}
         <button class="btn-outline" onclick="setView('orders')">${ico('receipt', 'tinted', '')} Ordini</button>
         <button class="btn-outline" onclick="globalSearchModal()">${ico('search', 'tinted', '')} Cerca ovunque (Ctrl+K)</button>
       </div>

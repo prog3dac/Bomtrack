@@ -229,7 +229,7 @@ function itemInfoCosto(it) {
 // Magazzino in sola lettura: gli stessi numeri della scheda del catalogo, senza
 // i pulsanti che li cambiano.
 function itemInfoMagazzino(it) {
-  if (!hasStock(it)) return '';
+  if (!hasStock(it) || !giacenzeVisibili()) return '';
   const s = stockOf(it.id);
   const imp = commitsOn(it.id, null);
   const impQty = imp.reduce((a, x) => a + x.qty, 0);

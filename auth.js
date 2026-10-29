@@ -69,6 +69,12 @@ function cloudInUso() { return typeof cloudAttivo === 'function' && cloudAttivo(
 function renderLogin() {
   const setup = needsSetup();
   document.getElementById('login-setup-fields').style.display = setup ? '' : 'none';
+  // Il profilo decide quali aree partono accese (core.js, PROFILI_AREE).
+  const prof = document.getElementById('login-setup-profile');
+  if (prof) prof.style.display = setup ? '' : 'none';
+  const sel = document.getElementById('login-profile');
+  if (sel && setup) { sel.innerHTML = Object.keys(PROFILI_AREE).map(k =>
+    `<option value="${k}">${esc(PROFILI_AREE[k].nome)}</option>`).join(''); loginProfiloDescr(); }
   document.getElementById('login-remember-row').style.display = setup ? 'none' : '';
   document.getElementById('login-sub').textContent = setup
     ? 'Primo avvio — crea l\'amministratore' : 'Distinte base & Costificazione';
@@ -91,6 +97,10 @@ function renderLogin() {
       if (first) first.focus();
     }, 50);
   }
+}
+function loginProfiloDescr() {
+  const p = PROFILI_AREE[val('login-profile')], el = document.getElementById('login-profile-descr');
+  if (p && el) el.textContent = p.descr + '. Le aree si cambiano poi da Gestione → Impostazioni.';
 }
 function submitLogin() {
   if (cloudInUso()) return submitLoginCloud();
@@ -169,6 +179,8 @@ function createFirstAdmin() {
   const u = { id: gid(), name, username: '', email, role: 'admin', color: '#3A7BE8', active: true };
   setUserPassword(u, password);
   Store.insert('users', u);
+  const profilo = val('login-profile');
+  if (PROFILI_AREE[profilo]) { applicaProfiloAree(profilo); saveDB(); if (typeof renderNav === 'function') renderNav(); }
   setVal('login-password', '');
   doLogin(u, true);
   showToast('Amministratore creato: benvenuto in Bomtrack');

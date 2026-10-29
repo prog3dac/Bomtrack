@@ -1002,7 +1002,8 @@ function docLinks(k, d) {
   return v;
 }
 function docLinksHtml(k, d) {
-  const v = docLinks(k, d);
+  // I collegati di un'area spenta non si mostrano: porterebbero a una vista che non c'è.
+  const v = docLinks(k, d).filter(x => !HOME_APRI_VISTA[x.tipo] || vistaAttiva(HOME_APRI_VISTA[x.tipo]));
   if (!v.length) return '';
   const icona = { job: 'clipboard', plan: 'list', rfq: 'mail', order: 'receipt', odl: 'wrench', odp: 'factory' };
   return `<div class="doc-links"><span class="doc-links-label">Collegati</span>${v.map(x =>
@@ -2030,7 +2031,7 @@ function newOdl() {
     docLeave('odl'); currentOdlId = o.id; odlView = 'edit'; renderOdl();
   });
 }
-function openOdlEdit(id) { docLeave('odl'); currentOdlId = id; odlView = 'edit'; renderOdl(); }
+function openOdlEdit(id) { if (!vistaAttiva('odl')) return; docLeave('odl'); currentOdlId = id; odlView = 'edit'; renderOdl(); }
 function odlBackToList() { docBackToList('odl'); }
 function odlMarkDirty() { docMarkDirty('odl'); }
 function odlSave(id) { docSave('odl', id); }
@@ -2357,7 +2358,7 @@ function odlAvviaModal(docId, lineId) {
   const passo = a.outKind === 'clStep';
   const corpo = righe.map((m, i) => `<div class="mgmt-item">
       <span style="width:110px;font-family:var(--mono)">${esc(m.item.code || '')}</span>
-      <span style="flex:1">${esc(m.item.name || '')}${passo ? '' : ` <span class="empty-text" style="padding:0">${fmtQtyIt(m.perPezzo)} ${esc(itemUom(m.item))}/pz · a magazzino ${fmtQtyIt(onHandOf(m.item.id))}</span>`}${m.gia ? ` <span class="rfq-clavoro-tag">già ${fmtQtyIt(+m.gia.toFixed(4))}</span>` : ''}</span>
+      <span style="flex:1">${esc(m.item.name || '')}${passo ? '' : ` <span class="empty-text" style="padding:0">${fmtQtyIt(m.perPezzo)} ${esc(itemUom(m.item))}/pz${giacenzeVisibili() ? ` · a magazzino ${fmtQtyIt(onHandOf(m.item.id))}` : ''}</span>`}${m.gia ? ` <span class="rfq-clavoro-tag">già ${fmtQtyIt(+m.gia.toFixed(4))}</span>` : ''}</span>
       <input class="num" type="number" id="odl-a-q-${i}" min="0" step="any" value="${+m.residuo.toFixed(4)}" style="width:110px" oninput="odlAvviaAvviso()">
       <span class="empty-text" style="padding:0;width:40px">${esc(itemUom(m.item))}</span>
     </div>`).join('');

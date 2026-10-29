@@ -787,7 +787,7 @@ function atSupplierRows() {
 
 // ─── Interfaccia: scheda articolo ───
 function stockPanelHtml(it) {
-  if (!hasStock(it)) return '';
+  if (!hasStock(it) || !giacenzeVisibili()) return '';
   const s = stockOf(it.id);
   const sotto = safetyStockOf(it) > 0 && s.onHand < safetyStockOf(it);
   // Impegnato e libero: la scheda articolo è il posto dove si guarda prima di
