@@ -320,7 +320,7 @@ function renderNav() {
     `<button class="subnav-btn ${activeView === w.id ? 'active' : ''}" onclick="setView('${w.id}')" title="${esc(w.label)}" aria-current="${activeView === w.id ? 'page' : 'false'}">${esc(w.label)}</button>`).join('');
   adattaHeader();
 }
-// La seconda riga resta ferma sotto la testata (0.126.0). Quanto è alta lo
+// La seconda riga resta ferma sotto la testata (0.127.0). Quanto è alta lo
 // sanno solo il disegno e il numero di voci: si misura, e chi resta fermo
 // anche lui (l'elenco accanto a un documento, la colonna di Gestione) si mette
 // sotto di lei leggendo --subnav-h invece di finirci coperto.

@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════
 //  VISTA: GESTIONE
 // ═══════════════════════════════════════════════════════════
-// Dalla 0.126.0 le schede stanno in una colonna a sinistra, raccolte per
+// Dalla 0.127.0 le schede stanno in una colonna a sinistra, raccolte per
 // argomento: in riga erano quattordici pulsanti dello stesso peso, che andavano
 // a capo su tre righe e non dicevano quale stava con quale. E «Impostazioni»,
 // che teneva insieme costi, codici, sessione, aree, calendario ed etichette QR,
@@ -27,6 +27,7 @@ const MGMT_TABS = [
   { id: 'uoms', gruppo: 'Classificazione articoli', label: ico('ruler', 'tinted', '') + ' Unità di misura' },
   { id: 'calendario', gruppo: 'Pianificazione e produzione', label: ico('clock', 'tinted', '') + ' Calendario di fabbrica' },
   { id: 'workcenters', gruppo: 'Pianificazione e produzione', label: ico('wrench', 'tinted', '') + ' Centri di lavoro', area: 'produzione' },
+  { id: 'machines', gruppo: 'Pianificazione e produzione', label: ico('settings', 'tinted', '') + ' Macchine utensili', modulo: 'macchine' },
   { id: 'moduli', gruppo: 'Configurazione', label: ico('settings', 'tinted', '') + ' Aree e moduli' },
   { id: 'costi', gruppo: 'Configurazione', label: ico('euro', 'tinted', '') + ' Costi e margini' },
   { id: 'codifica', gruppo: 'Configurazione', label: ico('tag', 'tinted', '') + ' Codifica articoli' },
@@ -60,6 +61,7 @@ function renderManage() {
   else if (mgmtTab === 'fam-materiale') c.innerHTML = renderFamilies('materiale');
   else if (mgmtTab === 'fam-parte') c.innerHTML = renderFamilies('parte');
   else if (mgmtTab === 'workcenters') c.innerHTML = renderWorkCenters();
+  else if (mgmtTab === 'machines') c.innerHTML = renderMachines();
   else if (mgmtTab === 'concepts') c.innerHTML = renderConcepts();
   else if (mgmtTab === 'uoms') c.innerHTML = renderUoms();
   else if (mgmtTab === 'calendario') c.innerHTML = renderSettingsPage(renderCalendarSettings());
@@ -353,7 +355,8 @@ function toggleActive(coll, id, nome) {
   const r = (db[coll] || []).find(x => x.id === id); if (!r) return;
   r.active = r.active === false;
   touch(r); saveDB(); renderManage();
-  savedToast(`${nome} ${r.active ? 'riattivato' : 'sospeso'}`);
+  const f = /a$/.test(nome) ? 'a' : 'o';   // «Macchina sospesa», «Fornitore sospeso»
+  savedToast(`${nome} ${r.active ? 'riattivat' + f : 'sospes' + f}`);
 }
 // Il pulsante e la pastiglia, uguali per le tre anagrafiche.
 function activeBadge(r) {
@@ -744,7 +747,7 @@ function delSubFamily(familyId, subId) {
 function renderWorkCenters() {
   const list = db.workCenters.map(w => `<div class="mgmt-item">
     <span class="mgmt-item-name">${esc(w.name)}</span>
-    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}</span>
+    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}${moduloAttivo('macchine') && macchineDelCentro(w.id).length ? ' · ' + macchineDelCentro(w.id).length + (macchineDelCentro(w.id).length === 1 ? ' macchina' : ' macchine') : ''}</span>
     ${activeBadge(w)}
     <div class="mgmt-item-actions">
       ${activeBtn('workCenters', w, 'Centro di lavoro')}
@@ -787,7 +790,8 @@ function editWcModal(id) {
       <button class="add-btn-sm" onclick="saveWc('${id}')">Salva</button></div>
     <div class="settings-group-title">${ico('factory', 'tinted', '')} Fornitori conto lavoro</div>
     <p style="color:var(--text-dim);margin-bottom:10px">Chi esegue questa lavorazione all'esterno, con la propria tariffa — proposta (e modificabile) quando si sceglie il fornitore in un ciclo.</p>
-    <div id="wc-sup-body">${wcSuppliersBody(id)}</div>`, true, 'wc-edit');
+    <div id="wc-sup-body">${wcSuppliersBody(id)}</div>
+    ${wcMachinesBlock(id)}`, true, 'wc-edit');
 }
 onPanelClose('wc-edit', () => { window.__wcEditId = null; });
 function saveWc(id) {
@@ -809,6 +813,8 @@ function delWc(id) {
   const usedCicli = db.items.filter(i => (i.cycle || []).some(r => r.kind === 'op' && r.workCenterId === id));
   const used = usedAssiemi.length + usedCicli.length;
   if (used) { showToast('Usato in ' + used + ' distinte', 'error'); return; }
+  const macchine = (db.machines || []).filter(m => m.workCenterId === id).length;
+  if (macchine) { showToast(`Ha ${macchine} ${macchine === 1 ? 'macchina' : 'macchine'}: spostale o eliminale prima`, 'error'); return; }
   askConfirm('Eliminare il centro di lavoro?', () => {
     removeConUndo('workCenters', id, 'Centro di lavoro eliminato', renderManage);
   });
@@ -1180,7 +1186,7 @@ function saveSettings() {
   // niente, invece di salvare il resto e lasciare quello vecchio senza dirlo.
   const erroreQr = readQrSettings();
   if (erroreQr) { showToast(erroreQr, 'error'); return; }
-  // Si legge solo quello che la pagina mostra (0.126.0): un campo che non è a
+  // Si legge solo quello che la pagina mostra (0.127.0): un campo che non è a
   // video tornerebbe vuoto, e azzererebbe il margine salvando il calendario.
   const c = id => !!document.getElementById(id);
   // Percentuali riportate dentro 0-1000 in silenzio, come già fa codeDigits qui sotto.

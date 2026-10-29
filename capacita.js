@@ -36,7 +36,14 @@ function capOreFase(o, f) {
 function capOreGiorno(wc, iso) {
   if (!isWorkDay(iso)) return 0;
   if (typeof centroFermo === 'function' && centroFermo(wc.id, iso)) return 0;
-  return wcOreGiornoCentro(wc);
+  // Con le macchine (macchine.js) una ferma toglie la sua parte del centro.
+  return wcOreGiornoCentro(wc) * (typeof quotaCentroAttiva === 'function' ? quotaCentroAttiva(wc.id, iso) : 1);
+}
+// La macchina della fase, se il modulo Macchine utensili è acceso e la
+// macchina esiste ancora: la fase fa la fila anche su di lei.
+function capMacchinaFase(f) {
+  if (f.supplierId || !f.machineId || typeof getMachine !== 'function' || !moduloAttivo('macchine')) return null;
+  return getMachine(f.machineId);
 }
 // → { fasi: Map faseId → { start, end, ore }, ordini: Map odpId → { fattibile, ritardo } }
 function capSchedula(oggi) {
@@ -59,18 +66,28 @@ function capSchedula(oggi) {
         return;
       }
       const wc = getWorkCenter(f.workCenterId);
+      const mac = capMacchinaFase(f);
+      const op = faseOperatori(f);
       let resta = capOreFase(o, f);
       if (!wc || !(resta > 0)) { fasi.set(f.id, { start: pronto, end: pronto, ore: 0 }); fine = pronto; return; }
       let d = pronto, start = '', end = pronto;
       for (let n = 0; resta > 1e-9 && n < CAP_ORIZZONTE; n++, d = calShift(d, 1)) {
         const cap = capOreGiorno(wc, d);
         if (!(cap > 0)) continue;
+        if (mac && macchinaFerma(mac.id, d)) continue;
         const k = wc.id + '|' + d;
         const libero = cap - (usato.get(k) || 0);
         if (!(libero > 1e-9)) continue;
+        // Una macchina lavora al più le ore al giorno di un operatore del suo
+        // centro (un turno), in ore di macchina: le ore-uomo della fase divise
+        // per i suoi operatori. Due fasi sulla stessa macchina se la dividono.
+        const km = mac ? 'm|' + mac.id + '|' + d : '';
+        const liberaMac = mac ? (wcHoursPerDay(wc) - (usato.get(km) || 0)) * op : Infinity;
+        if (!(liberaMac > 1e-9)) continue;
         // Una fase non fa più delle ore dei suoi operatori in un giorno.
-        const preso = Math.min(libero, resta, faseOreGiorno(wc, f.operators));
+        const preso = Math.min(libero, resta, faseOreGiorno(wc, f.operators), liberaMac);
         usato.set(k, (usato.get(k) || 0) + preso);
+        if (mac) usato.set(km, (usato.get(km) || 0) + preso / op);
         resta -= preso;
         if (!start) start = d;
         end = d;

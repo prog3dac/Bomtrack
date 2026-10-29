@@ -692,6 +692,12 @@ const MODULI = {
     descr: 'Le fasi interne degli ordini di produzione in fila sui centri, per data di consegna, senza superare le ore che ogni centro lavora e fuori dai fermi. Ogni ordine ha la sua data fattibile accanto a quella richiesta; il Carico centri mostra la coda. Propone, non cambia le date.',
     area: 'produzione',
   },
+  // Dalla 0.126.0: le macchine dei centri, con tariffa e manutenzione proprie (macchine.js).
+  macchine: {
+    nome: 'Macchine utensili',
+    descr: 'Le macchine di ogni centro di lavoro, in Gestione → Macchine utensili, ciascuna con la sua tariffa oraria che si somma a quella del centro (la manodopera). Le fasi dei cicli e degli ordini di produzione si assegnano a una macchina; con Officina la manutenzione e i fermi sono per macchina, e con Capacità finita le fasi fanno la fila sulla loro macchina.',
+    area: 'produzione',
+  },
 };
 function moduloAttivo(nome) {
   const m = db && db.settings && db.settings.modules;

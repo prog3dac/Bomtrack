@@ -75,6 +75,7 @@ const FILE = [
   './consuntivo.js',
   './officina.js',
   './capacita.js',
+  './macchine.js',
   './allegati.js',
   './archivio.js',
   './documenti.js',

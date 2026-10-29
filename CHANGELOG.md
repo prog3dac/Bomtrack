@@ -6,7 +6,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **La seconda barra resta ferma in alto.** Le voci del gruppo aperto (per esempio *Articoli di progetto · Articoli d'acquisto · Gestione DB…*) restano sotto la barra dei gruppi anche quando si scorre la pagina: per cambiare voce non serve più tornare in cima. Al telefono le voci non vanno a capo ma scorrono di lato. Gli elenchi accanto ai documenti, che restano fermi anche loro, si mettono sotto la barra invece di finirci coperti.
 
-**Gestione con le schede in colonna.** Le diciotto schede passano da una fila di pulsanti in alto a una **colonna a sinistra**, ferma mentre la pagina scorre e raccolta per argomento: *Azienda* (Dati azienda, Utenti e accesso), *Anagrafiche* (Fornitori, Clienti, Condizioni offerta), *Classificazione articoli* (le tre Famiglie, Concetti, Unità di misura), *Pianificazione e produzione* (Calendario di fabbrica, Centri di lavoro), *Configurazione* (Aree e moduli, Costi e margini, Codifica articoli, Etichette QR), *Dati* (Import, Backup). Al telefono la colonna torna una riga che scorre di lato, con la scheda aperta sempre in vista.
+**Gestione con le schede in colonna.** Le diciotto schede (diciannove con il modulo Macchine utensili) passano da una fila di pulsanti in alto a una **colonna a sinistra**, ferma mentre la pagina scorre e raccolta per argomento: *Azienda* (Dati azienda, Utenti e accesso), *Anagrafiche* (Fornitori, Clienti, Condizioni offerta), *Classificazione articoli* (le tre Famiglie, Concetti, Unità di misura), *Pianificazione e produzione* (Calendario di fabbrica, Centri di lavoro, Macchine utensili), *Configurazione* (Aree e moduli, Costi e margini, Codifica articoli, Etichette QR), *Dati* (Import, Backup). Al telefono la colonna torna una riga che scorre di lato, con la scheda aperta sempre in vista.
 
 **Impostazioni divise per argomento.** La pagina unica, che mescolava costi, codici, sessione, aree, calendario ed etichette QR, diventa:
 - **Aree e moduli**: le aree e i moduli da accendere.
@@ -18,6 +18,22 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 Ogni pagina ha il suo **Salva impostazioni**, che salva solo i campi che mostra: le altre pagine restano com'erano. Gli avvisi che rimandavano a *Gestione → Impostazioni* ora dicono la pagina giusta.
 
 **Manuale**: cap. 3 «La navigazione a due livelli», cap. 4, cap. 25 «Gestione» riscritto per gruppi e pagine.
+
+### 0.126.0 — 2026-10-29
+
+**Modulo Macchine utensili.** Il centro di lavoro è il reparto, la macchina la risorsa che ci sta dentro: ogni macchina appartiene a un centro e porta la sua tariffa oraria, la sua manutenzione e i suoi fermi. Si accende in *Gestione → Impostazioni → Moduli* (nasce spento).
+- **Gestione → Macchine utensili**: codice, nome, centro, tariffa (€/h di macchina), tipo, costruttore, modello, matricola, anno e ore di lavoro all'ingresso. **Calcola la tariffa** la propone da ammortamento, manutenzione ed energia sulle ore dell'anno. Il centro elenca le sue macchine; una macchina in uso non si elimina, si sospende, e un centro con macchine non si elimina.
+- **Costo: operatore più macchina.** A costo orario: ore-uomo × tariffa del centro + ore di macchina × tariffa della macchina, dove le ore di macchina sono le ore-uomo divise per gli operatori. 80 h con 2 operatori, centro a 30 e tornio a 25: 2.400 + 1.000. A costo fisso e dal terzista la macchina non entra. Nel ciclo, il tooltip del costo dice il conto.
+- **Ciclo**: le fasi interne di un centro con macchine hanno la tendina **Macchina**; la fase nuova propone la macchina se il centro ne ha una sola. La tariffa si copia sulla fase; cambiandola in Gestione si aggiornano i cicli che la usano (non le revisioni né gli ODP lanciati).
+- **Ordini di produzione**: la fase congela macchina, nome e tariffa; prima dell'avvio si sposta su un'altra macchina dello stesso centro. **Consuntivo**: le ore timbrate pagano operatore e macchina.
+- **Reparto**: filtro per macchina, e la timbratura porta la macchina della fase.
+- **Manutenzione** (con Officina): piani e interventi su un centro o su una macchina; il piano di macchina scade sulle ore della macchina; ogni macchina ha il suo contatore.
+- **Capacità finita**: il fermo di una macchina ferma lei sola e toglie la sua parte al centro; una fase con macchina fa la fila sulla macchina, al più un turno al giorno.
+- Spento il modulo, tutto torna come prima: la quota macchina esce dai costi e il fermo di una macchina ferma il suo centro.
+
+**Schema Supabase**: tabella nuova `machines`, colonne `machine_id` su `item_cycle_rows`, `production_order_phases`, `production_time_logs`, `maintenance_plans`, `maintenance_events`, più `machine_rate` (cicli e fasi) e `machine_name` (fasi). Va eseguita `supabase/schema.sql` prima di aggiornare l'app sui PC collegati all'archivio condiviso. Conviene aggiornare tutti i PC: una versione vecchia non vede la macchina sulle fasi.
+
+**Manuale**: cap. 24 «Macchine utensili», cap. 25 scheda *Macchine utensili*, cap. 14 campo *Macchina*, glossario.
 
 ### 0.125.0 — 2026-10-29
 

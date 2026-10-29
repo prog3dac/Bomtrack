@@ -116,6 +116,17 @@ create table if not exists public.work_center_suppliers (
   synced_at timestamptz not null default clock_timestamp()
 );
 
+-- 0.126.0, modulo Macchine utensili: le macchine di ogni centro, con la loro
+-- tariffa oraria (si somma a quella del centro) e il contatore di partenza.
+create table if not exists public.machines (
+  id uuid primary key,
+  work_center_id uuid references public.work_centers(id) deferrable initially deferred,
+  code text, name text, kind text, brand text, model text, serial text, year int,
+  hourly_rate numeric, hours_start numeric, notes text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+
 create table if not exists public.families (
   id uuid primary key,
   name text, kind text, sigla text, child_sets text,
@@ -222,10 +233,14 @@ create table if not exists public.item_cycle_rows (
   work_center_id uuid references public.work_centers(id) deferrable initially deferred,
   supplier_id uuid references public.suppliers(id) deferrable initially deferred,
   cost_mode text, hours numeric, operators numeric, days numeric, rate numeric, cost numeric, note text, pos int,
+  machine_id uuid references public.machines(id) deferrable initially deferred, machine_rate numeric,
   synced_at timestamptz not null default clock_timestamp()
 );
 -- 0.124.0: gli operatori della fase (giorni = ore ÷ ore al giorno × operatori).
 alter table public.item_cycle_rows add column if not exists operators numeric;
+-- 0.126.0: la macchina della fase e la sua tariffa, copiata come `rate`.
+alter table public.item_cycle_rows add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
+alter table public.item_cycle_rows add column if not exists machine_rate numeric;
 
 -- 0.118.0: gli equivalenti di un articolo, in ordine di preferenza (modulo
 -- Alternativi). Quarta tabella «replace», per la stessa ragione delle altre:
@@ -380,9 +395,14 @@ create table if not exists public.production_order_phases (
   supplier_name text, run_from int, run_to int, passata int,
   cost_mode text, hours numeric, operators numeric, days numeric, rate numeric, cost numeric, note text,
   planned_start date, planned_end date,
+  machine_id uuid references public.machines(id) deferrable initially deferred, machine_name text, machine_rate numeric,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.126.0: la macchina della fase, con nome e tariffa congelati.
+alter table public.production_order_phases add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
+alter table public.production_order_phases add column if not exists machine_name text;
+alter table public.production_order_phases add column if not exists machine_rate numeric;
 -- 0.124.0: gli operatori che lavorano insieme su una fase, per i database già creati.
 alter table public.production_order_phases add column if not exists operators numeric;
 -- 0.90.0: inizio e fine pianificati di ogni fase, per i database già creati.
@@ -543,6 +563,7 @@ create table if not exists public.production_time_logs (
   odp_id uuid references public.production_orders(id) on delete cascade deferrable initially deferred,
   phase_id uuid references public.production_order_phases(id) on delete set null deferrable initially deferred,
   work_center_id uuid references public.work_centers(id) deferrable initially deferred,
+  machine_id uuid references public.machines(id) deferrable initially deferred,
   user_id uuid, started_at timestamptz, ended_at timestamptz, note text, active boolean,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
@@ -550,6 +571,7 @@ create table if not exists public.production_time_logs (
 create table if not exists public.maintenance_plans (
   id uuid primary key,
   work_center_id uuid references public.work_centers(id) deferrable initially deferred,
+  machine_id uuid references public.machines(id) deferrable initially deferred,
   title text, every_days numeric, every_hours numeric, ricambi jsonb, notes text, active boolean,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
@@ -558,10 +580,16 @@ create table if not exists public.maintenance_events (
   id uuid primary key,
   plan_id uuid references public.maintenance_plans(id) on delete set null deferrable initially deferred,
   work_center_id uuid references public.work_centers(id) deferrable initially deferred,
+  machine_id uuid references public.machines(id) deferrable initially deferred,
   date date, down_from date, down_to date, ricambi jsonb, note text, active boolean,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+
+-- 0.126.0: la macchina su timbrature, piani e interventi, per i database già creati.
+alter table public.production_time_logs add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
+alter table public.maintenance_plans add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
+alter table public.maintenance_events add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 
 create table if not exists public.trash (
   id uuid primary key,
@@ -615,6 +643,7 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('production_time_logs', null, null, 'root'),
   ('maintenance_plans', null, null, 'root'),
   ('maintenance_events', null, null, 'root'),
+  ('machines', null, null, 'root'),
   ('trash', null, null, 'root')
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
 
@@ -1137,6 +1166,8 @@ select t, a from (values
   ('production_time_logs', 'shop'), ('production_time_logs', 'docs'),
   ('maintenance_events', 'shop'), ('maintenance_events', 'docs'),
   ('maintenance_plans', 'manage'),
+  -- Le macchine sono anagrafica dei centri, come i centri.
+  ('machines', 'manage'),
   -- Il cestino e le lapidi li scrive chiunque elimini qualcosa, in qualunque area.
   ('trash', 'catalog'), ('trash', 'bom'), ('trash', 'docs'), ('trash', 'manage'), ('trash', 'agenda'), ('trash', 'shop'),
   ('sync_tombstones', 'catalog'), ('sync_tombstones', 'bom'), ('sync_tombstones', 'docs'),
@@ -1169,6 +1200,7 @@ language sql immutable set search_path = public as $$
     ('workOrders', 'work_orders'), ('plans', 'production_plans'), ('prodOrders', 'production_orders'),
     ('prodDecls', 'production_declarations'), ('jobs', 'jobs'), ('reminders', 'reminders'),
     ('timeLogs', 'production_time_logs'), ('maintPlans', 'maintenance_plans'), ('maintEvents', 'maintenance_events'),
+    ('machines', 'machines'),
     ('trash', 'trash'), ('users', 'profiles')
   ) v(k, t) where k = c
 $$;

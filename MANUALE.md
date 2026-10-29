@@ -1351,6 +1351,7 @@ posto per infilarne una in mezzo).
 |---|---|
 | **Centro di lavoro** | Dall'elenco di *Gestione → Centri di lavoro* |
 | **Interna / Conto lavoro** | Se conto lavoro, si sceglie il **fornitore** |
+| **Macchina** | Con il modulo Macchine utensili (dalla 0.126.0), per le fasi interne di un centro che ha macchine: a costo orario la sua tariffa si somma a quella del centro, sulle ore divise per gli operatori (→ [cap. 24](#24-carico-dei-centri-di-lavoro)) |
 | **Costo** | *Fisso* oppure *Orario* |
 | **Ore (h)** | Fase **interna**: le ore-uomo per pezzo, cioè le ore che il pezzo occupa il centro sommate su tutti quelli che ci lavorano. Entrano nel costo (a costo orario) e nel carico |
 | **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda del centro: 80 h con 2 operatori a 8 h al giorno sono 5 giorni. Sotto si legge quanti giorni fa un pezzo, comprese le ore di attrezzaggio del centro: passandoci sopra col mouse si vede il calcolo completo |
@@ -2877,6 +2878,52 @@ ritardo a capacità finita*.
 **Propone, non comanda.** Le date pianificate degli ordini e del fabbisogno restano quelle a
 ritroso: la coda è un avviso da guardare, non una data riscritta. Le fasi non si spostano a mano.
 
+Con il modulo **Macchine utensili** una fase assegnata a una macchina fa la fila anche su di lei:
+una macchina lavora al più le ore al giorno di un operatore del suo centro, in ore di macchina
+(le ore-uomo della fase divise per i suoi operatori), e due fasi sulla stessa macchina se le
+dividono. Il fermo di una macchina ferma lei sola, e al centro toglie la sua parte (tre macchine,
+una ferma: due terzi delle ore).
+
+---
+
+### Macchine utensili (modulo, dalla 0.126.0)
+
+Il **centro di lavoro** è il reparto (Tornitura), la **macchina** è la risorsa che ci sta dentro
+(il tornio CNC, il tornio parallelo). Il modulo si accende in *Gestione → Aree e moduli* e
+porta la scheda *Gestione → Macchine utensili* (→ [cap. 25](#25-gestione)).
+
+**Il costo: operatore più macchina.** Con le macchine la tariffa del centro è quella della
+**manodopera**, e la macchina aggiunge la sua sulle **ore di macchina**, cioè le ore-uomo della
+fase divise per gli operatori (quanto dura la fase):
+
+> costo fase oraria = ore-uomo × tariffa del centro + (ore-uomo ÷ operatori) × tariffa della macchina
+
+80 ore-uomo con 2 operatori, centro a 30 €/h e tornio a 25 €/h: 80 × 30 + 40 × 25 = 3.400 €.
+**Se la tariffa del centro comprendeva già la macchina, va abbassata**, o il costo la conta due
+volte. A costo fisso e sulle fasi dal terzista la macchina non entra. Una fase senza macchina costa
+come prima, e spegnendo il modulo la quota macchina sparisce da tutti i costi.
+
+**Nel ciclo** (→ [cap. 14](#14-cicli-di-lavorazione)) ogni fase interna di un centro che ha
+macchine mostra la tendina **Macchina** accanto al nome del centro; nel selettore della fase nuova,
+se il centro ne ha una sola, si propone da sola. La tariffa si copia sulla fase come quella del
+centro, così una revisione rilasciata non cambia; cambiandola in Gestione si aggiornano le fasi dei
+cicli che usano la macchina. Passando sopra il costo della riga si legge il conto: operatore e
+macchina.
+
+**Nell'ordine di produzione** la fase congela macchina, nome e tariffa del momento del lancio.
+Prima dell'avvio si può spostare su un'altra macchina dello stesso centro (quella libera), e la
+tariffa si ricopia. Il **consuntivo** paga le ore timbrate all'operatore e, divise per gli
+operatori, alla macchina.
+
+**Nel reparto** il menu dei centri elenca sotto ciascuno le sue macchine: si filtra per macchina, e
+la timbratura porta la macchina della fase.
+
+**Manutenzione.** Piani e interventi si scrivono su un **centro** (tutto il reparto) o su una
+**macchina**: un piano di macchina scade sulle ore lavorate da quella macchina, cioè le ore
+timbrate sulle fasi assegnate a lei divise per gli operatori; il fermo di una macchina ferma lei
+sola. Ogni macchina ha un **contatore**: le ore che aveva quando è stata registrata più quelle
+lavorate da allora.
+
 ---
 
 ### Terminale di reparto (modulo Officina, dalla 0.123.0)
@@ -2901,7 +2948,8 @@ N ore».
 
 ### Manutenzione (modulo Officina, dalla 0.123.0)
 
-*Produzione → Manutenzione* tiene i **piani** per centro: un intervento ricorrente (cambio olio,
+*Produzione → Manutenzione* tiene i **piani** per centro (o per macchina, con il modulo Macchine
+utensili): un intervento ricorrente (cambio olio,
 taratura…) **ogni N giorni**, **ogni N ore lavorate**, o tutti e due — scade al primo dei due.
 I giorni si contano dall'ultimo intervento registrato (o dalla nascita del piano), le ore sono
 quelle **timbrate** su quel centro da allora. Un piano porta i **ricambi di serie**, scritti un
@@ -2932,7 +2980,7 @@ una riga che scorre di lato.
 | **Azienda** | Dati azienda · Utenti e accesso |
 | **Anagrafiche** | Fornitori · Clienti · Condizioni offerta |
 | **Classificazione articoli** | Famiglie commerciali · Famiglie materie prime · Famiglie parti · Concetti · Unità di misura |
-| **Pianificazione e produzione** | Calendario di fabbrica · Centri di lavoro |
+| **Pianificazione e produzione** | Calendario di fabbrica · Centri di lavoro · Macchine utensili (con il modulo) |
 | **Configurazione** | Aree e moduli · Costi e margini · Codifica articoli · Etichette QR |
 | **Dati** | Import · Backup |
 
@@ -3008,7 +3056,23 @@ così i nomi già composti non cambiano da soli.
 | **Giorni di coda** | L'attesa prima di ogni fase su questo centro, in giorni lavorativi |
 
 Sotto ogni centro, il sotto-elenco **Fornitori conto lavoro**: fornitore, tariffa, nota — chi sa
-fare quella lavorazione fuori, e a quanto. Si possono sospendere.
+fare quella lavorazione fuori, e a quanto. Si possono sospendere. Con il modulo Macchine utensili
+c'è anche l'elenco delle **macchine** del centro, e un centro con macchine non si elimina.
+
+### ⚙️ Macchine utensili (modulo, dalla 0.126.0)
+
+| Campo | Note |
+|---|---|
+| **Codice** · **Nome** | T01 · Tornio CNC |
+| **Centro di lavoro** | Il reparto in cui sta. Una macchina usata nei cicli non cambia centro |
+| **Tariffa (€/h di macchina)** | Si **somma** a quella del centro sulle ore di macchina (→ [cap. 24](#24-carico-dei-centri-di-lavoro)) |
+| **Tipo** · **Costruttore** · **Modello** · **Matricola** · **Anno** | Anagrafica |
+| **Ore di lavoro all'ingresso** | Il contatore parte da qui e somma le ore timbrate |
+
+**Calcola la tariffa** propone un costo orario: (valore d'acquisto ÷ anni di ammortamento +
+manutenzione all'anno) ÷ ore lavorate in un anno + kW × €/kWh. **Usa questa tariffa** riempie il
+campo, che resta modificabile. Una macchina citata da cicli, ordini, manutenzioni o timbrature non
+si elimina: si sospende (⏸).
 
 ### 📏 Unità di misura
 
@@ -3050,6 +3114,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Costi reali (→ [cap. 18](#18-commesse)), nell'area Pianificazione | spento |
 | Officina: terminale di reparto e manutenzione (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Capacità finita (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
+| Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
@@ -3983,6 +4048,8 @@ dentro**: uscendo e rientrando, il documento torna bloccato.
 | **Lotto di riordino** | La quantità a cui si arrotondano gli acquisti (multiplo esatto o quantità minima) |
 | **Saturazione** | La percentuale di capacità di un centro occupata in una settimana |
 | **Capacità** | Le ore che un centro può fare in una settimana. **0 = non dichiarata** |
+| **Macchina utensile** | La risorsa dentro un centro di lavoro (il tornio CNC nella Tornitura), con tariffa, manutenzione e fermi propri (modulo, dalla 0.126.0) |
+| **Ore di macchina** | Le ore-uomo di una fase divise per i suoi operatori: quanto la macchina lavora |
 | **Revisione** | Una fotografia congelata di una distinta, identificata da una lettera |
 | **Cruscotto** | La pagina che dice come stanno le cose: valore di magazzino, articoli fermi, sotto scorta, consegne scadute (→ [cap. 5](#il-cruscotto)) |
 | **Articolo fermo** | Un articolo con giacenza e nessun movimento da 3, 6 o 12 mesi: denaro immobilizzato a scaffale |

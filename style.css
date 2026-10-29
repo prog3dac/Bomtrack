@@ -301,7 +301,7 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
    nessuna sessione) sparisce da sé senza lasciare una striscia vuota. */
 .subnav{display:flex;gap:2px;justify-content:center;flex-wrap:wrap;padding:6px 16px;background:var(--card);border-bottom:1px solid var(--border);
   position:sticky;top:56px;z-index:45}
-/* La seconda riga resta sotto la testata quando si scorre (0.126.0): le voci
+/* La seconda riga resta sotto la testata quando si scorre (0.127.0): le voci
    del gruppo sono la navigazione di tutti i giorni, e risalire in cima a una
    distinta lunga per cambiare pagina era un giro inutile. Al telefono non va a
    capo — scorre di lato — o una riga ferma alta tre righe mangerebbe lo schermo. */
@@ -440,6 +440,9 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .cycle-row input.num{font-family:var(--mono);text-align:right}
 .cycle-sup{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 6px;color:var(--text);font-size:12px;outline:none}
 .cycle-sup:focus{border-color:var(--accent)}
+/* La macchina della fase (modulo Macchine utensili), accanto al nome del centro */
+.cycle-mac{flex:0 1 auto;min-width:0;max-width:170px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 4px;color:var(--text);font-size:11px;outline:none}
+.cycle-mac:focus{border-color:var(--accent)}
 .cycle-name{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cycle-code{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
 .cycle-dim{color:var(--text-dim);font-size:11px}
@@ -588,7 +591,7 @@ tr{border-bottom:1px solid var(--hairline)}
 .manage-wrap > .modal-grid > .modal-field input,
 .manage-wrap > .modal-grid > .modal-field select,
 .manage-wrap > .modal-grid > .modal-field textarea{padding:8px 11px}
-/* Gestione (0.126.0): le schede in una colonna a sinistra, raccolte per
+/* Gestione (0.127.0): le schede in una colonna a sinistra, raccolte per
    argomento, che resta ferma sotto le barre mentre il contenuto scorre. Sotto
    gli 860 px la colonna torna una riga che scorre di lato, senza i titoli. */
 .mgmt-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}
