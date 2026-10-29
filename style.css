@@ -431,6 +431,9 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .cycle-row input.num{font-family:var(--mono);text-align:right}
 .cycle-sup{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 6px;color:var(--text);font-size:12px;outline:none}
 .cycle-sup:focus{border-color:var(--accent)}
+/* La macchina della fase (modulo Macchine utensili), accanto al nome del centro */
+.cycle-mac{flex:0 1 auto;min-width:0;max-width:170px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 4px;color:var(--text);font-size:11px;outline:none}
+.cycle-mac:focus{border-color:var(--accent)}
 .cycle-name{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cycle-code{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
 .cycle-dim{color:var(--text-dim);font-size:11px}

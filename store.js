@@ -435,6 +435,10 @@ const SCHEMA = {
   // come array dentro la riga del centro, e la rimappatura v1→v2 non ne
   // riscriveva il `supplierId`. Hanno un id proprio, quindi merge per riga.
   workCenters: { table: 'work_centers', children: { suppliers: { table: 'work_center_suppliers', rowId: 'id', merge: 'row' } } },
+  // Modulo Macchine utensili (0.126.0): le macchine di ogni centro, con la
+  // tariffa propria. Collezione radice e non figlia del centro: una macchina
+  // può cambiare reparto, e piani, fasi e timbrature la citano per id.
+  machines: { table: 'machines' },
   families: { table: 'families', children: { subs: { table: 'sub_families', rowId: 'id', merge: 'row' } } },
   rfqs: { table: 'rfqs', children: { lines: { table: 'rfq_lines', rowId: 'id', merge: 'row' } } },
   // `derived`: campi della riga che si leggono e non si scrivono — li ricava lo
@@ -542,6 +546,7 @@ const REFS = {
   },
   revisions: { fields: { itemId: 'item' } },
   workCenters: { children: { suppliers: { supplierId: 'supplier' } } },
+  machines: { fields: { workCenterId: 'workCenter' } },
   // `orderId` e `lineId` restano fuori: REFS non ha una destinazione 'order',
   // e gli ordini non sono mai stati rimappati. Va scritto, non lasciato muto.
   movements: { fields: { itemId: 'item', supplierId: 'supplier', fromSupplierId: 'supplier' } },
@@ -822,6 +827,7 @@ function migrateDB() {
   if (!db.timeLogs) db.timeLogs = [];     // timbrature del reparto
   if (!db.maintPlans) db.maintPlans = []; // piani di manutenzione
   if (!db.maintEvents) db.maintEvents = []; // interventi di manutenzione
+  if (!db.machines) db.machines = [];       // macchine utensili dei centri
   // Cestino: le eliminazioni recenti, recuperabili. Si svuota da solo passata
   // la finestra di ripristino, altrimenti crescerebbe finché lo spazio del
   // browser non finisce — e a quel punto il rimedio sarebbe peggio del male.

@@ -75,7 +75,7 @@ function consOrigini(jobId) {
   return { piani, odp, orders: orders.filter(o => o.status !== 'annullato'), odl: workOrders.filter(o => o.status !== 'annullato'), montaggi };
 }
 function consFaseCostoPezzo(f) {
-  return f.costMode === 'orario' ? (Number(f.hours) || 0) * (Number(f.rate) || 0) : (Number(f.cost) || 0);
+  return f.costMode === 'orario' ? (Number(f.hours) || 0) * (Number(f.rate) || 0) + costoMacchinaFase(f) : (Number(f.cost) || 0);
 }
 function consReale(jobId) {
   const o = consOrigini(jobId);
@@ -124,8 +124,10 @@ function consReale(jobId) {
     if (ore > 0) {
       const wc = getWorkCenter(f.workCenterId);
       const tariffa = f.costMode === 'orario' && Number(f.rate) > 0 ? Number(f.rate) : (wc ? Number(wc.hourlyRate) || 0 : 0);
-      v = ore * tariffa;
-      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtOre(ore)} timbrate`;
+      // La macchina lavora le ore timbrate divise per gli operatori della fase.
+      const macchina = costoMacchinaOre(f, ore);
+      v = ore * tariffa + macchina;
+      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''}${f.machineName ? ' · ' + f.machineName : ''} — ${fmtOre(ore)} timbrate${macchina > 0 ? `, di cui macchina ${fmtN(macchina)}` : ''}`;
     } else {
       const n = opProcessati(d, f);
       v = n * consFaseCostoPezzo(f);
