@@ -32,9 +32,6 @@
 // parte, quanti ne sono stati fatti.**
 
 // ─── Le dichiarazioni ───
-function produzioniDi(planId) {
-  return (db.productions || []).filter(p => p.planId === planId);
-}
 // Quanti pezzi di una parte risultano fatti dentro un piano. È la somma, e la
 // somma può essere corretta aggiungendo una dichiarazione negativa — come una
 // rettifica di magazzino, e per la stessa ragione: cancellare una riga sbagliata

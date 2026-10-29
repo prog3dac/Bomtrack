@@ -351,7 +351,6 @@ function opMaterialeResiduo(odp) {
   return (odp.materials || []).map(m => Object.assign({}, m,
     { gia: gia.get(m.itemId) || 0, residuo: Math.max(0, (Number(m.qty) || 0) - (gia.get(m.itemId) || 0)) }));
 }
-function opMaterialePrelevato(odp) { return opRegistrato(odp, opPrima(odp), 'out').size > 0; }
 // Un assieme non ha giacenza (hasStock), e il suo versamento non scrive
 // movimenti: i pezzi fatti sono i buoni dichiarati sull'ultima fase.
 function opVersato(odp) {
@@ -1665,8 +1664,10 @@ function odpListExportSpec() {
 // porta le fasi con i loro tempi e lo spazio per leggere l'avanzamento, non i
 // prezzi — quelli riguardano l'ordine di lavoro, non chi lavora il pezzo.
 function odpDocSpec(o) {
+  // Con il modulo Macchine utensili la fase interna dice su quale macchina si fa:
+  // è il foglio che va in officina, e «Interna» non bastava a trovarla.
   const fasi = (o.phases || []).map(f => [String(f.seq), f.wcName,
-    f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : 'Interna',
+    f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : (faseMacchinaNome(f) || 'Interna'),
     f.supplierId ? (f.days ? f.days + ' gg' : '') : (f.hours ? fmtQtyIt(f.hours) + ' h/pz' : ''),
     opDaFare(o, f), opFatti(o, f), opScarti(o, f),
     ODP_FASE_LABELS[opStatoFase(o, f)] || '']);

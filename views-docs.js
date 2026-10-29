@@ -215,11 +215,6 @@ const DOC_KINDS = {
     },
   },
 };
-// Su una riga che viene da un ordine di produzione i **pezzi rientrati** li
-// dichiara quello: è lo stesso fatto scritto in due posti, e tenerli d'accordo
-// a mano è il modo di vederli divergere. Il campo resta quello di sempre, con
-// gli stessi lettori — cambia solo chi lo scrive.
-function odlRigaDaOdp(l) { return !!(l && l.odpId); }
 // A che punto è la lavorazione di una riga (dalla 0.113.0). Emettere l'ordine
 // di lavoro non è mandare il pezzo: la riga è **in lavorazione** quando è
 // avviata e **fatta** quando i pezzi sono rientrati. Se il padrone è un ordine

@@ -624,7 +624,7 @@ tr{border-bottom:1px solid var(--hairline)}
 
 /* Catalog filters */
 .catalog-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-.catalog-filters input,.catalog-filters select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none}
+.catalog-filters input,.catalog-filters select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%}
 .catalog-filters .search{flex:1;min-width:200px}
 
 /* Barra Filtri a scomparsa (filters.js): stessa riga di sempre, solo più alta
@@ -839,7 +839,9 @@ textarea.notes-internal{border-style:dashed}
 .rfq-head .modal-field input,.rfq-head .modal-field select,.rfq-head .modal-field textarea{padding:8px 11px}
 .rfq-head .modal-field textarea{line-height:1.45}
 .rfq-subhead{font-size:14px;font-weight:600;color:var(--text);margin:18px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.rfq-head-actions{display:flex;gap:8px}
+/* I comandi della testata vanno a capo al telefono: tre pulsanti in fila
+   (ricevimento, PDF, Excel) superavano i 390 px e la pagina scorreva di lato. */
+.rfq-head-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
 .rfq-sup-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:6px}
 .rfq-sup-chk{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;cursor:pointer}
 .rfq-sup-chk:hover{border-color:var(--text-dim)}

@@ -34,6 +34,13 @@ function macchineDelCentro(wcId, selId) {
   return machinesAll().filter(m => m.workCenterId === wcId && (m.active !== false || m.id === selId));
 }
 function machineLabel(m) { return m ? [m.code, m.name].filter(Boolean).join(' ') : ''; }
+// Il nome della macchina di una fase (di ciclo o di ODP) per i documenti e gli
+// export; vuoto col modulo spento. L'ODP ha il nome congelato, se la macchina
+// non c'è più.
+function faseMacchinaNome(f) {
+  if (!f || !f.machineId || !moduloAttivo('macchine')) return '';
+  return machineLabel(getMachine(f.machineId)) || f.machineName || '';
+}
 
 // ─── Costo ───
 // Le ore di macchina di una fase per un pezzo: le ore-uomo per gli operatori.
@@ -259,6 +266,9 @@ function saveMachine(id) {
   const toccati = new Set();
   usi.forEach(({ it, r }) => { if ((Number(r.machineRate) || 0) !== rate) { r.machineRate = rate; toccati.add(it); } });
   toccati.forEach(it => touch(it));
+  // I piani di manutenzione della macchina la seguono nel centro nuovo: restando
+  // sul vecchio si leggevano «Tornitura · F01» con la fresa ormai in Fresatura.
+  (db.maintPlans || []).forEach(p => { if (p.machineId === id && p.workCenterId !== wcId) { p.workCenterId = wcId; touch(p); } });
   saveDB(); closeModal(); renderManage();
   savedToast(toccati.size ? `Aggiornata, con la tariffa in ${toccati.size} ${toccati.size === 1 ? 'ciclo' : 'cicli'}` : 'Aggiornata');
 }

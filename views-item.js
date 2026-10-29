@@ -42,8 +42,6 @@ function codeLink(itemId, testo, cls) {
     onclick="itemInfoModal('${itemId}', event)"
     onkeydown="if(event.key==='Enter'||event.key===' '){itemInfoModal('${itemId}', event)}">${txt}</span>`;
 }
-// Comodità per il caso normale: il codice dell'articolo stesso.
-function itemCodeLink(it, cls) { return it ? codeLink(it.id, it.code, cls) : ''; }
 
 // ─── La scheda ───
 // Una chiave di pannello sola: cliccare un codice dentro la scheda sostituisce
@@ -446,6 +444,8 @@ const STORICO_COLL = {
   prodOrders: 'Ordine di produzione', jobs: 'Commessa', users: 'Utente', families: 'Famiglia',
   workCenters: 'Centro di lavoro', reminders: 'Promemoria', attachments: 'Allegato',
   attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione', settings: 'Impostazioni',
+  revisions: 'Revisione', movements: 'Movimento di magazzino', receipts: 'Ricevimento', prodDecls: 'Dichiarazione di produzione',
+  timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina',
 };
 const STORICO_CAMPI = {
   code: 'Codice', name: 'Nome', description: 'Descrizione', type: 'Tipo', uom: 'U.M.',

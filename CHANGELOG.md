@@ -2,6 +2,21 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.127.1 — 2026-10-29
+
+**Controllo generale prima dei merge.** Correzioni trovate passando l'app intera prima di unire la 0.126.0 e la 0.127.0, senza funzioni nuove. Nessun cambio a `supabase/schema.sql`.
+- **Piano → Genera documenti**: il conto delle righe scelte («2 documenti · 7 righe») restava vuoto dalla 0.92.0. Due funzioni di `views-mrp.js` si chiamavano `planDocsCount`, e la seconda (il numero di documenti sulla scheda *Documenti*) copriva la prima; ora si chiama `planDocsTotale`. Il controllo dei nomi globali in `test/scripts.test.js` conta anche i doppioni dentro lo stesso file e le `async function`.
+- **Al telefono** il Carico centri e l'Avanzamento non scorrono più di lato per un piano dal titolo lungo nella tendina, e la testata delle lavorazioni di un ODL manda a capo i suoi tre pulsanti.
+- **Cestino e storico** dicono il nome di ogni collezione («Piano di manutenzione», «Timbratura», «Documento emesso»…) invece di quello interno; un test lo tiene vero per le collezioni che verranno.
+- **Codice morto tolto**: undici funzioni che nessuno chiamava più (`cloudLogin`, `closeAllPanels`, `escapeRegExp`, `itemPickerOptions`, `toggleFavorite`, `produzioniDi`, `odlRigaDaOdp`, `opMaterialePrelevato`, `clFromOrderModal`, `itemCodeLink`, la variabile `odpDirty`).
+- **Dati di prova**: `test/genera-dati-prova.js` si fermava con «la fase è già chiusa» quando un ordine da un pezzo scartava alla prima fase; ora salta le fasi in cui non arriva più niente.
+- **README**: nella tabella dei file mancavano `filters.js`, `qr.js`, `inventario.js` e `combo.js`.
+
+**Macchine utensili, le parti rimaste fuori dalla 0.126.0**:
+- il **foglio dell'ordine di produzione** che va in officina dice, nella colonna *Dove*, su quale macchina si fa la fase interna, invece di «Interna»; l'**export del ciclo** porta la macchina accanto al centro;
+- una macchina che **cambia centro** si porta dietro i suoi piani di manutenzione, che restavano sul centro vecchio;
+- cestino e storico dicono «Macchina».
+
 ### 0.127.0 — 2026-10-29
 
 **La seconda barra resta ferma in alto.** Le voci del gruppo aperto (per esempio *Articoli di progetto · Articoli d'acquisto · Gestione DB…*) restano sotto la barra dei gruppi anche quando si scorre la pagina: per cambiare voce non serve più tornare in cima. Al telefono le voci non vanno a capo ma scorrono di lato. Gli elenchi accanto ai documenti, che restano fermi anche loro, si mettono sotto la barra invece di finirci coperti.

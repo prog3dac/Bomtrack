@@ -1397,12 +1397,6 @@ function cloudLogout() {
 // ═══════════════════════════════════════════════════════════
 //  Accesso
 // ═══════════════════════════════════════════════════════════
-// Dalla schermata d'accesso. Il primo collegamento di un PC (archivio non
-// ancora allineato) passa dalla scelta fra caricare e scaricare.
-async function cloudLogin(email, password) {
-  await cloudAccediConPassword(email, password);
-  return cloudDopoAccesso();
-}
 async function cloudDopoAccesso() {
   const st = await cloudRpc('archivio_stato', {});
   const p = st && st.profilo;

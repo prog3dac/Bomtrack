@@ -2486,7 +2486,7 @@ function renderPlanEdit(id) {
           <p class="empty-text" style="text-align:left;padding:0 0 8px">Le ore che <strong>questo piano</strong> chiede ai centri interni, per settimana. Il carico vero è la somma di tutti i piani aperti: si guarda in <em>Pianificazione → Carico centri</em>, perché il centro è condiviso e un piano solo non dice se regge.</p>
           ${loadTableHtml(mrpLoad(p), id)}
         </div>` },
-      { id: 'docs', label: 'Documenti', n: planDocsCount(id), html: planDocsList(id) || '<p class="empty-text">Nessun documento generato da questo piano: si creano dai pulsanti «Genera» delle altre schede.</p>' },
+      { id: 'docs', label: 'Documenti', n: planDocsTotale(id), html: planDocsList(id) || '<p class="empty-text">Nessun documento generato da questo piano: si creano dai pulsanti «Genera» delle altre schede.</p>' },
     // Senza Produzione interna non c'è niente da fabbricare né da far lavorare
     // fuori, e nessun centro da caricare: restano acquisti e montaggio.
     ].filter(t => prodInterna || !PLAN_TAB_PRODUZIONE.includes(t.id)))}</div>`;
@@ -2506,7 +2506,11 @@ function renderPlanEdit(id) {
 // memoria dei gruppi della barra.
 let planTab = 'buy';
 const PLAN_TAB_PRODUZIONE = ['cl', 'make', 'load'];
-function planDocsCount(planId) {
+// Quanti documenti ha generato un piano, per il numero sulla scheda. Fino alla
+// 0.125.0 si chiamava planDocsCount come il contatore delle righe spuntate qui
+// sopra, e in uno script classico la seconda definizione copriva la prima:
+// nella scheda «Genera documenti» il conto delle righe scelte restava vuoto.
+function planDocsTotale(planId) {
   const d = planDocs(planId);
   return d.rfqs.length + d.orders.length + d.workOrders.length + d.prodOrders.length;
 }

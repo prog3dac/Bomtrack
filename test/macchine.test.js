@@ -200,3 +200,26 @@ describe('Fermi e capacità finita per macchina', () => {
     assert.equal(s.b.start, '2026-10-29'); assert.equal(s.b.end, '2026-10-30');
   });
 });
+
+describe('La macchina nei documenti (0.127.1)', () => {
+  it('il foglio dell\'ODP per l\'officina dice su quale macchina', () => {
+    const fase = m => m.eval("odpDocSpec(getOdp('A')).sezioni[0].righe[0][2]");
+    assert.equal(fase(app({ macchine: true })), 'T01 Tornio CNC');
+    assert.equal(fase(app({})), 'Interna', 'col modulo spento resta com\'era');
+  });
+  it('l\'export del ciclo porta la macchina accanto al centro', () => {
+    const a = app({ macchine: true });
+    a.eval("currentCycleItemId = 'p1'");
+    assert.equal(a.eval("cycleExportSpec().sezioni[1].righe[0][1]"), 'Tornitura · T01 Tornio CNC');
+  });
+  it('una macchina che cambia centro si porta dietro i suoi piani di manutenzione', () => {
+    const a = app({ macchine: true, officina: true }, { maintPlans: [
+      { id: 'pm', workCenterId: 'w1', machineId: 'm2', title: 'Olio', everyDays: 30, everyHours: 0, ricambi: [], active: true }] });
+    a.eval(`db.workCenters.push({ id: 'w2', name: 'Fresatura', hourlyRate: 35, hoursPerDay: 8, active: true });
+      editMachineModal('m2'); document.getElementById('em-code').value = 'T02'; document.getElementById('em-name').value = 'Tornio parallelo'; document.getElementById('em-wc').value = 'w2';
+      document.getElementById('em-rate').value = '10'; saveMachine('m2')`);
+    assert.equal(a.eval("getMachine('m2').workCenterId"), 'w2');
+    assert.equal(a.eval("getMaintPlan('pm').workCenterId"), 'w2');
+    assert.equal(a.eval("dovePlanLabel(getMaintPlan('pm'))"), 'Fresatura · T02 Tornio parallelo');
+  });
+});

@@ -68,11 +68,14 @@ describe('Nomi globali', () => {
   // Le dichiarazioni di primo livello: `function x()` e `let/const/var x` a
   // inizio riga. Non è un analizzatore sintattico e non deve esserlo — le
   // dichiarazioni annidate sono rientrate, e quindi non finiscono qui.
+  // Un elenco e non un insieme: anche lo stesso file può dichiarare un nome
+  // due volte, e il danno è lo stesso (fino alla 0.125.0 views-mrp.js aveva due
+  // `planDocsCount`, e il contatore delle righe scelte nel piano restava vuoto).
   function globaliDi(file) {
     const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
-    const nomi = new Set();
-    for (const m of src.matchAll(/^function\s+([A-Za-z0-9_$]+)/gm)) nomi.add(m[1]);
-    for (const m of src.matchAll(/^(?:let|const|var)\s+([A-Za-z0-9_$]+)/gm)) nomi.add(m[1]);
+    const nomi = [];
+    for (const m of src.matchAll(/^(?:async\s+)?function\s+([A-Za-z0-9_$]+)/gm)) nomi.push(m[1]);
+    for (const m of src.matchAll(/^(?:let|const|var)\s+([A-Za-z0-9_$]+)/gm)) nomi.push(m[1]);
     return nomi;
   }
 
@@ -87,5 +90,25 @@ describe('Nomi globali', () => {
     });
     assert.deepEqual(collisioni, [],
       'due dichiarazioni dello stesso nome nello stesso scope: vince quella caricata dopo, e non lo dice nessuno');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  I nomi delle collezioni, a chi legge
+// ═══════════════════════════════════════════════════════════
+// Il cestino e lo storico dicono di che cosa si tratta con TRASH_LABELS e
+// STORICO_COLL. Una collezione aggiunta a SCHEMA e dimenticata lì si leggeva
+// col suo nome interno: «maintPlans», «timeLogs».
+describe('Nomi delle collezioni', () => {
+  const { loadApp } = require('./harness.js');
+  const app = loadApp({ silent: true });
+  const senza = mappa => JSON.parse(app.eval(`JSON.stringify(Object.keys(SCHEMA).filter(k => k !== 'trash' && !${mappa}[k]))`));
+
+  it('ogni collezione ha il suo nome nel cestino', () => {
+    assert.deepEqual(senza('TRASH_LABELS'), []);
+  });
+
+  it('ogni collezione ha il suo nome nello storico', () => {
+    assert.deepEqual(senza('STORICO_COLL'), []);
   });
 });
