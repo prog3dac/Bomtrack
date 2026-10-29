@@ -1678,7 +1678,7 @@ function cycleOpsTable(opRows) {
           <em id="cyc-opgg-${i}" title="${esc(cycleOpGiorniDettaglio(r))}">${cycleOpGiorni(r)}</em></span>`;
     return `<div class="cycle-row cycle-op-row">
       <span class="cycle-phase">${cyclePhaseNumber(k)}</span>
-      <span class="cycle-name">${cycleRowLabel(r)}</span>
+      <span class="cycle-name">${cycleRowLabel(r)}${cycleMachineCell(r, i)}</span>
       <select class="cycle-sup sel-cerca" title="Interna, o conto lavoro se si sceglie un fornitore" onchange="onCycleRowSupplierChange(${i})" id="cyc-sup-${i}">${wcSupplierOptions(getWorkCenter(r.workCenterId), r.supplierId || '')}</select>
       <select onchange="onCycleRowModeChange(${i})" id="cyc-opmode-${i}">
         <option value="fisso" ${!orario ? 'selected' : ''}>Fisso</option>
@@ -1686,7 +1686,7 @@ function cycleOpsTable(opRows) {
       </select>
       ${tempoCell}
       ${costoCell}
-      <span class="num cost" id="cyc-cost-${i}">${fmtN(cycleRowCost(r))}</span>
+      <span class="num cost" id="cyc-cost-${i}" title="${esc(costoFaseDettaglio(r))}">${fmtN(cycleRowCost(r))}</span>
       <span class="cycle-move">
         <button class="mini-btn" title="Sposta su" onclick="moveCycleOp(${k},-1)" ${k === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" title="Sposta giù" onclick="moveCycleOp(${k},1)" ${k === last ? 'disabled' : ''}>↓</button>
@@ -1773,7 +1773,8 @@ function cycleExportSpec() {
         ],
         righe: ops.map(({ r }, k) => {
           const wc = getWorkCenter(r.workCenterId);
-          return [cyclePhaseNumber(k), wc ? wc.name : '(centro mancante)',
+          const mac = !r.supplierId ? faseMacchinaNome(r) : '';
+          return [cyclePhaseNumber(k), (wc ? wc.name : '(centro mancante)') + (mac ? ' · ' + mac : ''),
             supplierName(r.supplierId) || '', Number(r.hours) || 0, Number(r.days) || 0,
             +cycleRowCost(r).toFixed(2)];
         }),
@@ -1791,7 +1792,7 @@ function cycleExportSpec() {
 function refreshCycleCosts(it) {
   (it.cycle || []).forEach((row, i) => {
     const el = document.getElementById('cyc-cost-' + i);
-    if (el) el.textContent = fmtN(cycleRowCost(row));
+    if (el) { el.textContent = fmtN(cycleRowCost(row)); if (row.kind === 'op') el.title = costoFaseDettaglio(row); }
     const ovr = document.getElementById('cyc-ovr-' + i);
     if (ovr) ovr.placeholder = cycleRowComputed(row).toFixed(2);
     const gg = document.getElementById('cyc-opgg-' + i);
@@ -1896,6 +1897,8 @@ function addCycleOpRow() {
     <div class="modal-grid">
       <div class="modal-field"><label>Centro di lavoro</label><select id="cyc-wc" onchange="onCycleOpWcChange()">${wcOptionsNoRate(null)}</select></div>
       <div class="modal-field"><label>Interna / Conto lavoro</label><select id="cyc-opsup" class="sel-cerca" onchange="onCycleOpModeChange()">${wcSupplierOptions(wc, '')}</select></div>
+      <div class="modal-field" id="cyc-mac-box" style="display:none"><label>Macchina</label><select id="cyc-mac"
+        title="La macchina del centro su cui si fa la fase: a costo orario la sua tariffa si somma a quella del centro, sulle ore divise per gli operatori"></select></div>
     </div>
     <div class="modal-grid">
       <div class="modal-field"><label>Costo</label><select id="cyc-opmode" onchange="onCycleOpModeChange()">
@@ -1918,6 +1921,7 @@ function addCycleOpRow() {
       <button class="add-btn-sm" onclick="pickCycleOp()">Aggiungi</button>
     </div>
   </div>`;
+  cyclePickerMachineSync();
 }
 // Cambiare centro di lavoro ricostruisce l'elenco fornitori (i "conto lavoro
 // abituali" dipendono dal centro scelto), stesso schema a cascata delle
@@ -1943,6 +1947,7 @@ function onCycleOpModeChange() {
     const rateEl = document.getElementById('cyc-oprate');
     if (rateEl) rateEl.value = wcRateFor(getWorkCenter(val('cyc-wc')), val('cyc-opsup'));
   }
+  cyclePickerMachineSync();
 }
 function pickCycleOp() {
   const it = currentCycleItem(); if (!it) return;
@@ -1963,6 +1968,7 @@ function pickCycleOp() {
     hours: (!esterna || orario) ? numVal('cyc-ophours', 0) : 0,
     days: esterna ? numVal('cyc-opdays', 0) : 0, note: '' };
   if (!esterna) row.operators = Math.max(1, Math.round(numVal('cyc-opop', 1)));
+  if (!esterna && val('cyc-mac')) impostaMacchinaFase(row, val('cyc-mac'));
   if (orario) row.rate = numVal('cyc-oprate', 0);
   else row.cost = numVal('cyc-opcost', 0);
   it.cycle.push(row);

@@ -445,7 +445,7 @@ const STORICO_COLL = {
   workCenters: 'Centro di lavoro', reminders: 'Promemoria', attachments: 'Allegato',
   attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione', settings: 'Impostazioni',
   revisions: 'Revisione', movements: 'Movimento di magazzino', receipts: 'Ricevimento', prodDecls: 'Dichiarazione di produzione',
-  timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione',
+  timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina',
 };
 const STORICO_CAMPI = {
   code: 'Codice', name: 'Nome', description: 'Descrizione', type: 'Tipo', uom: 'U.M.',

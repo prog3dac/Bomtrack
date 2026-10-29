@@ -251,6 +251,7 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `alternativi.js` | modulo **Alternativi**: equivalenti e sostitutivi degli articoli, le decisioni «usa l'alternativo» di un piano e il loro effetto su esplosione, montaggio, ordini di produzione e conto lavoro |
 | `consuntivo.js` | modulo **Costi reali**: il consuntivo di commessa, con il preventivo fotografato all'avvio della produzione e il reale letto da prelievi, ricevimenti, ODL e fasi lavorate (il costo medio d'acquisto sta in `views-stock.js`) |
 | `officina.js` | modulo **Officina**: il terminale di reparto con le timbrature Inizia / Pausa / Fine sulle fasi, e la manutenzione dei centri (piani a giorni o a ore, interventi con ricambi e fermi) |
+| `macchine.js` | modulo **Macchine utensili**: le macchine dei centri con la tariffa che si somma a quella del centro, la macchina sulle fasi di cicli e ODP, il contatore ore, la manutenzione e i fermi per macchina |
 | `capacita.js` | modulo **Capacità finita**: le fasi degli ODP in fila sui centri senza superarne le ore, la data fattibile e la coda per centro |
 | `varianti.js` | modulo **Varianti**: opzioni della macchina modello, righe di distinta condizionate e a formula, regole solo sui gruppi del primo livello, la pagina *Tecnico → Varianti* con il configuratore che genera la macchina concreta e Rigenera quando il modello cambia |
 | `produzione.js` | avanzamento di produzione: le dichiarazioni di pezzi fatti dentro un piano, e il netto che ne discende sulle lavorazioni |

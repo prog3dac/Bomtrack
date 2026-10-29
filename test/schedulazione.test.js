@@ -248,7 +248,7 @@ describe('Programmazione: i tempi nelle impostazioni Excel', () => {
 
 describe('Programmazione: le schede', () => {
   it('le impostazioni mostrano il calendario di fabbrica', () => {
-    const html = conDb().eval('renderSettings()');
+    const html = conDb().eval('renderCalendarSettings()');
     assert.match(html, /Calendario di fabbrica/);
     assert.match(html, /value="25\/12, 26\/12|26\/12/);
     assert.match(html, /id="set-sched-buf"/);
@@ -566,7 +566,7 @@ describe('Programmazione: i giorni dei fornitori lavorativi', () => {
 
   it('le impostazioni offrono la scelta, e la leggono', () => {
     const app = conDb();
-    const html = app.eval('renderSettings()');
+    const html = app.eval('renderCalendarSettings()');
     assert.match(html, /id="set-cal-sup"/);
     assert.match(html, /<option value="calendario" selected>/);
     const letto = ev(app, `(() => {

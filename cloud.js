@@ -1583,7 +1583,7 @@ async function cloudCaricaArchivio(stato) {
 //  - i listini citano le richieste d'offerta, che citano i piani.
 let CLOUD_LOTTO_RIGHE = 500;   // `let`: le prove lo abbassano
 const CLOUD_ORDINE_CARICAMENTO = ['profiles', 'suppliers', 'customers', 'families', 'sub_families', 'work_centers',
-  'work_center_suppliers', 'jobs', 'items*', 'production_plans', 'production_plan_lines', 'rfqs', 'rfq_lines',
+  'work_center_suppliers', 'machines', 'jobs', 'items*', 'production_plans', 'production_plan_lines', 'rfqs', 'rfq_lines',
   'item_prices', 'items', 'orders', 'order_lines', 'production_orders', 'production_order_phases',
   'production_order_materials', 'work_orders', 'work_order_lines', 'production_declarations', 'stock_movements',
   'order_receipts', 'productions', 'item_revisions', 'attachment_docs', 'attachments', 'generated_docs', 'reminders', 'production_time_logs', 'maintenance_plans', 'maintenance_events', 'trash'];

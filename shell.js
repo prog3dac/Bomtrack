@@ -320,6 +320,17 @@ function renderNav() {
     `<button class="subnav-btn ${activeView === w.id ? 'active' : ''}" onclick="setView('${w.id}')" title="${esc(w.label)}" aria-current="${activeView === w.id ? 'page' : 'false'}">${esc(w.label)}</button>`).join('');
   adattaHeader();
 }
+// La seconda riga resta ferma sotto la testata (0.127.0). Quanto è alta lo
+// sanno solo il disegno e il numero di voci: si misura, e chi resta fermo
+// anche lui (l'elenco accanto a un documento, la colonna di Gestione) si mette
+// sotto di lei leggendo --subnav-h invece di finirci coperto.
+function misuraSubnav() {
+  const st = typeof document !== 'undefined' && document.documentElement && document.documentElement.style;
+  if (!st || typeof st.setProperty !== 'function') return;
+  const sub = document.getElementById('sub-nav');
+  const h = sub && sub.offsetHeight ? sub.offsetHeight : 0;
+  st.setProperty('--subnav-h', h + 'px');
+}
 // ─── L'intestazione che si adatta ───
 // Una riga sola a qualunque larghezza. Quando non ci sta si cede spazio per
 // gradi (vedi «Header» in style.css), e il grado si **misura** invece di
@@ -334,6 +345,7 @@ function adattaHeader() {
   const h = document.getElementById('app-header');
   const nav = document.getElementById('main-nav');
   if (!h || !nav || !h.classList || (h.style && h.style.display === 'none')) return;
+  misuraSubnav();
   const trabocca = () => h.scrollWidth > h.clientWidth + 1
     || (getComputedStyle(nav).display !== 'none' && nav.scrollWidth > nav.clientWidth + 1);
   const aperti = ['menu-nav', 'menu-extra'].filter(c => h.classList.contains(c));
@@ -421,10 +433,10 @@ function setView(v) {
   if (v === 'manage' && !isAdmin()) { showToast('Sezione riservata agli amministratori', 'error'); v = 'bom'; }
   // Una vista di un'area spenta (un link vecchio, la ricerca, un segnale) non
   // si apre: si torna al Riepilogo dicendo perché.
-  if (!vistaAttiva(v)) { showToast(`${AREE[areaDiVista(v)].nome}: area spenta in Gestione → Impostazioni`, 'error'); v = 'home'; }
+  if (!vistaAttiva(v)) { showToast(`${AREE[areaDiVista(v)].nome}: area spenta in Gestione → Aree e moduli`, 'error'); v = 'home'; }
   // Lo stesso per la voce di un modulo spento.
   const voce = (groupOfView(v) || { views: [] }).views.find(w => w.id === v);
-  if (voce && voce.modulo && !moduloAttivo(voce.modulo)) { showToast(`${MODULI[voce.modulo].nome}: modulo spento in Gestione → Impostazioni`, 'error'); v = 'home'; }
+  if (voce && voce.modulo && !moduloAttivo(voce.modulo)) { showToast(`${MODULI[voce.modulo].nome}: modulo spento in Gestione → Aree e moduli`, 'error'); v = 'home'; }
   scriviHash(v);
   // Si lascia un documento aperto (dalla 0.105.3): quel che era in sospeso si
   // salva, come quando si apre un altro documento. Restava «da salvare» anche

@@ -117,7 +117,7 @@ const PART_SOURCING = {
   make: 'Produzione interna',
   buy: 'Acquisto da fornitore',
 };
-// Proposto alle parti NUOVE (Gestione → Impostazioni). Di serie è l'acquisto:
+// Proposto alle parti NUOVE (Gestione → Codifica articoli). Di serie è l'acquisto:
 // nella maggior parte dei casi la parte la lavora un terzista, e chi la produce
 // in casa è l'eccezione che si dichiara.
 function defaultPartSourcing() {
@@ -165,8 +165,10 @@ function cycleRowComputed(row, visited, out) {
 function cycleRowCost(row, visited, out) {
   if (!row) return 0;
   if (row.kind === 'op') {
+    // A costo orario: la manodopera alla tariffa della fase, più la macchina
+    // alla sua (modulo Macchine utensili, macchine.js) sulle ore di macchina.
     return row.costMode === 'orario'
-      ? (Number(row.hours) || 0) * (Number(row.rate) || 0)
+      ? (Number(row.hours) || 0) * (Number(row.rate) || 0) + (typeof costoMacchinaFase === 'function' ? costoMacchinaFase(row) : 0)
       : (Number(row.cost) || 0);
   }
   // Con un override il costo non dipende più dal sottoalbero: niente da segnalare.

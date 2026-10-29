@@ -225,7 +225,7 @@ function costoMedioOf(itemId) {
   return e && e.qty > 0 ? e.valore / e.qty : null;
 }
 // Come si valorizza il magazzino: a listino (itemUnitCost) o, con Costi reali
-// acceso e la scelta fatta in Impostazioni, a costo medio.
+// acceso e la scelta fatta in Gestione → Costi e margini, a costo medio.
 function valorizzaAMedio() { return moduloAttivo('costiReali') && db.settings && db.settings.valoreMagazzino === 'medio'; }
 function costoGiacenza(it) {
   if (!it) return 0;

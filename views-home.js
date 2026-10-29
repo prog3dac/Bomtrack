@@ -214,8 +214,7 @@ function homeSegnali() {
   // Modulo Officina: le manutenzioni scadute, per centro.
   if (moduloAttivo('officina')) {
     const scadute = maintPlans().map(p => ({ p, s: maintStato(p) })).filter(x => x.s.scaduto);
-    agg(scadute.map(({ p }) => { const wc = getWorkCenter(p.workCenterId);
-      return voce(wc ? wc.name : '', p.title, `setView('manutenzione')`); }),
+    agg(scadute.map(({ p }) => voce(dovePlanLabel(p), p.title, `setView('manutenzione')`)),
     'manutenzione scaduta', 'manutenzioni scadute', 'manutenzione', 'media');
   }
   // Modulo Capacità finita: gli ordini che con i centri pieni non ce la fanno.
@@ -225,7 +224,7 @@ function homeSegnali() {
     'ordine di produzione in ritardo a capacità finita', 'ordini di produzione in ritardo a capacità finita', 'odp', 'media');
   }
 
-  // Un'area spenta (Gestione → Impostazioni) non parla: i suoi avvisi
+  // Un'area spenta (Gestione → Aree e moduli) non parla: i suoi avvisi
   // porterebbero a una vista che non c'è.
   return out.filter(s => vistaAttiva(s.vista)).sort((a, b) => CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }
@@ -507,8 +506,7 @@ function homeEventi() {
   if (moduloAttivo('officina')) maintPlans().forEach(pm => {
     const s = maintStato(pm, oggi);
     if (!s.scadenza) return;
-    const wc = getWorkCenter(pm.workCenterId);
-    out.push({ tipo: 'manutenzione', data: s.scadenza, icona: 'wrench', testo: `Manutenzione ${wc ? wc.name : ''}`.trim(),
+    out.push({ tipo: 'manutenzione', data: s.scadenza, icona: 'wrench', testo: `Manutenzione ${dovePlanLabel(pm)}`.trim(),
       dettaglio: pm.title || '', gravita: s.scadenza < oggi ? 'alta' : calGravitaData(s.scadenza, oggi), azione: `setView('manutenzione')` });
   });
 

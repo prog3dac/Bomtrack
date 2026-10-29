@@ -81,6 +81,9 @@ function opFreezePhases(part) {
   cicloFasi(part).forEach((r, k) => {
     const t = runs.find(x => k >= x.from && k <= x.to) || { from: k, to: k, passata: 0 };
     const wc = getWorkCenter(r.workCenterId);
+    // La macchina (modulo Macchine utensili) si congela come il centro: con il
+    // nome, e con la tariffa di oggi, perché è lei che costa.
+    const mac = !r.supplierId && r.machineId ? getMachine(r.machineId) : null;
     out.push({
       id: newId(),
       seq: cyclePhaseNumber(k),
@@ -88,6 +91,9 @@ function opFreezePhases(part) {
       phaseKey: mrpPhaseKey(part.id, k, r.workCenterId),
       workCenterId: r.workCenterId || null,
       wcName: wc ? wc.name : '(centro mancante)',
+      machineId: mac ? mac.id : null,
+      machineName: mac ? machineLabel(mac) : '',
+      machineRate: mac ? Number(mac.hourlyRate) || 0 : 0,
       supplierId: r.supplierId || null,
       supplierName: r.supplierId ? (supplierName(r.supplierId) || '') : '',
       runFrom: t.from, runTo: t.to, passata: t.passata || 0,
@@ -1060,7 +1066,7 @@ function odpPhaseRows(o) {
     const forzata = opForzata(o, f);
     return `<tr class="odp-fase odp-fase-${st}">
       <td><span class="cycle-phase">${esc(String(f.seq))}</span></td>
-      <td>${esc(f.wcName)}${f.note ? ` <span class="empty-text" style="padding:0">${esc(f.note)}</span>` : ''}</td>
+      <td>${esc(f.wcName)}${odpMachineCell(o, f)}${f.note ? ` <span class="empty-text" style="padding:0">${esc(f.note)}</span>` : ''}</td>
       <td>${f.supplierId
     ? `${ico('factory', 'tinted', '')} ${esc(f.supplierName || supplierName(f.supplierId) || '—')}`
     : '<span class="empty-text" style="padding:0">Interna</span>'}</td>
@@ -1658,8 +1664,10 @@ function odpListExportSpec() {
 // porta le fasi con i loro tempi e lo spazio per leggere l'avanzamento, non i
 // prezzi — quelli riguardano l'ordine di lavoro, non chi lavora il pezzo.
 function odpDocSpec(o) {
+  // Con il modulo Macchine utensili la fase interna dice su quale macchina si fa:
+  // è il foglio che va in officina, e «Interna» non bastava a trovarla.
   const fasi = (o.phases || []).map(f => [String(f.seq), f.wcName,
-    f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : 'Interna',
+    f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : (faseMacchinaNome(f) || 'Interna'),
     f.supplierId ? (f.days ? f.days + ' gg' : '') : (f.hours ? fmtQtyIt(f.hours) + ' h/pz' : ''),
     opDaFare(o, f), opFatti(o, f), opScarti(o, f),
     ODP_FASE_LABELS[opStatoFase(o, f)] || '']);

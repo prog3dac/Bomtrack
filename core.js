@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.125.1';
+const APP_VERSION = '0.127.1';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -39,6 +39,7 @@ let currentOdlId = null;     // ordine di lavoro aperto in editor
 let odlDirty = false;        // modifiche non salvate nell'editor ODL
 let odpView = 'list';        // 'list' | 'edit' — Ordini di produzione (ODP)
 let currentOdpId = null;     // ordine di produzione aperto in editor
+let odpDirty = false;        // modifiche non salvate nell'editor ODP
 
 
 // ═══════════════════════════════════════════════════════════
@@ -655,7 +656,7 @@ function isAdmin() { return !!currentUser && currentUser.role === 'admin'; }
 
 // ─── Moduli (dalla 0.118.0) ───
 // Le funzioni che non servono a tutti si accendono e si spengono da Gestione →
-// Impostazioni. Spento vuol dire **nascosto e ignorato dai conti**, non
+// Aree e moduli. Spento vuol dire **nascosto e ignorato dai conti**, non
 // cancellato: i dati scritti restano dove sono, e riaccendendo il modulo
 // tornano come erano. Per questo un modulo spento non tocca mai un record —
 // ogni lettura passa da moduloAttivo(), e basta quello.
@@ -691,6 +692,12 @@ const MODULI = {
     descr: 'Le fasi interne degli ordini di produzione in fila sui centri, per data di consegna, senza superare le ore che ogni centro lavora e fuori dai fermi. Ogni ordine ha la sua data fattibile accanto a quella richiesta; il Carico centri mostra la coda. Propone, non cambia le date.',
     area: 'produzione',
   },
+  // Dalla 0.126.0: le macchine dei centri, con tariffa e manutenzione proprie (macchine.js).
+  macchine: {
+    nome: 'Macchine utensili',
+    descr: 'Le macchine di ogni centro di lavoro, in Gestione → Macchine utensili, ciascuna con la sua tariffa oraria che si somma a quella del centro (la manodopera). Le fasi dei cicli e degli ordini di produzione si assegnano a una macchina; con Officina la manutenzione e i fermi sono per macchina, e con Capacità finita le fasi fanno la fila sulla loro macchina.',
+    area: 'produzione',
+  },
 };
 function moduloAttivo(nome) {
   const m = db && db.settings && db.settings.modules;
@@ -703,7 +710,7 @@ function moduloAttivo(nome) {
 // ─── Aree (dalla 0.121.0) ───
 // La base dell'app è quella di un costruttore che compra tutto: anagrafiche,
 // distinta base, acquisti e listini. Il resto sono **aree** che si spengono
-// da Gestione → Impostazioni, con la stessa regola dei moduli: spenta vuol
+// da Gestione → Aree e moduli, con la stessa regola dei moduli: spenta vuol
 // dire nascosta e ignorata, mai cancellata.
 //
 // Al contrario dei moduli un'area nasce **accesa**: un archivio che non ne
@@ -733,7 +740,7 @@ const AREE = {
   },
 };
 // I profili del primo avvio: un punto di partenza, non un vincolo — le aree si
-// cambiano dopo da Gestione → Impostazioni.
+// cambiano dopo da Gestione → Aree e moduli.
 const PROFILI_AREE = {
   completo: { nome: 'Con produzione interna', descr: 'Tutte le aree: anche parti fatte in casa, cicli, ODP e ODL', aree: {} },
   costruttore: { nome: 'Costruttore senza produzione interna', descr: 'Distinte, acquisti, magazzino e fabbisogno: ogni parte si compra', aree: { produzione: false } },
@@ -998,7 +1005,8 @@ function duplicateSiglaGroups(kind) {
   fam.forEach(f => raggruppa(f.subs || [], f.name, { kind: f.kind || 'acquistato', familyId: f.id }));
   return out.sort((a, b) => a.dove.localeCompare(b.dove) || a.sigla.localeCompare(b.sigla));
 }
-// Numero di cifre della parte incrementale (configurabile in Impostazioni)
+function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// Numero di cifre della parte incrementale (configurabile in Gestione → Codifica articoli)
 function codeDigits() {
   const n = parseInt(db.settings && db.settings.codeDigits, 10);
   return (n >= 1 && n <= 10) ? n : 3;
@@ -1981,6 +1989,15 @@ function closePanel(p) {
 // Chiude la scheda in primo piano: le decine di "Annulla" e i salvataggi che
 // chiamano closeModal() intendono sempre quella con cui si sta lavorando.
 function closeModal() { closePanel(panelTop()); }
+function closeAllPanels() {
+  const r = panelRoot();
+  if (r) Array.prototype.forEach.call(r.children, el => {
+    const k = el.dataset && el.dataset.panelKey;
+    if (k) panelCleanup(k);
+  });
+  if (r) r.innerHTML = '';
+  _panelZ = PANEL_Z;
+}
 
 // ─── Conferme in scheda ───
 // confirm() nativo blocca il browser, esce dallo stile dell'app e non lascia

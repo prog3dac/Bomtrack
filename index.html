@@ -100,7 +100,7 @@
       <div class="login-field" id="login-setup-profile" style="display:none">
         <label for="login-profile" style="display:block;font-size:13px;color:var(--text-dim);margin-bottom:4px">Come lavora l'azienda</label>
         <select id="login-profile" onchange="loginProfiloDescr()"></select>
-        <p class="login-profile-descr" id="login-profile-descr">Le aree si cambiano poi da Gestione → Impostazioni.</p>
+        <p class="login-profile-descr" id="login-profile-descr">Le aree si cambiano poi da Gestione → Aree e moduli.</p>
       </div>
       <div class="login-remember" id="login-remember-row">
         <label><input type="checkbox" id="login-remember"> Ricordami su questo PC</label>
@@ -474,8 +474,11 @@
   <div id="view-manage" class="view-panel">
     <div class="manage-wrap">
       <h2 class="section-title"><svg class="ico ic-settings tinted pill" aria-hidden="true"><use href="#ic-settings"></use></svg> Gestione</h2>
-      <div class="mgmt-tabs" id="mgmt-tabs"></div>
-      <div id="mgmt-content"></div>
+      <!-- Le schede in colonna, raccolte per argomento (renderManage in views-manage.js) -->
+      <div class="mgmt-layout">
+        <nav class="mgmt-tabs" id="mgmt-tabs" aria-label="Sezioni di Gestione"></nav>
+        <div id="mgmt-content" class="mgmt-content"></div>
+      </div>
     </div>
   </div>
 
@@ -527,6 +530,7 @@
 <script src="consuntivo.js"></script>
 <script src="officina.js"></script>
 <script src="capacita.js"></script>
+<script src="macchine.js"></script>
 <!-- Allegati: i dati stanno in db come ogni collezione, i byte dei vecchi file
      in IndexedDB. Va prima di views-item.js, che ne disegna la sezione. -->
 <script src="allegati.js"></script>
