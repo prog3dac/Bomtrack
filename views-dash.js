@@ -21,7 +21,7 @@ let dashFermiMesi = 6;
 function valoreGiacenza(it) {
   if (!it || it.active === false) return 0;
   const q = stockOf(it.id).onHand;
-  return q > 0 ? q * itemUnitCost(it) : 0;
+  return q > 0 ? q * costoGiacenza(it) : 0;
 }
 
 // Le righe d'ordine (ODA e ODL) ancora da ricevere, con la data attesa:
@@ -166,7 +166,7 @@ function renderDash() {
       ${listExportButtons('dashExportSpec')}
     </div>
     <div class="cost-summary">
-      ${kpi(`Valore giacenza (${esc(cur())})`, fmtN(m.totale), 'purple', { azione: "dashVaiStock('')", titolo: 'Apri il Magazzino' })}
+      ${kpi(`Valore giacenza${valorizzaAMedio() ? ' a costo medio' : ''} (${esc(cur())})`, fmtN(m.totale), 'purple', { azione: "dashVaiStock('')", titolo: 'Apri il Magazzino' })}
       ${kpi(`Fermo da ${m.mesi} mesi`, fmtN(m.valoreFermo), m.valoreFermo > 0 ? 'orange' : '', { azione: "dashScorri('dash-fermi')", titolo: 'Vai agli articoli fermi' })}
       ${kpi('Sotto scorta minima', String(m.sotto.length), m.sotto.length ? 'red' : '', { azione: "dashVaiStock('sotto')", titolo: 'Apri il Magazzino filtrato sugli articoli sotto scorta' })}
       ${kpi('Consegne scadute', String(m.righeScadute), m.righeScadute ? 'red' : '', { azione: "dashScorri('dash-scaduti')", titolo: 'Vai alle consegne scadute' })}

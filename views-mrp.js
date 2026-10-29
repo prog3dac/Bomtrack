@@ -995,6 +995,7 @@ function renderLoad() {
     ${loadOverloadHtml(tab)}
     ${loadChartHtml(tab)}
     ${loadTableHtml(tab)}
+    ${typeof capCodaHtml === 'function' ? capCodaHtml() : ''}
     ${loadItemsHtml(entries)}</div>`;
 }
 function loadSetPlan(id) { loadSoloPiano = id || ''; renderLoad(); }

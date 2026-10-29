@@ -966,6 +966,12 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .login-field input{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none}
 .login-field input:focus{border-color:var(--accent)}
 .login-field select{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px}
+.reparto-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.reparto-card{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--card)}
+.reparto-card.attiva{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+.reparto-testa{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.reparto-azioni{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.reparto-btn{min-height:48px;font-size:16px;padding:0 18px;flex:1;justify-content:center}
 .login-profile-descr{font-size:12px;color:var(--text-dim);margin:4px 0 0}
 .login-remember{display:flex;align-items:center;gap:6px;margin:2px 0 12px;font-size:13px;color:var(--text-dim)}
 .login-remember input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}

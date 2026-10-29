@@ -188,10 +188,50 @@ function stockIndex() {
   return idx;
 }
 let _esplosi = new Map();   // mrpExplodePlan
-function invalidateStock() { _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; _ordinePiani = null; _esplosi = new Map(); }
+function invalidateStock() { _costoMedioIdx = null; _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; _ordinePiani = null; _esplosi = new Map(); }
 function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, arrivi: [], nMov: 0 }; }
 function onHandOf(itemId) { return stockOf(itemId).onHand; }
 function incomingOf(itemId) { return stockOf(itemId).incoming; }
+
+// ─── Costo medio d'acquisto (modulo Costi reali, dalla 0.122.0) ───
+// Media ponderata di quanto si è pagato davvero: ogni riga d'ordine ricevuta
+// pesa per la quantità ricevuta, al prezzo dell'ordine. Non si salva: si
+// ricalcola dagli ordini, come la giacenza, così due PC non possono avere due
+// costi medi diversi. Il prezzo è nell'unità del fornitore, la quantità si
+// porta in quella di gestione: 120 kg a 2 €/kg per 15 m fanno 16 €/m.
+// Un articolo mai ricevuto non ha costo medio (null): vale il listino.
+let _costoMedioIdx = null;
+function costoMedioIndex() {
+  if (_costoMedioIdx) return _costoMedioIdx;
+  const idx = new Map();
+  (db.orders || []).forEach(o => {
+    if (o.status === 'annullato') return;
+    (o.lines || []).forEach(l => {
+      const ric = Number(l.received) || 0, prezzo = Number(l.price);
+      if (!l.itemId || !(ric > 0) || l.price === '' || l.price == null || !isFinite(prezzo)) return;
+      const it = getItem(l.itemId);
+      const q = it ? fromAltUom(it, ric, l.uom) : ric;
+      if (!(q > 0)) return;
+      const e = idx.get(l.itemId) || { qty: 0, valore: 0, righe: 0 };
+      e.qty += q; e.valore += ric * prezzo; e.righe++;
+      idx.set(l.itemId, e);
+    });
+  });
+  _costoMedioIdx = idx;
+  return idx;
+}
+function costoMedioOf(itemId) {
+  const e = costoMedioIndex().get(itemId);
+  return e && e.qty > 0 ? e.valore / e.qty : null;
+}
+// Come si valorizza il magazzino: a listino (itemUnitCost) o, con Costi reali
+// acceso e la scelta fatta in Impostazioni, a costo medio.
+function valorizzaAMedio() { return moduloAttivo('costiReali') && db.settings && db.settings.valoreMagazzino === 'medio'; }
+function costoGiacenza(it) {
+  if (!it) return 0;
+  if (valorizzaAMedio()) { const m = costoMedioOf(it.id); if (m != null) return m; }
+  return itemUnitCost(it);
+}
 // Quanto di ciò che è in arrivo arriva ENTRO una data, e cosa arriva dopo.
 // Serve a distinguere due situazioni che il netto confonde: «non c'è e va
 // comprato» e «c'è, ma arriva dopo che serviva». La prima costa un lead time,
@@ -1516,7 +1556,7 @@ function renderStock() {
     kpi('Articoli a magazzino', String(tutti.length), '', { azione: "stockFiltraStato('')", attiva: false, titolo: 'Mostra tutti gli stati' }),
     kpi('Sotto scorta minima', String(sotto), sotto > 0 ? 'red' : '', { azione: "stockFiltraStato('sotto')", attiva: statoOra === 'sotto', titolo: 'Filtra gli articoli sotto la scorta minima' }),
     kpi('Con merce in arrivo', String(inArrivo), 'accent', { azione: "stockFiltraStato('arrivo')", attiva: statoOra === 'arrivo', titolo: 'Filtra gli articoli con merce in arrivo' }),
-    kpi(`Valore giacenza (${esc(cur())})`, fmtN(valore), 'purple', { azione: "setView('dash')", titolo: 'Apri il Cruscotto: valore per tipo e per famiglia' }),
+    kpi(`Valore giacenza${valorizzaAMedio() ? ' a costo medio' : ''} (${esc(cur())})`, fmtN(valore), 'purple', { azione: "setView('dash')", titolo: 'Apri il Cruscotto: valore per tipo e per famiglia' }),
   ].concat(negativi || statoOra === 'sottozero' ? [
     // Solo quando ce n'è: è un avviso da ricontare, non una misura del magazzino.
     kpi('Esistente negativo', String(negativi), negativi ? 'red' : '', { azione: "stockFiltraStato('sottozero')", attiva: statoOra === 'sottozero', titolo: 'Filtra gli articoli con esistente sotto zero: vanno ricontati' }),

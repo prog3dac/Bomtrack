@@ -60,7 +60,8 @@ function dbCloudCompleto() {
     workCenters: [st({ id: wc1, name: 'Tornitura', hourlyRate: 40, capacityHours: 38, active: true,
       suppliers: [st({ id: wcs, supplierId: s2, rate: 55, note: '' })] })],
     families: [st({ id: fam, name: 'Acciaio', kind: 'materiale', sigla: 'ACC', subs: [st({ id: sub, name: 'Barre', sigla: 'BAR' })] })],
-    jobs: [st({ id: job, number: 'COM-2026-001', customer: 'Rossi', title: 'Linea', customerRef: '', status: 'aperta', date: '2026-03-01', dueDate: '2026-06-30', notes: '', active: true })],
+    jobs: [st({ id: job, number: 'COM-2026-001', customer: 'Rossi', title: 'Linea', customerRef: '', status: 'aperta', date: '2026-03-01', dueDate: '2026-06-30', notes: '', active: true,
+      costSnapshot: { date: '2026-03-01', materiali: 100, lavorazioni: 40, generali: 10, totale: 150, righe: 1 } })],
     items: [
       st({ id: m1, code: 'MAT-ACC-BAR-001', name: 'Barra', type: 'materiale', uom: 'kg', unitCost: 4.5, familyId: fam, subFamilyId: sub, notes: '', active: true,
         activePriceId: pr1, priceListSeeded: true, altUom: 'm', altFactor: 2.5, conceptId: 'cn-albero',
@@ -105,6 +106,9 @@ function dbCloudCompleto() {
     generatedDocs: [st({ id: gdoc, kind: 'order', refId: ord, number: 'ODA-2026-001', seq: 0, path: 'Documenti Bomtrack/ODA/2026/ODA-2026-001_SKF.pdf',
       format: 'pdf', size: 48213, sha256: 'ab'.repeat(32), sentAt: '2026-02-05T10:00:00.000Z', sentVia: 'manuale', sentTo: '' })],
     reminders: [st({ id: rem, date: '2026-03-20', title: 'Sollecitare SKF', notes: '', gravita: 'media', done: false, jobId: job, active: true })],
+    timeLogs: [st({ id: U(50), odpId: odp, phaseId: ph1, workCenterId: wc1, userId: usr, startedAt: '2026-03-02T09:00:00.000Z', endedAt: '2026-03-02T11:30:00.000Z', note: '', active: true })],
+    maintPlans: [st({ id: U(51), workCenterId: wc1, title: 'Cambio olio', everyDays: 90, everyHours: 500, ricambi: [{ itemId: c1, qty: 1 }], notes: '', active: true })],
+    maintEvents: [st({ id: U(52), planId: U(51), workCenterId: wc1, date: '2026-03-10', downFrom: '2026-03-10', downTo: '2026-03-11', ricambi: [{ itemId: c1, qty: 1 }], note: 'fatto', active: true })],
     trash: [{ id: trash, coll: 'suppliers', deletedAt: T0, deletedBy: usr, record: { id: U(99), name: 'Vecchio' } }],
   });
 }

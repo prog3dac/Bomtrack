@@ -248,6 +248,9 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `views-report.js` | costificazione e report |
 | `views-mrp.js` | fabbisogno materiali, programmazione a ritroso delle date (montaggi, fasi, tratte di conto lavoro, acquisti) e carico dei centri |
 | `alternativi.js` | modulo **Alternativi**: equivalenti e sostitutivi degli articoli, le decisioni «usa l'alternativo» di un piano e il loro effetto su esplosione, montaggio, ordini di produzione e conto lavoro |
+| `consuntivo.js` | modulo **Costi reali**: il consuntivo di commessa, con il preventivo fotografato all'avvio della produzione e il reale letto da prelievi, ricevimenti, ODL e fasi lavorate (il costo medio d'acquisto sta in `views-stock.js`) |
+| `officina.js` | modulo **Officina**: il terminale di reparto con le timbrature Inizia / Pausa / Fine sulle fasi, e la manutenzione dei centri (piani a giorni o a ore, interventi con ricambi e fermi) |
+| `capacita.js` | modulo **Capacità finita**: le fasi degli ODP in fila sui centri senza superarne le ore, la data fattibile e la coda per centro |
 | `varianti.js` | modulo **Varianti**: opzioni della macchina modello, righe di distinta condizionate e a formula, regole solo sui gruppi del primo livello, la pagina *Tecnico → Varianti* con il configuratore che genera la macchina concreta e Rigenera quando il modello cambia |
 | `produzione.js` | avanzamento di produzione: le dichiarazioni di pezzi fatti dentro un piano, e il netto che ne discende sulle lavorazioni |
 | `allegati.js` | allegati degli articoli: i documenti d'archivio e i loro collegamenti ai codici; i byte dei vecchi file in IndexedDB |

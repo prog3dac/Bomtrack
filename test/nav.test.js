@@ -43,7 +43,7 @@ describe('Integrità della barra', () => {
     assert.deepEqual(g.tech, ['design', 'buy', 'bom', 'report', 'cycles', 'varianti']);
     assert.deepEqual(g.plan, ['jobs', 'mrp', 'load', 'avz']);
     assert.deepEqual(g.buying, ['rfq', 'orders', 'pricelist']);
-    assert.deepEqual(g.prod, ['odp', 'odl']);
+    assert.deepEqual(g.prod, ['odp', 'odl', 'reparto', 'manutenzione']);
   });
 });
 

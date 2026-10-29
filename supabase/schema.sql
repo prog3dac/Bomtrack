@@ -134,10 +134,12 @@ create table if not exists public.sub_families (
 create table if not exists public.jobs (
   id uuid primary key,
   number text, customer text, title text, customer_ref text, status text,
-  date date, due_date date, notes text, active boolean,
+  date date, due_date date, notes text, active boolean, cost_snapshot jsonb,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.122.0: il preventivo fotografato della commessa (modulo Costi reali).
+alter table public.jobs add column if not exists cost_snapshot jsonb;
 
 -- ─── Articoli ───────────────────────────────────────────────
 create table if not exists public.items (
@@ -526,6 +528,34 @@ create table if not exists public.reminders (
   synced_at timestamptz not null default clock_timestamp()
 );
 
+-- 0.123.0, modulo Officina: le timbrature del reparto (eventi, come le
+-- dichiarazioni), i piani di manutenzione dei centri e gli interventi, con i
+-- ricambi usati e il fermo macchina.
+create table if not exists public.production_time_logs (
+  id uuid primary key,
+  odp_id uuid references public.production_orders(id) on delete cascade deferrable initially deferred,
+  phase_id uuid references public.production_order_phases(id) on delete set null deferrable initially deferred,
+  work_center_id uuid references public.work_centers(id) deferrable initially deferred,
+  user_id uuid, started_at timestamptz, ended_at timestamptz, note text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create table if not exists public.maintenance_plans (
+  id uuid primary key,
+  work_center_id uuid references public.work_centers(id) deferrable initially deferred,
+  title text, every_days numeric, every_hours numeric, ricambi jsonb, notes text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+create table if not exists public.maintenance_events (
+  id uuid primary key,
+  plan_id uuid references public.maintenance_plans(id) on delete set null deferrable initially deferred,
+  work_center_id uuid references public.work_centers(id) deferrable initially deferred,
+  date date, down_from date, down_to date, ricambi jsonb, note text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+
 create table if not exists public.trash (
   id uuid primary key,
   coll text, deleted_at timestamptz, deleted_by uuid, record jsonb,
@@ -575,6 +605,9 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('attachments', null, null, 'root'),
   ('generated_docs', null, null, 'root'),
   ('reminders', null, null, 'root'),
+  ('production_time_logs', null, null, 'root'),
+  ('maintenance_plans', null, null, 'root'),
+  ('maintenance_events', null, null, 'root'),
   ('trash', null, null, 'root')
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
 
@@ -1092,6 +1125,11 @@ select t, a from (values
   ('production_declarations', 'shop'), ('productions', 'shop'), ('stock_movements', 'shop'),
   ('jobs', 'docs'), ('jobs', 'manage'),
   ('reminders', 'agenda'),
+  -- Modulo Officina: chi è in reparto timbra e registra gli interventi; i
+  -- piani di manutenzione sono anagrafica dei centri.
+  ('production_time_logs', 'shop'), ('production_time_logs', 'docs'),
+  ('maintenance_events', 'shop'), ('maintenance_events', 'docs'),
+  ('maintenance_plans', 'manage'),
   -- Il cestino e le lapidi li scrive chiunque elimini qualcosa, in qualunque area.
   ('trash', 'catalog'), ('trash', 'bom'), ('trash', 'docs'), ('trash', 'manage'), ('trash', 'agenda'), ('trash', 'shop'),
   ('sync_tombstones', 'catalog'), ('sync_tombstones', 'bom'), ('sync_tombstones', 'docs'),
@@ -1123,6 +1161,7 @@ language sql immutable set search_path = public as $$
     ('workCenters', 'work_centers'), ('families', 'families'), ('rfqs', 'rfqs'), ('orders', 'orders'),
     ('workOrders', 'work_orders'), ('plans', 'production_plans'), ('prodOrders', 'production_orders'),
     ('prodDecls', 'production_declarations'), ('jobs', 'jobs'), ('reminders', 'reminders'),
+    ('timeLogs', 'production_time_logs'), ('maintPlans', 'maintenance_plans'), ('maintEvents', 'maintenance_events'),
     ('trash', 'trash'), ('users', 'profiles')
   ) v(k, t) where k = c
 $$;
