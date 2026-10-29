@@ -115,7 +115,7 @@ describe('Cosa dice la scheda', () => {
 
   it('la distinta parte e il ciclo di una parte prodotta in casa', () => {
     const h = apri(app(), 'pt');
-    assert.match(h, /Distinta parte e ciclo/);
+    assert.match(h, /Distinta e ciclo/);
     assert.match(h, /Tornio/);
   });
 

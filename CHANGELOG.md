@@ -2,6 +2,21 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.125.0 — 2026-10-29
+
+**Distinta = cosa serve, ciclo = come si fa, anche per le parti.** Il materiale che serve per fare una parte (materie prime e commerciali) passa dalla sezione *Distinta parte* dei Cicli alla **distinta della parte**, in *Tecnico → Gestione DB*, come i componenti di un assieme. Nel ciclo restano le sole fasi.
+- **Gestione DB** apre anche le parti (gruppo *Parti* nel menu): **+ Aggiungi componenti** propone solo materie prime e commerciali, ogni riga ha quantità, **scarto %** e il **costo riga forzato** (asterisco nell'albero). Sotto, la riga *Ciclo di lavorazione* in sola lettura con **Apri ciclo**. Nell'albero di un gruppo la parte si espande in distinta e fasi. Per una parte la testata non ha le spese generali, che valgono per gli assiemi.
+- **Cicli di lavorazione**: per una parte, la nota in testa dice quante righe ha la distinta e il pulsante **Distinta** la apre; la card si chiama *Distinta*. L'export del ciclo tiene il foglio *Distinta*.
+- **Scarto**: ora c'è anche sul materiale delle parti, ed entra nel costo, nel fabbisogno e nel materiale dell'ordine di produzione.
+- **Import Distinte**: il padre può essere una parte.
+- **Migrazione**: all'avvio le righe materiale dei cicli passano alla distinta, nello stesso ordine, con quantità e costo forzato, scarto zero: il costo non cambia. Si ripete senza danni. Le revisioni di prima si confrontano con quelle nuove riga per riga. Conviene aggiornare tutti i PC dell'archivio condiviso: una versione vecchia non vede il materiale delle parti.
+
+**Filtri uguali in Gestione DB e Cicli di lavorazione**: testo, **tipo** (Macchine · Gruppi · Sottogruppi · Parti), **famiglia** e **sottofamiglia** delle parti, **macchina** e **gruppo** di appartenenza. Famiglia, sottofamiglia, macchina e gruppo sono condivisi con Progetto e Magazzino.
+
+**Schema Supabase**: una colonna nuova, `cost_override`, in `item_components`. Va eseguita `supabase/schema.sql` prima di aggiornare l'app sui PC collegati all'archivio condiviso.
+
+**Manuale**: cap. 13 «La distinta di una parte» e filtri, cap. 14 (Cicli), glossario, schema dei dati.
+
 ### 0.124.0 — 2026-10-29
 
 **Il ciclo anche per macchine, gruppi e sottogruppi.** Le lavorazioni di un assieme diventano le **fasi del suo ciclo**, con tutto quello che ha una fase di una parte: centro, interna o conto lavoro, costo fisso o orario, ore o giorni, ordine delle fasi.

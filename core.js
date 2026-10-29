@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.124.0';
+const APP_VERSION = '0.125.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -275,8 +275,8 @@ function parentIndex() {
     if (l[l.length - 1] !== padre) l.push(padre);
   };
   (db.items || []).forEach(i => {
-    if (isAssembly(i.type)) (i.components || []).forEach(c => aggiungi(c.itemId, i));
-    else if (i.type === 'parte') (i.cycle || []).forEach(r => { if (r.kind !== 'op') aggiungi(r.itemId, i); });
+    // Dalla 0.125.0 anche una parte ha la distinta: stessa lettura degli assiemi.
+    if (isAssembly(i.type) || i.type === 'parte') distintaRighe(i).forEach(c => aggiungi(c.itemId, i));
   });
   _parentIdx = idx;
   return idx;
@@ -596,7 +596,9 @@ const ALLOWED_CHILDREN = {
   macchina: ['gruppo', 'sottogruppo'],
   gruppo: ['sottogruppo', 'parte', 'materiale', 'acquistato'],
   sottogruppo: ['sottogruppo', 'parte', 'materiale', 'acquistato'],
-  parte: [], materiale: [], acquistato: [],
+  // Dalla 0.125.0 anche una parte ha la distinta: il materiale per farla.
+  parte: ['materiale', 'acquistato'],
+  materiale: [], acquistato: [],
 };
 // ─── Ruoli e permessi ───
 // I ruoli limitano la SCRITTURA, non la lettura: tutti vedono tutto. Le aree
@@ -726,7 +728,7 @@ const AREE = {
   },
   produzione: {
     nome: 'Produzione interna',
-    descr: 'Parti fatte in casa con distinta parte e ciclo, centri di lavoro, ordini di produzione e di lavoro, conto lavoro, carico centri e avanzamento. Spento, ogni parte vale come acquistata e costa il suo prezzo di listino.',
+    descr: 'Parti fatte in casa con distinta e ciclo, centri di lavoro, ordini di produzione e di lavoro, conto lavoro, carico centri e avanzamento. Spento, ogni parte vale come acquistata e costa il suo prezzo di listino.',
     viste: ['cycles', 'load', 'avz', 'odp', 'odl', 'reparto', 'manutenzione'],
     richiede: 'pianificazione',
   },
@@ -794,8 +796,6 @@ const CATALOG_SCOPES = {
   design: { types: ['macchina', 'gruppo', 'sottogruppo', 'parte'], pfx: 'des', title: 'Macchine, gruppi e parti' },
 };
 function scopeOf(type) { return CATALOG_SCOPES.buy.types.includes(type) ? 'buy' : 'design'; }
-// Tipi inseribili nel ciclo di lavorazione di una Parte (le lavorazioni sono a parte, dai centri di lavoro)
-const CYCLE_CHILD_TYPES = ['acquistato', 'materiale'];
 const TYPE_LABELS = { macchina: 'Macchina', gruppo: 'Gruppo', sottogruppo: 'Sottogruppo', parte: 'Parte', materiale: 'Materia prima', acquistato: 'Commerciale' };
 const TYPE_SHORTS = { macchina: 'MAC', gruppo: 'GRP', sottogruppo: 'SGR', parte: 'PRT', materiale: 'MAT', acquistato: 'CMM' };
 // Il tipo arriva dall'archivio, e nell'archivio condiviso lo scrive un collega:

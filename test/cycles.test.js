@@ -1,8 +1,9 @@
-// Vista Cicli di lavorazione: distinta parte e fasi vivono nello stesso array
-// `it.cycle`, distinti solo dal campo `kind`. Il punto delicato è tutto qui:
-// le due sezioni mostrano indici di sezione, ma chi modifica deve usare
-// l'indice assoluto — e riordinare le lavorazioni non deve spostare (né far
-// sparire) le righe della distinta, né cambiare di un centesimo il costo.
+// Vista Cicli di lavorazione. Fino alla 0.124 distinta parte e fasi vivevano
+// nello stesso array `it.cycle`, distinti solo dal campo `kind`; dalla 0.125.0
+// il materiale sta nella distinta della parte (`components`). I dati qui sotto
+// sono volutamente quelli di prima, non migrati: le fasi si modificano con
+// l'indice assoluto nell'array, e riordinarle non deve spostare (né far
+// sparire) le vecchie righe di distinta, né cambiare di un centesimo il costo.
 
 const assert = require('node:assert/strict');
 const { describe, it, approx } = require('./tap.js');
@@ -131,30 +132,40 @@ describe('Righe: aggiunta, modifica, eliminazione', () => {
   });
 
   // Dalla 0.105.7 un articolo già in distinta non fa una seconda riga: se ne
-  // aumenta la quantità, e il costo è lo stesso di prima.
-  it('pickCycleItem su un articolo già presente ne aumenta la quantità', () => {
+  // aumenta la quantità, e il costo è lo stesso di prima. Dalla 0.125.0 il
+  // materiale di una parte si aggiunge dalla Distinta, come per gli assiemi,
+  // e la prima modifica sposta le vecchie righe dal ciclo alla distinta.
+  const distinta = app => app.snapshot().items.find(i => i.id === 'p').components
+    .map(c => c.itemId + ':' + c.qty + (c.costOverride != null ? '=' + c.costOverride : ''));
+  it('un articolo già nella distinta della parte ne aumenta la quantità', () => {
     const app = conDb(dbMisto());
-    app.eval('currentCycleItemId = "p"');
-    app.eval('pickCycleItem("a")');
-    assert.equal(forma(app), 'm,w1,a,w2,w3');
-    assert.equal(app.eval('getItem("p").cycle[2].qty'), 2);
+    app.eval('currentBomId = "p"; bomPanelQty = new Map([["a", 1]]); bomPanelInsertAll()');
+    assert.deepEqual(distinta(app), ['m:3', 'a:2']);
+    assert.equal(forma(app), 'w1,w2,w3', 'nel ciclo restano le fasi');
     approx(app.eval('costOf("p").total'), 3 * 2 + 5 + 10 + 20 + 30 + 5);
   });
 
-  it('pickCycleItem accoda un articolo nuovo in fondo', () => {
+  it('un articolo nuovo si accoda in fondo alla distinta della parte', () => {
     const app = conDb(dbMisto());
-    app.eval('currentCycleItemId = "p"; db.items.push({ id: "b", code: "B", name: "B", type: "acquistato", unitCost: 4, active: true })');
-    app.eval('pickCycleItem("b")');
-    assert.equal(forma(app), 'm,w1,a,w2,w3,b');
+    app.eval('db.items.push({ id: "b", code: "B", name: "B", type: "acquistato", unitCost: 4, active: true })');
+    app.eval('currentBomId = "p"; bomPanelQty = new Map([["b", 1]]); bomPanelInsertAll()');
+    assert.deepEqual(distinta(app), ['m:3', 'a:1', 'b:1']);
   });
 
   // Il costo forzato vale per la riga intera: sommarci un pezzo lo regalerebbe.
   it('una riga a costo forzato non si somma: nasce una riga nuova', () => {
     const app = conDb(dbMisto());
-    app.eval('currentCycleItemId = "p"; getItem("p").cycle[2].costOverride = 9');
-    app.eval('pickCycleItem("a")');
-    assert.equal(forma(app), 'm,w1,a,w2,w3,a');
-    assert.equal(app.eval('getItem("p").cycle[2].qty'), 1);
+    app.eval('getItem("p").cycle[2].costOverride = 9');
+    app.eval('currentBomId = "p"; bomPanelQty = new Map([["a", 1]]); bomPanelInsertAll()');
+    assert.deepEqual(distinta(app), ['m:3', 'a:1=9', 'a:1']);
+  });
+
+  it('nella distinta di una parte entrano solo materie prime e commerciali', () => {
+    const { asm } = require('./fixtures.js');
+    const app = conDb(dbMisto());
+    app.eval(`db.items.push(${JSON.stringify(asm('g', 'gruppo'))}, ${JSON.stringify(parte('q'))})`);
+    app.eval('currentBomId = "p"; bomPanelQty = new Map([["g", 1], ["q", 1]]); bomPanelInsertAll()');
+    assert.deepEqual(distinta(app), ['m:3', 'a:1']);
   });
 
   it('Inserisci nella distinta base somma la quantità a un componente già presente', () => {
@@ -176,24 +187,36 @@ describe('Righe: aggiunta, modifica, eliminazione', () => {
     approx(app.eval('costOf("p").total'), 3 * 2 + 5 + 10 + 20 + 30 + 7);
   });
 
-  it('updateCycleRow cambia la quantità e il costo segue', () => {
+  it('la quantità di una riga della distinta della parte si cambia dalla Distinta, e il costo segue', () => {
     const app = conDb(dbMisto());
-    app.eval('currentCycleItemId = "p"');
-    app.el('cyc-qty-0').value = '10';
-    app.eval('updateCycleRow(0)');
+    app.eval('currentBomId = "p"; editComponentModal(0)');
+    app.el('cmp-item').value = 'm';
+    app.el('cmp-qty').value = '10';
+    app.el('cmp-scrap').value = '0';
+    app.el('cmp-ovr').value = '';
+    app.eval('saveComponentEdit(0)');
     approx(app.eval('costOf("p").total'), 10 * 2 + 5 + 10 + 20 + 30);
   });
 
-  it('override vuoto = nessun override, negativo riportato a zero', () => {
+  it('il costo di riga forzato: vuoto = calcolato, un valore vale per la riga intera', () => {
     const app = conDb(dbMisto());
-    app.eval('currentCycleItemId = "p"');
-    app.el('cyc-qty-0').value = '3';
-    app.el('cyc-ovr-0').value = '';
-    app.eval('updateCycleRow(0)');
-    assert.equal(app.snapshot().items.find(i => i.id === 'p').cycle[0].costOverride, null);
-    app.el('cyc-ovr-0').value = '-5';
-    app.eval('updateCycleRow(0)');
-    assert.equal(app.snapshot().items.find(i => i.id === 'p').cycle[0].costOverride, 0);
+    const salva = ovr => {
+      app.eval('currentBomId = "p"; editComponentModal(0)');
+      app.el('cmp-item').value = 'm'; app.el('cmp-qty').value = '3'; app.el('cmp-scrap').value = '0';
+      app.el('cmp-ovr').value = ovr;
+      app.eval('saveComponentEdit(0)');
+    };
+    salva('');
+    assert.equal(app.snapshot().items.find(i => i.id === 'p').components[0].costOverride, null);
+    salva('7');
+    assert.equal(app.snapshot().items.find(i => i.id === 'p').components[0].costOverride, 7);
+    approx(app.eval('costOf("p").total'), 7 + 5 + 10 + 20 + 30);
+  });
+
+  it('lo scarto della distinta di una parte entra nel costo', () => {
+    const app = conDb(dbMisto());
+    app.eval('parteDistintaViva(getItem("p")); getItem("p").components[0].scrapPct = 50; invalidateCaches()');
+    approx(app.eval('costOf("p").total'), 3 * 2 * 1.5 + 5 + 10 + 20 + 30);
   });
 
   it('il ruolo lettore non elimina né modifica', () => {
@@ -209,7 +232,7 @@ describe('Righe: aggiunta, modifica, eliminazione', () => {
   it('senza una parte selezionata i mutatori non lanciano', () => {
     const app = conDb(dbMisto());
     app.eval('currentCycleItemId = null');
-    app.eval('delCycleRow(0); moveCycleOp(0, 1); updateCycleRow(0); pickCycleItem("a")');
+    app.eval('delCycleRow(0); moveCycleOp(0, 1); updateCycleRow(0)');
     assert.equal(forma(app), 'm,w1,a,w2,w3');
   });
 });
@@ -309,7 +332,10 @@ describe('renderCycles — disegno delle due sezioni', () => {
     app.eval('currentCycleItemId = "p"');
     app.eval('renderCycles()');
     const h = app.html('cyc-body');
-    assert.ok(h.includes('Distinta parte'), 'manca la sezione distinta');
+    // Il materiale non si scrive più qui: c'è il rimando alla distinta della parte
+    assert.ok(!h.includes('addCycleItemRow'), 'la distinta parte non si scrive più nei cicli');
+    assert.ok(h.includes("openBomFor('p')"), 'manca il rimando alla distinta');
+    assert.ok(h.includes('2 righe'), 'la nota dice quante righe ha la distinta');
     assert.ok(h.includes('Ciclo di lavorazione'), 'manca la sezione ciclo');
     assert.ok(h.includes('>10<') && h.includes('>20<') && h.includes('>30<'), 'mancano i numeri di fase');
     // Le frecce dei bordi sono spente
@@ -326,7 +352,7 @@ describe('renderCycles — disegno delle due sezioni', () => {
   it('cycleCountLabel riassume le due sezioni', () => {
     const app = conDb(dbMisto());
     assert.equal(app.eval('cycleCountLabel(getItem("p"))'), '2 articoli · 3 lavorazioni');
-    assert.equal(app.eval('cycleCountLabel({ cycle: [] })'), 'Distinta parte e ciclo vuoti');
+    assert.equal(app.eval('cycleCountLabel({ cycle: [] })'), 'Distinta e ciclo vuoti');
     assert.equal(app.eval('cycleCountLabel({ cycle: [{ kind: "item" }, { kind: "op" }] })'), '1 articolo · 1 lavorazione');
   });
 });
@@ -342,8 +368,8 @@ describe('Duplicazione di una parte', () => {
     app.eval('saveNewItem()');
     const nuova = app.snapshot().items.filter(i => i.type === 'parte' && i.id !== 'p')[0];
     assert.ok(nuova, 'la copia non è stata creata');
-    assert.deepEqual(nuova.cycle.map(r => r.kind === 'op' ? r.workCenterId : r.itemId),
-      ['m', 'w1', 'a', 'w2', 'w3']);
+    assert.deepEqual(nuova.components.map(c => c.itemId + ':' + c.qty), ['m:3', 'a:1']);
+    assert.deepEqual(nuova.cycle.map(r => r.workCenterId), ['w1', 'w2', 'w3']);
     // Copia vera: modificarla non tocca l'originale
     assert.notEqual(app.eval(`getItem(${JSON.stringify(nuova.id)}).cycle`), app.eval('getItem("p").cycle'));
   });
@@ -358,6 +384,7 @@ describe('Duplicazione di una parte', () => {
     app.eval('saveNewItem()');
     const nuova = app.snapshot().items[0];
     assert.deepEqual(nuova.cycle, []);
+    assert.deepEqual(nuova.components, []);
     assert.equal(nuova.sourcing, 'buy', 'una parte nuova si compra, salvo dirlo diversamente');
   });
 

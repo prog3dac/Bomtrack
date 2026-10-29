@@ -59,13 +59,12 @@ describe('Il registro copre le viste giuste', () => {
     ['load', 'jobs', 'mrp', 'rfq', 'orders', 'odl', 'report', 'home', 'manage'].forEach(v =>
       assert.equal(a.eval(`filtPanelFor('${v}')`), null, `"${v}" non dovrebbe avere un pannello filtri`));
   });
-  it('solo Progetto e Magazzino hanno tutte e 4 le dimensioni condivise', () => {
+  it('Progetto, Magazzino, Distinte e Cicli hanno tutte e 4 le dimensioni condivise; Acquisti due', () => {
     const a = app();
-    assert.deepEqual(asJson(a, 'FILT_PANELS.design.dims.slice().sort()'), ['family', 'group', 'machine', 'subfamily']);
-    assert.deepEqual(asJson(a, 'FILT_PANELS.stock.dims.slice().sort()'), ['family', 'group', 'machine', 'subfamily']);
+    const tutte = ['family', 'group', 'machine', 'subfamily'];
+    ['design', 'stock', 'bom', 'cycles'].forEach(v =>
+      assert.deepEqual(asJson(a, `FILT_PANELS.${v}.dims.slice().sort()`), tutte, v));
     assert.deepEqual(asJson(a, 'FILT_PANELS.buy.dims.slice().sort()'), ['family', 'subfamily']);
-    assert.deepEqual(asJson(a, 'FILT_PANELS.cycles.dims.slice().sort()'), ['family', 'subfamily']);
-    assert.deepEqual(asJson(a, 'FILT_PANELS.bom.dims'), ['machine']);
   });
 });
 

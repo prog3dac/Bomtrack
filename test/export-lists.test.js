@@ -227,11 +227,11 @@ describe('Anagrafiche', () => {
 });
 
 describe('Cicli di lavorazione', () => {
-  it('due sezioni: la distinta parte e le fasi', () => {
+  it('due sezioni: la distinta della parte e le fasi', () => {
     const a = app();
     a.eval('currentCycleItemId = "p1"');
     const sp = spec(a, 'cycleExportSpec()');
-    assert.deepEqual(sp.sezioni.map(s => s.nome), ['Distinta parte', 'Ciclo di lavorazione']);
+    assert.deepEqual(sp.sezioni.map(s => s.nome), ['Distinta', 'Ciclo di lavorazione']);
     assert.equal(sp.sezioni[0].righe.length, 1);
     assert.equal(sp.sezioni[1].righe.length, 1);
     assert.equal(sp.sezioni[1].righe[0][0], 10, 'le fasi si numerano 10, 20, 30…');
@@ -482,7 +482,7 @@ describe('L\'Excel', () => {
     a.eval('currentCycleItemId = "p1"');
     const stato = fintoXlsx(a);
     assert.equal(a.eval('exportListXlsx(cycleExportSpec())'), true);
-    assert.deepEqual(stato().fogli.map(f => f.nome), ['Distinta parte', 'Ciclo di lavorazione', 'Estrazione']);
+    assert.deepEqual(stato().fogli.map(f => f.nome), ['Distinta', 'Ciclo di lavorazione', 'Estrazione']);
   });
 
   it('le intestazioni stanno in riga 1, senza preamboli sopra', () => {

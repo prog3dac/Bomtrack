@@ -252,7 +252,7 @@ function itemInfoMagazzino(it) {
   ]) + dettaglio);
 }
 
-// Di cosa è fatto: componenti per un assieme, distinta parte e ciclo per una
+// Di cosa è fatto: componenti per un assieme, distinta e ciclo per una
 // parte. Un solo livello — scendere si fa cliccando il codice, che è il gesto
 // che questa scheda insegna.
 function itemInfoComposizione(it) {
@@ -286,8 +286,9 @@ function itemInfoComposizione(it) {
   }
 
   if (it.type !== 'parte') return '';
-  const rows = it.cycle || [];
-  if (!rows.length) return itemInfoSection(ico('wrench', 'tinted', '') + ' Distinta parte e ciclo', '<div class="empty-text">Distinta parte e ciclo vuoti.</div>');
+  // Prima la distinta della parte, poi le fasi (dalla 0.125.0 stanno separate).
+  const rows = distintaRighe(it).concat(cicloFasi(it));
+  if (!rows.length) return itemInfoSection(ico('wrench', 'tinted', '') + ' Distinta e ciclo', '<div class="empty-text">Distinta e ciclo vuoti.</div>');
   let fase = 0;
   const righe = rows.map(r => {
     if (r.kind === 'op') {
@@ -312,7 +313,7 @@ function itemInfoComposizione(it) {
   const nota = partSourcing(it) === 'buy'
     ? '<p class="empty-text" style="text-align:left;padding:6px 0 0">Questa parte si <strong>acquista</strong>: il suo costo è il prezzo a listino, non la somma di queste righe. Distinta e ciclo restano salvati e tornano a contare se l\'approvvigionamento passa a produzione interna.</p>'
     : '';
-  return itemInfoSection(`${ico('wrench', 'tinted', '')} Distinta parte e ciclo — ${esc(cycleCountLabel(it))}`,
+  return itemInfoSection(`${ico('wrench', 'tinted', '')} Distinta e ciclo — ${esc(cycleCountLabel(it))}`,
     `<div class="table-wrap"><table>
       <thead><tr><th scope="col">Codice / Fase</th><th scope="col">Riga</th><th scope="col" style="text-align:right">Q.tà</th><th scope="col" style="text-align:right">Costo</th></tr></thead>
       <tbody>${righe}</tbody></table></div>${nota}`);

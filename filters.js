@@ -81,19 +81,25 @@ const FILT_PANELS = {
     ],
   },
   cycles: {
-    pfx: 'cyc', dims: ['family', 'subfamily'], refresh: () => onCycleFilterChange(),
+    pfx: 'cyc', dims: ['family', 'subfamily', 'machine', 'group'], refresh: () => onCycleFilterChange(),
     fields: [
       { id: 'cyc-search', label: 'Testo', kind: 'text' },
+      { id: 'cyc-type', label: 'Tipo', kind: 'select' },
       { id: 'cyc-family', label: 'Famiglia', kind: 'select', dim: 'family' },
       { id: 'cyc-subfamily', label: 'Sottofamiglia', kind: 'select', dim: 'subfamily' },
+      { id: 'cyc-machine', label: 'Macchina', kind: 'select', dim: 'machine' },
+      { id: 'cyc-group', label: 'Gruppo', kind: 'select', dim: 'group' },
     ],
   },
   bom: {
-    pfx: 'bom', dims: ['machine'], refresh: () => onBomFilterChange(),
+    pfx: 'bom', dims: ['family', 'subfamily', 'machine', 'group'], refresh: () => onBomFilterChange(),
     fields: [
       { id: 'bom-search', label: 'Testo', kind: 'text' },
-      { id: 'bom-type', label: 'Livello', kind: 'select' },
+      { id: 'bom-type', label: 'Tipo', kind: 'select' },
+      { id: 'bom-family', label: 'Famiglia', kind: 'select', dim: 'family' },
+      { id: 'bom-subfamily', label: 'Sottofamiglia', kind: 'select', dim: 'subfamily' },
       { id: 'bom-machine', label: 'Macchina', kind: 'select', dim: 'machine' },
+      { id: 'bom-group', label: 'Gruppo', kind: 'select', dim: 'group' },
     ],
   },
 };

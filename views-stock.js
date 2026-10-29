@@ -1134,14 +1134,17 @@ function clLineRole(o, l) {
     prima, ultima, part, run, sorelle,
   };
 }
-// Il materiale che esce è quello del **ciclo della parte**: le righe di distinta
-// parte, moltiplicate per i pezzi del documento. Non è una scelta libera fra
-// tutti gli articoli — è scritto nel ciclo, ed è lo stesso materiale che il
-// fabbisogno ha già fatto comprare.
+// Il materiale che esce è quello della **distinta della parte** (fino alla
+// 0.124 stava nel ciclo), moltiplicato per i pezzi del documento, scarto
+// compreso. Non è una scelta libera fra tutti gli articoli: è scritto nella
+// distinta, ed è lo stesso materiale che il fabbisogno ha già fatto comprare.
 function clMaterialsOf(part, pezzi) {
-  return ((part && part.cycle) || [])
-    .filter(r => r.kind !== 'op' && r.itemId)
-    .map(r => ({ item: getItem(r.itemId), perPezzo: Number(r.qty) || 0, qty: (Number(r.qty) || 0) * pezzi }))
+  return distintaRighe(part)
+    .filter(r => r.itemId)
+    .map(r => {
+      const pp = (Number(r.qty) || 0) * (1 + (Number(r.scrapPct) || 0) / 100);
+      return { item: getItem(r.itemId), perPezzo: pp, qty: pp * pezzi };
+    })
     .filter(x => x.item && hasStock(x.item));
 }
 // ─── Quanto è già stato registrato su questa riga, in questo verso ───

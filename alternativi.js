@@ -433,7 +433,7 @@ function distinteConObsoleti() {
   const out = [];
   (db.items || []).forEach(asm => {
     if (asm.obsolete) return;
-    const righe = (asm.components || []).concat((asm.cycle || []).filter(r => r.kind !== 'op'));
+    const righe = distintaRighe(asm);
     righe.forEach(r => {
       const it = getItem(r && r.itemId);
       const s = sostitutivoDi(it);

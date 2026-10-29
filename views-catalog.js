@@ -201,7 +201,7 @@ function priceListBody(id) {
   const vuoto = `<tr><td colspan="7" class="empty-text">Nessuna quotazione registrata. Aggiungine una, oppure registrale da una richiesta di offerta ricevuta.</td></tr>`;
   const attuale = campo
     ? `<p style="margin-bottom:12px">Prezzo in uso nella costificazione: <strong style="font-family:var(--mono)">${fmtPer(Number(it[campo]) || 0, itemUom(it))}</strong>${doppia ? ` <span style="color:var(--text-dim)">— ${esc(itemUom(it))} è l'unità con cui l'articolo si gestisce e si mette in distinta</span>` : ''}${inUso ? '' : ' <span style="color:var(--text-dim)">(inserito a mano, non da listino)</span>'}</p>`
-    : `<p style="margin-bottom:12px;color:var(--text-dim)">Il costo di questa parte è derivato dalla distinta parte e dal ciclo di lavorazione. Con “✓ Usa” si può passare al prezzo del fornitore, cambiando il modo di calcolo.</p>`;
+    : `<p style="margin-bottom:12px;color:var(--text-dim)">Il costo di questa parte è derivato dalla sua distinta e dal ciclo di lavorazione. Con “✓ Usa” si può passare al prezzo del fornitore, cambiando il modo di calcolo.</p>`;
   // Prezzo e quantità minima sono entrambi nell'unità **della quotazione**, che
   // può non essere quella di gestione: quando le due differiscono la colonna
   // dell'unità compare accanto al prezzo e l'intestazione non la anticipa.
@@ -446,7 +446,7 @@ function priceApplyRow(rowId) {
 function priceSourcingModal(rowId) {
   const found = priceRowById(rowId); if (!found || !found.row) return;
   openModal(`<h3>Questa parte risulta prodotta in casa</h3>
-    <p style="margin-bottom:14px">Il costo di <strong>${esc(found.it.code)}</strong> lo determinano la sua distinta parte e il suo
+    <p style="margin-bottom:14px">Il costo di <strong>${esc(found.it.code)}</strong> lo determinano la sua distinta e il suo
       ciclo di lavorazione. Per usare il prezzo del fornitore va segnata come <strong>acquistata</strong>: il costo diventa
       quello a listino e nel fabbisogno la sua distinta smette di esplodersi.</p>
     <p style="margin-bottom:14px;color:var(--text-dim)">Distinta e ciclo restano salvati: si può tornare indietro dalla scheda articolo.</p>
@@ -785,7 +785,7 @@ function catalogMeta(i) {
     // Una parte comprata si riconosce dal fornitore, non dal suo ciclo
     meta = partSourcing(i) === 'buy'
       ? (supplierName(i.supplierId) || 'da acquistare')
-      : ((i.cycle || []).length ? cycleCountLabel(i) : '—');
+      : ((distintaRighe(i).length || cicloFasi(i).length) ? cycleCountLabel(i) : '—');
   }
   else meta = '—';
   // Più quotazioni a listino: si segnala qui, è il posto dove si confrontano i costi
@@ -841,7 +841,7 @@ function catalogRow(i, scope) {
     ${scope === 'design' ? catalogDesignCells(i) : ''}
     <td class="row-actions" style="text-align:right;white-space:nowrap">
       ${hasPriceList(i) ? `<button class="mini-btn" title="Listino fornitori e storico prezzi" onclick="priceListModal('${i.id}')">${ico('euro', 'tinted', 'Listino fornitori e storico prezzi')}</button>` : ''}
-      ${i.type === 'parte' && vistaAttiva('cycles') ? `<button class="mini-btn" title="Distinta parte e ciclo di lavorazione" onclick="openCycleFor('${i.id}')">${ico('wrench', 'tinted', 'Distinta parte e ciclo di lavorazione')}</button>` : ''}
+      ${i.type === 'parte' && vistaAttiva('cycles') ? `<button class="mini-btn" title="Ciclo di lavorazione" onclick="openCycleFor('${i.id}')">${ico('wrench', 'tinted', 'Ciclo di lavorazione')}</button>` : ''}
       <button class="mini-btn" title="Apri documento" onclick="allegatoApriPrimo('${i.id}')">${ico('file', 'tinted', 'Apri documento')}</button>
       <button class="mini-btn" title="Allegati: disegni e schede tecniche" onclick="allegatiModal('${i.id}')">${ico('folder', 'tinted', 'Allegati')}${allegatiCount(i.id) ? '<span class="mini-count">' + allegatiCount(i.id) + '</span>' : ''}</button>
       <button class="mini-btn" title="Dove è usato e impatto costi" onclick="usageModal('${i.id}')">${ico('link', 'tinted', 'Dove è usato e impatto costi')}</button>
@@ -1171,11 +1171,12 @@ function itemModalBody(it, scope) {
     </div>
     ${codingFieldsHtml(it, lock.structLocked)}
     <div class="modal-field" id="fld-cycle">
-      <label>Distinta parte e ciclo di lavorazione</label>
+      <label>Distinta e ciclo di lavorazione</label>
       <span class="empty-text" style="padding:0">${it
-        ? `${cycleCountLabel(it)} — si gestiscono nella vista <strong>${ico('wrench', 'tinted')} Cicli di lavorazione</strong>.
+        ? `${cycleCountLabel(it)} — la distinta si gestisce in <strong>${ico('tree', 'tinted')} Gestione DB</strong>, il ciclo in <strong>${ico('wrench', 'tinted')} Cicli di lavorazione</strong>.
+           <button class="btn-outline" style="margin-left:8px" onclick="closeModal();openBomFor('${it.id}')">${ico('tree', 'tinted', '')} Apri la distinta</button>
            <button class="btn-outline" style="margin-left:8px" onclick="closeModal();openCycleFor('${it.id}')">${ico('wrench', 'tinted', '')} Apri il ciclo</button>`
-        : `Si gestiscono nella vista <strong>${ico('wrench', 'tinted')} Cicli di lavorazione</strong>, dopo aver creato l'articolo.`}</span>
+        : `La distinta si gestisce in <strong>${ico('tree', 'tinted')} Gestione DB</strong> e il ciclo in <strong>${ico('wrench', 'tinted')} Cicli di lavorazione</strong>, dopo aver creato l'articolo.`}</span>
     </div>
     <div class="modal-grid" id="fld-flags">
       <div class="modal-field" id="fld-flag-fav"><label>Preferito</label>
@@ -1465,14 +1466,13 @@ function onItemFamilyChange() {
 function onItemSubFamilyChange() { refreshItemCode(); }
 
 // ═══════════════════════════════════════════════════════════
-//  VISTA: CICLI DI LAVORAZIONE (distinta parte + fasi)
+//  VISTA: CICLI DI LAVORAZIONE (le fasi di parti e assiemi)
 // ═══════════════════════════════════════════════════════════
-// Distinta parte e ciclo sono due sezioni della STESSA lista `it.cycle`: le
-// righe kind:'item' sono gli articoli necessari, le kind:'op' le lavorazioni.
-// Un array solo significa nessuna conversione dei dati e motore di costo,
-// albero di distinta, report ed export che continuano a leggere ciò che
-// leggevano prima. Le funzioni che modificano una riga usano sempre il suo
-// indice ASSOLUTO nell'array: quello di sezione servirebbe solo a sbagliare.
+// Dalla 0.125.0 qui stanno solo le fasi, di parti e assiemi: il materiale di
+// una parte sta nella sua distinta (Distinte base), come i componenti di un
+// assieme. Le funzioni che modificano una riga usano il suo indice ASSOLUTO
+// nell'array `cycle`: in un dato non ancora migrato ci sono anche le righe
+// materiale, e un indice di sezione servirebbe solo a sbagliare.
 // Nessuna bozza: qui si è in una vista, non in un form, e ogni azione salva
 // subito come nella vista della distinta.
 
@@ -1497,10 +1497,9 @@ function cyclePhaseNumber(k) { return (k + 1) * 10; }
 
 // Riassunto testuale del contenuto, per il catalogo e la scheda articolo
 function cycleCountLabel(it) {
-  const rows = (it && it.cycle) || [];
-  const art = rows.filter(r => r.kind !== 'op').length;
-  const lav = rows.filter(r => r.kind === 'op').length;
-  if (!art && !lav) return 'Distinta parte e ciclo vuoti';
+  const art = distintaRighe(it).length;
+  const lav = cicloFasi(it).length;
+  if (!art && !lav) return 'Distinta e ciclo vuoti';
   return `${art} ${art === 1 ? 'articolo' : 'articoli'} · ${lav} ${lav === 1 ? 'lavorazione' : 'lavorazioni'}`;
 }
 function cycleRowLabel(row) {
@@ -1516,32 +1515,13 @@ function cycleRowLabel(row) {
 }
 // ─── Selezione della parte (filtri in cima alla vista) ───
 // Dalla 0.124.0 anche gli assiemi: il loro ciclo sono le fasi di montaggio.
-function partItems() { return (db.items || []).filter(i => i.type === 'parte' || isAssembly(i.type)); }
-// Famiglie e sottofamiglie delle parti, con le selezioni preservate se ancora
-// valide (stesso patto di updateCatFamilyFilters nelle anagrafiche).
-function updateCycleFamilyFilters() {
-  const famSel = document.getElementById('cyc-family');
-  const subSel = document.getElementById('cyc-subfamily');
-  if (!famSel || !subSel) return;
-  const fams = (db.families || []).filter(f => (f.kind || 'acquistato') === 'parte');
-  const keepFam = fams.some(f => f.id === famSel.value) ? famSel.value : '';
-  famSel.innerHTML = `<option value="">Tutte le famiglie</option>` +
-    fams.map(f => `<option value="${f.id}" ${f.id === keepFam ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
-  const subs = (getFamily(keepFam) || {}).subs || [];
-  const keepSub = subs.some(s => s.id === subSel.value) ? subSel.value : '';
-  subSel.innerHTML = `<option value="">Tutte le sottofamiglie</option>` +
-    subs.map(s => `<option value="${s.id}" ${s.id === keepSub ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
-}
+// Gli stessi articoli e gli stessi filtri delle Distinte base (distinteFiltrate
+// in views-bom.js): testo, tipo, famiglia, sottofamiglia, macchina, gruppo.
+function partItems() { return distinteArticoli(); }
+function updateCycleFamilyFilters() { syncDistinteFiltri('cyc'); }
 function cycleFilteredParts() {
-  const q = (val('cyc-search') || '').toLowerCase();
-  const fam = val('cyc-family');
-  const sub = val('cyc-subfamily');
-  let rows = partItems();
-  if (fam) rows = rows.filter(i => i.familyId === fam);
-  if (sub) rows = rows.filter(i => i.subFamilyId === sub);
-  if (q) rows = rows.filter(i => (i.code + ' ' + i.name).toLowerCase().includes(q));
   // Prima le parti, poi gli assiemi: chi apre i cicli cerca quasi sempre una parte.
-  return rows.sort((a, b) => (isAssembly(a.type) - isAssembly(b.type)) || String(a.code).localeCompare(String(b.code)));
+  return distinteFiltrate('cyc').sort((a, b) => (isAssembly(a.type) - isAssembly(b.type)) || String(a.code).localeCompare(String(b.code)));
 }
 function cycleSearchInput() { debounced('cyc-sel', renderCycles); }
 function onCycleFilterChange() { renderCycles(); }
@@ -1558,11 +1538,11 @@ function openCycleFor(id) {
   if (!it || (it.type !== 'parte' && !isAssembly(it.type))) return;
   if (!vistaAttiva('cycles')) { setView('cycles'); return; }   // avvisa e resta al Riepilogo
   currentCycleItemId = id;
-  setVal('cyc-search', ''); setVal('cyc-family', ''); setVal('cyc-subfamily', '');
+  ['search', 'type', 'family', 'subfamily', 'machine', 'group'].forEach(k => setVal('cyc-' + k, ''));
   // Anche lo scope condiviso (filters.js), altrimenti setView lo riscriverebbe
   // subito dopo sui campi appena svuotati, e la parte scelta potrebbe restare
   // fuori dal filtro come prima di questa pulizia.
-  if (typeof filtScope !== 'undefined') { filtScope.familyId = ''; filtScope.subFamilyId = ''; filtPrefsSave(); }
+  if (typeof filtScope !== 'undefined') { filtScope = { familyId: '', subFamilyId: '', machineId: '', groupId: '' }; filtPrefsSave(); }
   setView('cycles');
 }
 function currentCycleItem() {
@@ -1575,15 +1555,18 @@ function currentCycleItem() {
 // fuorviante. La scelta si fa nella scheda articolo, non qui: un solo posto.
 function cycleSourcingNote(it) {
   const apri = `<button class="mini-btn" style="margin-left:8px" onclick="editItemModal('${it.id}')">${ico('edit', 'tinted', '')} Scheda articolo</button>`;
+  const dist = `<button class="mini-btn" style="margin-left:8px" onclick="openBomFor('${it.id}')">${ico('tree', 'tinted', '')} Distinta</button>`;
+  const n = distintaRighe(it).length;
+  const materiale = `Il materiale per farla sta nella <strong>distinta</strong> della parte (${n ? n + (n === 1 ? ' riga' : ' righe') : 'vuota'}), qui le <strong>fasi</strong>.`;
   if (partSourcing(it) === 'buy') {
     const forn = supplierName(it.supplierId);
-    return `<div class="cycle-note">${ico('cart', 'tinted')} <strong>Parte acquistata</strong>${forn ? ' da ' + esc(forn) : ' (nessun fornitore a listino)'}:
-      il costo è il prezzo scelto nel listino. Distinta e ciclo qui sotto restano documentali — non concorrono al costo e nel
-      fabbisogno non vengono esplosi.${apri}</div>`;
+    return `<div class="cycle-note">${ico('cart', 'tinted')} <span><strong>Parte acquistata</strong>${forn ? ' da ' + esc(forn) : ' (nessun fornitore a listino)'}:
+      il costo è il prezzo scelto nel listino. ${materiale} Distinta e ciclo restano documentali: non concorrono al costo e nel
+      fabbisogno non vengono esplosi.</span>${dist}${apri}</div>`;
   }
-  const vuoto = !(it.cycle || []).length;
-  return `<div class="cycle-note">${ico('factory', 'tinted')} <strong>Parte prodotta in casa</strong>: il costo lo determinano la distinta parte e il ciclo
-    qui sotto.${vuoto ? ' Finché sono vuoti vale il prezzo a listino.' : ''}${apri}</div>`;
+  const vuoto = !(n || cicloFasi(it).length);
+  return `<div class="cycle-note">${ico('factory', 'tinted')} <span><strong>Parte prodotta in casa</strong>: il costo lo determinano la distinta
+    e il ciclo. ${materiale}${vuoto ? ' Finché sono vuoti vale il prezzo a listino.' : ''}</span>${dist}${apri}</div>`;
 }
 
 // Un assieme: i componenti stanno nella distinta, qui solo le fasi. I giorni
@@ -1619,20 +1602,13 @@ function renderCycles() {
     return;
   }
   renderCycleSummary(it);
-  const rows = (it.cycle || []).map((r, i) => ({ r, i }));
-  const bomRows = rows.filter(x => x.r.kind !== 'op');
-  const opRows = rows.filter(x => x.r.kind === 'op');
+  // Gli indici sono quelli dell'array `cycle`, perché è quello che le
+  // modifiche toccano: in un dato non ancora migrato ci sono anche le righe
+  // materiale di una parte, che qui non si mostrano (stanno nella distinta).
+  const opRows = (it.cycle || []).map((r, i) => ({ r, i })).filter(x => x.r.kind === 'op');
   const assieme = isAssembly(it.type);
   body.innerHTML = `
     ${assieme ? cycleAssiemeNote(it) : cycleSourcingNote(it)}
-    ${assieme ? '' : `<div class="cycle-section">
-      <div class="cycle-section-head">
-        <h3>${ico('package', 'tinted pill', '')} Distinta parte <span class="cycle-dim">${bomRows.length} ${bomRows.length === 1 ? 'articolo' : 'articoli'}</span></h3>
-        <button class="add-btn-sm" onclick="addCycleItemRow()">+ Articolo</button>
-      </div>
-      <div class="cycle-box">${cycleBomTable(bomRows)}</div>
-      <div id="picker-bom"></div>
-    </div>`}
     <div class="cycle-section">
       <div class="cycle-section-head">
         <h3>${ico('wrench', 'tinted pill', '')} ${assieme ? 'Ciclo di montaggio' : 'Ciclo di lavorazione'} <span class="cycle-dim">${opRows.length} ${opRows.length === 1 ? 'fase' : 'fasi'}</span></h3>
@@ -1647,42 +1623,19 @@ function renderCycles() {
 // Riepilogo in cima: le due metà del costo separate, come le due sezioni sotto.
 function renderCycleSummary(it) {
   const el = document.getElementById('cyc-summary'); if (!el) return;
-  const rows = it.cycle || [];
-  const bomTot = rows.filter(r => r.kind !== 'op').reduce((s, r) => s + cycleRowCost(r), 0);
-  const opsTot = rows.filter(r => r.kind === 'op').reduce((s, r) => s + cycleRowCost(r), 0);
+  const bomTot = distintaRighe(it).reduce((s, r) => s + cycleRowCost(r), 0);
+  const opsTot = cicloFasi(it).reduce((s, r) => s + cycleRowCost(r), 0);
   const c = costOf(it.id);
   const u = itemUom(it);
   el.innerHTML = (isAssembly(it.type) ? [
     kpi('Fasi di montaggio', fmtPer(opsTot, u), 'green'),
     kpi('Costo ' + typeLabel(it.type).toLowerCase(), fmtPer(c.total, u), ''),
   ] : [
-    kpi('Distinta parte', fmtPer(bomTot, u), 'orange'),
+    kpi('Distinta', fmtPer(bomTot, u), 'orange'),
     kpi('Lavorazioni', fmtPer(opsTot, u), 'green'),
     kpi('Costo unitario a mano', fmtPer(Number(it.unitCost) || 0, u), 'purple'),
     kpi('Costo parte', fmtPer(c.total, u), ''),
   ]).join('') + (c.cycle ? '<div class="empty-text" style="color:var(--red)">' + ico('warning', 'tinted') + ' Rilevato riferimento ciclico: una riga risale a questa stessa parte.</div>' : '');
-}
-function cycleBomTable(bomRows) {
-  if (!bomRows.length) return '<div class="empty-text" style="padding:8px 0">Nessun articolo. Usa "+ Articolo" per aggiungere commerciali e materie prime.</div>';
-  const head = `<div class="cycle-row cycle-head">
-    <span>Voce</span><span>Fornitore</span><span>U.M.</span><span class="num">Q.tà</span>
-    <span class="num" title="Costo dell'intera riga (quantità compresa) al posto di quello calcolato: vuoto = calcolato dall'anagrafica">Costo riga forzato (${esc(cur())})</span>
-    <span class="num">Costo riga (${esc(cur())})</span><span></span></div>`;
-  return head + bomRows.map(({ r, i }) => {
-    const ci = getItem(r.itemId);
-    return `<div class="cycle-row">
-      <span class="cycle-name">${cycleRowLabel(r)}</span>
-      <span class="cycle-dim">${esc(supplierName(ci && ci.supplierId) || '—')}</span>
-      <span class="cycle-dim">${esc(ci ? (ci.uom || '') : '')}</span>
-      <input class="num" type="number" min="0" step="0.001" value="${Number(r.qty) || 0}"
-        onchange="updateCycleRow(${i})" id="cyc-qty-${i}">
-      <input class="num" type="number" min="0" step="0.01" value="${r.costOverride != null ? r.costOverride : ''}"
-        placeholder="${cycleRowComputed(r).toFixed(2)}" title="Costo della riga intera, non di un'unità. Lascia vuoto per usare quello calcolato"
-        onchange="updateCycleRow(${i})" id="cyc-ovr-${i}">
-      <span class="num cost" id="cyc-cost-${i}">${fmtN(cycleRowCost(r))}</span>
-      <button class="mini-btn danger" title="Elimina" onclick="delCycleRow(${i})">${ico('trash', 'tinted', 'Elimina')}</button>
-    </div>`;
-  }).join('');
 }
 function cycleOpsTable(opRows) {
   if (!opRows.length) return '<div class="empty-text" style="padding:8px 0">Nessuna lavorazione. Usa "+ Lavorazione" per aggiungere una fase.</div>';
@@ -1777,9 +1730,10 @@ function cycleOpGiorniDettaglio(r) {
 // HTML, e in un foglio di calcolo un tag è solo sporcizia.
 function cycleExportSpec() {
   const it = currentCycleItem();
-  const righe = ((it && it.cycle) || []).map((r, i) => ({ r, i }));
-  const bom = righe.filter(x => x.r.kind !== 'op');
-  const ops = righe.filter(x => x.r.kind === 'op');
+  // La distinta della parte resta nell'export del suo ciclo: è il foglio che
+  // si dà a chi la fa, e il materiale ci serve.
+  const bom = distintaRighe(it).map((r, i) => ({ r, i }));
+  const ops = cicloFasi(it).map((r, i) => ({ r, i }));
   const fam = getFamily(val('cyc-family'));
   const sub = (fam && (fam.subs || []).find(s => s.id === val('cyc-subfamily'))) || null;
   const tot = rs => +rs.reduce((s, x) => s + cycleRowCost(x.r), 0).toFixed(2);
@@ -1797,7 +1751,7 @@ function cycleExportSpec() {
     ],
     sezioni: [
       {
-        nome: 'Distinta parte',
+        nome: 'Distinta',
         colonne: [
           { h: 'Codice', w: 18 }, { h: 'Descrizione', w: 34 }, { h: 'Fornitore', w: 24 },
           { h: 'U.M.', w: 8 }, { h: 'Q.tà', w: 10, num: true },
@@ -1811,7 +1765,7 @@ function cycleExportSpec() {
             // Il costo di un'unità, come dice la colonna: prima c'era quello della riga.
             Number(r.qty) || 0, +(ci ? costOf(ci.id).total : 0).toFixed(4), +cycleRowCost(r).toFixed(2)];
         }),
-        totali: bom.length ? ['Totale distinta parte', '', '', '', '', '', tot(bom)] : null,
+        totali: bom.length ? ['Totale distinta', '', '', '', '', '', tot(bom)] : null,
       },
       {
         nome: 'Ciclo di lavorazione',
@@ -1857,8 +1811,8 @@ function updateCycleRow(idx) {
   const it = currentCycleItem(); if (!it) return;
   // Il ridisegno rimette il valore salvato: senza permessi il campo non resta modificato a video
   if (!roleGuard('catalog')) { renderCycles(); return; }
-  const row = (it.cycle || [])[idx]; if (!row) return;
-  if (row.kind === 'op') {
+  const row = (it.cycle || [])[idx]; if (!row || row.kind !== 'op') return;
+  {
     // Il tempo cambia unità con la natura della fase: ore su una lavorazione
     // interna, giorni di attraversamento su una in conto lavoro. I due campi
     // esistono entrambi sulla riga, ma solo uno per volta è a video — leggere
@@ -1881,12 +1835,6 @@ function updateCycleRow(idx) {
       // stanno con la tariffa: è l'unico punto in cui compaiono.
       if (eraEsterna) row.hours = numVal('cyc-ophours-' + idx, 0);
     } else row.cost = numVal('cyc-cost-in-' + idx, 0);
-  } else {
-    row.qty = numVal('cyc-qty-' + idx, 0);
-    // Vuoto = nessun override, si usa il costo calcolato. Un negativo si corregge
-    // in silenzio: è una cella di tabella, non un form con la sua validazione.
-    const ovr = val('cyc-ovr-' + idx);
-    row.costOverride = ovr === '' ? null : clampNum(parseFloat(ovr), 0);
   }
   touch(it); saveDB();
   refreshCycleCosts(it);
@@ -1940,63 +1888,7 @@ function moveCycleOp(k, dir) {
   touch(it); saveDB(); renderCycles();
 }
 function closeCyclePicker() {
-  ['picker-bom', 'picker-op'].forEach(id => { const b = document.getElementById(id); if (b) b.innerHTML = ''; });
-}
-// Picker inline di un articolo (commerciale o materia prima) per la distinta parte.
-function addCycleItemRow() {
-  if (!roleGuard('catalog')) return;
-  const box = document.getElementById('picker-bom'); if (!box) return;
-  // Un articolo Obsoleto resta dov'è già inserito nei cicli, ma non si propone
-  // più come NUOVO materiale/commerciale.
-  window.__cyclePickerCandidates = db.items
-    .filter(i => CYCLE_CHILD_TYPES.includes(i.type) && !i.obsolete)
-    .sort((a, b) => String(a.code).localeCompare(String(b.code)));
-  if (!window.__cyclePickerCandidates.length) {
-    showToast('Nessun commerciale o materia prima a catalogo.', 'error'); return;
-  }
-  box.innerHTML = `<div class="cycle-picker-box">
-    <input type="text" id="cycpick-search" class="search" placeholder="Cerca codice o nome..." oninput="debounced('cycpick', renderCyclePickerResults)" autocomplete="off">
-    <div id="cycpick-results" class="picker-results"></div>
-    <div class="cycle-actions"><button class="btn-ghost" onclick="closeCyclePicker()">Annulla</button></div>
-  </div>`;
-  renderCyclePickerResults();
-  const s = document.getElementById('cycpick-search'); if (s) s.focus();
-}
-function renderCyclePickerResults() {
-  const box = document.getElementById('cycpick-results'); if (!box) return;
-  const q = (val('cycpick-search') || '').toLowerCase();
-  let rows = window.__cyclePickerCandidates || [];
-  if (q) rows = rows.filter(i => (i.code + ' ' + i.name).toLowerCase().includes(q));
-  const total = rows.length;
-  rows = rows.slice(0, 50);
-  let html = rows.map(i =>
-    `<div class="picker-row" ${clickAttrs(`pickCycleItem('${i.id}')`, `Scegli ${i.code}`)}>
-       <span class="picker-type">${typeLabel(i.type)}</span><b>${esc(i.code)}</b> — ${esc(i.name)}${itemBadges(i)}
-     </div>`).join('');
-  if (!html) html = `<div class="picker-empty">Nessun articolo trovato</div>`;
-  else if (total > rows.length) html += `<div class="picker-empty">+${total - rows.length} altri — affina la ricerca</div>`;
-  box.innerHTML = html;
-}
-function pickCycleItem(id) {
-  const it = currentCycleItem(); if (!it) return;
-  if (!roleGuard('catalog')) return;
-  // Le stesse due guardie della distinta base. Il selettore propone già solo i
-  // tipi ammessi e oggi quei tipi sono foglie, quindi nessuna delle due può
-  // scattare: sono qui perché la regola stia scritta accanto alla scrittura che
-  // la deve rispettare, non nel filtro di un elenco.
-  const child = getItem(id);
-  if (!child || !CYCLE_CHILD_TYPES.includes(child.type)) { showToast('Nella distinta parte vanno solo commerciali e materie prime', 'error'); return; }
-  if (createsCycle(it.id, id)) { showToast('Operazione annullata: creerebbe un ciclo', 'error'); return; }
-  if (!Array.isArray(it.cycle)) it.cycle = [];
-  // Come nella distinta base (dalla 0.105.7): un articolo già presente prende
-  // una unità in più invece di una seconda riga. Non se la riga ha un costo
-  // forzato: quello vale per la riga intera, e aumentandone la quantità il
-  // pezzo in più resterebbe gratis.
-  const gia = it.cycle.find(r => r.kind !== 'op' && r.itemId === id && r.costOverride == null);
-  if (gia) gia.qty = Math.round(((Number(gia.qty) || 0) + 1) * 1e6) / 1e6;
-  else it.cycle.push({ kind: 'item', itemId: id, qty: 1, costOverride: null });
-  closeCyclePicker();
-  touch(it); saveDB(); renderCycles(); savedToast(gia ? 'Quantità aumentata: l\'articolo era già nella distinta parte' : 'Articolo aggiunto alla distinta parte');
+  ['picker-op'].forEach(id => { const b = document.getElementById(id); if (b) b.innerHTML = ''; });
 }
 // Selettore inline di una lavorazione da un centro di lavoro esistente:
 // interna o conto lavoro (a seconda del fornitore scelto), a costo fisso o
@@ -2315,7 +2207,7 @@ function saveNewItem() {
   if (dupErr) { showToast(dupErr, 'error'); return; }
   const it = { id: gid(), type: val('it-type') };
   if (isAssembly(it.type)) { it.components = []; it.operations = []; it.cycle = []; }
-  if (it.type === 'parte') { it.cycle = []; it.sourcing = defaultPartSourcing(); }
+  if (it.type === 'parte') { it.components = []; it.cycle = []; it.sourcing = defaultPartSourcing(); }
   readItemForm(it);
   const src = window.__dupSourceId ? getItem(window.__dupSourceId) : null;
   if (src && isAssembly(it.type)) {
@@ -2324,7 +2216,8 @@ function saveNewItem() {
   }
   // Duplicando una parte si porta dietro distinta e ciclo, come gli assiemi coi componenti
   if (src && it.type === 'parte') {
-    it.cycle = (src.cycle || []).map(r => Object.assign({}, r));
+    it.components = distintaRighe(src).map(c => Object.assign({}, c));
+    it.cycle = cicloFasi(src).map(r => Object.assign({}, r));
   }
   if (src) {
     if (src.overheadPctOverride != null) it.overheadPctOverride = src.overheadPctOverride;
