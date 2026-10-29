@@ -1334,7 +1334,7 @@ posto per infilarne una in mezzo).
 | **Interna / Conto lavoro** | Se conto lavoro, si sceglie il **fornitore** |
 | **Costo** | *Fisso* oppure *Orario* |
 | **Ore (h)** | Fase **interna**: le ore-uomo per pezzo, cioè le ore che il pezzo occupa il centro sommate su tutti quelli che ci lavorano. Entrano nel costo (a costo orario) e nel carico |
-| **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda del centro: 80 h con 2 operatori a 8 h al giorno sono 5 giorni. Sotto si legge quanti giorni fa un pezzo |
+| **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda del centro: 80 h con 2 operatori a 8 h al giorno sono 5 giorni. Sotto si legge quanti giorni fa un pezzo, comprese le ore di attrezzaggio del centro: passandoci sopra col mouse si vede il calcolo completo |
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
 | **Costo (€)** o **Tariffa (€/h)** | Secondo il modo scelto |
 | Nota | Testo libero, finisce sull'ordine di lavoro |

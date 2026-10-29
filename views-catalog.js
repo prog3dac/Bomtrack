@@ -1739,7 +1739,7 @@ function cycleOpsTable(opRows) {
           <span><input class="num" type="number" min="1" step="1" value="${faseOperatori(r)}"
           title="Operatori che lavorano insieme sulla fase: i giorni sono le ore divise per le ore al giorno di un operatore per gli operatori"
           onchange="updateCycleRow(${i})" id="cyc-opop-${i}"><em>op</em></span>
-          <em id="cyc-opgg-${i}" title="Giorni lavorativi per un pezzo, con l'attrezzaggio e la coda del centro">${cycleOpGiorni(r)}</em></span>`;
+          <em id="cyc-opgg-${i}" title="${esc(cycleOpGiorniDettaglio(r))}">${cycleOpGiorni(r)}</em></span>`;
     return `<div class="cycle-row cycle-op-row">
       <span class="cycle-phase">${cyclePhaseNumber(k)}</span>
       <span class="cycle-name">${cycleRowLabel(r)}</span>
@@ -1763,6 +1763,24 @@ function cycleOpsTable(opRows) {
 function cycleOpGiorni(r) {
   const gg = internalOpDays(getWorkCenter(r.workCenterId), r.hours, 1, r.operators);
   return `1 pz: ${gg} gg`;
+}
+// Da dove vengono i giorni della fase, per il tooltip: attrezzaggio e coda
+// sono del centro e non si vedono nella riga del ciclo.
+function cycleOpGiorniDettaglio(r) {
+  const wc = getWorkCenter(r.workCenterId);
+  const n = v => numIt(v, v % 1 ? 2 : 0);
+  const setup = wc ? Number(wc.setupHours) || 0 : 0;
+  const coda = wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0;
+  const ore = Number(r.hours) || 0;
+  const giorno = faseOreGiorno(wc, r.operators);
+  const tot = setup + ore;
+  const lav = tot > 0 ? Math.ceil(tot / giorno - 1e-9) : 0;
+  const righe = [`Giorni lavorativi per un pezzo: ${lav + coda}`,
+    `Ore: ${n(ore)} h${setup ? ` + attrezzaggio ${n(setup)} h = ${n(tot)} h` : ''}`,
+    `Al giorno: ${n(wcHoursPerDay(wc))} h × ${faseOperatori(r)} op = ${n(giorno)} h`,
+    `Lavorazione: ${n(tot)} ÷ ${n(giorno)} = ${lav} gg (al giorno intero)`];
+  if (coda) righe.push(`Coda del centro: + ${coda} gg`);
+  return righe.join('\n');
 }
 // ─── Export del ciclo aperto ───
 // I Cicli non sono un elenco ma una scheda: si esporta la parte che si sta
@@ -1840,7 +1858,7 @@ function refreshCycleCosts(it) {
     const ovr = document.getElementById('cyc-ovr-' + i);
     if (ovr) ovr.placeholder = cycleRowComputed(row).toFixed(2);
     const gg = document.getElementById('cyc-opgg-' + i);
-    if (gg && row.kind === 'op') gg.textContent = cycleOpGiorni(row);
+    if (gg && row.kind === 'op') { gg.textContent = cycleOpGiorni(row); gg.title = cycleOpGiorniDettaglio(row); }
   });
   renderCycleSummary(it);
 }

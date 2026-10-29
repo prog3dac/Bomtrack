@@ -209,4 +209,14 @@ describe('Operatori sulla fase', () => {
     assert.equal(a.eval("getItem('grp').cycle[0].operators"), 3);
     assert.match(a.html('cyc-body'), /1 pz: 1 gg/);
   });
+  it('il tooltip dei giorni mostra attrezzaggio, operatori e coda del centro', () => {
+    const a = app();
+    a.eval("Object.assign(getWorkCenter('mon'), { setupHours: 11, queueDays: 1 })");
+    const t = a.eval("cycleOpGiorniDettaglio({ workCenterId: 'mon', hours: 150, operators: 2 })");
+    assert.match(t, /150 h \+ attrezzaggio 11 h = 161 h/);
+    assert.match(t, /8 h × 2 op = 16 h/);
+    assert.match(t, /161 ÷ 16 = 11 gg/);
+    assert.match(t, /Coda del centro: \+ 1 gg/);
+    assert.match(t, /per un pezzo: 12/);
+  });
 });
