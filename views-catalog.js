@@ -938,7 +938,7 @@ function catalogGroups(rows) {
   const order = (i) => ORDER[i.type] != null ? ORDER[i.type] : 9;
   const groups = {};
   rows.forEach(i => { const k = groupKey(i); (groups[k] = groups[k] || { items: [], ord: order(i) }).items.push(i); });
-  const keys = Object.keys(groups).sort((a, b) => groups[a].ord - groups[b].ord || a.localeCompare(b));
+  const keys = Object.keys(groups).sort((a, b) => groups[a].ord - groups[b].ord || confrontaAlfa(a, b));
   return { groups, keys };
 }
 // Gli articoli che la vista mostra, filtrati e ordinati. Come per il magazzino
@@ -964,20 +964,68 @@ function catalogFilteredRows(scope, soloIds) {
   // esportare la selezione deve dare le righe scelte, non le righe scelte più
   // quelle che il filtro avrebbe aggiunto.
   if (soloIds && soloIds.length) rows = rows.filter(i => soloIds.includes(i.id));
-  return rows.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  return catalogSortRows(rows, scope);
+}
+// ─── Ordinare l'elenco per colonna (dalla 0.128.0) ───
+// Un clic sull'intestazione ordina per quella colonna, un secondo clic inverte.
+// Di serie l'ordine è per codice, crescente. Il confronto è quello naturale di
+// confrontaAlfa (PRT-2 prima di PRT-10), i numeri si confrontano come numeri, e
+// le celle vuote vanno in fondo in tutti e due i versi: chi ordina per fornitore
+// vuole vedere i fornitori, non cento righe di «—». Con la divisione per
+// famiglia accesa l'ordine vale dentro ogni gruppo (catalogGroups tiene l'ordine
+// delle righe). I valori sono quelli dell'export (CATALOG_EXPORT_COLS): il file
+// esce nello stesso ordine dello schermo e la colonna si legge in un posto solo.
+// La scelta è per vista e resta nel browser, come le colonne nascoste.
+const SORT_KEY = 'bomtrack_sort';
+let catalogSort = {};   // scope → { key, dir }; dir 1 crescente, -1 decrescente
+function catalogSortOf(scope) {
+  const s = catalogSort[scope];
+  return s && CATALOG_EXPORT_COLS[s.key] && (s.dir === 1 || s.dir === -1) ? s : { key: 'code', dir: 1 };
+}
+function catalogSortLoad() {
+  try {
+    const p = JSON.parse(localStorage.getItem(SORT_KEY) || 'null');
+    if (p && typeof p === 'object') catalogSort = p;
+  } catch (e) { /* preferenza illeggibile: si riparte per codice */ }
+}
+function catalogSortSave() {
+  try { localStorage.setItem(SORT_KEY, JSON.stringify(catalogSort)); } catch (e) { /* niente da rompere */ }
+}
+function catalogSortBy(scope, key) {
+  if (!CATALOG_SCOPES[scope] || !CATALOG_EXPORT_COLS[key]) return;
+  const s = catalogSortOf(scope);
+  catalogSort[scope] = { key, dir: s.key === key ? -s.dir : 1 };
+  catalogSortSave();
+  catalogFilterChange(scope);
+}
+function catalogSortRows(rows, scope) {
+  const { key, dir } = catalogSortOf(scope);
+  const col = CATALOG_EXPORT_COLS[key];
+  const vuoto = v => v == null || v === '' || (col.num && !Number(v));
+  const righe = rows.map(i => ({ i, k: col.v(i) }));
+  righe.sort((a, b) => {
+    const va = vuoto(a.k), vb = vuoto(b.k);
+    if (va !== vb) return va ? 1 : -1;
+    const c = va ? 0 : col.num ? (Number(a.k) || 0) - (Number(b.k) || 0) : confrontaAlfa(a.k, b.k);
+    return dir * c || confrontaAlfa(a.i.code, b.i.code);
+  });
+  return righe.map(r => r.i);
+}
+// L'intestazione cliccabile: un pulsante dentro la cella di testata, così si raggiunge da
+// tastiera, e aria-sort dice a chi usa un lettore di schermo come è ordinato.
+// `etichetta` è già HTML sicuro; `testo` serve al title.
+function catalogTh(scope, key, etichetta, testo, title) {
+  const s = catalogSortOf(scope), on = s.key === key;
+  const verso = on ? (s.dir > 0 ? 'ascending' : 'descending') : 'none';
+  const freccia = on ? (s.dir > 0 ? '▲' : '▼') : '';
+  const aiuto = (title ? title + '. ' : '') + (on && s.dir > 0 ? 'Clic: ordina in verso decrescente' : 'Clic: ordina per ' + testo.toLowerCase());
+  return `<th scope="col" class="col-${key}" aria-sort="${verso}"><button type="button" class="th-sort${on ? ' on' : ''}" onclick="catalogSortBy('${scope}','${key}')" title="${esc(aiuto)}">${etichetta}<span class="th-sort-ico" aria-hidden="true">${freccia}</span></button></th>`;
 }
 // Le intestazioni delle colonne facoltative, gemelle di `catalogExtraCells`/
 // `catalogDesignCells`: stessa classe col-X, stesso ordine.
-const CAT_EXTRA_HEAD = `<th scope="col" class="col-subfamily">Sottofamiglia</th>
-    <th scope="col" class="col-supplier">Fornitore</th>
-    <th scope="col" class="col-altuom">UM acquisto</th>
-    <th scope="col" class="col-altfactor">Fattore</th>
-    <th scope="col" class="col-safety">Scorta minima</th>
-    <th scope="col" class="col-lot">Lotto</th>
-    <th scope="col" class="col-notes">Note</th>
-    <th scope="col" class="col-autore">Creato/aggiornato da</th>`;
-const CAT_DESIGN_HEAD = `<th scope="col" class="col-concept">Concetto</th>
-    <th scope="col" class="col-sourcing">Approvvigionamento</th>`;
+const CAT_EXTRA_HEAD = [['subfamily', 'Sottofamiglia'], ['supplier', 'Fornitore'], ['altuom', 'UM acquisto'],
+  ['altfactor', 'Fattore'], ['safety', 'Scorta minima'], ['lot', 'Lotto'], ['notes', 'Note'], ['autore', 'Creato/aggiornato da']];
+const CAT_DESIGN_HEAD = [['concept', 'Concetto'], ['sourcing', 'Approvvigionamento']];
 function renderCatalog(scope) {
   invalidateCaches();
   const sc = CATALOG_SCOPES[scope]; if (!sc) return;
@@ -993,12 +1041,13 @@ function renderCatalog(scope) {
 
   // «Costo un.» è per una unità dell'articolo, cioè nella U.M. della colonna
   // accanto: si dice in intestazione, una volta, invece che su ogni riga.
-  const head = `<thead><tr><th scope="col" class="col-flags"></th><th scope="col" class="col-code">Codice</th><th scope="col" class="col-name">Descrizione</th>
-    <th scope="col" class="col-type">Tipo</th><th scope="col" class="col-family">Famiglia</th><th scope="col" class="col-uom">U.M.</th>
-    <th scope="col" class="col-cost" title="Costo di una unità, nella U.M. della colonna accanto">Costo un. (${esc(cur())}/U.M.)</th>
-    <th scope="col" class="col-meta">Dettaglio</th>
-    ${CAT_EXTRA_HEAD}
-    ${scope === 'design' ? CAT_DESIGN_HEAD : ''}
+  const th = (k, t, title) => catalogTh(scope, k, esc(t), t, title);
+  const head = `<thead><tr><th scope="col" class="col-flags"></th>${th('code', 'Codice')}${th('name', 'Descrizione')}
+    ${th('type', 'Tipo')}${th('family', 'Famiglia')}${th('uom', 'U.M.')}
+    ${th('cost', `Costo un. (${cur()}/U.M.)`, 'Costo di una unità, nella U.M. della colonna accanto')}
+    ${th('meta', 'Dettaglio')}
+    ${CAT_EXTRA_HEAD.map(([k, t]) => th(k, t)).join('')}
+    ${scope === 'design' ? CAT_DESIGN_HEAD.map(([k, t]) => th(k, t)).join('') : ''}
     <th scope="col" class="row-actions"></th></tr></thead>`;
   itemGrid({
     hostId: pfx + '-table',
@@ -2438,3 +2487,5 @@ function bulkDelete(ids) {
     });
   });
 }
+
+if (typeof document !== 'undefined') catalogSortLoad();

@@ -4,7 +4,11 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 ### 0.128.0 — 2026-10-29
 
-**Gestione in ordine alfanumerico.** Gli elenchi di tutte le schede di Gestione si mostrano in ordine naturale, senza distinzione fra maiuscole e minuscole: *M2* prima di *M10*, *acciaio* accanto ad *Acciaio*. Utenti, fornitori, clienti, centri di lavoro e famiglie (macrofamiglie e sottofamiglie) per nome; condizioni offerta per voce; concetti per nome; unità di misura per codice; macchine utensili ancora raccolte per centro, ora anch'esse in ordine naturale (prima *T10* veniva prima di *T2*). Cambia solo la vista: l'archivio resta com'è, e i pulsanti che lavorano per posizione (concetti, unità di misura, condizioni) puntano sempre alla voce giusta. Il confronto è `confrontaAlfa` / `inOrdineAlfa` in `core.js`. Nessun cambio a `supabase/schema.sql`.
+**Gestione in ordine alfanumerico.** Gli elenchi di tutte le schede di Gestione si mostrano in ordine naturale, senza distinzione fra maiuscole e minuscole: *M2* prima di *M10*, *acciaio* accanto ad *Acciaio*. Utenti, fornitori, clienti, centri di lavoro e famiglie (macrofamiglie e sottofamiglie) per nome; condizioni offerta per voce; concetti per nome; unità di misura per codice; macchine utensili ancora raccolte per centro, ora anch'esse in ordine naturale (prima *T10* veniva prima di *T2*). Cambia solo la vista: l'archivio resta com'è, e i pulsanti che lavorano per posizione (concetti, unità di misura, condizioni) puntano sempre alla voce giusta. Il confronto è `confrontaAlfa` / `inOrdineAlfa` in `core.js`.
+
+**Articoli di progetto e d'acquisto: si ordina cliccando l'intestazione.** Un clic su una colonna (codice, descrizione, tipo, famiglia, U.M., costo, dettaglio e le colonne facoltative) ordina l'elenco per quella colonna, il secondo inverte il verso; la freccia ▲/▼ dice come è ordinato. Di serie per codice, ora in ordine naturale (prima *PRT-10* veniva prima di *PRT-2*), e anche le famiglie dell'elenco diviso seguono l'ordine naturale. I numeri si confrontano come numeri, le celle vuote restano in fondo nei due versi, con l'elenco diviso si ordina dentro ogni famiglia, e l'export esce nello stesso ordine dello schermo. La scelta resta nel browser, per vista (`bomtrack_sort`). L'intestazione è un pulsante raggiungibile da tastiera, con `aria-sort` per i lettori di schermo.
+
+Nessun cambio a `supabase/schema.sql`.
 
 ### 0.127.1 — 2026-10-29
 

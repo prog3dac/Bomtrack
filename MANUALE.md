@@ -758,6 +758,15 @@ descrizione non si nascondono: sono l'identità della riga.
 La scelta resta anche domani, ed è **separata** da quella di *Progetto* — le due anagrafiche hanno
 le stesse colonne ma si guardano per motivi diversi.
 
+**Ordinare l'elenco** (dalla 0.128.0). Un clic sull'**intestazione** di una colonna ordina le righe
+per quella colonna, dalla A alla Z o dal più piccolo al più grande; un secondo clic inverte il
+verso. La freccia ▲/▼ accanto al titolo dice per quale colonna e in che verso è ordinato. Di serie
+l'ordine è per **Codice**. L'ordine è *naturale*: i numeri dentro i codici contano come numeri
+(*PRT-2* prima di *PRT-10*) e maiuscole e minuscole non fanno differenza. Le celle vuote (un
+fornitore che manca, un lotto non indicato) vanno sempre in fondo. Con l'elenco diviso per famiglia
+si ordina dentro ogni famiglia; le famiglie restano in ordine di nome. L'export esce nello stesso
+ordine dello schermo. La scelta resta anche domani, separata per *Acquisti* e *Progetto*.
+
 **Da sapere.**
 
 - **★ Preferito** marca gli articoli che si usano spesso, e ha un filtro dedicato.
@@ -795,6 +804,9 @@ articolo. Gruppo e sottogruppo hanno colori diversi apposta, per non confonderli
 **+ Nuovo articolo**.
 
 **Filtri.** Ricerca, tipo (i quattro qui sopra), famiglia, sottofamiglia.
+
+**Ordinare l'elenco.** Come negli *Articoli d'acquisto*: un clic sull'intestazione ordina per quella
+colonna, un secondo clic inverte (→ [cap. 6](#6-tecnico--articoli-dacquisto)).
 
 **Da sapere — l'approvvigionamento delle parti.** Ogni parte dichiara come si ottiene, e la scelta
 cambia due cose insieme:
