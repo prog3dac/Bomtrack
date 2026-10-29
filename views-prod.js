@@ -345,7 +345,6 @@ function opMaterialeResiduo(odp) {
   return (odp.materials || []).map(m => Object.assign({}, m,
     { gia: gia.get(m.itemId) || 0, residuo: Math.max(0, (Number(m.qty) || 0) - (gia.get(m.itemId) || 0)) }));
 }
-function opMaterialePrelevato(odp) { return opRegistrato(odp, opPrima(odp), 'out').size > 0; }
 // Un assieme non ha giacenza (hasStock), e il suo versamento non scrive
 // movimenti: i pezzi fatti sono i buoni dichiarati sull'ultima fase.
 function opVersato(odp) {

@@ -43,7 +43,7 @@ app.asRole('admin');
 // funzione non viene mai chiamata in Node: se ne prende il testo.
 /* global db, Store, gid, stampNew, touch, saveDB, setUserPassword, getWorkCenter, getItem, invalidateCaches, addMovement,
    planDocGroups, planDocRows, planRowKey, planCreateDocs, nextPlanNumber, registraRicevuto, ordAutoStatus, opLancia, opAvvia,
-   opDichiara, opProcessati, odpNew, showToast, opGenerabile, opGeneraOdl, nowISO, costOf, window */
+   opDichiara, opProcessati, opChiusa, odpNew, showToast, opGenerabile, opGeneraOdl, nowISO, costOf, window */
 function lavoro() {
 // Un errore che l'app mostrerebbe a chi preme il pulsante qui non lo vede
 // nessuno: si raccoglie, e il generatore si ferma se ce n'è uno.
@@ -387,6 +387,9 @@ const avanzaOdp = (o, fin, dataInizio) => {
     const f = fasi[i];
     if (i > n) break;
     giorno(d, '07:' + pad(tra(10, 50), 2));
+    // Un ordine da un pezzo solo, scartato alla fase prima, chiude le fasi dopo:
+    // non arriva più niente, e l'app rifiuterebbe giustamente di avviarle.
+    if (opChiusa(o, f)) break;
     if (!opAvvia(o.id, f.id, {})) break;
     if (i === n && fin < 1) break;            // avviata, ancora in lavorazione
     avanti(tra(2, 9));

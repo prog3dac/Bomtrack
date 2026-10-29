@@ -231,6 +231,7 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 |---|---|
 | `worklist.js` | il telaio comune delle viste a documento (commesse, fabbisogno, richieste, ordini): elenco a destra, documento al centro. Solo disegno, nessuno stato |
 | `columns.js` | scelta delle colonne di ciascun elenco: registro delle colonne, regola CSS che le nasconde, scheda per sceglierle |
+| `filters.js` | la barra Filtri a scomparsa delle viste che elencano articoli, e i quattro filtri (famiglia, sottofamiglia, macchina, gruppo) condivisi fra le viste |
 | `inspector.js` | il pannello laterale: cosa si seleziona in ogni vista, quali comandi e quali schede mostrare, ridimensionamento e memoria delle preferenze |
 | `icons.js` | il set di icone dell’app: i 50 tracciati, lo sprite, la tinta e il nome di ciascuna (il suggerimento che compare col mouse) e `ico()`. Caricato per primo, serve già al primo disegno della barra. È l’unico posto dove sta un disegno |
 | `core.js` | stato dell'app, utility, ruoli, pannelli e conferme. `APP_VERSION` in cima è la revisione mostrata nell'header |
@@ -264,6 +265,9 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `views-manage.js` | gestione (utenti, anagrafiche di servizio, impostazioni) |
 | `cloud-map.js` | traduzione fra la forma annidata locale e quella normalizzata del database condiviso. Funzioni pure, **nessun codice di rete** |
 | `cloud.js` | l'archivio condiviso su Supabase: collegamento, accesso, invio e ricezione delle modifiche, numeri e codici dal server |
+| `qr.js` | codici QR: l'indirizzo stampato sull'etichetta, la scheda rapida che apre, il pulsante «Scansiona» e la stampa delle etichette |
+| `inventario.js` | inventario guidato: gli articoli da contare in fila per scaffale, la lettura dei QR, il riepilogo delle differenze registrate come rettifiche |
+| `combo.js` | i menu a tendina in cui si scrive (`sel-cerca`): il `<select>` resta nella pagina, il campo sopra filtra le voci mentre si digita |
 | `import-catalog.js` | articoli ⇄ Excel nei due file Acquisti e Progetto: colonne per tipo, foglio Liste, verifica senza importare |
 | `import-export.js` | import distinte da Excel, impostazioni di Gestione ⇄ Excel, backup JSON, cestino e avvio dell'app |
 - `style.css` — tema dark.

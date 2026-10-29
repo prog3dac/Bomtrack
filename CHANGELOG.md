@@ -2,6 +2,16 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.125.1 — 2026-10-29
+
+**Controllo generale prima dei merge.** Correzioni trovate passando l'app intera, senza funzioni nuove. Nessun cambio a `supabase/schema.sql`.
+- **Piano → Genera documenti**: il conto delle righe scelte («2 documenti · 7 righe») restava vuoto dalla 0.92.0. Due funzioni di `views-mrp.js` si chiamavano `planDocsCount`, e la seconda (il numero di documenti sulla scheda *Documenti*) copriva la prima; ora si chiama `planDocsTotale`. Il controllo dei nomi globali in `test/scripts.test.js` conta anche i doppioni dentro lo stesso file e le `async function`.
+- **Al telefono** il Carico centri e l'Avanzamento non scorrono più di lato per un piano dal titolo lungo nella tendina, e la testata delle lavorazioni di un ODL manda a capo i suoi tre pulsanti.
+- **Cestino e storico** dicono il nome di ogni collezione («Piano di manutenzione», «Timbratura», «Documento emesso»…) invece di quello interno; un test lo tiene vero per le collezioni che verranno.
+- **Codice morto tolto**: undici funzioni che nessuno chiamava più (`cloudLogin`, `closeAllPanels`, `escapeRegExp`, `itemPickerOptions`, `toggleFavorite`, `produzioniDi`, `odlRigaDaOdp`, `opMaterialePrelevato`, `clFromOrderModal`, `itemCodeLink`, la variabile `odpDirty`).
+- **Dati di prova**: `test/genera-dati-prova.js` si fermava con «la fase è già chiusa» quando un ordine da un pezzo scartava alla prima fase; ora salta le fasi in cui non arriva più niente.
+- **README**: nella tabella dei file mancavano `filters.js`, `qr.js`, `inventario.js` e `combo.js`.
+
 ### 0.125.0 — 2026-10-29
 
 **Distinta = cosa serve, ciclo = come si fa, anche per le parti.** Il materiale che serve per fare una parte (materie prime e commerciali) passa dalla sezione *Distinta parte* dei Cicli alla **distinta della parte**, in *Tecnico → Gestione DB*, come i componenti di un assieme. Nel ciclo restano le sole fasi.

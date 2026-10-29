@@ -737,12 +737,6 @@ function syncMachineFilters(pfx) {
 }
 // Preferiti: solo su ciò che si acquista, per ritrovare in fretta gli articoli ricorrenti
 function canFavorite(type) { return type === 'acquistato' || type === 'materiale'; }
-function toggleFavorite(id) {
-  if (!roleGuard('catalog')) return;
-  const it = getItem(id); if (!it) return;
-  it.favorite = !it.favorite;
-  touch(it); saveDB(); renderCatalogs();
-}
 function toggleFavFilter() {
   favOnly = !favOnly;
   const b = document.getElementById('buy-fav');

@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.125.0';
+const APP_VERSION = '0.125.1';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -39,7 +39,6 @@ let currentOdlId = null;     // ordine di lavoro aperto in editor
 let odlDirty = false;        // modifiche non salvate nell'editor ODL
 let odpView = 'list';        // 'list' | 'edit' — Ordini di produzione (ODP)
 let currentOdpId = null;     // ordine di produzione aperto in editor
-let odpDirty = false;        // modifiche non salvate nell'editor ODP
 
 
 // ═══════════════════════════════════════════════════════════
@@ -999,7 +998,6 @@ function duplicateSiglaGroups(kind) {
   fam.forEach(f => raggruppa(f.subs || [], f.name, { kind: f.kind || 'acquistato', familyId: f.id }));
   return out.sort((a, b) => a.dove.localeCompare(b.dove) || a.sigla.localeCompare(b.sigla));
 }
-function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // Numero di cifre della parte incrementale (configurabile in Impostazioni)
 function codeDigits() {
   const n = parseInt(db.settings && db.settings.codeDigits, 10);
@@ -1983,15 +1981,6 @@ function closePanel(p) {
 // Chiude la scheda in primo piano: le decine di "Annulla" e i salvataggi che
 // chiamano closeModal() intendono sempre quella con cui si sta lavorando.
 function closeModal() { closePanel(panelTop()); }
-function closeAllPanels() {
-  const r = panelRoot();
-  if (r) Array.prototype.forEach.call(r.children, el => {
-    const k = el.dataset && el.dataset.panelKey;
-    if (k) panelCleanup(k);
-  });
-  if (r) r.innerHTML = '';
-  _panelZ = PANEL_Z;
-}
 
 // ─── Conferme in scheda ───
 // confirm() nativo blocca il browser, esce dallo stile dell'app e non lascia

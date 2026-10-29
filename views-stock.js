@@ -1279,9 +1279,6 @@ function saveClFromOdl(docId, lineId, verso) {
       ? (n === 1 ? 'Materiale spedito al terzista' : n + ' materiali spediti al terzista')
       : 'Rientro registrato'));
 }
-// Le righe di conto lavoro finite in un ordine d'acquisto prima della
-// separazione fra ODA e ODL passano dalla stessa scheda: hanno la stessa forma.
-function clFromOrderModal(docId, lineId, verso) { clFromOdlModal(docId, lineId, verso); }
 
 // ─── Prospetto «materiale presso terzi» ───
 // Non è una vista nuova, ed è deliberato: il Magazzino elenca già gli stessi

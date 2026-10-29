@@ -268,15 +268,6 @@ function expandAllBom(on) {
 }
 
 // ─── CRUD componenti / lavorazioni dell'articolo aperto ───
-// Opzioni limitate ai tipi ammessi dal tipo del padre (regole rigide di contenimento).
-function itemPickerOptions(parentType, selectedId, excludeId) {
-  const allowed = ALLOWED_CHILDREN[parentType] || [];
-  return allowed.map(t => {
-    const opts = db.items.filter(i => i.type === t && i.id !== excludeId)
-      .map(i => `<option value="${i.id}" ${i.id === selectedId ? 'selected' : ''}>${itemBadgesTxt(i)}${esc(i.code)} — ${esc(i.name)}</option>`).join('');
-    return opts ? `<optgroup label="${typeLabel(t)}">${opts}</optgroup>` : '';
-  }).join('');
-}
 // Picker a ricerca live: candidati ammessi dal tipo padre, filtrabili per codice/nome.
 // Motore condiviso da due consumatori con id distinti (prefisso `pfx`), così
 // possono stare aperti insieme senza pestarsi i piedi: la modale "Modifica
