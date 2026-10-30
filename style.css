@@ -713,6 +713,7 @@ body.filt-open .filt-summary{display:none}
 @media (max-width:600px){.code-preview-grid{grid-template-columns:max-content 1fr}.code-preview-nota{grid-column:1/-1;margin-top:-4px}}
 .code-man-mark{display:inline-block;font-family:var(--font);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;margin-left:6px;border-radius:6px;border:1px solid var(--accent);color:var(--accent);vertical-align:middle}
 .var-mark-link{cursor:pointer}
+.var-manca{margin:2px 4px 2px 0;max-width:220px;font-size:12px}
 .var-mark-link:hover,.var-mark-link:focus-visible{background:var(--accent);color:var(--bg)}
 .pick-fav{color:var(--orange);font-size:12px}
 .row-obsolete td{opacity:.55}

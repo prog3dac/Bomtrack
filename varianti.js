@@ -371,16 +371,59 @@ function varRigenera(id) {
   if (!roleGuard('bom')) return null;
   const m = getItem(id);
   if (!m || !m.configuredFromId) return null;
+  const t = getItem(m.configuredFromId);
   const prep = varPrepara(m.configuredFromId, m.configChoices || {}, m);
   if (prep.errori.length) { showToast(`${m.code}: ${prep.errori[0]}`, 'error'); return null; }
+  // Le scelte si riscrivono intere (dalla 0.130.0): quella data a mano per
+  // un'opzione nuova entra nella chiave, e quella di un'opzione tolta dal
+  // modello esce. Due macchine con la stessa chiave sarebbero la stessa
+  // combinazione due volte: si dice, e non si rigenera.
+  const chiave = 'scelte:' + varChiaveScelte(prep.scelte);
+  const doppia = varGenerateDa(t.id).find(x => x.id !== m.id && x.configKey === chiave);
+  if (doppia) { showToast(`${m.code}: con queste scelte sarebbe uguale a ${doppia.code}`, 'error'); return null; }
+  // La descrizione segue le scelte solo se è ancora quella data alla
+  // generazione («<modello> — <scelte>»): una scritta a mano resta.
+  if (String(m.name || '').startsWith(`${t.name} — `)) m.name = `${t.name} — ${varEtichetteScelte(t, prep.scelte)}`;
+  m.configChoices = prep.scelte;
+  m.configKey = chiave;
   m.components = prep.macchina.components;
   m.cycle = prep.macchina.cycle;
   m.operations = [];
   m.configHash = prep.macchina.configHash;
-  varCopiaCodifica(getItem(m.configuredFromId), m);
+  varCopiaCodifica(t, m);
   touch(m);
   saveDB();
   return m;
+}
+// Le opzioni del modello per cui la macchina non ha una scelta valida: una
+// nuova aggiunta dopo la generazione, o una scelta tolta dal modello.
+function varScelteMancanti(t, m) {
+  const cs = (m && m.configChoices) || {};
+  return varOpzioni(t).filter(o => {
+    const v = cs[varCodice(o.code)];
+    return v == null || !o.choices.some(c => varValore(c.value) === varValore(v));
+  });
+}
+// La scelta di un'opzione mancante, data a una macchina sola (0.130.0). Si
+// scrive subito fra le sue scelte; la distinta la riscrive Rigenera.
+function varSceltaMacchina(id, codice, valore) {
+  if (!roleGuard('bom')) return;
+  const m = getItem(id); if (!m || !m.configuredFromId) return;
+  const t = getItem(m.configuredFromId);
+  const k = varCodice(codice), v = varValore(valore);
+  const o = varOpzioni(t).find(x => varCodice(x.code) === k);
+  if (!o || (v && !o.choices.some(c => varValore(c.value) === v))) { renderVarianti(); return; }
+  const scelte = Object.assign({}, m.configChoices || {});
+  if (v) scelte[k] = v; else delete scelte[k];
+  if (v && !varScelteMancanti(t, { configChoices: scelte }).length) {
+    const chiave = 'scelte:' + varChiaveScelte(varNormalizzaScelte(t, scelte).scelte);
+    const doppia = varGenerateDa(t.id).find(x => x.id !== m.id && x.configKey === chiave);
+    if (doppia) { showToast(`Con questa scelta ${m.code} sarebbe uguale a ${doppia.code}`, 'error'); renderVarianti(); return; }
+  }
+  m.configChoices = scelte;
+  touch(m);
+  saveDB();
+  renderVarianti();
 }
 // La codifica che la variante eredita dal modello, tutta: famiglia, sigla
 // macchina e schema dei codici dei figli. Non si scrive sulla variante (la
@@ -746,27 +789,46 @@ function varConfiguraGenera() {
 function varSezioneGenerate(t) {
   const gen = varGenerateDa(t.id).filter(x => x.type === 'macchina').sort((a, b) => String(a.code).localeCompare(String(b.code)));
   const vecchie = gen.filter(varModelloAggiornato);
+  const pronte = vecchie.filter(x => !varScelteMancanti(t, x).length);
   const scrivibile = canWrite('bom');
   const tab = gen.length ? `<table class="price-table"><thead><tr><th scope="col">Codice</th><th scope="col">Scelte</th><th scope="col" style="text-align:right">Costo</th><th scope="col">Stato</th><th scope="col"></th></tr></thead><tbody>
     ${gen.map(x => {
       const vecchia = varModelloAggiornato(x);
+      const mancanti = varScelteMancanti(t, x);
+      // Un'opzione che la macchina non ha: si sceglie qui, macchina per macchina.
+      const menu = mancanti.map(o => {
+        const k = varCodice(o.code);
+        return scrivibile
+          ? `<select class="var-manca" aria-label="${esc((o.name || k) + ' per ' + x.code)}" onchange="varSceltaMacchina('${x.id}', '${k}', this.value)"><option value="">${esc(o.name || k)}: scegli…</option>${o.choices.filter(c => varValore(c.value)).map(c => `<option value="${esc(varValore(c.value))}">${esc(c.label || c.value)}</option>`).join('')}</select>`
+          : `<span class="mrp-warn">${esc(o.name || k)}: da scegliere</span>`;
+      }).join(' ');
       return `<tr><td style="font-family:var(--mono)">${codeLink(x.id, x.code)}</td>
-        <td>${esc(x.configChoices ? (varEtichetteScelte(t, x.configChoices) || varChiaveScelte(x.configChoices)) : '')}</td>
+        <td>${esc(x.configChoices ? (varEtichetteScelte(t, x.configChoices) || varChiaveScelte(x.configChoices)) : '')}${menu ? ' ' + menu : ''}</td>
         <td style="text-align:right;font-family:var(--mono)">${fmtN(costOf(x.id).total)}</td>
         <td>${vecchia ? `<span class="mrp-warn">${ico('warning', 'tinted', '')} modello cambiato</span>` : '<span class="price-best">aggiornata</span>'}</td>
         <td style="white-space:nowrap"><button class="mini-btn" title="Apri la distinta" onclick="currentBomId='${x.id}';bomExpanded=new Set();setView('bom')">${ico('eye', 'tinted', 'Apri la distinta')}</button>
-          ${vecchia && scrivibile ? `<button class="btn-outline" onclick="varRigeneraUI(['${x.id}'])">Rigenera</button>` : ''}</td></tr>`;
+          ${vecchia && scrivibile ? (mancanti.length
+            ? `<button class="btn-outline" disabled title="Scegli prima ${esc(mancanti.map(o => o.name || o.code).join(', '))}">Rigenera</button>`
+            : `<button class="btn-outline" onclick="varRigeneraUI(['${x.id}'])">Rigenera</button>`) : ''}</td></tr>`;
     }).join('')}</tbody></table>`
     : '<p class="empty-text" style="text-align:left;padding:8px">Nessuna macchina generata da questo modello.</p>';
   return varSezione('package', 'Varianti generate', gen.length, `<div class="cycle-box">${tab}</div>`,
-    vecchie.length > 1 && scrivibile ? `<button class="add-btn-sm" onclick="varRigeneraTutte('${t.id}')">Rigenera tutte (${vecchie.length})</button>` : '');
+    pronte.length > 1 && scrivibile ? `<button class="add-btn-sm" onclick="varRigeneraTutte('${t.id}')">Rigenera tutte (${pronte.length})</button>` : '');
 }
-function varRigeneraTutte(id) { varRigeneraUI(varGenerateDa(id).filter(varModelloAggiornato).map(x => x.id)); }
+// Solo quelle con tutte le scelte: le altre aspettano la loro.
+function varRigeneraTutte(id) {
+  const t = getItem(id);
+  const vecchie = varGenerateDa(id).filter(varModelloAggiornato);
+  const pronte = vecchie.filter(x => !varScelteMancanti(t, x).length);
+  if (!pronte.length) { showToast('Scegli prima le opzioni mancanti nella tabella', 'error'); return; }
+  if (pronte.length < vecchie.length) showToast(`${vecchie.length - pronte.length} da completare prima: scegli le opzioni mancanti nella tabella`);
+  varRigeneraUI(pronte.map(x => x.id));
+}
 function varRigeneraUI(ids) {
   const macchine = (ids || []).map(getItem).filter(Boolean);
   if (!macchine.length) return;
   const chi = macchine.length === 1 ? macchine[0].code : `${macchine.length} macchine`;
-  askConfirm(`Riscrivere la distinta di ${chi} dal modello di adesso, con le stesse scelte? Il codice resta lo stesso, quindi piani e movimenti non cambiano. Se ti serve tenere traccia della distinta di prima, rilascia prima una revisione.`, () => {
+  askConfirm(`Riscrivere la distinta di ${chi} dal modello di adesso, con le sue scelte? Il codice resta lo stesso, quindi piani e movimenti non cambiano. Se ti serve tenere traccia della distinta di prima, rilascia prima una revisione.`, () => {
     const fatte = macchine.filter(m => varRigenera(m.id));
     if (fatte.length) savedToast(fatte.length === 1 ? `Distinta di ${fatte[0].code} rigenerata` : `${fatte.length} distinte rigenerate`);
     renderVarianti();

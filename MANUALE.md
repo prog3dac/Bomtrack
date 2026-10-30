@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.129.0**
+**Versione dell'app documentata: 0.130.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1306,6 +1306,15 @@ già, il pulsante diventa **Apri la macchina**.
 
 **Varianti generate.** Le macchine nate da questo modello, con le scelte, il costo e lo stato:
 *aggiornata* oppure *modello cambiato*.
+
+**Un'opzione aggiunta dopo** (dalla 0.130.0). Le macchine già generate non hanno una scelta per
+la nuova opzione: nella loro riga compare un menu (*Protezione: scegli…*) e la scelta si dà
+**macchina per macchina**. Finché manca, **Rigenera** resta spento e **Rigenera tutte** salta quella
+macchina. Data la scelta, Rigenera riscrive la distinta con le scelte complete: codice, piani e
+movimenti restano gli stessi, e la descrizione si aggiorna con la nuova scelta (se è ancora quella
+data alla generazione; una descrizione scritta a mano resta). Una scelta che renderebbe la macchina
+uguale a un'altra già generata si rifiuta. Se invece si **toglie** un'opzione dal modello, la
+macchina perde quella scelta al Rigenera.
 
 **La macchina generata è una macchina come le altre.** Si mette in un piano, si costifica, si
 revisiona. In Gestione DB una riga sopra l'albero dice da quale modello è nata.

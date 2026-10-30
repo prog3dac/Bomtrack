@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.130.0 — 2026-10-30
+
+**Un'opzione aggiunta al modello si sceglie anche sulle macchine già generate.** Prima, aggiungendo un'opzione a un modello, le macchine generate risultavano *modello cambiato* ma **Rigenera** si fermava con «scegli un valore»: la macchina non aveva una scelta per l'opzione nuova e non c'era modo di dargliela, se non generarne un'altra con un altro codice. Ora, in *Tecnico → Varianti → Varianti generate*:
+- la riga di ogni macchina senza scelta per un'opzione ha un **menu** per sceglierla, **macchina per macchina**; la scelta si salva subito;
+- finché manca, **Rigenera** è spento (il suggerimento dice cosa scegliere) e **Rigenera tutte** salta la macchina, dicendolo;
+- Rigenera riscrive distinta, **scelte e chiave** della macchina: codice, piani e movimenti restano. La **descrizione** segue le scelte se è ancora quella data alla generazione;
+- una scelta che renderebbe la macchina **uguale a un'altra** già generata si rifiuta, sia nel menu sia al Rigenera;
+- un'opzione **tolta** dal modello esce dalle scelte della macchina al Rigenera (prima restava scritta nella chiave).
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.129.0 — 2026-10-30
 
 **Modelli e varianti si riconoscono ovunque.** Prima un modello si vedeva solo nella pagina *Tecnico → Varianti* e nella riga sopra la distinta in Gestione DB: negli elenchi sembrava una macchina come le altre. Ora, con il modulo Varianti acceso:

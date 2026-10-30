@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.129.0</span>
+        <span class="chip">v0.130.0</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -602,6 +602,7 @@ PRT-…               parte non legata a una macchina</code></pre>
 <p>Il pulsante <strong>Esempi</strong> della sezione apre una finestra con esempi pratici delle due colonne. Un codice di opzione che il modello non ha, o una regola scritta male, si rifiuta subito. I gruppi si aggiungono e si tolgono in <em>Gestione DB</em>, come in ogni distinta: la pagina ha il link. In distinta le righe con una regola si riconoscono dal segno <code>se M=B</code> o <code>q.tà = L</code> accanto al nome.</p>
 <p><strong>Configura.</strong> Si sceglie un valore per ogni opzione, e l'anteprima dice cosa nascerà: la <strong>macchina</strong> con codice <code>&lt;codice del modello&gt;-V01</code>, <code>-V02</code>…, il nome del modello seguito dalle scelte, il costo e i gruppi che conterrà. Sopra c'è l'intervallo di costo <strong>da quanto a quanto</strong> su tutte le combinazioni, fino a 256. <strong>Genera la macchina</strong> la crea; se la combinazione esiste già, il pulsante diventa <strong>Apri la macchina</strong>.</p>
 <p><strong>Varianti generate.</strong> Le macchine nate da questo modello, con le scelte, il costo e lo stato: <em>aggiornata</em> oppure <em>modello cambiato</em>.</p>
+<p><strong>Un'opzione aggiunta dopo</strong> (dalla 0.130.0). Le macchine già generate non hanno una scelta per la nuova opzione: nella loro riga compare un menu (<em>Protezione: scegli…</em>) e la scelta si dà <strong>macchina per macchina</strong>. Finché manca, <strong>Rigenera</strong> resta spento e <strong>Rigenera tutte</strong> salta quella macchina. Data la scelta, Rigenera riscrive la distinta con le scelte complete: codice, piani e movimenti restano gli stessi, e la descrizione si aggiorna con la nuova scelta (se è ancora quella data alla generazione; una descrizione scritta a mano resta). Una scelta che renderebbe la macchina uguale a un'altra già generata si rifiuta. Se invece si <strong>toglie</strong> un'opzione dal modello, la macchina perde quella scelta al Rigenera.</p>
 <p><strong>La macchina generata è una macchina come le altre.</strong> Si mette in un piano, si costifica, si revisiona. In Gestione DB una riga sopra l'albero dice da quale modello è nata.</p>
 <p><strong>La codifica è quella del modello.</strong> La macchina generata eredita macrofamiglia, sottofamiglia, sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati: si cambiano sul modello, e salvando il modello le varianti lo seguono. Una variante non conta come un'altra macchina con la stessa sigla e non ha gruppi suoi: i gruppi stanno sul modello.</p>
 <p><strong>Il modello non si mette in un piano.</strong> Aggiungerlo a un piano viene rifiutato con un avviso; un piano che ne contiene già uno lo segnala con <em>modello da configurare</em>. Il <strong>costo</strong> del modello nelle card e in Gestione DB è quello della <strong>parte comune</strong>, cioè delle righe senza regole.</p>
