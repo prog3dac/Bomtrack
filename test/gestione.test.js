@@ -141,3 +141,48 @@ describe('La seconda barra resta ferma in alto', () => {
     assert.equal(v, '39px');
   });
 });
+
+describe('Gestione: elenchi in ordine alfanumerico (0.128.0)', () => {
+  const ordine = (html, re) => Array.from(html.matchAll(re)).map(m => m[1]);
+  it('confrontaAlfa: numeri come numeri, maiuscole come minuscole', () => {
+    const a = app();
+    const v = Array.from(a.eval(`['M10', 'm2', 'Albero', 'M1', 'alba'].sort(confrontaAlfa)`));
+    assert.deepEqual(v, ['alba', 'Albero', 'M1', 'm2', 'M10']);
+  });
+  it('fornitori, clienti e centri per nome, senza toccare l\'archivio', () => {
+    const a = app();
+    a.eval(`db.suppliers = [{ id: 's1', name: 'Zeta' }, { id: 's2', name: 'acme 10' }, { id: 's3', name: 'Acme 2' }];
+      db.customers = [{ id: 'c1', name: 'Rossi' }, { id: 'c2', name: 'bianchi' }];
+      db.workCenters = [{ id: 'w1', name: 'Tornitura' }, { id: 'w2', name: 'Fresatura' }]`);
+    const nome = /<span class="mgmt-item-name">([^<]+)<\/span>/g;
+    assert.deepEqual(ordine(pagina(a, 'suppliers'), nome), ['Acme 2', 'acme 10', 'Zeta']);
+    assert.deepEqual(ordine(pagina(a, 'customers'), nome), ['bianchi', 'Rossi']);
+    assert.deepEqual(ordine(pagina(a, 'workcenters'), nome), ['Fresatura', 'Tornitura']);
+    assert.deepEqual(Array.from(a.eval('db.suppliers.map(s => s.id)')), ['s1', 's2', 's3']);
+  });
+  it('famiglie e sottofamiglie per nome', () => {
+    const a = app();
+    a.eval(`db.families = [{ id: 'f1', kind: 'acquistato', name: 'Viteria', sigla: 'VIT', subs: [{ id: 'x1', name: 'Viti M10', sigla: 'V10' }, { id: 'x2', name: 'Viti M8', sigla: 'V8' }] },
+      { id: 'f2', kind: 'acquistato', name: 'Cuscinetti', sigla: 'CUS', subs: [] }]`);
+    const h = pagina(a, 'fam-acquistato');
+    assert.ok(h.indexOf('Cuscinetti') < h.indexOf('Viteria'));
+    assert.ok(h.indexOf('Viti M8') < h.indexOf('Viti M10'));
+  });
+  it('U.M. e concetti in ordine, ma i pulsanti puntano alla voce giusta', () => {
+    const a = app();
+    a.eval(`db.settings.uoms = [{ code: 'pz', name: 'Pezzi' }, { code: 'kg', name: 'Chili' }, { code: 'm', name: 'Metri' }];
+      db.settings.concepts = [{ id: 'k1', name: 'VITE' }, { id: 'k2', name: 'ALBERO' }]`);
+    const u = pagina(a, 'uoms');
+    assert.deepEqual(ordine(u, /font-family:var\(--mono\)">([^< ]+)/g), ['kg', 'm', 'pz']);
+    assert.deepEqual(ordine(u, /editUomModal\((\d+)\)/g), ['1', '2', '0']);
+    const c = pagina(a, 'concepts');
+    assert.deepEqual(ordine(c, /delConcept\((\d+)\)/g), ['1', '0']);
+    assert.ok(c.indexOf('ALBERO') < c.indexOf('VITE'));
+  });
+  it('condizioni offerta in ordine, con l\'indice originale', () => {
+    const a = app();
+    a.eval(`db.settings.paymentOptions = ['RiBa 90 gg', 'Bonifico', 'RiBa 30 gg']`);
+    const h = pagina(a, 'terms');
+    assert.deepEqual(ordine(h, /termsDel\('payment',(\d+)\)/g), ['1', '2', '0']);
+  });
+});

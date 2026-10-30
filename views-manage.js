@@ -96,7 +96,7 @@ function renderUsers() {
   // Con l'archivio condiviso gli utenti nascono da un invito di Supabase, e
   // le password le tiene Supabase: qui si assegnano ruolo e stato.
   const cloud = cloudInUso();
-  const list = userList().map(u => {
+  const list = inOrdineAlfa(userList(), u => u.name).map(u => {
     const me = currentUser && u.id === currentUser.id;
     const susp = u.active === false;
     return `<div class="mgmt-item" style="border-left:3px solid ${safeColor(u.color)}">
@@ -276,7 +276,7 @@ function renderTerms() {
   const s = db.settings;
   const sect = (kind, title, def) => {
     const arr = s[kind + 'Options'] || [];
-    const list = arr.map((o, i) => `<div class="mgmt-item">
+    const list = inOrdineAlfa(arr, o => o, true).map(({ v: o, i }) => `<div class="mgmt-item">
       <span class="mgmt-item-name">${esc(o)}${o === def ? ' <span class="terms-default">predefinito</span>' : ''}</span>
       <div class="mgmt-item-actions">
         <button class="mini-btn" onclick="termsSetDefault('${kind}',${i})" title="Imposta/rimuovi predefinito">${o === def ? '★' : '☆'}</button>
@@ -369,7 +369,7 @@ function activeBtn(coll, r, nome) {
   return `<button class="mini-btn" onclick="toggleActive('${coll}',${jsAttr(r.id)},${jsAttr(nome)})" title="${esc(testo)}">${susp ? ico('check', 'tinted', 'Riattiva') : ico('pause', 'tinted', 'Sospendi')}</button>`;
 }
 function renderSuppliers() {
-  const list = db.suppliers.map(s => {
+  const list = inOrdineAlfa(db.suppliers, s => s.name).map(s => {
     const loc = [s.city, s.province ? '(' + s.province + ')' : ''].filter(Boolean).join(' ');
     return `<div class="mgmt-item">
     <span class="mgmt-item-name">${esc(s.name)}</span>
@@ -494,7 +494,7 @@ function delSupplier(id) {
 // resterebbero senza cliente — ma da qui si precompila, così due commesse
 // dello stesso cliente non si chiamano più «Rossi Srl» e «Rossi S.r.l.».
 function renderCustomers() {
-  const list = (db.customers || []).map(c => {
+  const list = inOrdineAlfa(db.customers, c => c.name).map(c => {
     const loc = [c.city, c.province ? '(' + c.province + ')' : ''].filter(Boolean).join(' ');
     return `<div class="mgmt-item">
     <span class="mgmt-item-name">${esc(c.name)}</span>
@@ -602,7 +602,7 @@ function siglaHtml(sigla, ripetute, size) {
 }
 function familyPanelHtml(f, gruppi, dupFam) {
   const dupSub = new Set(gruppi.filter(g => g.familyId === f.id).map(g => g.sigla));
-  const subs = (f.subs || []).map(s => `<div class="mgmt-item" style="padding:6px 12px">
+  const subs = inOrdineAlfa(f.subs, s => s.name).map(s => `<div class="mgmt-item" style="padding:6px 12px">
       <span class="mgmt-item-name" style="font-size:13px;font-weight:500">${esc(s.name)} ${siglaHtml(s.sigla || siglaFromName(s.name), dupSub, '11px')}</span>
       <div class="mgmt-item-actions">
         <button class="mini-btn" onclick="editSubFamilyModal('${f.id}','${s.id}')" title="Modifica sottofamiglia">${ico('edit', 'tinted', 'Modifica sottofamiglia')}</button>
@@ -628,7 +628,7 @@ function renderFamilies(kind) {
     : 'Nuova macrofamiglia (es. Idraulico)';
   const gruppi = duplicateSiglaGroups(kind);
   const dupFam = new Set(gruppi.filter(g => g.dove === 'macrofamiglie').map(g => g.sigla));
-  const blocks = (db.families || []).filter(f => (f.kind || 'acquistato') === kind)
+  const blocks = inOrdineAlfa((db.families || []).filter(f => (f.kind || 'acquistato') === kind), f => f.name)
     .map(f => familyPanelHtml(f, gruppi, dupFam)).join('')
     || '<div class="empty-text">Nessuna macrofamiglia.</div>';
   return `<div>${siglaWarnHtml(gruppi)}${blocks}
@@ -745,7 +745,7 @@ function delSubFamily(familyId, subId) {
 }
 
 function renderWorkCenters() {
-  const list = db.workCenters.map(w => `<div class="mgmt-item">
+  const list = inOrdineAlfa(db.workCenters, w => w.name).map(w => `<div class="mgmt-item">
     <span class="mgmt-item-name">${esc(w.name)}</span>
     <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}${moduloAttivo('macchine') && macchineDelCentro(w.id).length ? ' · ' + macchineDelCentro(w.id).length + (macchineDelCentro(w.id).length === 1 ? ' macchina' : ' macchine') : ''}</span>
     ${activeBadge(w)}
@@ -876,7 +876,7 @@ function conceptUsage(id) {
   return (db.items || []).filter(i => i.type === 'parte' && i.conceptId === id).length;
 }
 function renderConcepts() {
-  const list = conceptList().map((c, i) => {
+  const list = inOrdineAlfa(conceptList(), c => c.name, true).map(({ v: c, i }) => {
     const used = conceptUsage(c.id);
     return `<div class="mgmt-item">
       <span class="mgmt-item-name">${esc(c.name)}</span>
@@ -953,7 +953,7 @@ function uomUsage(code) {
 }
 function renderUoms() {
   const def = defaultUom();
-  const list = uomList().map((u, i) => {
+  const list = inOrdineAlfa(uomList(), u => u.code, true).map(({ v: u, i }) => {
     const used = uomUsage(u.code);
     return `<div class="mgmt-item">
       <span class="mgmt-item-name" style="font-family:var(--mono)">${esc(u.code)}${u.code === def ? ' <span class="terms-default">predefinita</span>' : ''}</span>

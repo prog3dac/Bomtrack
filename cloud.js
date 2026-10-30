@@ -284,7 +284,9 @@ function cloudPayload(changes, _soglia, puoImpostazioni) {
       // Un insieme «sostituito» rimasto vuoto parte vuoto (dalla 0.106.1): il
       // server rifà l'insieme solo delle tabelle che l'invio nomina, e senza
       // la tabella le righe di prima restavano lì. Tolta l'ultima riga di un
-      // ciclo, il pull dopo la riportava indietro.
+      // ciclo, il pull dopo la riportava indietro. Vale solo se l'elenco c'è,
+      // vuoto: chi lo svuota non deve cancellare il campo (fino alla 0.127.1
+      // lo facevano le opzioni di un modello e gli alternativi, e tornavano).
       Object.keys(figli).forEach(k => {
         if (figli[k].merge === 'replace' && recs.some(x => Array.isArray(x[k]))) upsert[figli[k].table] = upsert[figli[k].table] || [];
       });
