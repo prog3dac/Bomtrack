@@ -286,7 +286,7 @@ function altMuta(id, fn) {
   const it = getItem(id); if (!it) return;
   if (!Array.isArray(it.alternatives)) it.alternatives = [];
   if (fn(it) === false) return;
-  // Vuoto resta vuoto, non sparisce: vedi varOpzioniMuta (0.127.2).
+  // Vuoto resta vuoto, non sparisce: vedi varOpzioniMuta (0.128.1).
   touch(it);
   saveDB();
   altModalRefresh();

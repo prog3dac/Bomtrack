@@ -97,7 +97,7 @@ describe('Archivio condiviso — il lotto da inviare', () => {
     assert.ok((p.upsert.item_components || []).every(r => r.item_id === part));
   });
 
-  // 0.127.2: tolta l'ultima opzione di un modello il campo `options` spariva.
+  // 0.128.1: tolta l'ultima opzione di un modello il campo `options` spariva.
   // L'invio non nominava `item_options`, il server teneva le righe di prima e
   // il pull dopo le riportava: la macchina tornava modello con una o due
   // opzioni. Lo stesso per l'ultimo alternativo di un articolo.
@@ -520,7 +520,7 @@ describe('Archivio condiviso — due colleghi sulla stessa cosa', () => {
     assert.equal(B.eval('db.items.length'), 5);
   });
 
-  // 0.127.2: tolte tutte le opzioni, il modello tornava al giro dopo con le
+  // 0.128.1: tolte tutte le opzioni, il modello tornava al giro dopo con le
   // opzioni che il server non aveva mai tolto.
   passo('un modello a cui si tolgono tutte le opzioni non torna modello al giro dopo', async () => {
     const mac = A.eval(`db.items.find(i => i.code === 'NT-1').id`);
