@@ -300,7 +300,11 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 /* Seconda riga: le voci del gruppo aperto. Vuota (gruppo a voce singola, o
    nessuna sessione) sparisce da sé senza lasciare una striscia vuota. */
 .subnav{display:flex;gap:2px;justify-content:center;flex-wrap:wrap;padding:6px 16px;background:var(--card);border-bottom:1px solid var(--border);
-  position:sticky;top:56px;z-index:45}
+  position:sticky;top:56px;z-index:38}
+/* z-index 38, sotto i pannelli di destra (pannello laterale 40, pannello della
+   distinta 39): partono anche loro da 56px e i loro comandi in cima — apri,
+   chiudi, riduci a colonna — stavano sotto questa riga e non si vedevano più
+   (0.127.2). Il contenuto della vista, che non ha z-index, le passa sotto. */
 /* La seconda riga resta sotto la testata quando si scorre (0.127.0): le voci
    del gruppo sono la navigazione di tutti i giorni, e risalire in cima a una
    distinta lunga per cambiare pagina era un giro inutile. Al telefono non va a

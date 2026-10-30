@@ -118,6 +118,13 @@ describe('La seconda barra resta ferma in alto', () => {
     assert.match(r[1], /position:sticky/);
     assert.match(r[1], /top:56px/);
   });
+  it('sta sotto i pannelli di destra, che ci mettono i loro comandi', () => {
+    const z = sel => Number((new RegExp(sel.replace(/[#.]/g, '\\$&') + '\\{[^}]*z-index:(\\d+)').exec(CSS) || [])[1]);
+    const sub = z('.subnav');
+    assert.ok(sub > 0, 'la barra ha uno z-index');
+    assert.ok(sub < z('#inspector'), 'il pannello laterale copre la barra, non il contrario');
+    assert.ok(sub < z('#bom-panel'), 'il pannello della distinta copre la barra, non il contrario');
+  });
   it('chi resta fermo sotto di lei ne conta l\'altezza', () => {
     assert.match(CSS, /\.mgmt-tabs\{[^}]*position:sticky;top:calc\(70px \+ var\(--subnav-h,0px\)\)/);
     assert.match(CSS, /\.wl-side\{[^}]*top:calc\(70px \+ var\(--subnav-h,0px\)\)/);

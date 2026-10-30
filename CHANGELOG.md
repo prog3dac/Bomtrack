@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.127.2 — 2026-10-30
+
+**Pannelli di destra di nuovo raggiungibili.** Dalla 0.127.0 la seconda barra, ferma in alto, passava sopra al pannello laterale e al pannello della distinta: il pulsante per chiuderli e quello per ridurli a colonna, che stanno in cima ai pannelli, restavano nascosti sotto la barra. Ora la barra sta sotto i pannelli, come prima, e resta ferma sopra il contenuto della pagina.
+
 ### 0.127.1 — 2026-10-29
 
 **Controllo generale prima dei merge.** Correzioni trovate passando l'app intera prima di unire la 0.126.0 e la 0.127.0, senza funzioni nuove. Nessun cambio a `supabase/schema.sql`.
