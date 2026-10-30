@@ -17,7 +17,7 @@
 // ritardo qui è un avviso da guardare, non una data riscritta.
 //
 // Le ore di una fase sono le ore del ciclo per i pezzi ancora da fare, più
-// l'attrezzaggio se la fase non è partita; con il modulo Officina acceso, le
+// l'attrezzaggio della fase se non è partita, dopo la sua coda; con il modulo Officina acceso, le
 // ore già timbrate su una fase in corso non si tolgono — il ciclo dice quanto
 // resta per pezzo, le timbrature quanto si è speso.
 // Una fase esterna non occupa centri: dura i suoi giorni dal terzista, più il
@@ -27,10 +27,14 @@ const CAP_ORIZZONTE = 730;   // due anni di giorni: oltre, la fila non si fa
 let _capCache = null;
 function invalidateCapacita() { _capCache = null; }
 
+// I pezzi che restano da fare sono quelli **attesi** dalla fase, non quelli
+// già arrivati: su un ordine appena lanciato alla 20 non è entrato ancora
+// niente, ma i pezzi arriveranno e le ore del centro vanno messe in fila
+// adesso (dalla 0.131.0; prima le fasi dopo la prima valevano zero ore, e la
+// data fattibile usciva troppo presto).
 function capOreFase(o, f) {
-  const wc = getWorkCenter(f.workCenterId);
-  const resta = opResidua(o, f);
-  const setup = opAvviata(o, f) ? 0 : (wc ? Number(wc.setupHours) || 0 : 0);
+  const resta = Math.max(0, opAttesiFase(o, f) - opProcessati(o, f));
+  const setup = opAvviata(o, f) ? 0 : faseAttrezzaggio(f);
   return resta > 0.000001 ? setup + (Number(f.hours) || 0) * resta : 0;
 }
 function capOreGiorno(wc, iso) {
@@ -59,7 +63,9 @@ function capSchedula(oggi) {
     (o.phases || []).forEach(f => {
       if (opChiusa(o, f)) return;
       if (f.supplierId) {
-        const gg = Math.max(0, Number(f.days) || 0) + supplierTransitDays(f.supplierId);
+        // Il trasporto una volta per tratta, sulla sua prima fase.
+        const prima = !(Number(f.opIndex) > Number(f.runFrom));
+        const gg = Math.max(0, Number(f.days) || 0) + (prima ? faseTrasporto(f) : 0);
         const end = gg > 0 ? addWorkDays(pronto, gg) : pronto;
         fasi.set(f.id, { start: pronto, end, ore: 0, esterna: true });
         fine = end; pronto = end;
@@ -70,6 +76,10 @@ function capSchedula(oggi) {
       const op = faseOperatori(f);
       let resta = capOreFase(o, f);
       if (!wc || !(resta > 0)) { fasi.set(f.id, { start: pronto, end: pronto, ore: 0 }); fine = pronto; return; }
+      // La coda della fase: i giorni che il pezzo aspetta davanti al centro
+      // prima di essere lavorato. Una fase già avviata l'ha già fatta.
+      const coda = opAvviata(o, f) ? 0 : faseCoda(f);
+      if (coda > 0) pronto = addWorkDays(pronto, coda);
       let d = pronto, start = '', end = pronto;
       for (let n = 0; resta > 1e-9 && n < CAP_ORIZZONTE; n++, d = calShift(d, 1)) {
         const cap = capOreGiorno(wc, d);

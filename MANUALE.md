@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.130.0**
+**Versione dell'app documentata: 0.131.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1238,7 +1238,7 @@ sue fasi.
   5% di scarto sono 10,5 pezzi di materiale.
 - I **giorni di montaggio** (quelli che la programmazione a ritroso del fabbisogno toglie dalla
   data in cui l'assieme serve) vengono **sempre dalle fasi** del ciclo dell'assieme: ore ÷ (ore al
-  giorno × operatori), più attrezzaggio e coda del centro. Dalla 0.124.0 non si dichiarano più a mano.
+  giorno × operatori), più attrezzaggio e coda di ogni fase. Dalla 0.124.0 non si dichiarano più a mano.
 - I **riferimenti ciclici** (A contiene B che contiene A) sono rilevati e impediti, sia nella
   distinta sia nel ciclo. Se ne resta uno, un **avviso rosso** nomina l'articolo coinvolto invece
   di far comparire un costo tronco che sembrerebbe buono. **⊞ Espandi tutto** si ferma
@@ -1383,10 +1383,15 @@ posto per infilarne una in mezzo).
 | **Macchina** | Con il modulo Macchine utensili (dalla 0.126.0), per le fasi interne di un centro che ha macchine: a costo orario la sua tariffa si somma a quella del centro, sulle ore divise per gli operatori (→ [cap. 24](#24-carico-dei-centri-di-lavoro)) |
 | **Costo** | *Fisso* oppure *Orario* |
 | **Ore (h)** | Fase **interna**: le ore-uomo per pezzo, cioè le ore che il pezzo occupa il centro sommate su tutti quelli che ci lavorano. Entrano nel costo (a costo orario) e nel carico |
-| **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda del centro: 80 h con 2 operatori a 8 h al giorno sono 5 giorni. Sotto si legge quanti giorni fa un pezzo, comprese le ore di attrezzaggio del centro: passandoci sopra col mouse si vede il calcolo completo |
+| **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda della fase: 80 h con 2 operatori a 8 h al giorno sono 5 giorni |
+| **Attrezzaggio (att.)** | Fase **interna** (dalla 0.131.0): le ore di attrezzaggio della fase, contate **una volta per lotto**. Proposte dal centro quando si aggiunge la fase, si cambiano qui. Entrano nei giorni, nel Carico centri e, a costo orario, nel preventivo e nel consuntivo della commessa; non nel costo per pezzo, che non sa su quanti pezzi dividerle |
+| **Coda (gg)** | Fase **interna** (dalla 0.131.0): i giorni che il pezzo aspetta davanti al centro prima della fase. Proposti dal centro |
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
+| **Trasporto (trasp.)** | Fase in **conto lavoro** (dalla 0.131.0): i giorni di trasporto verso e dal terzista, andata più ritorno. Proposti dal fornitore, si cambiano qui. In una tratta di più fasi consecutive dello stesso terzista vale quello della **prima** fase: il pezzo va e torna una volta sola, e sulle altre il campo è spento |
 | **Costo (€)** o **Tariffa (€/h)** | Secondo il modo scelto |
 | Nota | Testo libero, finisce sull'ordine di lavoro |
+
+Il ciclo **non calcola giorni** (dalla 0.131.0): non sa quanti pezzi si faranno. I giorni di ogni fase li calcolano il fabbisogno, gli ordini di produzione e la capacità finita, dove la quantità c'è.
 
 **Da sapere — la differenza che conta di più.**
 
@@ -2050,8 +2055,8 @@ consegna del gruppo (ven 16)
 | Che cosa | Quanto dura | In che giorni |
 |---|---|---|
 | **Montaggio** di un assieme | le fasi del suo ciclo in fila: le interne per le ore sul centro, quelle dal terzista per i giorni più il trasporto (dalla 0.124.0) | lavorativi |
-| **Fase interna** | (attrezzaggio del centro + ore/pz × pezzi) ÷ ore al giorno del centro, arrotondato al giorno, + giorni di coda | lavorativi |
-| **Tratta di conto lavoro** (fasi consecutive dello stesso terzista) | somma dei giorni di attraversamento + giorni di trasporto del terzista | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); l'invio cade sempre in un giorno lavorativo |
+| **Fase interna** | (attrezzaggio della fase + ore/pz × pezzi) ÷ (ore al giorno di un operatore × operatori), arrotondato al giorno, + giorni di coda della fase | lavorativi |
+| **Tratta di conto lavoro** (fasi consecutive dello stesso terzista) | somma dei giorni di attraversamento + giorni di trasporto della prima fase della tratta | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); l'invio cade sempre in un giorno lavorativo |
 | **Acquisto** | giorni di consegna del listino | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); la data d'ordine cade sempre in un giorno lavorativo |
 
 **I giorni dei fornitori** (dalla 0.110.0). La settimana è di cinque giorni anche per fornitori e
@@ -2891,13 +2896,14 @@ finita**: il conto fatto in avanti, da oggi.
 
 - Entrano le fasi **interne** non chiuse degli ODP **lanciati e in corso**, ordine per ordine
   **per data di consegna** (la più vicina prima).
-- Ogni fase occupa il suo centro per le ore del ciclo sui pezzi ancora da fare, più
-  l'attrezzaggio se non è partita, senza superare le ore che il centro intero dà in un giorno (la
+- Ogni fase occupa il suo centro per le ore del ciclo sui pezzi ancora da fare (anche quelli
+  che devono ancora arrivare dalla fase prima), più l'attrezzaggio della fase se non è partita, senza superare le ore che il centro intero dà in un giorno (la
   capacità settimanale divisa per i giorni lavorativi, o senza capacità le ore di un operatore) né
   quelle dei suoi operatori (ore al giorno di un operatore × operatori della fase), nei giorni lavorativi del
   calendario di fabbrica e **fuori dai fermi** registrati in manutenzione.
-- Una fase comincia il giorno lavorativo dopo la fine della precedente. Una fase esterna non
-  occupa centri: dura i suoi giorni dal terzista più il trasporto.
+- Una fase comincia il giorno lavorativo dopo la fine della precedente, più i suoi giorni di coda
+  se non è ancora partita. Una fase esterna non occupa centri: dura i suoi giorni dal terzista più
+  il trasporto (una volta per tratta).
 
 Per ogni centro la coda dice ordine, fase, ore, dal / al e la data in cui l'ordine serve; in
 rosso le fasi di un ordine che finisce dopo. Nella scheda dell'ODP una riga sopra le fasi dice
@@ -3050,8 +3056,10 @@ Ragione sociale · Referente · Email · Telefono · P.IVA/C.F. · indirizzo.
 Nome · Referente · Email · Telefono · P.IVA/C.F. · **Pagamento predefinito** ·
 **Trasporto predefinito** · indirizzo · **Trasporto conto lavoro (gg)**.
 I due predefiniti si riproporranno su ogni richiesta e ogni ordine a quel fornitore.
-I giorni di trasporto, andata più ritorno, si sommano all'attraversamento di ogni tratta di conto
-lavoro affidata a quel terzista (→ [cap. 19](#19-fabbisogno-materiali)).
+I giorni di trasporto, andata più ritorno, si **propongono** alle fasi di conto lavoro affidate a
+quel terzista, che li possono cambiare; è il trasporto della fase a sommarsi all'attraversamento
+(→ [cap. 19](#19-fabbisogno-materiali)). Cambiandolo, la scheda offre di aggiornare anche le fasi
+di ciclo che hanno ancora il valore di prima; gli ordini già lanciati non cambiano.
 Si possono **sospendere** (⏸).
 
 ### 📇 Clienti
@@ -3087,8 +3095,11 @@ così i nomi già composti non cambiano da soli.
 | **Tariffa (€/h)** | Entra nel costo delle fasi interne a costo orario |
 | **Capacità (h/settimana, tutti gli operatori)** | Le ore **totali** del centro in una settimana: tre montatori per 40 ore sono 120. Il metro del Carico centri, e il tetto di un giorno della capacità finita. **0 = non dichiarata** |
 | **Ore al giorno di un operatore** | Per la durata delle fasi interne: giorni = ore ÷ (queste ore × gli **operatori** della fase). **0 = 8**. Fino alla 0.123 a zero si ricavavano dalla capacità (dalla 0.124.0) |
-| **Attrezzaggio per lotto (h)** | Si aggiunge alle ore di ogni fase su questo centro |
-| **Giorni di coda** | L'attesa prima di ogni fase su questo centro, in giorni lavorativi |
+| **Attrezzaggio proposto (h)** | Si propone alle fasi nuove su questo centro (dalla 0.131.0): l'attrezzaggio vero è quello della fase, nel ciclo |
+| **Coda proposta (gg)** | Si propone alle fasi nuove su questo centro, in giorni lavorativi (dalla 0.131.0) |
+
+Cambiando attrezzaggio o coda proposti, la scheda offre di aggiornare anche le fasi di ciclo che
+hanno ancora il valore di prima: quelle scritte a mano diversamente restano come sono.
 
 Sotto ogni centro, il sotto-elenco **Fornitori conto lavoro**: fornitore, tariffa, nota — chi sa
 fare quella lavorazione fuori, e a quanto. Si possono sospendere. Con il modulo Macchine utensili

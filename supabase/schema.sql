@@ -241,6 +241,11 @@ alter table public.item_cycle_rows add column if not exists operators numeric;
 -- 0.126.0: la macchina della fase e la sua tariffa, copiata come `rate`.
 alter table public.item_cycle_rows add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 alter table public.item_cycle_rows add column if not exists machine_rate numeric;
+-- 0.131.0: attrezzaggio e coda (fase interna) e trasporto (conto lavoro) sulla
+-- fase, proposti da centro e fornitore.
+alter table public.item_cycle_rows add column if not exists setup_hours numeric;
+alter table public.item_cycle_rows add column if not exists queue_days numeric;
+alter table public.item_cycle_rows add column if not exists transit_days numeric;
 
 -- 0.118.0: gli equivalenti di un articolo, in ordine di preferenza (modulo
 -- Alternativi). Quarta tabella «replace», per la stessa ragione delle altre:
@@ -403,6 +408,10 @@ create table if not exists public.production_order_phases (
 alter table public.production_order_phases add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 alter table public.production_order_phases add column if not exists machine_name text;
 alter table public.production_order_phases add column if not exists machine_rate numeric;
+-- 0.131.0: attrezzaggio, coda e trasporto della fase, congelati con l'ordine.
+alter table public.production_order_phases add column if not exists setup_hours numeric;
+alter table public.production_order_phases add column if not exists queue_days numeric;
+alter table public.production_order_phases add column if not exists transit_days numeric;
 -- 0.124.0: gli operatori che lavorano insieme su una fase, per i database già creati.
 alter table public.production_order_phases add column if not exists operators numeric;
 -- 0.90.0: inizio e fine pianificati di ogni fase, per i database già creati.

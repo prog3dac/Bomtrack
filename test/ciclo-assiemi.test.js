@@ -182,8 +182,8 @@ describe('Operatori sulla fase', () => {
   it('i giorni sono le ore divise per le ore di un operatore per gli operatori', () => {
     const a = app();
     // 80 h, 2 operatori da 8 h: 5 giorni; da soli 10.
-    assert.equal(a.eval("internalOpDays(getWorkCenter('mon'), 80, 1, 2)"), 5);
-    assert.equal(a.eval("internalOpDays(getWorkCenter('mon'), 80, 1)"), 10);
+    assert.equal(a.eval("internalOpDays({ workCenterId: 'mon', hours: 80, operators: 2 }, 1)"), 5);
+    assert.equal(a.eval("internalOpDays({ workCenterId: 'mon', hours: 80 }, 1)"), 10);
   });
   it('le ore al giorno a zero sono otto, non più la capacità divisa per i giorni', () => {
     const a = app();
@@ -210,16 +210,12 @@ describe('Operatori sulla fase', () => {
     const a = app();
     a.eval("openCycleFor('grp'); document.getElementById('cyc-opop-0').value = '3'; updateCycleRow(0)");
     assert.equal(a.eval("getItem('grp').cycle[0].operators"), 3);
-    assert.match(a.html('cyc-body'), /1 pz: 1 gg/);
+    // Il ciclo non sa quanti pezzi si faranno: niente giorni per un pezzo (0.131.0).
+    assert.doesNotMatch(a.html('cyc-body'), /1 pz:/);
   });
-  it('il tooltip dei giorni mostra attrezzaggio, operatori e coda del centro', () => {
+  it('attrezzaggio, operatori e coda della fase danno i giorni', () => {
     const a = app();
-    a.eval("Object.assign(getWorkCenter('mon'), { setupHours: 11, queueDays: 1 })");
-    const t = a.eval("cycleOpGiorniDettaglio({ workCenterId: 'mon', hours: 150, operators: 2 })");
-    assert.match(t, /150 h \+ attrezzaggio 11 h = 161 h/);
-    assert.match(t, /8 h × 2 op = 16 h/);
-    assert.match(t, /161 ÷ 16 = 11 gg/);
-    assert.match(t, /Coda del centro: \+ 1 gg/);
-    assert.match(t, /per un pezzo: 12/);
+    // (11 + 150) h a 16 h al giorno: 11 giorni, più 1 di coda.
+    assert.equal(a.eval("internalOpDays({ workCenterId: 'mon', hours: 150, operators: 2, setupHours: 11, queueDays: 1 }, 1)"), 12);
   });
 });

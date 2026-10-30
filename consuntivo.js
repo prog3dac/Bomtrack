@@ -6,7 +6,8 @@
 // davvero, voce per voce. Classic script, scope globale condiviso.
 //
 // Il preventivo è il costo industriale delle righe dei piani della commessa
-// (costOf × quantità), diviso nelle voci della costificazione. Si **congela**
+// (costOf × quantità), diviso nelle voci della costificazione, più
+// l'attrezzaggio delle fasi interne a costo orario, una volta per lotto. Si **congela**
 // quando la commessa va in produzione: senza fotografia il confronto
 // cambierebbe a ogni ritocco di listino. «Aggiorna preventivo» la rifà.
 //
@@ -20,8 +21,8 @@
 //     raddoppierebbe il costo;
 //   - lavorazioni esterne: le righe ricevute degli ODL, al prezzo dell'ordine;
 //   - lavorazioni interne: i pezzi lavorati nelle fasi interne degli ODP per il
-//     costo di fase del ciclo congelato (ore × tariffa, o costo fisso a pezzo),
-//     più le operazioni di montaggio degli assiemi dichiarati montati;
+//     costo di fase del ciclo congelato (ore × tariffa, o costo fisso a pezzo)
+//     e l'attrezzaggio delle fasi avviate, più le operazioni di montaggio degli assiemi dichiarati montati;
 //   - spese generali: nella stessa proporzione del preventivo.
 
 const CONS_VOCI = [
@@ -45,6 +46,9 @@ function consPreventivoCalcolato(jobId) {
     out.generali += c.overhead * q;
     out.righe++;
   }));
+  // L'attrezzaggio delle fasi interne, una volta per fase e per piano: il
+  // costo per pezzo non lo contiene, perché dipende dal lotto.
+  jobPlans(jobId).forEach(p => mrpExplodePlan(p).intOps.forEach(e => { out.lavorazioni += costoAttrezzaggio(e.row); }));
   out.totale = out.materiali + out.lavorazioni + out.generali;
   return out;
 }
@@ -130,8 +134,10 @@ function consReale(jobId) {
       testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''}${f.machineName ? ' · ' + f.machineName : ''} — ${fmtOre(ore)} timbrate${macchina > 0 ? `, di cui macchina ${fmtN(macchina)}` : ''}`;
     } else {
       const n = opProcessati(d, f);
-      v = n * consFaseCostoPezzo(f);
-      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtQtyIt(n)} pz`;
+      // L'attrezzaggio si è speso quando la fase è partita.
+      const att = opAvviata(d, f) ? costoAttrezzaggio(f) : 0;
+      v = n * consFaseCostoPezzo(f) + att;
+      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtQtyIt(n)} pz${att > 0 ? `, più attrezzaggio ${fmtOre(faseAttrezzaggio(f))}` : ''}`;
     }
     if (!v) return;
     lavorazioni += v;

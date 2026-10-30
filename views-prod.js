@@ -101,6 +101,11 @@ function opFreezePhases(part) {
       hours: Number(r.hours) || 0,
       operators: faseOperatori(r),
       days: Number(r.days) || 0,
+      // Attrezzaggio, coda e trasporto della fase (dalla 0.131.0), congelati
+      // come le ore: l'ordine non cambia se cambia il ciclo o il centro.
+      setupHours: r.supplierId ? 0 : faseAttrezzaggio(r),
+      queueDays: r.supplierId ? 0 : faseCoda(r),
+      transitDays: r.supplierId ? faseTrasporto(r) : 0,
       rate: Number(r.rate) || 0,
       cost: Number(r.cost) || 0,
       note: r.note || '',
@@ -1668,7 +1673,8 @@ function odpDocSpec(o) {
   // è il foglio che va in officina, e «Interna» non bastava a trovarla.
   const fasi = (o.phases || []).map(f => [String(f.seq), f.wcName,
     f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : (faseMacchinaNome(f) || 'Interna'),
-    f.supplierId ? (f.days ? f.days + ' gg' : '') : (f.hours ? fmtQtyIt(f.hours) + ' h/pz' : ''),
+    f.supplierId ? (f.days ? f.days + ' gg' : '')
+      : [f.hours ? fmtQtyIt(f.hours) + ' h/pz' : '', faseAttrezzaggio(f) ? '+ ' + fmtQtyIt(faseAttrezzaggio(f)) + ' h att.' : ''].filter(Boolean).join(' '),
     opDaFare(o, f), opFatti(o, f), opScarti(o, f),
     ODP_FASE_LABELS[opStatoFase(o, f)] || '']);
   const mat = opMaterialeResiduo(o).map(m => [m.code, m.name, m.uom, m.qty, m.gia, m.residuo]);

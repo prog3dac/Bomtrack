@@ -1037,6 +1037,7 @@ function migrateDB() {
       ['seq', 'opIndex', 'runFrom', 'runTo', 'passata', 'hours', 'days', 'rate', 'cost'].forEach(k => { if (f[k] == null) f[k] = 0; });
       if (!f.costMode) f.costMode = 'fisso';
       if (f.note == null) f.note = '';
+      migraTempiFase(f);
       // Inizio e fine pianificati della fase (0.90.0): vuoti sugli ordini di
       // prima, che continuano a ragionare sulla data dell'ordine.
       if (f.plannedStart == null) f.plannedStart = '';
@@ -1216,11 +1217,26 @@ function migrateDB() {
       // tutte le fasi precedenti, e su quelle interne resta zero per sempre —
       // lì il tempo sono le ore.
       if (row.days == null) row.days = 0;
+      migraTempiFase(row);
     });
   });
   // Migrazioni versionate
   if ((db.schemaVersion || 1) < 2) { migrateV2(); db.schemaVersion = 2; }
   riparaIdSeminati();
+}
+// Attrezzaggio, coda e trasporto passano dal centro e dal fornitore alla fase
+// (0.131.0). Una fase che non li ha ancora prende i valori che le davano
+// centro e fornitore, così nessuna data cambia: le interne l'attrezzaggio e la
+// coda del centro, quelle in conto lavoro il trasporto del terzista. Ognuna li
+// ha tutte e tre, a zero dove non servono: la colonna c'è per tutte le righe.
+function migraTempiFase(f) {
+  if (!f) return;
+  const esterna = !!f.supplierId;
+  const wc = esterna ? null : (db.workCenters || []).find(w => w.id === f.workCenterId);
+  const sup = esterna ? (db.suppliers || []).find(x => x.id === f.supplierId) : null;
+  if (f.setupHours == null) f.setupHours = wc ? Math.max(0, Number(wc.setupHours) || 0) : 0;
+  if (f.queueDays == null) f.queueDays = wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0;
+  if (f.transitDays == null) f.transitDays = sup ? Math.max(0, Math.round(Number(sup.transitDays) || 0)) : 0;
 }
 // ── Ricevuto: somma di eventi, non un numero riscritto ──
 // Valgono per le righe di ordini d'acquisto e di lavoro **che non vengono da

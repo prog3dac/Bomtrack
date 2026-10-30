@@ -67,7 +67,7 @@ function mrpExplode(lines, opz) {
   // sette di parametri posizionali, e l'ottavo sarebbe stato quello che si
   // sbaglia a passare.
   const acc = { buy: new Map(), make: new Map(), phases: new Map(), load: new Map(),
-    asm: new Map(), intOps: new Map(), stock: new Map(), cycle: false,
+    asm: new Map(), intOps: new Map(), stock: new Map(), cycle: false, setupVisti: new Set(),
     scaffale: (opz && opz.scaffale) || null, lotti: mrpLotti(lines) };
   (lines || []).forEach(l => mrpDescend(l.itemId, Number(l.qty) || 0, new Set(), acc, l.dueDate || ''));
   // Le decisioni «usa l'alternativo» del piano (alternativi.js), dopo la
@@ -178,7 +178,7 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
       // non è un acquisto, è un'ora di macchina da qualche parte.
       if (r.supplierId) mrpAddPhase(acc.phases, it, r, k, qty, f.end, f.start);
       else {
-        mrpAddLoad(acc.load, r.workCenterId, f.start, Number(r.hours) || 0, qty, it, cyclePhaseNumber(k));
+        mrpAddLoad(acc.load, r.workCenterId, f.start, Number(r.hours) || 0, qty, it, cyclePhaseNumber(k), mrpLoadSetup(acc, it, r, k));
         mrpAddPhase(acc.intOps, it, r, k, qty, f.end, f.start);
       }
     });
@@ -199,7 +199,7 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
     const f = prog.fasi[k] || { start: prog.start, end: due };
     if (r.supplierId) mrpAddPhase(acc.phases, it, r, k, qty, f.end, f.start);
     else {
-      mrpAddLoad(acc.load, r.workCenterId, f.start, Number(r.hours) || 0, qty, it, cyclePhaseNumber(k));
+      mrpAddLoad(acc.load, r.workCenterId, f.start, Number(r.hours) || 0, qty, it, cyclePhaseNumber(k), mrpLoadSetup(acc, it, r, k));
       mrpAddPhase(acc.intOps, it, r, k, qty, f.end, f.start);
     }
   });
@@ -266,26 +266,52 @@ function faseOperatori(r) { return Math.max(1, Math.round(Number(r && r.operator
 function faseOreGiorno(wc, operatori) {
   return wcHoursPerDay(wc) * faseOperatori({ operators: operatori });
 }
+// Attrezzaggio, coda e trasporto stanno sulla **fase** (dalla 0.131.0): una
+// tornitura e una foratura sullo stesso centro non si piazzano nello stesso
+// tempo, e lo stesso terzista può dover andare a prendere un pezzo più lontano
+// di un altro. Centro e fornitore tengono il valore che si **propone** alla
+// fase nuova. Una fase senza il campo — una revisione di prima, un dato
+// arrivato per un'altra strada — vale quello del centro o del fornitore, come
+// prima.
+function faseValore(r, campo, ripiego) {
+  const v = r ? r[campo] : null;
+  return v != null && v !== '' && Number.isFinite(Number(v)) ? Math.max(0, Number(v)) : ripiego();
+}
+function faseAttrezzaggio(r) {
+  return faseValore(r, 'setupHours', () => wcAttrezzaggio(getWorkCenter(r && r.workCenterId)));
+}
+function faseCoda(r) {
+  return Math.round(faseValore(r, 'queueDays', () => wcCoda(getWorkCenter(r && r.workCenterId))));
+}
+function faseTrasporto(r) {
+  return Math.round(faseValore(r, 'transitDays', () => supplierTransitDays(r && r.supplierId)));
+}
+// I valori proposti dal centro alle sue fasi nuove.
+function wcAttrezzaggio(wc) { return wc ? Math.max(0, Number(wc.setupHours) || 0) : 0; }
+function wcCoda(wc) { return wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0; }
 // Giorni lavorativi di una fase interna per `pezzi` pezzi: le ore-uomo
 // (attrezzaggio + ore/pz × pezzi) divise per le ore che la fase fa in un
-// giorno, più la coda del centro. 80 ore con due operatori a 8 ore sono 5
-// giorni.
-function internalOpDays(wc, oreUnit, pezzi, operatori) {
-  const ore = (wc ? Number(wc.setupHours) || 0 : 0) + (Number(oreUnit) || 0) * (Number(pezzi) || 0);
-  const coda = wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0;
+// giorno, più la sua coda. 80 ore con due operatori a 8 ore sono 5 giorni.
+// `r` è una fase di ciclo o di ODP: centro, ore, operatori, attrezzaggio, coda.
+function internalOpDays(r, pezzi) {
+  const ore = faseAttrezzaggio(r) + (Number(r && r.hours) || 0) * (Number(pezzi) || 0);
   // Il millesimo toglie l'errore del float: 16 ore a 8 al giorno sono due
   // giorni, non tre.
-  return (ore > 0 ? Math.ceil(ore / faseOreGiorno(wc, operatori) - 1e-9) : 0) + coda;
+  const giorno = faseOreGiorno(getWorkCenter(r && r.workCenterId), r && r.operators);
+  return (ore > 0 ? Math.ceil(ore / giorno - 1e-9) : 0) + faseCoda(r);
 }
-// Il trasporto da e verso un terzista, andata più ritorno.
+// Il trasporto da e verso un terzista, andata più ritorno: il valore del
+// fornitore, che si propone alle sue fasi di conto lavoro.
 function supplierTransitDays(supplierId) {
   const s = supplierId ? getSupplier(supplierId) : null;
   return s ? Math.max(0, Number(s.transitDays) || 0) : 0;
 }
 // Giorni-fornitore di una tratta: attraversamento delle sue fasi più il
-// trasporto, una volta sola — il pezzo va e torna una volta per tratta.
-function runLeadDays(fasiDays, supplierId) {
-  return fasiDays.reduce((s, g) => s + Math.max(0, Number(g) || 0), 0) + supplierTransitDays(supplierId);
+// trasporto, una volta sola — il pezzo va e torna una volta per tratta, e il
+// trasporto è quello scritto sulla **prima** fase della tratta.
+function runLeadDays(fasi) {
+  if (!fasi || !fasi.length) return 0;
+  return fasi.reduce((s, r) => s + Math.max(0, Number(r && r.days) || 0), 0) + faseTrasporto(fasi[0]);
 }
 // L'invio di una tratta (o l'ordine di un acquisto) che deve rientrare il
 // giorno `rientro`: `giorni` giorni-fornitore prima (calendario.js).
@@ -340,7 +366,7 @@ function schedOps(ops, tratte, qty, due) {
   for (let t = tratte.length - 1; t >= 0; t--) {
     const run = tratte[t];
     if (run.esterna) {
-      const gg = runLeadDays(ops.slice(run.from, run.to + 1).map(r => r.days), run.supplierId);
+      const gg = runLeadDays(ops.slice(run.from, run.to + 1));
       const invio = due ? runSendDate(fine, gg) : '';
       if (due) for (let k = run.from; k <= run.to; k++) fasi[k] = { start: invio, end: fine, days: gg, esterna: true, run };
       steps.unshift({ esterna: true, from: run.from, to: run.to, supplierId: run.supplierId,
@@ -349,7 +375,7 @@ function schedOps(ops, tratte, qty, due) {
       continue;
     }
     for (let k = run.to; k >= run.from; k--) {
-      const gg = internalOpDays(getWorkCenter(ops[k].workCenterId), ops[k].hours, qty, ops[k].operators);
+      const gg = internalOpDays(ops[k], qty);
       const inizio = due ? schedBack(fine, gg) : '';
       if (due) fasi[k] = { start: inizio, end: fine, days: gg, esterna: false, run };
       steps.unshift({ esterna: false, from: k, to: k, supplierId: '', workCenterId: ops[k].workCenterId || '',
@@ -364,8 +390,8 @@ function schedOps(ops, tratte, qty, due) {
 function assemblyDaysOf(it, qty) {
   const ops = cicloFasi(it);
   return clCycleRuns(it).reduce((s, t) => s + (t.esterna
-    ? runLeadDays(ops.slice(t.from, t.to + 1).map(r => r.days), t.supplierId)
-    : ops.slice(t.from, t.to + 1).reduce((a, r) => a + internalOpDays(getWorkCenter(r.workCenterId), r.hours, qty, r.operators), 0)), 0);
+    ? runLeadDays(ops.slice(t.from, t.to + 1))
+    : ops.slice(t.from, t.to + 1).reduce((a, r) => a + internalOpDays(r, qty), 0)), 0);
 }
 // Le fasi si programmano a ritroso come quelle di una parte (schedPart), e il
 // montaggio comincia con la prima; senza fasi l'assieme si monta il giorno
@@ -599,8 +625,11 @@ function schedStepLabel(n, st) {
 // Le voci portano anche i **pezzi** e le ore per pezzo, non solo il totale:
 // «62 ore» senza sapere su quanti pezzi non si può verificare, e un numero che
 // non si può verificare non si può nemmeno contestare.
-function mrpAddLoad(map, workCenterId, due, oreUnit, pezzi, it, faseNo) {
-  const ore = (Number(oreUnit) || 0) * (Number(pezzi) || 0);
+// L'attrezzaggio della fase (dalla 0.131.0) entra una volta per lotto: `setup`
+// sono le sue ore, zero se la fase le ha già portate in un altro ramo.
+function mrpAddLoad(map, workCenterId, due, oreUnit, pezzi, it, faseNo, setup) {
+  const att = Math.max(0, Number(setup) || 0);
+  const ore = (Number(oreUnit) || 0) * (Number(pezzi) || 0) + att;
   if (!workCenterId || !(ore > 0)) return;
   // Una riga senza data non ha settimana, e non se ne inventa una: finisce in un
   // secchiello dichiarato, come un arrivo senza data non è un ritardo.
@@ -610,7 +639,15 @@ function mrpAddLoad(map, workCenterId, due, oreUnit, pezzi, it, faseNo) {
   if (!e) { e = { workCenterId, week: wk, hours: 0, voci: [] }; map.set(k, e); }
   e.hours += ore;
   e.voci.push({ itemId: it.id, code: it.code || '', name: it.name || '', faseNo,
-    hoursUnit: Number(oreUnit) || 0, qty: Number(pezzi) || 0, hours: ore });
+    hoursUnit: Number(oreUnit) || 0, qty: Number(pezzi) || 0, setup: att, hours: ore });
+}
+// Le ore di attrezzaggio che la fase porta al carico: una volta sola per
+// lotto, anche se la parte compare in più rami della distinta.
+function mrpLoadSetup(acc, it, r, k) {
+  const key = mrpPhaseKey(it.id, k, r.workCenterId);
+  if (acc.setupVisti.has(key)) return 0;
+  acc.setupVisti.add(key);
+  return faseAttrezzaggio(r);
 }
 // ─── Date: da quando serve a entro quando ordinare ───
 // `leadDays` stava a listino da versioni e non entrava in nessun conto: c'era
@@ -908,7 +945,9 @@ function mrpLoadEntries(plans) {
     exp.load.forEach(e => {
       const voci = e.voci.map(v => {
         const f = resto(v.itemId);
-        return f === 1 ? v : Object.assign({}, v, { qty: v.qty * f, hours: v.hours * f });
+        // L'attrezzaggio non si divide: con dei pezzi già fatti la fase è già
+        // stata attrezzata, e resta da fare solo il tempo dei pezzi.
+        return f === 1 ? v : Object.assign({}, v, { qty: v.qty * f, setup: 0, hours: (v.hours - (v.setup || 0)) * f });
       }).filter(v => v.hours > 0);
       if (!voci.length) return;
       const k = e.workCenterId + '|' + e.week;
@@ -1182,7 +1221,7 @@ function loadCellModal(wcId, week, planId) {
         <span style="width:110px;font-family:var(--mono)">${codeLink(v.itemId, v.code)}</span>
         <span style="flex:1">${esc(v.name)}${v.faseNo ? ` <span class="cycle-phase">fase ${esc(String(v.faseNo))}</span>` : ''}</span>
         <span class="empty-text" style="padding:0;width:120px">${esc(v.planNumber || '')}</span>
-        <span class="empty-text" style="padding:0;width:110px;text-align:right">${fmtQtyIt(v.qty)} pz × ${fmtQtyIt(v.hoursUnit)} h</span>
+        <span class="empty-text" style="padding:0;width:150px;text-align:right">${fmtQtyIt(v.qty)} pz × ${fmtQtyIt(v.hoursUnit)} h${v.setup > 0 ? ` + ${fmtQtyIt(v.setup)} h att.` : ''}</span>
         <span style="font-family:var(--mono);width:80px;text-align:right">${fmtQtyIt(+v.hours.toFixed(2))} h</span>
       </div>`).join('')}
     </div>
@@ -1399,7 +1438,7 @@ function mrpPhaseRuns(rows) {
     const somma = f => fasi.reduce((s, x) => s + (Number(x[f]) || 0), 0);
     const due = fasi.reduce((d, x) => primaData(d, x.due), '');
     // I giorni della tratta comprendono il trasporto del terzista, una volta.
-    const leadDays = runLeadDays(fasi.map(x => x.leadDays), prima.supplierId);
+    const leadDays = runLeadDays(fasi.map(x => ({ days: x.leadDays, supplierId: x.supplierId, transitDays: x.row ? x.row.transitDays : null })));
     const programmato = fasi.reduce((d, x) => primaData(d, x.start), '');
     const orderBy = programmato || (due ? runSendDate(due, leadDays) : '');
     const price = somma('price');

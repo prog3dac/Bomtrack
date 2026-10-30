@@ -1698,8 +1698,9 @@ function cycleOpsTable(opRows) {
   const head = `<div class="cycle-row cycle-op-row cycle-head">
     <span>Fase</span><span>Lavorazione</span><span>Fornitore</span><span>Modo</span>
     <span class="num" title="Interna: ore di occupazione del centro, che alimentano il Carico centri. Conto lavoro: giorni di attraversamento, da cui si ricava entro quando mandare l'ordine di lavoro">Tempo</span>
-    <span class="num">Costo (${esc(cur())})</span><span class="num">Costo riga (${esc(cur())})</span><span>Ordine</span><span></span></div>`;
+    <span class="num">Costo</span><span class="num">Costo riga (${esc(cur())}/pz)</span><span>Ordine</span><span></span></div>`;
   const last = opRows.length - 1;
+  const tratte = typeof clCycleRuns === 'function' ? clCycleRuns(currentCycleItem()) : [];
   return head + opRows.map(({ r, i }, k) => {
     const orario = r.costMode === 'orario';
     const esterna = !!r.supplierId;
@@ -1708,24 +1709,39 @@ function cycleOpsTable(opRows) {
     // del tempo lì misura giorni.
     const costoCell = orario
       ? `<span class="cycle-op-cost">
-          ${esterna ? `<input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}" title="Ore fatturate dal terzista, per pezzo" placeholder="ore"
-            onchange="updateCycleRow(${i})" id="cyc-ophours-${i}">` : ''}
-          <input class="num" type="number" min="0" step="0.5" value="${Number(r.rate) || 0}" title="Tariffa ${esc(cur())}/h" placeholder="${esc(cur())}/h"
-            onchange="updateCycleRow(${i})" id="cyc-oprate-${i}">
+          ${esterna ? `<label class="cycle-op-f"><span>Ore fatturate (h/pz)</span><input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}" title="Ore fatturate dal terzista, per pezzo"
+            onchange="updateCycleRow(${i})" id="cyc-ophours-${i}"></label>` : ''}
+          <label class="cycle-op-f"><span>Tariffa (${esc(cur())}/h)</span><input class="num" type="number" min="0" step="0.5" value="${Number(r.rate) || 0}" title="Tariffa ${esc(cur())}/h"
+            onchange="updateCycleRow(${i})" id="cyc-oprate-${i}"></label>
         </span>`
-      : `<input class="num" type="number" min="0" step="0.01" value="${Number(r.cost) || 0}"
-          title="Costo fisso della lavorazione" onchange="updateCycleRow(${i})" id="cyc-cost-in-${i}">`;
+      : `<label class="cycle-op-f"><span>Costo fisso (${esc(cur())}/pz)</span><input class="num" type="number" min="0" step="0.01" value="${Number(r.cost) || 0}"
+          title="Costo fisso della lavorazione, per pezzo" onchange="updateCycleRow(${i})" id="cyc-cost-in-${i}"></label>`;
+    // Attrezzaggio e coda (fase interna) e trasporto (conto lavoro) sono della
+    // fase dalla 0.131.0, proposti da centro e fornitore. Nessun conto in
+    // giorni qui: il ciclo non sa quanti pezzi si faranno, e i giorni li
+    // calcola chi la quantità ce l'ha — fabbisogno, ODP, capacità finita.
+    const tratta = esterna ? tratte.find(t => k >= t.from && k <= t.to) : null;
+    const primaTratta = !tratta || tratta.from === k;
+    const sup = esterna ? getSupplier(r.supplierId) : null;
     const tempoCell = esterna
-      ? `<span class="cycle-op-time"><input class="num" type="number" min="0" step="1" value="${Number(r.days) || 0}"
+      ? `<span class="cycle-op-time cycle-op-time-int"><label class="cycle-op-f"><span>Attraversamento (gg)</span><input class="num" type="number" min="0" step="1" value="${Number(r.days) || 0}"
           title="Giorni di attraversamento dal terzista: da qui si ricava entro quando mandargli l'ordine di lavoro"
-          onchange="updateCycleRow(${i})" id="cyc-opdays-${i}"><em>gg</em></span>`
-      : `<span class="cycle-op-time cycle-op-time-int"><span><input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}"
+          onchange="updateCycleRow(${i})" id="cyc-opdays-${i}"></label>
+          <label class="cycle-op-f"><span>Trasporto (gg)</span><input class="num" type="number" min="0" max="99" step="1" value="${primaTratta ? faseTrasporto(r) : 0}" ${primaTratta ? '' : 'disabled'}
+          title="${primaTratta ? `Trasporto verso e dal terzista, andata più ritorno, in giorni. Proposto dal fornitore${sup ? ` (${Number(sup.transitDays) || 0} gg)` : ''}, si può cambiare` : `Il trasporto della tratta è quello della fase ${cyclePhaseNumber(tratta.from)}: il pezzo va e torna una volta sola`}"
+          onchange="updateCycleRow(${i})" id="cyc-optransit-${i}"></label></span>`
+      : `<span class="cycle-op-time cycle-op-time-int cycle-op-time-grid"><label class="cycle-op-f"><span>Ore/pz (h)</span><input class="num" type="number" min="0" step="0.25" value="${Number(r.hours) || 0}"
           title="Ore-uomo per pezzo${orario ? '' : ' — non entrano nel costo, servono al carico del centro'}"
-          onchange="updateCycleRow(${i})" id="cyc-ophours-${i}"><em>h</em></span>
-          <span><input class="num" type="number" min="1" step="1" value="${faseOperatori(r)}"
+          onchange="updateCycleRow(${i})" id="cyc-ophours-${i}"></label>
+          <label class="cycle-op-f"><span>Operatori (n.)</span><input class="num" type="number" min="1" step="1" value="${faseOperatori(r)}"
           title="Operatori che lavorano insieme sulla fase: i giorni sono le ore divise per le ore al giorno di un operatore per gli operatori"
-          onchange="updateCycleRow(${i})" id="cyc-opop-${i}"><em>op</em></span>
-          <em id="cyc-opgg-${i}" title="${esc(cycleOpGiorniDettaglio(r))}">${cycleOpGiorni(r)}</em></span>`;
+          onchange="updateCycleRow(${i})" id="cyc-opop-${i}"></label>
+          <label class="cycle-op-f"><span>Attrezzaggio (h)</span><input class="num" type="number" min="0" step="0.25" value="${faseAttrezzaggio(r)}"
+          title="Attrezzaggio della fase, in ore: si conta una volta per lotto, non per pezzo. Proposto dal centro (${wcAttrezzaggio(getWorkCenter(r.workCenterId))} h)"
+          onchange="updateCycleRow(${i})" id="cyc-opsetup-${i}"></label>
+          <label class="cycle-op-f"><span>Coda (gg)</span><input class="num" type="number" min="0" max="99" step="1" value="${faseCoda(r)}"
+          title="Giorni di coda: quanto il pezzo aspetta davanti al centro prima della fase. Proposto dal centro (${wcCoda(getWorkCenter(r.workCenterId))} gg)"
+          onchange="updateCycleRow(${i})" id="cyc-opqueue-${i}"></label></span>`;
     return `<div class="cycle-row cycle-op-row">
       <span class="cycle-phase">${cyclePhaseNumber(k)}</span>
       <span class="cycle-name">${cycleRowLabel(r)}${cycleMachineCell(r, i)}</span>
@@ -1744,29 +1760,6 @@ function cycleOpsTable(opRows) {
       <button class="mini-btn danger" title="Elimina" onclick="delCycleRow(${i})">${ico('trash', 'tinted', 'Elimina')}</button>
     </div>`;
   }).join('');
-}
-// I giorni di una fase interna per un pezzo, come li conta il fabbisogno.
-function cycleOpGiorni(r) {
-  const gg = internalOpDays(getWorkCenter(r.workCenterId), r.hours, 1, r.operators);
-  return `1 pz: ${gg} gg`;
-}
-// Da dove vengono i giorni della fase, per il tooltip: attrezzaggio e coda
-// sono del centro e non si vedono nella riga del ciclo.
-function cycleOpGiorniDettaglio(r) {
-  const wc = getWorkCenter(r.workCenterId);
-  const n = v => numIt(v, v % 1 ? 2 : 0);
-  const setup = wc ? Number(wc.setupHours) || 0 : 0;
-  const coda = wc ? Math.max(0, Math.round(Number(wc.queueDays) || 0)) : 0;
-  const ore = Number(r.hours) || 0;
-  const giorno = faseOreGiorno(wc, r.operators);
-  const tot = setup + ore;
-  const lav = tot > 0 ? Math.ceil(tot / giorno - 1e-9) : 0;
-  const righe = [`Giorni lavorativi per un pezzo: ${lav + coda}`,
-    `Ore: ${n(ore)} h${setup ? ` + attrezzaggio ${n(setup)} h = ${n(tot)} h` : ''}`,
-    `Al giorno: ${n(wcHoursPerDay(wc))} h × ${faseOperatori(r)} op = ${n(giorno)} h`,
-    `Lavorazione: ${n(tot)} ÷ ${n(giorno)} = ${lav} gg (al giorno intero)`];
-  if (coda) righe.push(`Coda del centro: + ${coda} gg`);
-  return righe.join('\n');
 }
 // ─── Export del ciclo aperto ───
 // I Cicli non sono un elenco ma una scheda: si esporta la parte che si sta
@@ -1818,19 +1811,22 @@ function cycleExportSpec() {
           // Due colonne e non una: le ore e i giorni misurano cose diverse, e in
           // un foglio di calcolo una colonna che cambia unità riga per riga non
           // si può sommare né filtrare.
-          { h: 'Ore (h)', w: 10, num: true }, { h: 'Giorni (gg)', w: 12, num: true },
+          { h: 'Ore (h)', w: 10, num: true }, { h: 'Attrezzaggio (h)', w: 14, num: true },
+          { h: 'Coda (gg)', w: 10, num: true }, { h: 'Giorni (gg)', w: 12, num: true }, { h: 'Trasporto (gg)', w: 13, num: true },
           { h: `Costo (${cur()})`, w: 16, num: true },
         ],
         righe: ops.map(({ r }, k) => {
           const wc = getWorkCenter(r.workCenterId);
           const mac = !r.supplierId ? faseMacchinaNome(r) : '';
           return [cyclePhaseNumber(k), (wc ? wc.name : '(centro mancante)') + (mac ? ' · ' + mac : ''),
-            supplierName(r.supplierId) || '', Number(r.hours) || 0, Number(r.days) || 0,
+            supplierName(r.supplierId) || '', Number(r.hours) || 0,
+            r.supplierId ? '' : faseAttrezzaggio(r), r.supplierId ? '' : faseCoda(r),
+            Number(r.days) || 0, r.supplierId ? faseTrasporto(r) : '',
             +cycleRowCost(r).toFixed(2)];
         }),
         totali: ops.length
-          ? ['Totale lavorazioni', '', '', +ops.reduce((s, x) => s + (Number(x.r.hours) || 0), 0).toFixed(2),
-            +ops.reduce((s, x) => s + (Number(x.r.days) || 0), 0).toFixed(0), tot(ops)]
+          ? ['Totale lavorazioni', '', '', +ops.reduce((s, x) => s + (Number(x.r.hours) || 0), 0).toFixed(2), '', '',
+            +ops.reduce((s, x) => s + (Number(x.r.days) || 0), 0).toFixed(0), '', tot(ops)]
           : null,
       },
     ],
@@ -1845,8 +1841,6 @@ function refreshCycleCosts(it) {
     if (el) { el.textContent = fmtN(cycleRowCost(row)); if (row.kind === 'op') el.title = costoFaseDettaglio(row); }
     const ovr = document.getElementById('cyc-ovr-' + i);
     if (ovr) ovr.placeholder = cycleRowComputed(row).toFixed(2);
-    const gg = document.getElementById('cyc-opgg-' + i);
-    if (gg && row.kind === 'op') { gg.textContent = cycleOpGiorni(row); gg.title = cycleOpGiorniDettaglio(row); }
   });
   renderCycleSummary(it);
 }
@@ -1869,10 +1863,17 @@ function updateCycleRow(idx) {
     // si azzererebbe in silenzio quello vero).
     const eraEsterna = !!row.supplierId;
     row.supplierId = val('cyc-sup-' + idx);
-    if (eraEsterna) row.days = numVal('cyc-opdays-' + idx, 0);
-    else {
+    if (eraEsterna) {
+      row.days = numVal('cyc-opdays-' + idx, 0);
+      // Solo la prima fase della tratta ha il trasporto a video: le altre lo
+      // hanno spento, e lì non si scrive niente.
+      const tr = document.getElementById('cyc-optransit-' + idx);
+      if (tr && !tr.disabled) row.transitDays = Math.round(numVal('cyc-optransit-' + idx, 0, 99));
+    } else {
       row.hours = numVal('cyc-ophours-' + idx, 0);
       row.operators = Math.max(1, Math.round(numVal('cyc-opop-' + idx, 1)));
+      row.setupHours = numVal('cyc-opsetup-' + idx, 0);
+      row.queueDays = Math.round(numVal('cyc-opqueue-' + idx, 0, 99));
     }
     if (row.costMode === 'orario') {
       row.rate = numVal('cyc-oprate-' + idx, 0);
@@ -1896,11 +1897,23 @@ function onCycleRowSupplierChange(idx) {
     if (rateEl) rateEl.value = wcRateFor(wc, val('cyc-sup-' + idx));
   }
   const eraEsterna = !!row.supplierId;
+  const primaSup = row.supplierId || '';
   updateCycleRow(idx);
+  // Un terzista nuovo propone il suo trasporto, come propone la sua tariffa;
+  // tornando interna la fase riprende quelli proposti dal centro.
+  if ((row.supplierId || '') !== primaSup) {
+    if (row.supplierId) row.transitDays = supplierTransitDays(row.supplierId);
+    else {
+      const wc = getWorkCenter(row.workCenterId);
+      row.setupHours = wcAttrezzaggio(wc);
+      row.queueDays = wcCoda(wc);
+    }
+    touch(it); saveDB();
+  }
   // Passare da interna a conto lavoro (o viceversa) cambia **cosa misura** la
   // colonna del tempo: si ridisegna, o resterebbe a video un campo che scrive
   // in un altro posto.
-  if (eraEsterna !== !!row.supplierId) renderCycles();
+  if (eraEsterna !== !!row.supplierId || (row.supplierId || '') !== primaSup) renderCycles();
 }
 // Passare da fisso a orario (o viceversa) cambia quali campi contano per il
 // costo: si ridisegna la riga così i campi giusti compaiono subito.
@@ -1946,7 +1959,7 @@ function addCycleOpRow() {
   box.innerHTML = `<div class="cycle-picker-box">
     <div class="modal-grid">
       <div class="modal-field"><label>Centro di lavoro</label><select id="cyc-wc" onchange="onCycleOpWcChange()">${wcOptionsNoRate(null)}</select></div>
-      <div class="modal-field"><label>Interna / Conto lavoro</label><select id="cyc-opsup" class="sel-cerca" onchange="onCycleOpModeChange()">${wcSupplierOptions(wc, '')}</select></div>
+      <div class="modal-field"><label>Interna / Conto lavoro</label><select id="cyc-opsup" class="sel-cerca" onchange="onCycleOpSupChange()">${wcSupplierOptions(wc, '')}</select></div>
       <div class="modal-field" id="cyc-mac-box" style="display:none"><label>Macchina</label><select id="cyc-mac"
         title="La macchina del centro su cui si fa la fase: a costo orario la sua tariffa si somma a quella del centro, sulle ore divise per gli operatori"></select></div>
     </div>
@@ -1955,13 +1968,19 @@ function addCycleOpRow() {
         <option value="fisso">Fisso</option><option value="orario">Orario</option></select></div>
       <div class="modal-field" id="cyc-optime-h"><label>Ore-uomo per pezzo (h)</label><input type="number" id="cyc-ophours" min="0" step="0.25" value="1"
         title="Ore di occupazione del centro. A costo fisso non entrano nel costo: servono al Carico centri"></div>
-      <div class="modal-field" id="cyc-optime-op"><label>Operatori</label><input type="number" id="cyc-opop" min="1" step="1" value="1"
+      <div class="modal-field" id="cyc-optime-op"><label>Operatori (n.)</label><input type="number" id="cyc-opop" min="1" step="1" value="1"
         title="Quanti lavorano insieme sulla fase: i giorni sono le ore divise per le ore al giorno di un operatore per gli operatori"></div>
-      <div class="modal-field" id="cyc-optime-gg" style="display:none"><label>Giorni (gg)</label><input type="number" id="cyc-opdays" min="0" step="1" value="0"
+      <div class="modal-field" id="cyc-optime-gg" style="display:none"><label>Attraversamento (gg)</label><input type="number" id="cyc-opdays" min="0" step="1" value="0"
         title="Giorni di attraversamento dal terzista: da qui si ricava entro quando mandargli l'ordine di lavoro"></div>
+      <div class="modal-field" id="cyc-optime-setup"><label>Attrezzaggio (h)</label><input type="number" id="cyc-opsetup" min="0" step="0.25" value="${wcAttrezzaggio(wc)}"
+        title="Ore di attrezzaggio della fase, una volta per lotto. Proposte dal centro"></div>
+      <div class="modal-field" id="cyc-optime-queue"><label>Coda (gg)</label><input type="number" id="cyc-opqueue" min="0" max="99" step="1" value="${wcCoda(wc)}"
+        title="Giorni che il pezzo aspetta davanti al centro prima della fase. Proposti dal centro"></div>
+      <div class="modal-field" id="cyc-optime-transit" style="display:none"><label>Trasporto (gg)</label><input type="number" id="cyc-optransit" min="0" max="99" step="1" value="0"
+        title="Giorni di trasporto verso e dal terzista, andata più ritorno. Proposti dal fornitore"></div>
     </div>
     <div class="modal-grid" id="cyc-opmode-fisso">
-      <div class="modal-field"><label>Costo (${cur()})</label><input type="number" id="cyc-opcost" min="0" step="0.01" value="0"></div>
+      <div class="modal-field"><label>Costo fisso (${cur()}/pz)</label><input type="number" id="cyc-opcost" min="0" step="0.01" value="0"></div>
     </div>
     <div class="modal-grid" id="cyc-opmode-orario" style="display:none">
       <div class="modal-field"><label>Tariffa (${cur()}/h)</label><input type="number" id="cyc-oprate" min="0" step="0.5" value="0"></div>
@@ -1977,8 +1996,18 @@ function addCycleOpRow() {
 // abituali" dipendono dal centro scelto), stesso schema a cascata delle
 // famiglie/sottofamiglie (syncFamilyFilters).
 function onCycleOpWcChange() {
+  const wc = getWorkCenter(val('cyc-wc'));
   const supSel = document.getElementById('cyc-opsup');
-  if (supSel) supSel.innerHTML = wcSupplierOptions(getWorkCenter(val('cyc-wc')), '');
+  if (supSel) supSel.innerHTML = wcSupplierOptions(wc, '');
+  // Attrezzaggio e coda proposti dal centro scelto, come la tariffa.
+  const setup = document.getElementById('cyc-opsetup'); if (setup) setup.value = wcAttrezzaggio(wc);
+  const coda = document.getElementById('cyc-opqueue'); if (coda) coda.value = wcCoda(wc);
+  onCycleOpSupChange();
+}
+// Il trasporto proposto dal terzista scelto.
+function onCycleOpSupChange() {
+  const tr = document.getElementById('cyc-optransit');
+  if (tr) tr.value = supplierTransitDays(val('cyc-opsup'));
   onCycleOpModeChange();
 }
 function onCycleOpModeChange() {
@@ -1993,6 +2022,9 @@ function onCycleOpModeChange() {
   mostra('cyc-optime-h', !esterna || orario);
   mostra('cyc-optime-gg', esterna);
   mostra('cyc-optime-op', !esterna);
+  mostra('cyc-optime-setup', !esterna);
+  mostra('cyc-optime-queue', !esterna);
+  mostra('cyc-optime-transit', esterna);
   if (orario) {
     const rateEl = document.getElementById('cyc-oprate');
     if (rateEl) rateEl.value = wcRateFor(getWorkCenter(val('cyc-wc')), val('cyc-opsup'));
@@ -2018,6 +2050,11 @@ function pickCycleOp() {
     hours: (!esterna || orario) ? numVal('cyc-ophours', 0) : 0,
     days: esterna ? numVal('cyc-opdays', 0) : 0, note: '' };
   if (!esterna) row.operators = Math.max(1, Math.round(numVal('cyc-opop', 1)));
+  // Tutte e tre su ogni fase, a zero dove non servono, come le scrive la
+  // migrazione: la colonna c'è per tutte le righe.
+  row.setupHours = esterna ? 0 : numVal('cyc-opsetup', 0);
+  row.queueDays = esterna ? 0 : Math.round(numVal('cyc-opqueue', 0, 99));
+  row.transitDays = esterna ? Math.round(numVal('cyc-optransit', 0, 99)) : 0;
   if (!esterna && val('cyc-mac')) impostaMacchinaFase(row, val('cyc-mac'));
   if (orario) row.rate = numVal('cyc-oprate', 0);
   else row.cost = numVal('cyc-opcost', 0);
