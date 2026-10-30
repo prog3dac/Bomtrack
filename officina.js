@@ -206,7 +206,7 @@ function repartoCardHtml(o, f, stato) {
       <div><span class="reparto-num-l">Tempo lavorato</span>
         <strong>${repartoTempo(o.id, f.id, 'totale')}</strong>${previste > 0 ? ` <span class="reparto-num-di">su ${fmtOre(previste)} previste</span>` : ''}</div>
     </div>
-    ${f.note ? `<div class="empty-text" style="text-align:left;padding:0 0 4px">${esc(f.note)}</div>` : ''}
+    ${f.note ? `<div class="reparto-nota"><span class="reparto-num-l">Note</span>${esc(f.note)}</div>` : ''}
     ${bottoni ? `<div class="reparto-azioni">${bottoni}</div>` : ''}
     ${typeof qrSvg === 'function' && qrDisponibile() ? `<div class="reparto-qr">${qrSvg(qrLink('fase', codiceQr), 96)}<span>${esc(codiceQr)}</span></div>` : ''}
     </div>

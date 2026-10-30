@@ -1389,7 +1389,7 @@ posto per infilarne una in mezzo).
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
 | **Trasporto (trasp.)** | Fase in **conto lavoro** (dalla 0.131.0): i giorni di trasporto verso e dal terzista, andata più ritorno. Proposti dal fornitore, si cambiano qui. In una tratta di più fasi consecutive dello stesso terzista vale quello della **prima** fase: il pezzo va e torna una volta sola, e sulle altre il campo è spento |
 | **Costo (€)** o **Tariffa (€/h)** | Secondo il modo scelto |
-| Nota | Testo libero, finisce sull'ordine di lavoro |
+| **Note per il reparto** | Testo libero, nella riga sotto la fase (dalla 0.132.0 si scrive anche qui, oltre che aggiungendo la fase). Finisce sull'ordine di lavoro e sull'ordine di produzione, che la congela al lancio, e si legge sulla scheda della fase in *Reparto* e sul foglio stampato |
 
 Il ciclo **non calcola giorni** (dalla 0.131.0): non sa quanti pezzi si faranno. I giorni di ogni fase li calcolano il fabbisogno, gli ordini di produzione e la capacità finita, dove la quantità c'è.
 

@@ -74,6 +74,8 @@ describe('Terminale di reparto', () => {
     assert.match(h, /In lavorazione da <span class="reparto-tempo"[^>]*data-tipo="sessione">0 h 00'<\/span> · tu/);
     assert.match(h, /Tempo lavorato/);
     assert.match(h, /Inizio previsto/);
+    a.eval("getOdp('A').phases[0].note = 'controllo al primo pezzo'; renderReparto()");
+    assert.match(a.html('view-reparto'), /class="reparto-nota"><span[^>]*>Note<\/span>controllo al primo pezzo/);
     a.eval("timbraPausa('A', 'fa'); renderReparto()");
     assert.match(a.html('view-reparto'), /In pausa/);
   });
