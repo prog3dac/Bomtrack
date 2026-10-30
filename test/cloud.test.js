@@ -97,6 +97,30 @@ describe('Archivio condiviso — il lotto da inviare', () => {
     assert.ok((p.upsert.item_components || []).every(r => r.item_id === part));
   });
 
+  // 0.128.1: tolta l'ultima opzione di un modello il campo `options` spariva.
+  // L'invio non nominava `item_options`, il server teneva le righe di prima e
+  // il pull dopo le riportava: la macchina tornava modello con una o due
+  // opzioni. Lo stesso per l'ultimo alternativo di un articolo.
+  it('un modello a cui si tolgono tutte le opzioni parte con le opzioni vuote', () => {
+    const a = appCondivisa(dbCloudCompleto());
+    a.asRole('admin'); a.eval('_cloud.collegato = true');
+    const mac = a.eval(`db.items.find(i => i.code === 'NT-1').id`);
+    a.eval(`varOpzioneTogli('${mac}', 0); confirmYes();`);
+    assert.equal(a.eval(`varInPagina(getItem('${mac}'))`), false, 'non è più un modello');
+    const p = ev(a, `cloudPayload(Store.pendingChanges(), null, true).payload`);
+    assert.deepEqual(p.upsert.items.map(r => r.id), [mac]);
+    assert.deepEqual(p.upsert.item_options, [], 'la tabella parte vuota: il server toglie le righe di prima');
+    assert.match(p.upsert.items[0].child_sets || '', /(^|,)options(,|$)/, 'e chi scarica sa che l\'elenco c\'è, vuoto');
+  });
+  it('un articolo a cui si toglie l\'ultimo alternativo parte con gli alternativi vuoti', () => {
+    const a = appCondivisa(dbCloudCompleto());
+    a.asRole('admin'); a.eval('_cloud.collegato = true');
+    const cus = a.eval(`db.items.find(i => i.code === 'CMM-001').id`);
+    a.eval(`altTogli('${cus}', 0)`);
+    const p = ev(a, `cloudPayload(Store.pendingChanges(), null, true).payload`);
+    assert.deepEqual(p.upsert.item_alternatives, []);
+  });
+
   it('le impostazioni partono solo con la gestione', () => {
     const a = appCondivisa(dbCloudCompleto());
     a.eval(`db.settings.currency = 'CHF'; saveDB();`);
@@ -494,6 +518,21 @@ describe('Archivio condiviso — due colleghi sulla stessa cosa', () => {
     await B.eval('cloudScaricaArchivio()');
     B.eval(`currentUser = getUser('${bruno}'); Store.setActor(currentUser.id);`);
     assert.equal(B.eval('db.items.length'), 5);
+  });
+
+  // 0.128.1: tolte tutte le opzioni, il modello tornava al giro dopo con le
+  // opzioni che il server non aveva mai tolto.
+  passo('un modello a cui si tolgono tutte le opzioni non torna modello al giro dopo', async () => {
+    const mac = A.eval(`db.items.find(i => i.code === 'NT-1').id`);
+    assert.equal(srv.db.sql(`select count(*) from item_options where item_id = '${mac}'`), '1');
+    A.eval(`varOpzioneTogli('${mac}', 0); confirmYes();`);
+    assert.equal(A.eval(`varInPagina(getItem('${mac}'))`), false);
+    await giro(A);
+    assert.equal(srv.db.sql(`select count(*) from item_options where item_id = '${mac}'`), '0', 'il server toglie le opzioni');
+    await giro(A);
+    assert.equal(A.eval(`varInPagina(getItem('${mac}'))`), false, 'il giro dopo non le riporta');
+    await giro(B);
+    assert.equal(B.eval(`varInPagina(getItem('${mac}'))`), false, 'e il collega non lo vede più modello');
   });
 
   passo('chi salva da una copia vecchia non cancella in silenzio la modifica del collega', async () => {

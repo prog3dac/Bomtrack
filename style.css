@@ -566,6 +566,11 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 table{width:100%;border-collapse:collapse}
 th{text-align:left;padding:10px 12px;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)}
 td{padding:10px 12px;font-size:13px}
+/* Intestazioni che ordinano (anagrafiche, dalla 0.128.0): il pulsante prende l'aspetto della testata */
+.th-sort{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;white-space:nowrap}
+.th-sort:hover,.th-sort.on{color:var(--text)}
+.th-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.th-sort-ico{font-size:9px;min-width:9px;color:var(--accent)}
 tr{border-bottom:1px solid var(--hairline)}
 
 /* Manage */
@@ -711,6 +716,9 @@ body.filt-open .filt-summary{display:none}
 .code-preview-avviso{margin:6px 0 0;color:var(--text);font-size:12px}
 @media (max-width:600px){.code-preview-grid{grid-template-columns:max-content 1fr}.code-preview-nota{grid-column:1/-1;margin-top:-4px}}
 .code-man-mark{display:inline-block;font-family:var(--font);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;margin-left:6px;border-radius:6px;border:1px solid var(--accent);color:var(--accent);vertical-align:middle}
+.var-mark-link{cursor:pointer}
+.var-manca{margin:2px 4px 2px 0;max-width:220px;font-size:12px}
+.var-mark-link:hover,.var-mark-link:focus-visible{background:var(--accent);color:var(--bg)}
 .pick-fav{color:var(--orange);font-size:12px}
 .row-obsolete td{opacity:.55}
 .flag-check{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--text);text-transform:none;letter-spacing:normal;cursor:pointer;padding:9px 0}
@@ -1336,6 +1344,7 @@ tr.agenda-day td{border-top:1px solid var(--hairline)}
   .home-chip{min-height:34px;display:inline-flex;align-items:center}
   .btn-icon{min-width:38px;min-height:38px;justify-content:center}
   .rfq-qty-input,.rfq-price-input{min-height:38px}
+  .th-sort{min-height:34px;min-width:34px}
 }
 .backup-vecchio{color:var(--orange)}
 /* Confronto fra due distinte */

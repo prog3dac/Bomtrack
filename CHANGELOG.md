@@ -2,6 +2,38 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.130.0 — 2026-10-30
+
+**Un'opzione aggiunta al modello si sceglie anche sulle macchine già generate.** Prima, aggiungendo un'opzione a un modello, le macchine generate risultavano *modello cambiato* ma **Rigenera** si fermava con «scegli un valore»: la macchina non aveva una scelta per l'opzione nuova e non c'era modo di dargliela, se non generarne un'altra con un altro codice. Ora, in *Tecnico → Varianti → Varianti generate*:
+- la riga di ogni macchina senza scelta per un'opzione ha un **menu** per sceglierla, **macchina per macchina**; la scelta si salva subito;
+- finché manca, **Rigenera** è spento (il suggerimento dice cosa scegliere) e **Rigenera tutte** salta la macchina, dicendolo;
+- Rigenera riscrive distinta, **scelte e chiave** della macchina: codice, piani e movimenti restano. La **descrizione** segue le scelte se è ancora quella data alla generazione;
+- una scelta che renderebbe la macchina **uguale a un'altra** già generata si rifiuta, sia nel menu sia al Rigenera;
+- un'opzione **tolta** dal modello esce dalle scelte della macchina al Rigenera (prima restava scritta nella chiave).
+
+Nessun cambio a `supabase/schema.sql`.
+
+### 0.129.0 — 2026-10-30
+
+**Modelli e varianti si riconoscono ovunque.** Prima un modello si vedeva solo nella pagina *Tecnico → Varianti* e nella riga sopra la distinta in Gestione DB: negli elenchi sembrava una macchina come le altre. Ora, con il modulo Varianti acceso:
+- **accanto al codice** negli elenchi degli articoli un modello porta l'etichetta *modello* e una macchina generata *variante di ECL-S00*; un clic (o Invio) porta alla pagina Varianti su quel modello;
+- **nei selettori** e nei titoli delle schede c'è la stessa etichetta, senza link; **nei menu a tendina** (Gestione DB, Cicli) il codice è preceduto da `[modello]` o `[variante di …]`;
+- **la scheda dell'articolo** ha la riga *Varianti*: per un modello quante macchine ne sono nate, per una generata il modello, le scelte e se va rigenerata, con il link alla pagina. Anche il titolo di *Modifica articolo* porta l'etichetta.
+
+Una macchina a cui si tolgono tutte le opzioni perde l'etichetta. Nessun cambio a `supabase/schema.sql`.
+
+### 0.128.1 — 2026-10-30
+
+**Un modello a cui si tolgono tutte le opzioni non torna più modello.** Con l'archivio condiviso, togliendo l'ultima opzione di una macchina modello (Tecnico → Varianti) l'app confermava che la macchina non era più un modello, ma al giro di sincronizzazione dopo le opzioni ricomparivano, una o due. Togliendo l'ultima, il campo `options` veniva cancellato invece di restare un elenco vuoto: l'invio al server non nominava le opzioni, il server teneva quelle che aveva (cioè l'ultima versione inviata, con le opzioni ancora da togliere) e il pull successivo le riportava sul PC. Ora l'elenco resta, vuoto, e il server lo rifà vuoto. Lo stesso succedeva togliendo l'ultimo **alternativo** di un articolo: corretto allo stesso modo. Nessun cambio a `supabase/schema.sql`. Chi ha già un modello «tornato» toglie di nuovo le opzioni: questa volta restano tolte.
+
+### 0.128.0 — 2026-10-29
+
+**Gestione in ordine alfanumerico.** Gli elenchi di tutte le schede di Gestione si mostrano in ordine naturale, senza distinzione fra maiuscole e minuscole: *M2* prima di *M10*, *acciaio* accanto ad *Acciaio*. Utenti, fornitori, clienti, centri di lavoro e famiglie (macrofamiglie e sottofamiglie) per nome; condizioni offerta per voce; concetti per nome; unità di misura per codice; macchine utensili ancora raccolte per centro, ora anch'esse in ordine naturale (prima *T10* veniva prima di *T2*). Cambia solo la vista: l'archivio resta com'è, e i pulsanti che lavorano per posizione (concetti, unità di misura, condizioni) puntano sempre alla voce giusta. Il confronto è `confrontaAlfa` / `inOrdineAlfa` in `core.js`.
+
+**Articoli di progetto e d'acquisto: si ordina cliccando l'intestazione.** Un clic su una colonna (codice, descrizione, tipo, famiglia, U.M., costo, dettaglio e le colonne facoltative) ordina l'elenco per quella colonna, il secondo inverte il verso; la freccia ▲/▼ dice come è ordinato. Di serie per codice, ora in ordine naturale (prima *PRT-10* veniva prima di *PRT-2*), e anche le famiglie dell'elenco diviso seguono l'ordine naturale. I numeri si confrontano come numeri, le celle vuote restano in fondo nei due versi, con l'elenco diviso si ordina dentro ogni famiglia, e l'export esce nello stesso ordine dello schermo. La scelta resta nel browser, per vista (`bomtrack_sort`). L'intestazione è un pulsante raggiungibile da tastiera, con `aria-sort` per i lettori di schermo.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.127.2 — 2026-10-30
 
 **Pannelli di destra di nuovo raggiungibili.** Dalla 0.127.0 la seconda barra, ferma in alto, passava sopra al pannello laterale e al pannello della distinta: il pulsante per chiuderli e quello per ridurli a colonna, che stanno in cima ai pannelli, restavano nascosti sotto la barra. Ora la barra sta sotto i pannelli, come prima, e resta ferma sopra il contenuto della pagina.

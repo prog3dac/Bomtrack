@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.127.2';
+const APP_VERSION = '0.130.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -810,6 +810,25 @@ function typeLabel(t) { return TYPE_LABELS[t] || esc(t); }
 // Per le classi CSS (tt-…): solo i tipi noti.
 function typeKey(t) { return TYPE_LABELS[t] ? t : 'x'; }
 function typeShort(t) { return TYPE_SHORTS[t] || '?'; }
+
+// ─── Ordine alfanumerico (dalla 0.128.0) ───
+// Gli elenchi di Gestione si mostrano in ordine «naturale»: M2 prima di M10,
+// maiuscole e minuscole insieme, «Às» accanto ad «As». Si ordina solo quello
+// che si vede: l'archivio resta nell'ordine in cui le voci sono state create, e
+// chi lavora per indice (concetti, U.M., condizioni) si porta dietro il suo.
+const ALFA = (typeof Intl !== 'undefined' && Intl.Collator) ? new Intl.Collator('it', { numeric: true, sensitivity: 'base' }) : null;
+function confrontaAlfa(a, b) {
+  const x = String(a == null ? '' : a).trim(), y = String(b == null ? '' : b).trim();
+  return ALFA ? ALFA.compare(x, y) : x.localeCompare(y);
+}
+// Copia ordinata di arr per la chiave chiave(v); a pari chiave resta l'ordine
+// di partenza. Con indici=true ogni voce esce come { v, i }, con i l'indice
+// nell'elenco originale, per i pulsanti che lavorano per posizione.
+function inOrdineAlfa(arr, chiave, indici) {
+  const righe = (arr || []).map((v, i) => ({ v, i, k: chiave(v) }));
+  righe.sort((a, b) => confrontaAlfa(a.k, b.k) || a.i - b.i);
+  return indici ? righe.map(r => ({ v: r.v, i: r.i })) : righe.map(r => r.v);
+}
 
 // ─── Unità di misura (elenco gestito in Gestione › Unità di misura) ───
 function uomList() { return (db.settings && db.settings.uoms) || []; }

@@ -130,6 +130,7 @@ function itemInfoAnagrafica(it) {
   const grp = getItem(it.groupItemId);
   return itemInfoSection('Anagrafica', itemInfoRows([
     ['Codice', rawHtml(_mono(it.code) + codeManualMark(it))],
+    varRuolo(it) ? ['Varianti', rawHtml(varRigaScheda(it))] : null,
     it.codeManual ? ['Codice manuale', [it.codeNote || 'senza motivo scritto',
       it.codeManualAt ? `deciso${it.codeManualBy ? ' da ' + actorName(it.codeManualBy) : ''} il ${fmtStamp(it.codeManualAt)}` : ''].filter(Boolean).join(' — ')] : null,
     ['Descrizione', it.name],

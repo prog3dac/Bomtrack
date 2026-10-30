@@ -256,6 +256,49 @@ describe('Il modello cambia', () => {
     assert.deepEqual(righe(a, r2.id)[0], ['MOD', 6]);
     assert.deepEqual(ev(a, 'varGenerateDaAggiornare()'), []);
   });
+  // 0.130.0: un'opzione aggiunta al modello dopo la generazione si sceglie
+  // macchina per macchina, poi Rigenera riscrive la distinta.
+  it('un\'opzione nuova si sceglie macchina per macchina, e Rigenera la usa', () => {
+    const a = app();
+    const r1 = genera(a, { L: '5', M: 'S' }), r2 = genera(a, { L: '3', M: 'S' });
+    a.eval("varOpzioneAggiungi('mac'); varOpzioneSet('mac', 2, 'code', 'P'); varOpzioneSet('mac', 2, 'name', 'Protezione')");
+    a.eval("varSceltaAggiungi('mac', 2); varSceltaSet('mac', 2, 0, 'value', 'SI'); varSceltaSet('mac', 2, 0, 'label', 'con protezione')");
+    a.eval("varSceltaAggiungi('mac', 2); varSceltaSet('mac', 2, 1, 'value', 'NO'); varSceltaSet('mac', 2, 1, 'label', 'senza protezione')");
+    a.eval("getItem('mac').components[4].cond = 'P=SI'; saveDB()");
+    assert.deepEqual(ev(a, `varScelteMancanti(getItem('mac'), getItem('${r1.id}')).map(o => o.code)`), ['P']);
+    a.eval("setView('varianti'); currentVarId = 'mac'; renderVarianti()");
+    const html = a.html('var-body');
+    assert.match(html, new RegExp(`varSceltaMacchina\\('${r1.id}', 'P'`), 'la tabella offre la scelta, riga per riga');
+    assert.match(html, /disabled title="Scegli prima Protezione"/, 'e Rigenera aspetta la scelta');
+    // Senza la scelta Rigenera non parte.
+    assert.equal(a.eval(`varRigenera('${r1.id}')`), null);
+    a.eval(`varSceltaMacchina('${r1.id}', 'P', 'SI'); varSceltaMacchina('${r2.id}', 'P', 'NO')`);
+    a.eval(`varRigeneraUI(['${r1.id}', '${r2.id}']); confirmYes()`);
+    assert.deepEqual(righe(a, r1.id), [['MOD', 5], ['TRSS', 1], ['FIS', 1], ['PRT', 1]]);
+    assert.deepEqual(righe(a, r2.id), [['MOD', 3], ['TRSS', 1], ['FIS', 1]]);
+    assert.equal(ev(a, `getItem('${r1.id}').code`), 'MAC-V01', 'codice, piani e movimenti restano');
+    assert.equal(ev(a, `getItem('${r1.id}').configKey`), 'scelte:L=5;M=S;P=SI');
+    assert.match(ev(a, `getItem('${r2.id}').name`), /3 m, standard, senza protezione$/, 'la descrizione segue le scelte');
+    assert.deepEqual(ev(a, 'varGenerateDaAggiornare()'), []);
+    // La stessa combinazione di un'altra macchina non si accetta.
+    const r3 = genera(a, { L: '3', M: 'S', P: 'SI' });
+    a.eval(`varSceltaMacchina('${r3.id}', 'P', 'NO')`);
+    assert.equal(ev(a, `getItem('${r3.id}').configChoices.P`), 'SI', 'sarebbe uguale a un\'altra');
+  });
+  it('Rigenera tutte salta le macchine ancora da completare, e un\'opzione tolta esce dalle scelte', () => {
+    const a = app();
+    const r1 = genera(a, { L: '3', M: 'S' }), r2 = genera(a, { L: '4', M: 'S' });
+    a.eval("varOpzioneAggiungi('mac'); varOpzioneSet('mac', 2, 'code', 'P'); varSceltaAggiungi('mac', 2); varSceltaSet('mac', 2, 0, 'value', 'NO')");
+    a.eval(`varSceltaMacchina('${r1.id}', 'P', 'NO')`);
+    a.eval("varRigeneraTutte('mac'); confirmYes()");
+    assert.equal(ev(a, `varModelloAggiornato(getItem('${r1.id}'))`), false);
+    assert.equal(ev(a, `varModelloAggiornato(getItem('${r2.id}'))`), true, 'quella senza scelta aspetta');
+    a.eval("varOpzioneTogli('mac', 2)");
+    a.eval(`varRigeneraUI(['${r1.id}', '${r2.id}']); confirmYes()`);
+    assert.deepEqual(ev(a, `getItem('${r1.id}').configChoices`), { L: '3', M: 'S' });
+    assert.equal(ev(a, `getItem('${r1.id}').configKey`), 'scelte:L=3;M=S');
+    assert.deepEqual(ev(a, 'varGenerateDaAggiornare()'), []);
+  });
   it('un gruppo che cambia dentro non chiede di rigenerare: è lo stesso articolo', () => {
     const a = app();
     const r = genera(a, { L: '4', M: 'B' });
@@ -308,6 +351,41 @@ describe('La pagina Varianti', () => {
     const ins = ev(a, "inspSchedeArticolo(getItem('mac')).map(s => s.id).concat(inspAzioniArticolo(getItem('mac')).map(c => c.label || c.testo || ''))");
     assert.equal(ins.includes('varianti'), false);
     assert.equal(ins.some(x => /Configura|Rigenera/.test(x)), false);
+  });
+});
+
+// 0.129.0: un modello e le macchine generate si riconoscono negli elenchi,
+// nei selettori e nella scheda, non solo nella pagina Varianti.
+describe('Modelli e varianti si riconoscono', () => {
+  it('l\'elenco degli articoli segna il modello e la variante, con un rimando alla pagina', () => {
+    const a = app();
+    const r = genera(a, { L: '3', M: 'S' });
+    assert.match(ev(a, "catalogRow(getItem('mac'), 'design')"), /var-mark-link[^>]*varApri\('mac'\)[^>]*>modello</);
+    assert.match(ev(a, `catalogRow(getItem('${r.id}'), 'design')`), /varApri\('mac'\)[^>]*>variante di MAC</);
+    assert.doesNotMatch(ev(a, "catalogRow(getItem('mac2'), 'design')"), /var-mark/, 'una macchina normale non ha segni');
+    assert.doesNotMatch(ev(a, "catalogRow(getItem('fis'), 'design')"), /var-mark/);
+  });
+  it('nei selettori il segno c\'è ma non porta altrove, e nei menu è testo', () => {
+    const a = app();
+    assert.match(ev(a, "itemBadges(getItem('mac'))"), />modello</);
+    assert.doesNotMatch(ev(a, "itemBadges(getItem('mac'))"), /onclick/);
+    assert.equal(ev(a, "itemBadgesTxt(getItem('mac'))"), '[modello] ');
+    const r = genera(a, { L: '4', M: 'B' });
+    assert.equal(ev(a, `itemBadgesTxt(getItem('${r.id}'))`), '[variante di MAC] ');
+  });
+  it('la scheda dice che cos\'è e da dove si gestisce', () => {
+    const a = app();
+    const r = genera(a, { L: '3', M: 'S' });
+    assert.match(ev(a, "itemInfoHtml(getItem('mac'))"), /Varianti.*Modello.*non si produce.*1 macchina generata/s);
+    assert.match(ev(a, `itemInfoHtml(getItem('${r.id}'))`), /Generata dal modello.*MAC.*con 3 m, standard/s);
+    assert.doesNotMatch(ev(a, "itemInfoHtml(getItem('mac2'))"), /info-key">Varianti/);
+  });
+  it('tolte tutte le opzioni il segno sparisce, e a modulo spento non c\'è', () => {
+    const a = app();
+    a.eval("varOpzioneTogli('mac', 1); varOpzioneTogli('mac', 0); confirmYes();");
+    assert.equal(ev(a, "varMarca(getItem('mac'))"), '');
+    const b = app({ spento: true });
+    assert.equal(ev(b, "varMarca(getItem('mac')) + itemBadgesTxt(getItem('mac'))"), '');
   });
 });
 
