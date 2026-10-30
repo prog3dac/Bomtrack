@@ -435,6 +435,8 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .cycle-op-time-int>em{white-space:nowrap}
 .cycle-op-time-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 6px}
 .cycle-op-time-grid input{padding:5px 4px}
+.cycle-op-f{display:flex;flex-direction:column;gap:1px;min-width:0}
+.cycle-op-f>span{font-size:10px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .cycle-op-time input{min-width:0;width:100%}
 .cycle-op-cost{display:flex;flex-direction:column;gap:3px}
 .cycle-row:last-child{border-bottom:none}
