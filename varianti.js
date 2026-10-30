@@ -476,6 +476,42 @@ function varRigaBom(it) {
   return `<div class="empty-text" style="text-align:left;padding:8px 12px">${ico('tree', 'tinted', '')} ${testo}</div>`;
 }
 function varApri(id) { if (id) currentVarId = id; setView('varianti'); }
+// L'etichetta accanto al codice (0.129.0): «modello» sui modelli, «variante di
+// …» sulle macchine generate. Una macchina modello non si produce, e senza un
+// segno negli elenchi sembrava uguale alle altre. `link` la rende un rimando
+// alla pagina Varianti: non nei selettori, dove il clic sceglie l'articolo.
+// Un modello ancora senza scelte è già nella pagina, e già si segna.
+function varRuolo(it) {
+  if (!varAttivo() || !it || it.type !== 'macchina') return null;
+  if (varInPagina(it)) return { modello: it };
+  const t = it.configuredFromId && getItem(it.configuredFromId);
+  return t ? { modello: t, generata: true } : null;
+}
+function varMarca(it, link) {
+  const r = varRuolo(it); if (!r) return '';
+  const testo = r.generata ? `variante di ${esc(r.modello.code)}` : 'modello';
+  const title = r.generata
+    ? `Generata dal modello ${r.modello.code}: la distinta si rigenera da lì (Tecnico → Varianti)`
+    : 'Macchina modello: non si produce, si configura in Tecnico → Varianti';
+  const click = link ? ` role="link" tabindex="0" onclick="event.stopPropagation();varApri('${r.modello.id}')" onkeydown="if(event.key==='Enter'){event.stopPropagation();varApri('${r.modello.id}')}"` : '';
+  return ` <span class="code-man-mark var-mark${link ? ' var-mark-link' : ''}" title="${esc(title)}"${click}>${testo}</span>`;
+}
+// La riga della scheda articolo: che cosa è, e da dove si gestisce.
+function varRigaScheda(it) {
+  const r = varRuolo(it); if (!r) return '';
+  const vai = `<a href="#" onclick="closeModal();varApri('${r.modello.id}');return false">Tecnico → Varianti</a>`;
+  if (r.generata) {
+    const scelte = it.configChoices ? varEtichetteScelte(r.modello, it.configChoices) || varChiaveScelte(it.configChoices) : '';
+    return `Generata dal modello ${codeLink(r.modello.id, r.modello.code)}${scelte ? ` con ${esc(scelte)}` : ''}${varModelloAggiornato(it) ? ' — <span class="mrp-warn">il modello è cambiato dopo: va rigenerata</span>' : ''}. Si gestisce in ${vai}.`;
+  }
+  const n = varGenerateDa(it.id).length;
+  return `<strong>Modello</strong>: non si produce, si configura. ${n ? `${n} ${n === 1 ? 'macchina generata' : 'macchine generate'}` : 'Nessuna macchina generata'}; si gestisce in ${vai}.`;
+}
+// Dentro un <option> solo testo.
+function varMarcaTxt(it) {
+  const r = varRuolo(it); if (!r) return '';
+  return r.generata ? `[variante di ${r.modello.code}] ` : '[modello] ';
+}
 
 // ═══════════════════════════════════════════════════════════
 //  LA PAGINA: Tecnico → Varianti

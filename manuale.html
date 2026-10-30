@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.128.1</span>
+        <span class="chip">v0.129.0</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -593,6 +593,7 @@ PRT-…               parte non legata a una macchina</code></pre>
 <h3 id="varianti-e-configuratore-modulo-dalla-01190">Varianti e configuratore (modulo, dalla 0.119.0)</h3>
 <p>Il modulo si accende in <em>Gestione → Aree e moduli</em>. Serve quando la stessa macchina si vende in più versioni: lunghezza 3, 4 o 5 m, motore standard o maggiorato. Invece di tenere a mano una distinta per combinazione, se ne tiene una sola, il <strong>modello</strong>, e il configuratore genera la macchina di ogni combinazione.</p>
 <p><strong>Tutto in una pagina: <em>Tecnico → Varianti</strong></em> (dalla 0.120.0). La voce compare solo con il modulo acceso. In alto si sceglie il modello; sotto ci sono quattro sezioni, nell'ordine in cui si lavora: <strong>Opzioni</strong>, <strong>Regole</strong>, <strong>Configura</strong>, <strong>Varianti generate</strong>. Fuori da questa pagina non ci sono comandi delle varianti: Gestione DB e Riepilogo mostrano solo dei segni, con un link qui.</p>
+<p><strong>Come si riconoscono fuori dalla pagina</strong> (dalla 0.129.0). Accanto al codice, negli elenchi degli articoli, nei selettori e nel titolo della scheda, un modello porta l'etichetta <strong>modello</strong> e una macchina generata <strong>variante di</strong> seguito dal codice del suo modello. Negli elenchi l'etichetta è un link alla pagina Varianti; nei menu a tendina diventa <code>[modello]</code> o <code>[variante di …]</code> davanti al codice. La scheda di sola lettura ha anche la riga <strong>Varianti</strong>: per un modello dice quante macchine ne sono nate, per una generata da quale modello e con quali scelte, e se va rigenerata. Una macchina a cui si tolgono tutte le opzioni perde l'etichetta. Con il modulo spento non compare niente.</p>
 <p><strong>Fino ai gruppi del primo livello.</strong> Le scelte decidono <strong>quali gruppi entrano nella macchina, e quanti</strong>. Ogni gruppo resta un articolo normale e fisso: se il telaio da 3 m e quello da 4 m sono diversi, sono due gruppi, e il modello prende l'uno con <code>L=3</code> e l'altro con <code>L=4</code>. Dentro i gruppi non ci sono regole, e la macchina generata usa i gruppi del modello così come sono, senza copie.</p>
 <p><strong>Nuovo modello.</strong> Il pulsante <strong>+ Nuovo modello</strong> chiede una macchina già in archivio: la sua distinta resta com'è, e la macchina diventa modello con la prima opzione. Per tornare indietro si toglie l'ultima opzione.</p>
 <p><strong>Opzioni.</strong> Ogni opzione ha un <strong>codice</strong> breve (<code>L</code>, <code>M</code>), un nome e le sue <strong>scelte</strong>, ognuna in due campi: il <strong>valore</strong> (<code>3</code>), che è quello che le regole citano, e l'<strong>etichetta</strong> (<code>3 metri</code>), che si legge nel configuratore e nel nome della macchina generata. Le opzioni stanno due per riga; un clic sul titolo <strong>Opzioni</strong> richiude la sezione, che allora le riassume in una riga.</p>

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.128.1**
+**Versione dell'app documentata: 0.129.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1264,6 +1264,14 @@ macchina di ogni combinazione.
 acceso. In alto si sceglie il modello; sotto ci sono quattro sezioni, nell'ordine in cui si
 lavora: **Opzioni**, **Regole**, **Configura**, **Varianti generate**. Fuori da questa pagina non
 ci sono comandi delle varianti: Gestione DB e Riepilogo mostrano solo dei segni, con un link qui.
+
+**Come si riconoscono fuori dalla pagina** (dalla 0.129.0). Accanto al codice, negli elenchi degli
+articoli, nei selettori e nel titolo della scheda, un modello porta l'etichetta **modello** e una
+macchina generata **variante di** seguito dal codice del suo modello. Negli elenchi l'etichetta è un
+link alla pagina Varianti; nei menu a tendina diventa `[modello]` o `[variante di …]` davanti al
+codice. La scheda di sola lettura ha anche la riga **Varianti**: per un modello dice quante macchine
+ne sono nate, per una generata da quale modello e con quali scelte, e se va rigenerata. Una macchina
+a cui si tolgono tutte le opzioni perde l'etichetta. Con il modulo spento non compare niente.
 
 **Fino ai gruppi del primo livello.** Le scelte decidono **quali gruppi entrano nella macchina, e
 quanti**. Ogni gruppo resta un articolo normale e fisso: se il telaio da 3 m e quello da 4 m sono

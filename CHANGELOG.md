@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.129.0 — 2026-10-30
+
+**Modelli e varianti si riconoscono ovunque.** Prima un modello si vedeva solo nella pagina *Tecnico → Varianti* e nella riga sopra la distinta in Gestione DB: negli elenchi sembrava una macchina come le altre. Ora, con il modulo Varianti acceso:
+- **accanto al codice** negli elenchi degli articoli un modello porta l'etichetta *modello* e una macchina generata *variante di ECL-S00*; un clic (o Invio) porta alla pagina Varianti su quel modello;
+- **nei selettori** e nei titoli delle schede c'è la stessa etichetta, senza link; **nei menu a tendina** (Gestione DB, Cicli) il codice è preceduto da `[modello]` o `[variante di …]`;
+- **la scheda dell'articolo** ha la riga *Varianti*: per un modello quante macchine ne sono nate, per una generata il modello, le scelte e se va rigenerata, con il link alla pagina. Anche il titolo di *Modifica articolo* porta l'etichetta.
+
+Una macchina a cui si tolgono tutte le opzioni perde l'etichetta. Nessun cambio a `supabase/schema.sql`.
+
 ### 0.128.1 — 2026-10-30
 
 **Un modello a cui si tolgono tutte le opzioni non torna più modello.** Con l'archivio condiviso, togliendo l'ultima opzione di una macchina modello (Tecnico → Varianti) l'app confermava che la macchina non era più un modello, ma al giro di sincronizzazione dopo le opzioni ricomparivano, una o due. Togliendo l'ultima, il campo `options` veniva cancellato invece di restare un elenco vuoto: l'invio al server non nominava le opzioni, il server teneva quelle che aveva (cioè l'ultima versione inviata, con le opzioni ancora da togliere) e il pull successivo le riportava sul PC. Ora l'elenco resta, vuoto, e il server lo rifà vuoto. Lo stesso succedeva togliendo l'ultimo **alternativo** di un articolo: corretto allo stesso modo. Nessun cambio a `supabase/schema.sql`. Chi ha già un modello «tornato» toglie di nuovo le opzioni: questa volta restano tolte.

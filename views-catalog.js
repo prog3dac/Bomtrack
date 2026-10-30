@@ -747,7 +747,8 @@ function toggleFavFilter() {
 function itemBadges(i) {
   if (!i) return '';
   return (i.favorite ? ' <span class="pick-fav" title="Preferito">★</span>' : '')
-    + (i.obsolete ? ' <span class="obs-mark" title="Articolo obsoleto">' + ico('blocked', 'tinted') + '</span>' : '');
+    + (i.obsolete ? ' <span class="obs-mark" title="Articolo obsoleto">' + ico('blocked', 'tinted') + '</span>' : '')
+    + varMarca(i);
 }
 // Il codice scritto a mano, accanto al codice: un'eccezione voluta (0.115.0).
 function codeManualMark(i) {
@@ -759,7 +760,7 @@ function codeManualMark(i) {
 // né un’icona, quindi qui il simbolo resta un carattere.
 function itemBadgesTxt(i) {
   if (!i) return '';
-  return (i.favorite ? '★ ' : '') + (i.obsolete ? '⛔ ' : '');
+  return (i.favorite ? '★ ' : '') + (i.obsolete ? '⛔ ' : '') + varMarcaTxt(i);
 }
 // Costo di una unità, nella U.M. di gestione dell'articolo: calcolato per ciò
 // che si produce, letto dal listino per ciò che si compra.
@@ -824,7 +825,7 @@ function catalogRow(i, scope) {
     + (i.type === 'parte' && partSourcing(i) === 'buy' ? `<span class="buy-mark" title="Parte acquistata da fornitore">${ico('cart', 'tinted')}</span>` : '');
   return `<tr data-sel="${i.id}" class="${i.obsolete ? 'row-obsolete' : ''}">
     <td class="col-flags" style="width:1%;white-space:nowrap">${flags}</td>
-    <td class="col-code" style="font-family:var(--mono)">${codeLink(i.id, i.code)}${codeManualMark(i)}</td>
+    <td class="col-code" style="font-family:var(--mono)">${codeLink(i.id, i.code)}${codeManualMark(i)}${varMarca(i, true)}</td>
     <td class="col-name">${esc(i.name)}</td>
     <td class="col-type"><span class="bom-type-tag tt-${typeKey(i.type)}">${typeShort(i.type)}</span> ${typeLabel(i.type)}</td>
     <td class="col-family" style="color:var(--text-dim)">${esc(codingLabel(i) || familyLabel(i))}</td>
@@ -2318,7 +2319,7 @@ function editItemModal(id) {
   // modello: la prende qui, prima che la scheda la mostri vuota.
   if (it.configuredFromId && typeof varAllineaCodifica === 'function') varAllineaCodifica([it]);
   const scope = scopeOf(it.type);
-  const p = openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica articolo</h3>${itemModalBody(it, scope)}
+  const p = openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica articolo${varMarca(it)}</h3>${itemModalBody(it, scope)}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveItemEdit('${id}')">Salva</button></div>`, true);
   if (!p) return;

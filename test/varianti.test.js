@@ -311,6 +311,41 @@ describe('La pagina Varianti', () => {
   });
 });
 
+// 0.129.0: un modello e le macchine generate si riconoscono negli elenchi,
+// nei selettori e nella scheda, non solo nella pagina Varianti.
+describe('Modelli e varianti si riconoscono', () => {
+  it('l\'elenco degli articoli segna il modello e la variante, con un rimando alla pagina', () => {
+    const a = app();
+    const r = genera(a, { L: '3', M: 'S' });
+    assert.match(ev(a, "catalogRow(getItem('mac'), 'design')"), /var-mark-link[^>]*varApri\('mac'\)[^>]*>modello</);
+    assert.match(ev(a, `catalogRow(getItem('${r.id}'), 'design')`), /varApri\('mac'\)[^>]*>variante di MAC</);
+    assert.doesNotMatch(ev(a, "catalogRow(getItem('mac2'), 'design')"), /var-mark/, 'una macchina normale non ha segni');
+    assert.doesNotMatch(ev(a, "catalogRow(getItem('fis'), 'design')"), /var-mark/);
+  });
+  it('nei selettori il segno c\'è ma non porta altrove, e nei menu è testo', () => {
+    const a = app();
+    assert.match(ev(a, "itemBadges(getItem('mac'))"), />modello</);
+    assert.doesNotMatch(ev(a, "itemBadges(getItem('mac'))"), /onclick/);
+    assert.equal(ev(a, "itemBadgesTxt(getItem('mac'))"), '[modello] ');
+    const r = genera(a, { L: '4', M: 'B' });
+    assert.equal(ev(a, `itemBadgesTxt(getItem('${r.id}'))`), '[variante di MAC] ');
+  });
+  it('la scheda dice che cos\'è e da dove si gestisce', () => {
+    const a = app();
+    const r = genera(a, { L: '3', M: 'S' });
+    assert.match(ev(a, "itemInfoHtml(getItem('mac'))"), /Varianti.*Modello.*non si produce.*1 macchina generata/s);
+    assert.match(ev(a, `itemInfoHtml(getItem('${r.id}'))`), /Generata dal modello.*MAC.*con 3 m, standard/s);
+    assert.doesNotMatch(ev(a, "itemInfoHtml(getItem('mac2'))"), /info-key">Varianti/);
+  });
+  it('tolte tutte le opzioni il segno sparisce, e a modulo spento non c\'è', () => {
+    const a = app();
+    a.eval("varOpzioneTogli('mac', 1); varOpzioneTogli('mac', 0); confirmYes();");
+    assert.equal(ev(a, "varMarca(getItem('mac'))"), '');
+    const b = app({ spento: true });
+    assert.equal(ev(b, "varMarca(getItem('mac')) + itemBadgesTxt(getItem('mac'))"), '');
+  });
+});
+
 describe('A modulo spento', () => {
   it('le righe condizionate contano come righe normali e niente è un modello', () => {
     const a = app({ spento: true });
