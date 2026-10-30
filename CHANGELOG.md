@@ -2,6 +2,10 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.127.2 — 2026-10-30
+
+**Un modello a cui si tolgono tutte le opzioni non torna più modello.** Con l'archivio condiviso, togliendo l'ultima opzione di una macchina modello (Tecnico → Varianti) l'app confermava che la macchina non era più un modello, ma al giro di sincronizzazione dopo le opzioni ricomparivano, una o due. Togliendo l'ultima, il campo `options` veniva cancellato invece di restare un elenco vuoto: l'invio al server non nominava le opzioni, il server teneva quelle che aveva (cioè l'ultima versione inviata, con le opzioni ancora da togliere) e il pull successivo le riportava sul PC. Ora l'elenco resta, vuoto, e il server lo rifà vuoto. Lo stesso succedeva togliendo l'ultimo **alternativo** di un articolo: corretto allo stesso modo. Nessun cambio a `supabase/schema.sql`. Chi ha già un modello «tornato» toglie di nuovo le opzioni: questa volta restano tolte.
+
 ### 0.127.1 — 2026-10-29
 
 **Controllo generale prima dei merge.** Correzioni trovate passando l'app intera prima di unire la 0.126.0 e la 0.127.0, senza funzioni nuove. Nessun cambio a `supabase/schema.sql`.

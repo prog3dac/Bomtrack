@@ -770,7 +770,10 @@ function varOpzioniMuta(id, fn) {
   const it = getItem(id); if (!it || it.configuredFromId) return;
   if (!Array.isArray(it.options)) it.options = [];
   if (fn(it) === false) { renderVarianti(); return; }
-  if (!it.options.length) delete it.options;
+  // Tolta l'ultima opzione l'elenco resta, vuoto: non si cancella il campo.
+  // Senza il campo l'invio al cloud non nominava `item_options`, il server
+  // teneva le righe di prima e il pull dopo le riportava indietro (0.127.2):
+  // il modello «tolto» tornava con le sue opzioni.
   touch(it);
   saveDB();
   renderVarianti();
