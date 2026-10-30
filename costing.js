@@ -175,6 +175,17 @@ function cycleRowCost(row, visited, out) {
   if (row.costOverride != null && row.costOverride !== '') return Number(row.costOverride) || 0;
   return cycleRowComputed(row, visited, out);
 }
+// Il costo dell'attrezzaggio di una fase interna a costo orario (dalla
+// 0.131.0): le sue ore alla tariffa della fase, più la macchina. Si paga una
+// volta per lotto, quindi **non** sta nel costo per pezzo del ciclo — che non
+// sa su quanti pezzi dividerlo — ma nel preventivo e nel consuntivo, dove il
+// lotto c'è. A costo fisso il prezzo è quello scritto, attrezzaggio compreso.
+function costoAttrezzaggio(r) {
+  if (!r || r.supplierId || r.costMode !== 'orario') return 0;
+  const ore = faseAttrezzaggio(r);
+  if (!(ore > 0)) return 0;
+  return ore * (Number(r.rate) || 0) + (typeof costoMacchinaOre === 'function' ? costoMacchinaOre(r, ore) : 0);
+}
 // Tariffa proposta per una riga a costo orario: quella del fornitore, se
 // registrata sul centro di lavoro, altrimenti quella del centro di lavoro
 // stesso. Solo una proposta iniziale — il campo resta modificabile a mano,

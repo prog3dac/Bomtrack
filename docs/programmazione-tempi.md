@@ -40,10 +40,11 @@ consegna riga piano (due)
 Regole:
 - **Date-mattino**: la data è il mattino in cui il pezzo è pronto. Una fase di un giorno che
   finisce lunedì comincia venerdì. Niente buchi né sovrapposizioni fra fasi.
-- **Durata fase interna** = ⌈(attrezzaggio centro + ore/pz × pezzi) ÷ ore al giorno⌉ + coda.
+- **Durata fase interna** = ⌈(attrezzaggio fase + ore/pz × pezzi) ÷ ore al giorno⌉ + coda della fase
+  (dalla 0.131.0; prima attrezzaggio e coda erano del centro).
   Ore al giorno: dichiarate sul centro, o capacità settimanale ÷ giorni lavorativi, o 8.
 - **Tratta esterna** (fasi consecutive dello stesso terzista, `clCycleRuns`): Σ giorni di
-  attraversamento + trasporto del terzista, una volta per tratta.
+  attraversamento + trasporto della prima fase della tratta (proposto dal terzista), una volta.
 - **Montaggio**: giorni dichiarati sull'assieme, o le ore delle sue lavorazioni in fila.
 - **Più rami**: si tiene la data più vicina (`primaData`), per `due` e per `start`.
 - **Capacità infinita**: le date non guardano il carico; il Carico centri mostra il
@@ -62,8 +63,8 @@ Regole:
   `views-mrp.js`; `mrpDescend` passa ai figli l'inizio del padre. Righe d'acquisto, di conto
   lavoro e da fabbricare con `due`/`start`/`orderBy` coerenti; documenti con le date giuste;
   carico per settimana d'inizio fase.
-- Scostamenti dal piano iniziale, voluti: l'attrezzaggio sta sul **centro** e non sulla fase
-  (una colonna in più nella griglia del ciclo costava più di quanto rende); una fase interna
+- Scostamenti dal piano iniziale, voluti: l'attrezzaggio stava sul **centro** e non sulla fase
+  (dalla 0.131.0 attrezzaggio, coda e trasporto stanno sulla fase, proposti da centro e fornitore); una fase interna
   **non** ha un override in giorni — il campo `days` delle fasi interne resta a zero perché
   passare una fase da esterna a interna lascerebbe lì i giorni del terzista come se fossero
   stati scritti apposta.

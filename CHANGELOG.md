@@ -2,6 +2,22 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.131.0 — 2026-10-30
+
+**Attrezzaggio, coda e trasporto si scrivono sulla fase del ciclo.** Prima l'attrezzaggio e la coda erano del centro di lavoro, uguali per tutte le sue fasi, e il trasporto era del fornitore. Ora:
+- ogni fase **interna** ha il suo **attrezzaggio** (ore, una volta per lotto) e la sua **coda** (giorni), proposti dal centro quando si aggiunge la fase;
+- ogni fase in **conto lavoro** ha il suo **trasporto** (giorni, andata più ritorno), proposto dal fornitore e modificabile. In una tratta di più fasi dello stesso terzista vale quello della prima fase;
+- centro e fornitore tengono il valore **proposto**: cambiandolo, la scheda offre di aggiornare le fasi di ciclo che hanno ancora il valore di prima;
+- il ciclo **non mostra più «1 pz: N gg»**: non sa quanti pezzi si faranno. I giorni li calcolano fabbisogno, ODP e capacità finita;
+- l'attrezzaggio entra nel **Carico centri** (una volta per lotto, si vede nel dettaglio) e, per le fasi a costo orario, nel **preventivo e nel consuntivo** della commessa; non nel costo per pezzo;
+- l'ordine di produzione **congela** attrezzaggio, coda e trasporto delle sue fasi; il foglio dell'ODP e l'export del ciclo li mostrano.
+
+La migrazione copia sulle fasi i valori di centri e fornitori: **nessuna data cambia**.
+
+**Capacità finita più giusta.** Le fasi dopo la prima di un ODP appena lanciato valevano zero ore, perché i pezzi non erano ancora arrivati dalla fase prima: la data fattibile usciva troppo presto e il centro sembrava più scarico. Ora contano i pezzi attesi. La coda della fase vale anche qui, e il trasporto si conta una volta per tratta.
+
+`supabase/schema.sql`: colonne `setup_hours`, `queue_days`, `transit_days` su `item_cycle_rows` e `production_order_phases` (da rilanciare lo script).
+
 ### 0.130.0 — 2026-10-30
 
 **Un'opzione aggiunta al modello si sceglie anche sulle macchine già generate.** Prima, aggiungendo un'opzione a un modello, le macchine generate risultavano *modello cambiato* ma **Rigenera** si fermava con «scegli un valore»: la macchina non aveva una scelta per l'opzione nuova e non c'era modo di dargliela, se non generarne un'altra con un altro codice. Ora, in *Tecnico → Varianti → Varianti generate*:

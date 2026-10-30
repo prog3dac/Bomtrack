@@ -428,8 +428,9 @@ function editSupplierModal(id) {
         <datalist id="sup-transport-opts">${(db.settings.transportOptions || []).map(o => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>
       ${addressFieldsHtml('es', s)}
       <div class="modal-field"><label>Trasporto conto lavoro (gg)</label><input id="es-transit" type="number" min="0" max="99" step="1" value="${Number(s.transitDays) || 0}"
-        title="Giorni di trasporto verso e dal terzista, andata più ritorno: si sommano all'attraversamento di ogni tratta di conto lavoro affidata a questo fornitore"></div>
+        title="Giorni di trasporto verso e dal terzista, andata più ritorno: si propongono alle fasi di conto lavoro affidate a questo fornitore, che li possono cambiare"></div>
     </div>
+    ${fasiPropostaCheck('es-transit-fasi', fasiConValore(r => r.supplierId === id, 'transitDays', Number(s.transitDays) || 0), 'il trasporto')}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveSupplier('${id}')">Salva</button></div>`, true);
 }
@@ -441,10 +442,12 @@ function saveSupplier(id) {
   s.phone = val('es-phone'); s.vat = val('es-vat');
   s.defaultPayment = val('es-dpayment'); s.defaultTransport = val('es-dtransport');
   if (isNeg('es-transit')) { showToast('I giorni di trasporto non possono essere negativi', 'error'); return; }
+  const prima = Number(s.transitDays) || 0;
   s.transitDays = Math.round(numVal('es-transit', 0, 99));
+  const fasi = isChecked('es-transit-fasi') ? fasiAggiornaValore(r => r.supplierId === id, 'transitDays', prima, s.transitDays) : 0;
   Object.assign(s, readAddressFields('es'));
   touch(s);
-  saveDB(); closeModal(); renderManage(); savedToast('Aggiornato');
+  saveDB(); closeModal(); renderManage(); savedToast(fasi ? `Aggiornato, con ${fasi} ${fasi === 1 ? 'fase' : 'fasi'} di ciclo` : 'Aggiornato');
 }
 // Dove compare un fornitore: articoli, quotazioni a listino, documenti,
 // lavorazioni esterne di ciclo e movimenti di magazzino. Controllare i soli
@@ -747,7 +750,7 @@ function delSubFamily(familyId, subId) {
 function renderWorkCenters() {
   const list = inOrdineAlfa(db.workCenters, w => w.name).map(w => `<div class="mgmt-item">
     <span class="mgmt-item-name">${esc(w.name)}</span>
-    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}${moduloAttivo('macchine') && macchineDelCentro(w.id).length ? ' · ' + macchineDelCentro(w.id).length + (macchineDelCentro(w.id).length === 1 ? ' macchina' : ' macchine') : ''}</span>
+    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda proposta ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}${moduloAttivo('macchine') && macchineDelCentro(w.id).length ? ' · ' + macchineDelCentro(w.id).length + (macchineDelCentro(w.id).length === 1 ? ' macchina' : ' macchine') : ''}</span>
     ${activeBadge(w)}
     <div class="mgmt-item-actions">
       ${activeBtn('workCenters', w, 'Centro di lavoro')}
@@ -782,10 +785,14 @@ function editWcModal(id) {
     <div class="settings-group-title">${ico('clock', 'tinted', '')} Tempi per la programmazione</div>
     <div class="modal-grid">
       <div class="modal-field"><label>Ore al giorno di un operatore</label><input id="ew-hpd" type="number" min="0" max="24" step="0.5" value="${Number(w.hoursPerDay) || 0}"></div>
-      <div class="modal-field"><label>Attrezzaggio per lotto (h)</label><input id="ew-setup" type="number" min="0" step="0.25" value="${Number(w.setupHours) || 0}"></div>
-      <div class="modal-field"><label>Giorni di coda</label><input id="ew-queue" type="number" min="0" max="99" step="1" value="${Number(w.queueDays) || 0}"></div>
+      <div class="modal-field"><label>Attrezzaggio proposto (h)</label><input id="ew-setup" type="number" min="0" step="0.25" value="${Number(w.setupHours) || 0}"
+        title="Si propone alle fasi nuove su questo centro: l'attrezzaggio vero è quello scritto sulla fase, nel ciclo"></div>
+      <div class="modal-field"><label>Coda proposta (gg)</label><input id="ew-queue" type="number" min="0" max="99" step="1" value="${Number(w.queueDays) || 0}"
+        title="Si propone alle fasi nuove su questo centro: la coda vera è quella scritta sulla fase, nel ciclo"></div>
     </div>
-    <p class="empty-text" style="text-align:left;padding:4px 0 0">Da qui il fabbisogno ricava quanti <strong>giorni lavorativi</strong> dura una fase interna: (attrezzaggio + ore/pz × pezzi) ÷ (ore al giorno di un operatore × operatori della fase), arrotondato al giorno, più i giorni di coda (il tempo in cui il pezzo aspetta il suo turno). Gli operatori si scrivono sulla fase, nel ciclo. La capacità qui non entra: è la coda a capacità finita a dividere le ore del centro fra le fasi. <strong>Ore al giorno a zero</strong> = 8.</p>
+    ${fasiPropostaCheck('ew-fasi', fasiConValore(r => !r.supplierId && r.workCenterId === id, 'setupHours', Number(w.setupHours) || 0)
+      + fasiConValore(r => !r.supplierId && r.workCenterId === id, 'queueDays', Number(w.queueDays) || 0), 'attrezzaggio o coda')}
+    <p class="empty-text" style="text-align:left;padding:4px 0 0">Da qui il fabbisogno ricava quanti <strong>giorni lavorativi</strong> dura una fase interna: (attrezzaggio della fase + ore/pz × pezzi) ÷ (ore al giorno di un operatore × operatori della fase), arrotondato al giorno, più i giorni di coda della fase (il tempo in cui il pezzo aspetta il suo turno). Attrezzaggio, coda e operatori si scrivono sulla fase, nel ciclo; i due valori qui sopra si propongono alle fasi nuove. La capacità qui non entra: è la coda a capacità finita a dividere le ore del centro fra le fasi. <strong>Ore al giorno a zero</strong> = 8.</p>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveWc('${id}')">Salva</button></div>
     <div class="settings-group-title">${ico('factory', 'tinted', '')} Fornitori conto lavoro</div>
@@ -802,10 +809,47 @@ function saveWc(id) {
   if (isNeg('ew-cap')) { showToast('La capacità non può essere negativa', 'error'); return; }
   if (isNeg('ew-hpd') || isNeg('ew-setup') || isNeg('ew-queue')) { showToast('I tempi non possono essere negativi', 'error'); return; }
   w.name = nome; w.hourlyRate = numVal('ew-rate', 0); w.capacityHours = numVal('ew-cap', 0);
+  const prima = { setupHours: Number(w.setupHours) || 0, queueDays: Number(w.queueDays) || 0 };
   w.hoursPerDay = numVal('ew-hpd', 0, 24); w.setupHours = numVal('ew-setup', 0);
   w.queueDays = Math.round(numVal('ew-queue', 0, 99));
+  let fasi = 0;
+  if (isChecked('ew-fasi')) {
+    const delCentro = r => !r.supplierId && r.workCenterId === id;
+    fasi = fasiAggiornaValore(delCentro, 'setupHours', prima.setupHours, w.setupHours)
+      + fasiAggiornaValore(delCentro, 'queueDays', prima.queueDays, w.queueDays);
+  }
   touch(w);
-  saveDB(); renderManage(); savedToast('Aggiornato');
+  saveDB(); renderManage(); savedToast(fasi ? `Aggiornato, con ${fasi} ${fasi === 1 ? 'valore' : 'valori'} sulle fasi di ciclo` : 'Aggiornato');
+}
+// ─── Valori proposti alle fasi (dalla 0.131.0) ───
+// Attrezzaggio e coda del centro, trasporto del fornitore: si propongono alle
+// fasi nuove, e le fasi già scritte restano come sono. Cambiando il valore si
+// può portare il nuovo sulle fasi che hanno **ancora quello di prima** — le
+// altre qualcuno le ha scritte apposta, e non si toccano. Gli ODP lanciati e
+// le revisioni hanno le loro fasi congelate e non c'entrano.
+function fasiCiclo(filtro) {
+  const out = [];
+  (db.items || []).forEach(it => (it.cycle || []).forEach(r => { if (r && r.kind === 'op' && filtro(r)) out.push({ it, r }); }));
+  return out;
+}
+function fasiConValore(filtro, campo, valore) {
+  return fasiCiclo(filtro).filter(x => (Number(x.r[campo]) || 0) === valore).length;
+}
+function fasiAggiornaValore(filtro, campo, prima, dopo) {
+  if (prima === dopo) return 0;
+  const toccati = new Set();
+  let n = 0;
+  fasiCiclo(filtro).forEach(({ it, r }) => {
+    if ((Number(r[campo]) || 0) !== prima) return;
+    r[campo] = dopo; n++; toccati.add(it);
+  });
+  toccati.forEach(it => touch(it));
+  return n;
+}
+function fasiPropostaCheck(id, n, cosa) {
+  if (!n) return '';
+  return `<label class="check-line" style="display:flex;gap:6px;align-items:center;margin:6px 0 0"><input type="checkbox" id="${id}" checked>
+    Cambiando ${esc(cosa)}, aggiorna anche le fasi di ciclo che hanno ancora il valore di adesso</label>`;
 }
 function delWc(id) {
   if (!roleGuard('manage')) return;
