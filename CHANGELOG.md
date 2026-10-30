@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.132.0 — 2026-10-30
+
+**Il terminale di reparto si legge a colpo d'occhio.** In *Produzione → Reparto*:
+- i **centri di lavoro** (e le macchine, con il modulo Macchine utensili) sono in una **barra a sinistra**, ciascuno con il numero di fasi da lavorare; sul telefono la barra diventa una fila da scorrere sopra le schede. Prima erano in un menu a tendina;
+- ogni scheda ha in cima la **situazione**, su sfondo colorato: **da avviare** (blu), **avviata** (giallo), **in ritardo** (rosso: doveva iniziare o finire prima di oggi secondo le date pianificate dell'ODP), **terminata** (verde);
+- la scheda porta l'**inizio previsto** della fase (e la fine) dall'ODP, accanto alla data in cui il pezzo serve;
+- in fondo una riga dice se la fase è **in lavorazione**, e da chi, o **in pausa**;
+- compaiono anche le **fasi future** degli ODP lanciati, in attesa della fase precedente, ordinate per inizio previsto e senza pulsanti, e in fondo le fasi **terminate** degli ordini ancora aperti. Una timbratura rimasta aperta su una fase che un collega ha chiuso si può così ancora mettere in pausa.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.131.0 — 2026-10-30
 
 **Attrezzaggio, coda e trasporto si scrivono sulla fase del ciclo.** Prima l'attrezzaggio e la coda erano del centro di lavoro, uguali per tutte le sue fasi, e il trasporto era del fornitore. Ora:

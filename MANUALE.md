@@ -2964,9 +2964,19 @@ lavorate da allora.
 ### Terminale di reparto (modulo Officina, dalla 0.123.0)
 
 *Produzione → Reparto* è la schermata di chi lavora alla macchina, a pulsanti grandi per il
-telefono. Si sceglie il **centro** (l'app lo ricorda su quel dispositivo) e compaiono le fasi
-interne degli ODP lanciati che si possono lavorare adesso — *Avviabili* o *In corso* — per data di
-consegna.
+telefono. Si sceglie il **centro** nella barra a sinistra (sul telefono, la fila sopra le schede;
+l'app lo ricorda su quel dispositivo). Ogni centro dice quante fasi ha da lavorare. Compaiono, in
+quest'ordine:
+
+- le fasi interne che si possono lavorare adesso, per data di consegna;
+- le **fasi future**, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;
+- le fasi **terminate** degli ordini ancora aperti.
+
+In cima a ogni scheda una riga colorata dice la **situazione**: *Da avviare* (blu), *Avviata*
+(giallo), *In ritardo* (rosso: secondo le date pianificate dell'ODP doveva già iniziare o finire),
+*Terminata* (verde). Sotto ci sono l'**inizio previsto** e la fine della fase, e la data in cui il
+pezzo serve. In fondo una riga dice se la fase è **in lavorazione** (e chi ci lavora) o **in
+pausa**.
 
 - **Inizia** apre una **timbratura** a nome di chi è entrato. Se la fase non è ancora avviata,
   prima si apre la finestra di avvio di sempre (sulla prima fase esce il materiale), e la
@@ -2976,7 +2986,7 @@ consegna.
   la stessa dell'ODP.
 
 Una persona ha **una sola** timbratura aperta: cominciare un'altra fase mette in pausa quella in
-corso. Ogni scheda dice i pezzi da fare, le ore timbrate e quelle previste dal ciclo. Il **QR**
+corso. Ogni scheda dice anche i pezzi da fare, le ore timbrate e quelle previste dal ciclo. Il **QR**
 dell'ODP, con il modulo acceso, porta gli stessi pulsanti. Le ore timbrate entrano nel
 **consuntivo** della commessa al posto delle ore del ciclo, e fanno scadere le manutenzioni «ogni
 N ore».

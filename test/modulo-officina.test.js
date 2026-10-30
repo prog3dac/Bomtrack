@@ -52,6 +52,30 @@ describe('Terminale di reparto', () => {
       { id: 't2', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: '2026-10-27T11:00:00.000Z', endedAt: '2026-10-27T11:30:00.000Z', active: true }] });
     assert.equal(a.eval("oreTimbrate('A', 'fa')"), 2.5);
   });
+  it('la schermata: fasi future in attesa e terminate, con la situazione', () => {
+    const a = app({ officina: true });
+    a.eval(`const o = getOdp('A'); o.phases.push({ id: 'fa2', seq: 20, opIndex: 1, workCenterId: 'w1', wcName: 'Tornio', costMode: 'orario', hours: 1, rate: 50, cost: 0, plannedStart: '2026-11-05', plannedEnd: '2026-11-06' });
+      getOdp('B').phases[0].plannedStart = '2026-10-20'`);
+    assert.deepEqual(Array.from(a.eval("repartoFasi('').map(x => x.f.id)")), ['fa', 'fb']);
+    assert.deepEqual(Array.from(a.eval("repartoFasi('', true).map(x => x.f.id + ':' + x.stato)")), ['fa:corso', 'fb:avviabile', 'fa2:attesa']);
+    assert.equal(a.eval("repartoSituazione(getOdp('A'), getOdp('A').phases[0], 'corso').id"), 'avviata');
+    assert.equal(a.eval("repartoSituazione(getOdp('B'), getOdp('B').phases[0], 'avviabile').id"), 'ritardo');
+    assert.equal(a.eval("repartoSituazione(getOdp('A'), getOdp('A').phases[1], 'attesa').nota"), 'dopo la fase 10');
+    a.eval("opDichiara('A', 'fa', { qty: 12 })");
+    assert.deepEqual(Array.from(a.eval("repartoFasi('', true).map(x => x.f.id + ':' + x.stato)")), ['fa2:avviabile', 'fb:avviabile', 'fa:chiusa']);
+    assert.equal(a.eval("repartoSituazione(getOdp('A'), getOdp('A').phases[0], 'chiusa').id"), 'terminata');
+  });
+  it('la scheda dice chi lavora e chi è in pausa; i centri in una barra', () => {
+    const a = app({ officina: true });
+    a.eval("timbraInizia('A', 'fa'); setView('reparto')");
+    const h = a.html('view-reparto');
+    assert.match(h, /reparto-centri/);
+    assert.match(h, /reparto-sit avviata/);
+    assert.match(h, /In lavorazione · tu/);
+    assert.match(h, /Inizio previsto/);
+    a.eval("timbraPausa('A', 'fa'); renderReparto()");
+    assert.match(a.html('view-reparto'), /In pausa/);
+  });
   it('la vista si disegna, e senza il modulo non si apre', () => {
     const a = app({ officina: true });
     a.eval("setView('reparto')");
