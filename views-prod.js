@@ -1302,6 +1302,8 @@ function odpAnnullaSave(id) {
 // di lavoro (dalla 0.116.0): finito il gesto si ridisegna la vista da cui si è
 // partiti, non sempre quella degli ordini di produzione.
 function opRidisegna() {
+  // La scheda di una fase aperta dal suo QR (officina.js) segue il gesto.
+  if (typeof repartoAggiornaScheda === 'function') repartoAggiornaScheda();
   if (typeof activeView !== 'undefined' && activeView === 'reparto' && typeof renderReparto === 'function') renderReparto();
   else if (typeof activeView !== 'undefined' && activeView === 'odl' && typeof renderOdl === 'function') renderOdl();
   else renderOdp();

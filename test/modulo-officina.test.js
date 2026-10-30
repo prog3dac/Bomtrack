@@ -71,10 +71,34 @@ describe('Terminale di reparto', () => {
     const h = a.html('view-reparto');
     assert.match(h, /reparto-centri/);
     assert.match(h, /reparto-sit avviata/);
-    assert.match(h, /In lavorazione · tu/);
+    assert.match(h, /In lavorazione da <span class="reparto-tempo"[^>]*data-tipo="sessione">0 h 00'<\/span> · tu/);
+    assert.match(h, /Tempo lavorato/);
     assert.match(h, /Inizio previsto/);
     a.eval("timbraPausa('A', 'fa'); renderReparto()");
     assert.match(a.html('view-reparto'), /In pausa/);
+  });
+  it('il tempo della sessione è la timbratura aperta più vecchia', () => {
+    const a = app({ officina: true }, { timeLogs: [
+      { id: 't1', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: '2026-10-27T08:00:00.000Z', endedAt: '2026-10-27T10:00:00.000Z', active: true },
+      { id: 't2', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: new Date(Date.now() - 90 * 60000).toISOString(), endedAt: null, active: true },
+      { id: 't3', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u2', startedAt: new Date(Date.now() - 30 * 60000).toISOString(), endedAt: null, active: true }] });
+    assert.equal(Math.round(a.eval("repartoOreSessione('A', 'fa')") * 60), 90);
+    assert.equal(Math.round(a.eval("oreTimbrate('A', 'fa')") * 60), 240);
+  });
+  it('ogni scheda ha il suo QR, che riapre la scheda della fase', () => {
+    const a = app({ officina: true });
+    a.eval(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'vendor', 'qrcode.js'), 'utf8'));
+    a.eval("setView('reparto')");
+    assert.match(a.html('view-reparto'), /class="reparto-qr"><svg[^]*?<span>ODP-A\/10<\/span>/);
+    const r = a.eval("(() => { const x = qrResolve('fase', 'ODP-A/10'); return x && x.rec.odp.id + ':' + x.rec.fase.id; })()");
+    assert.equal(r, 'A:fa');
+    assert.equal(a.eval("JSON.stringify(qrParse('https://x/app/#/q/fase/ODP-A%2F10'))"), JSON.stringify({ tipo: 'fase', codice: 'ODP-A/10' }));
+    assert.equal(a.eval("qrResolve('fase', 'ODP-A/90')"), null);
+    assert.equal(a.eval("qrApri({ tipo: 'fase', codice: 'ODP-A/10' })"), true);
+    const h = a.eval("qrSchedaHtml('fase', qrResolve('fase', 'ODP-A/10').rec)");
+    assert.match(h, /Fase 10 di ODP-A/);
+    assert.match(h, /id="reparto-qr-scheda"[^>]*>\s*<div class="reparto-card/);
+    assert.match(h, /repartoPausa\('A','fa'\)|repartoInizia\('A','fa'\)/);
   });
   it('la vista si disegna, e senza il modulo non si apre', () => {
     const a = app({ officina: true });

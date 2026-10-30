@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.131.0**
+**Versione dell'app documentata: 0.132.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2975,8 +2975,16 @@ quest'ordine:
 In cima a ogni scheda una riga colorata dice la **situazione**: *Da avviare* (blu), *Avviata*
 (giallo), *In ritardo* (rosso: secondo le date pianificate dell'ODP doveva già iniziare o finire),
 *Terminata* (verde). Sotto ci sono l'**inizio previsto** e la fine della fase, e la data in cui il
-pezzo serve. In fondo una riga dice se la fase è **in lavorazione** (e chi ci lavora) o **in
-pausa**.
+pezzo serve. Il riquadro dei numeri dice i pezzi e il **tempo lavorato**, cioè la somma delle
+timbrature di tutti, con le ore previste dal ciclo. In fondo una riga dice se la fase è **in
+lavorazione** (da quanto e chi ci lavora) o **in pausa**. I tempi si aggiornano da soli ogni minuto.
+
+**Stampa le schede** stampa le schede del centro scelto, due per riga; l'icona della stampante su
+una scheda stampa solo quella. Sul foglio ogni scheda porta un **QR** con il numero dell'ODP e la
+fase (`ODP-2026-014/20`): inquadrato con il telefono, o letto con *Scansiona*, apre la scheda di
+quella fase con i suoi pulsanti, qualunque sia il centro scelto. Perché la fotocamera del telefono
+sappia dove andare serve l'indirizzo dell'app in *Gestione › Etichette QR*, come per le altre
+etichette.
 
 - **Inizia** apre una **timbratura** a nome di chi è entrato. Se la fase non è ancora avviata,
   prima si apre la finestra di avvio di sempre (sulla prima fase esce il materiale), e la
@@ -2986,7 +2994,7 @@ pausa**.
   la stessa dell'ODP.
 
 Una persona ha **una sola** timbratura aperta: cominciare un'altra fase mette in pausa quella in
-corso. Ogni scheda dice anche i pezzi da fare, le ore timbrate e quelle previste dal ciclo. Il **QR**
+corso. Il **QR**
 dell'ODP, con il modulo acceso, porta gli stessi pulsanti. Le ore timbrate entrano nel
 **consuntivo** della commessa al posto delle ore del ciclo, e fanno scadere le manutenzioni «ogni
 N ore».

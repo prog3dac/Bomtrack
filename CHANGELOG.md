@@ -8,7 +8,9 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - i **centri di lavoro** (e le macchine, con il modulo Macchine utensili) sono in una **barra a sinistra**, ciascuno con il numero di fasi da lavorare; sul telefono la barra diventa una fila da scorrere sopra le schede. Prima erano in un menu a tendina;
 - ogni scheda ha in cima la **situazione**, su sfondo colorato: **da avviare** (blu), **avviata** (giallo), **in ritardo** (rosso: doveva iniziare o finire prima di oggi secondo le date pianificate dell'ODP), **terminata** (verde);
 - la scheda porta l'**inizio previsto** della fase (e la fine) dall'ODP, accanto alla data in cui il pezzo serve;
-- in fondo una riga dice se la fase è **in lavorazione**, e da chi, o **in pausa**;
+- il **tempo lavorato** sulla fase (la somma delle timbrature) è in evidenza accanto ai pezzi, con le ore previste dal ciclo;
+- in fondo una riga dice se la fase è **in lavorazione**, da quanto e da chi, o **in pausa**. I tempi si aggiornano da soli ogni minuto;
+- le schede si **stampano**: tutte quelle del centro scelto con *Stampa le schede*, o una sola con l'icona della stampante sulla scheda. Sul foglio ogni scheda ha il suo **QR**, che inquadrato apre proprio la scheda di quella fase con Inizia, Pausa e Fine. Il codice è il numero dell'ODP e la fase (`ODP-2026-014/20`), e si legge anche dal pulsante *Scansiona*;
 - compaiono anche le **fasi future** degli ODP lanciati, in attesa della fase precedente, ordinate per inizio previsto e senza pulsanti, e in fondo le fasi **terminate** degli ordini ancora aperti. Una timbratura rimasta aperta su una fase che un collega ha chiuso si può così ancora mettere in pausa.
 
 Nessun cambio a `supabase/schema.sql`.
