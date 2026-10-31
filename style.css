@@ -428,6 +428,9 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
    costo — la cui cella si impila in due campi (ore, tariffa) quando è orario
    — e le frecce di riordino in coda. */
 .cycle-op-row{grid-template-columns:52px minmax(126px,2fr) minmax(92px,1fr) 68px 184px 92px 80px 56px 32px}
+.cycle-op-nota{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim)}
+.cycle-op-nota span{white-space:nowrap}
+.cycle-op-nota input{flex:1;min-width:0}
 .cycle-op-time{display:flex;align-items:center;gap:4px}
 .cycle-op-time em{font-style:normal;font-size:11px;color:var(--text-dim)}
 .cycle-op-time-int{flex-direction:column;align-items:stretch;gap:3px}
@@ -1015,10 +1018,86 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .login-field input{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none}
 .login-field input:focus{border-color:var(--accent)}
 .login-field select{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px}
-.reparto-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
-.reparto-card{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--card)}
+/* Reparto (dalla 0.132.0): i centri in una barra a sinistra, che sul telefono
+   diventa una fila da scorrere sopra le schede. */
+.reparto-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;align-items:start}
+.reparto-centri{display:flex;flex-direction:column;gap:4px;position:sticky;top:12px}
+.reparto-centro{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);font-size:14px;text-align:left;cursor:pointer}
+.reparto-centro.sotto{margin-left:14px;font-size:13px;min-height:38px}
+.reparto-centro:hover{border-color:var(--accent-line)}
+.reparto-centro.on{background:var(--accent-soft-hi);border-color:var(--accent);font-weight:700}
+.reparto-centro-n{font-size:12px;font-weight:700;color:var(--text-dim);min-width:20px;text-align:right}
+@media(max-width:700px){
+  .reparto-layout{grid-template-columns:minmax(0,1fr)}
+  .reparto-centri{flex-direction:row;overflow-x:auto;position:static;padding-bottom:4px}
+  .reparto-centro{flex:0 0 auto;white-space:nowrap}
+  .reparto-centro.sotto{margin-left:0}
+}
+.reparto-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+/* Le colonne (dalla 0.132.0): una per codice, giorno o ODP, da scorrere di lato. */
+.reparto-ordina{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card)}
+.reparto-ordina>span{padding:0 10px;font-size:12px;color:var(--text-dim)}
+.reparto-ordina button{border:none;border-left:1px solid var(--border);background:transparent;color:var(--text);padding:8px 14px;font-size:14px;cursor:pointer;min-height:40px}
+.reparto-ordina button.on{background:var(--accent-soft-hi);color:var(--accent-solid);font-weight:700}
+/* Il reparto si guarda spesso su uno schermo grande: le colonne prendono la larghezza. */
+@media screen{body:has(#view-reparto.active) #app-main{max-width:1800px}}
+.reparto-colonne{display:flex;gap:12px;overflow-x:auto;align-items:flex-start;padding-bottom:8px;scroll-snap-type:x proximity}
+.reparto-col{flex:0 0 min(310px,86vw);display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:14px;background:color-mix(in srgb,var(--text) 4%,transparent);scroll-snap-align:start}
+.reparto-col.oggi{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.reparto-col-testa{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:4px 6px}
+.reparto-col-testa strong{display:block;font-size:15px}
+.reparto-col-testa div span{display:block;font-size:12px;color:var(--text-dim)}
+.reparto-card{border:1px solid var(--border);border-radius:12px;background:var(--card);overflow:hidden;display:flex;flex-direction:column}
 .reparto-card.attiva{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
-.reparto-testa{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.reparto-corpo{padding:12px 14px;flex:1}
+/* La situazione, in cima: blu da avviare, giallo avviata, rosso in ritardo, verde terminata. */
+.reparto-sit{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 14px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--text)}
+.reparto-sit span{text-transform:none;letter-spacing:0;font-size:12.5px}
+.reparto-sit.avviare{background:color-mix(in srgb,var(--accent) 24%,var(--card))}
+.reparto-sit.avviata{background:color-mix(in srgb,#F0C93A 42%,var(--card))}
+.reparto-sit.ritardo{background:color-mix(in srgb,var(--red) 28%,var(--card))}
+.reparto-sit.terminata{background:color-mix(in srgb,var(--green) 26%,var(--card))}
+/* Il lavoro, in fondo: in lavorazione o in pausa, adesso. */
+.reparto-lavoro{display:flex;align-items:center;gap:6px;padding:10px 14px;border-top:1px solid var(--border);font-size:14px;font-weight:700;color:var(--text-dim)}
+.reparto-lavoro.on{color:var(--green-solid);background:var(--green-soft)}
+.reparto-lavoro.pausa{color:var(--orange-solid);background:var(--orange-soft)}
+.reparto-codice{flex:1;min-width:0;font-family:var(--mono);font-size:22px;font-weight:800;letter-spacing:-.01em;line-height:1.15;overflow-wrap:anywhere}
+.reparto-descr{font-size:15px;font-weight:600;margin-bottom:6px}
+.reparto-fase{font-size:13.5px;color:var(--text-dim)}
+.reparto-fase strong{color:var(--text)}
+.reparto-odp{display:inline-block;margin:6px 0 2px;padding:3px 10px;border-radius:6px;background:var(--accent-soft-hi);color:var(--accent-solid);font-family:var(--mono);font-weight:700;font-size:14px}
+.reparto-date{font-size:13px;margin-top:4px}
+.reparto-nota{margin:8px 0 2px;padding:6px 10px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:4px;font-size:13.5px;white-space:pre-wrap}
+.reparto-numeri{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 2px;padding:8px 10px;border-radius:8px;background:var(--bg)}
+.reparto-numeri strong{font-size:17px;font-variant-numeric:tabular-nums}
+.reparto-num-l{display:block;font-size:11.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
+.reparto-num-di{font-size:12.5px;font-weight:400;color:var(--text-dim)}
+.reparto-testa>span{flex:1;min-width:0}
+.reparto-stampa{padding:2px 6px;min-height:0;flex:0 0 auto}
+#reparto-qr-scheda .reparto-stampa{display:none}
+.reparto-qr{display:none}
+/* Sul foglio (dalla 0.132.0): le schede, due per riga, ciascuna col suo QR in
+   alto a destra che apre la scheda della fase. I colori della situazione e
+   del lavoro si stampano: sono l'informazione, non decorazione. */
+@media print{
+  #view-reparto .reparto-centri,#view-reparto .rfq-warn,#view-reparto .reparto-azioni{display:none!important}
+  #view-reparto .reparto-layout{display:block}
+  #view-reparto .reparto-lista{grid-template-columns:1fr 1fr;gap:6mm}
+  #view-reparto .reparto-ordina{display:none!important}
+  #view-reparto .reparto-colonne{display:block;overflow:visible}
+  #view-reparto .reparto-col{display:grid;grid-template-columns:1fr 1fr;gap:6mm;background:none;box-shadow:none;padding:0;margin-bottom:6mm}
+  #view-reparto .reparto-col-testa{grid-column:1/-1;border-bottom:1px solid #888;padding:0 0 2px}
+  body.reparto-stampa-una #view-reparto .reparto-col:not(:has(.stampa-sola)){display:none}
+  body.reparto-stampa-una #view-reparto .reparto-col{grid-template-columns:1fr;max-width:130mm}
+  body.reparto-stampa-una #view-reparto .reparto-col-testa{display:none}
+  .reparto-card{break-inside:avoid;page-break-inside:avoid;box-shadow:none!important;border:1px solid #888!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .reparto-corpo{position:relative;padding-right:100px;min-height:104px}
+  .reparto-qr{display:flex;flex-direction:column;align-items:center;gap:2px;position:absolute;top:8px;right:8px;font-size:9px;font-family:var(--mono)}
+  .reparto-numeri{background:#f2f2f2}
+  body.reparto-stampa-una #view-reparto .reparto-card:not(.stampa-sola){display:none}
+  body.reparto-stampa-una #view-reparto .reparto-lista{grid-template-columns:1fr;max-width:130mm}
+}
+.reparto-testa{display:flex;gap:8px;align-items:flex-start;margin-bottom:4px}
 .reparto-azioni{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .reparto-btn{min-height:48px;font-size:16px;padding:0 18px;flex:1;justify-content:center}
 .login-profile-descr{font-size:12px;color:var(--text-dim);margin:4px 0 0}

@@ -52,6 +52,68 @@ describe('Terminale di reparto', () => {
       { id: 't2', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: '2026-10-27T11:00:00.000Z', endedAt: '2026-10-27T11:30:00.000Z', active: true }] });
     assert.equal(a.eval("oreTimbrate('A', 'fa')"), 2.5);
   });
+  it('la schermata: fasi future in attesa e terminate, con la situazione', () => {
+    const a = app({ officina: true });
+    a.eval(`const o = getOdp('A'); o.phases.push({ id: 'fa2', seq: 20, opIndex: 1, workCenterId: 'w1', wcName: 'Tornio', costMode: 'orario', hours: 1, rate: 50, cost: 0, plannedStart: '2026-11-05', plannedEnd: '2026-11-06' });
+      getOdp('B').phases[0].plannedStart = '2026-10-20'`);
+    assert.deepEqual(Array.from(a.eval("repartoFasi('').map(x => x.f.id)")), ['fa', 'fb']);
+    assert.deepEqual(Array.from(a.eval("repartoFasi('', true).map(x => x.f.id + ':' + x.stato)")), ['fa:corso', 'fb:avviabile', 'fa2:attesa']);
+    assert.equal(a.eval("repartoSituazione(getOdp('A'), getOdp('A').phases[0], 'corso').id"), 'avviata');
+    assert.equal(a.eval("repartoSituazione(getOdp('B'), getOdp('B').phases[0], 'avviabile').id"), 'ritardo');
+    assert.equal(a.eval("repartoSituazione(getOdp('A'), getOdp('A').phases[1], 'attesa').nota"), 'dopo la fase 10');
+    a.eval("opDichiara('A', 'fa', { qty: 12 })");
+    assert.deepEqual(Array.from(a.eval("repartoFasi('', true).map(x => x.f.id + ':' + x.stato)")), ['fa2:avviabile', 'fb:avviabile', 'fa:chiusa']);
+    assert.equal(a.eval("repartoSituazione(getOdp('A'), getOdp('A').phases[0], 'chiusa').id"), 'terminata');
+  });
+  it('la scheda dice chi lavora e chi è in pausa; i centri in una barra', () => {
+    const a = app({ officina: true });
+    a.eval("timbraInizia('A', 'fa'); setView('reparto')");
+    const h = a.html('view-reparto');
+    assert.match(h, /reparto-centri/);
+    assert.match(h, /reparto-sit avviata/);
+    assert.match(h, /In lavorazione da <span class="reparto-tempo"[^>]*data-tipo="sessione">0 h 00'<\/span> · tu/);
+    assert.match(h, /Tempo lavorato/);
+    assert.match(h, /Inizio previsto/);
+    a.eval("getOdp('A').phases[0].note = 'controllo al primo pezzo'; renderReparto()");
+    assert.match(a.html('view-reparto'), /class="reparto-nota"><span[^>]*>Note<\/span>controllo al primo pezzo/);
+    a.eval("timbraPausa('A', 'fa'); renderReparto()");
+    assert.match(a.html('view-reparto'), /In pausa/);
+  });
+  it('il tempo della sessione è la timbratura aperta più vecchia', () => {
+    const a = app({ officina: true }, { timeLogs: [
+      { id: 't1', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: '2026-10-27T08:00:00.000Z', endedAt: '2026-10-27T10:00:00.000Z', active: true },
+      { id: 't2', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: new Date(Date.now() - 90 * 60000).toISOString(), endedAt: null, active: true },
+      { id: 't3', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u2', startedAt: new Date(Date.now() - 30 * 60000).toISOString(), endedAt: null, active: true }] });
+    assert.equal(Math.round(a.eval("repartoOreSessione('A', 'fa')") * 60), 90);
+    assert.equal(Math.round(a.eval("oreTimbrate('A', 'fa')") * 60), 240);
+  });
+  it('ogni scheda ha il suo QR, che riapre la scheda della fase', () => {
+    const a = app({ officina: true });
+    a.eval(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'vendor', 'qrcode.js'), 'utf8'));
+    a.eval("setView('reparto')");
+    assert.match(a.html('view-reparto'), /class="reparto-qr"><svg[^]*?<span>ODP-A\/10<\/span>/);
+    const r = a.eval("(() => { const x = qrResolve('fase', 'ODP-A/10'); return x && x.rec.odp.id + ':' + x.rec.fase.id; })()");
+    assert.equal(r, 'A:fa');
+    assert.equal(a.eval("JSON.stringify(qrParse('https://x/app/#/q/fase/ODP-A%2F10'))"), JSON.stringify({ tipo: 'fase', codice: 'ODP-A/10' }));
+    assert.equal(a.eval("qrResolve('fase', 'ODP-A/90')"), null);
+    assert.equal(a.eval("qrApri({ tipo: 'fase', codice: 'ODP-A/10' })"), true);
+    const h = a.eval("qrSchedaHtml('fase', qrResolve('fase', 'ODP-A/10').rec)");
+    assert.match(h, /Fase 10 di ODP-A/);
+    assert.match(h, /id="reparto-qr-scheda"[^>]*>\s*<div class="reparto-card/);
+    assert.match(h, /repartoPausa\('A','fa'\)|repartoInizia\('A','fa'\)/);
+  });
+  it('le colonne: per codice, per giorno di inizio previsto, per ODP', () => {
+    const a = app({ officina: true });
+    a.eval(`getOdp('A').phases[0].plannedStart = '2026-10-28'; getOdp('B').phases[0].plannedStart = '2026-10-30';
+      getOdp('A').phases.push({ id: 'fa2', seq: 20, opIndex: 1, workCenterId: 'w1', wcName: 'Tornio', costMode: 'orario', hours: 1, rate: 50, cost: 0, plannedStart: '' })`);
+    const col = m => JSON.parse(a.eval(`JSON.stringify(repartoColonne(repartoFasi('', true), '${m}').map(c => c.titolo + ':' + c.fasi.map(x => x.f.id).join(',')))`));
+    assert.deepEqual(col('codice'), ['P1:fa,fa2,fb']);
+    assert.deepEqual(col('odp'), ['ODP-A:fa,fa2', 'ODP-B:fb']);
+    assert.deepEqual(col('data'), ['Mercoledì 28 ottobre:fa', 'Venerdì 30 ottobre:fb', 'Senza data:fa2']);
+    a.eval("repartoSetOrdine('odp')");
+    assert.match(a.html('view-reparto'), /class="reparto-colonne"[^]*ODP-A[^]*ODP-B/);
+    assert.match(a.html('view-reparto'), /aria-pressed="true" onclick="repartoSetOrdine\('odp'\)"/);
+  });
   it('la vista si disegna, e senza il modulo non si apre', () => {
     const a = app({ officina: true });
     a.eval("setView('reparto')");

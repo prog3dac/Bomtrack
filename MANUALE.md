@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.131.0**
+**Versione dell'app documentata: 0.132.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1389,7 +1389,7 @@ posto per infilarne una in mezzo).
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
 | **Trasporto (trasp.)** | Fase in **conto lavoro** (dalla 0.131.0): i giorni di trasporto verso e dal terzista, andata più ritorno. Proposti dal fornitore, si cambiano qui. In una tratta di più fasi consecutive dello stesso terzista vale quello della **prima** fase: il pezzo va e torna una volta sola, e sulle altre il campo è spento |
 | **Costo (€)** o **Tariffa (€/h)** | Secondo il modo scelto |
-| Nota | Testo libero, finisce sull'ordine di lavoro |
+| **Note per il reparto** | Testo libero, nella riga sotto la fase (dalla 0.132.0 si scrive anche qui, oltre che aggiungendo la fase). Finisce sull'ordine di lavoro e sull'ordine di produzione, che la congela al lancio, e si legge sulla scheda della fase in *Reparto* e sul foglio stampato |
 
 Il ciclo **non calcola giorni** (dalla 0.131.0): non sa quanti pezzi si faranno. I giorni di ogni fase li calcolano il fabbisogno, gli ordini di produzione e la capacità finita, dove la quantità c'è.
 
@@ -2964,9 +2964,33 @@ lavorate da allora.
 ### Terminale di reparto (modulo Officina, dalla 0.123.0)
 
 *Produzione → Reparto* è la schermata di chi lavora alla macchina, a pulsanti grandi per il
-telefono. Si sceglie il **centro** (l'app lo ricorda su quel dispositivo) e compaiono le fasi
-interne degli ODP lanciati che si possono lavorare adesso — *Avviabili* o *In corso* — per data di
-consegna.
+telefono. Si sceglie il **centro** nella barra a sinistra (sul telefono, la fila sopra le schede;
+l'app lo ricorda su quel dispositivo). Ogni centro dice quante fasi ha da lavorare. Compaiono, in
+quest'ordine:
+
+- le fasi interne che si possono lavorare adesso, per data di consegna;
+- le **fasi future**, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;
+- le fasi **terminate** degli ordini ancora aperti.
+
+**Ordina per**, in alto a destra, dispone le schede in **colonne** da scorrere di lato: *Codice*
+(una colonna per parte, con le sue fasi per consegna e numero di fase), *Data* (una per giorno di
+inizio previsto, con oggi evidenziato e in fondo le fasi senza data) o *ODP* (una per ordine, per
+data di consegna). Il dispositivo ricorda la scelta. Ogni scheda mostra in grande il **codice**,
+sotto la descrizione, la fase con centro e macchina, e l'**ODP** evidenziato.
+
+In cima a ogni scheda una riga colorata dice la **situazione**: *Da avviare* (blu), *Avviata*
+(giallo), *In ritardo* (rosso: secondo le date pianificate dell'ODP doveva già iniziare o finire),
+*Terminata* (verde). Sotto ci sono l'**inizio previsto** e la fine della fase, e la data in cui il
+pezzo serve. Il riquadro dei numeri dice i pezzi e il **tempo lavorato**, cioè la somma delle
+timbrature di tutti, con le ore previste dal ciclo. In fondo una riga dice se la fase è **in
+lavorazione** (da quanto e chi ci lavora) o **in pausa**. I tempi si aggiornano da soli ogni minuto.
+
+**Stampa le schede** stampa le schede del centro scelto, due per riga; l'icona della stampante su
+una scheda stampa solo quella. Sul foglio ogni scheda porta un **QR** con il numero dell'ODP e la
+fase (`ODP-2026-014/20`): inquadrato con il telefono, o letto con *Scansiona*, apre la scheda di
+quella fase con i suoi pulsanti, qualunque sia il centro scelto. Perché la fotocamera del telefono
+sappia dove andare serve l'indirizzo dell'app in *Gestione › Etichette QR*, come per le altre
+etichette.
 
 - **Inizia** apre una **timbratura** a nome di chi è entrato. Se la fase non è ancora avviata,
   prima si apre la finestra di avvio di sempre (sulla prima fase esce il materiale), e la
@@ -2976,7 +3000,7 @@ consegna.
   la stessa dell'ODP.
 
 Una persona ha **una sola** timbratura aperta: cominciare un'altra fase mette in pausa quella in
-corso. Ogni scheda dice i pezzi da fare, le ore timbrate e quelle previste dal ciclo. Il **QR**
+corso. Il **QR**
 dell'ODP, con il modulo acceso, porta gli stessi pulsanti. Le ore timbrate entrano nel
 **consuntivo** della commessa al posto delle ore del ciclo, e fanno scadere le manutenzioni «ogni
 N ore».

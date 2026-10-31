@@ -2,6 +2,21 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.132.0 — 2026-10-30
+
+**Il terminale di reparto si legge a colpo d'occhio.** In *Produzione → Reparto*:
+- i **centri di lavoro** (e le macchine, con il modulo Macchine utensili) sono in una **barra a sinistra**, ciascuno con il numero di fasi da lavorare; sul telefono la barra diventa una fila da scorrere sopra le schede. Prima erano in un menu a tendina;
+- ogni scheda ha in cima la **situazione**, su sfondo colorato: **da avviare** (blu), **avviata** (giallo), **in ritardo** (rosso: doveva iniziare o finire prima di oggi secondo le date pianificate dell'ODP), **terminata** (verde);
+- la scheda porta l'**inizio previsto** della fase (e la fine) dall'ODP, accanto alla data in cui il pezzo serve;
+- il **tempo lavorato** sulla fase (la somma delle timbrature) è in evidenza accanto ai pezzi, con le ore previste dal ciclo;
+- in fondo una riga dice se la fase è **in lavorazione**, da quanto e da chi, o **in pausa**. I tempi si aggiornano da soli ogni minuto;
+- le schede si **stampano**: tutte quelle del centro scelto con *Stampa le schede*, o una sola con l'icona della stampante sulla scheda. Sul foglio ogni scheda ha il suo **QR**, che inquadrato apre proprio la scheda di quella fase con Inizia, Pausa e Fine. Il codice è il numero dell'ODP e la fase (`ODP-2026-014/20`), e si legge anche dal pulsante *Scansiona*;
+- ogni fase del **ciclo** ha il campo **Note per il reparto**, nella riga sotto la fase e nella finestra *+ Lavorazione*. L'ODP le prende al lancio e la scheda di reparto le mostra in evidenza, anche stampata. Gli ODP già lanciati tengono le note che avevano;
+- **Ordina per** *Codice*, *Data* o *ODP*: le schede si dispongono in **colonne**, una per codice con le sue fasi, una per giorno di inizio previsto (oggi evidenziato, le fasi senza data in fondo) o una per ODP; la scelta resta sul dispositivo e la pagina usa tutta la larghezza dello schermo. Ogni scheda mette in evidenza il **codice**, poi descrizione, fase e macchina, e l'**ODP**;
+- compaiono anche le **fasi future** degli ODP lanciati, in attesa della fase precedente, ordinate per inizio previsto e senza pulsanti, e in fondo le fasi **terminate** degli ordini ancora aperti. Una timbratura rimasta aperta su una fase che un collega ha chiuso si può così ancora mettere in pausa.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.131.0 — 2026-10-30
 
 **Attrezzaggio, coda e trasporto si scrivono sulla fase del ciclo.** Prima l'attrezzaggio e la coda erano del centro di lavoro, uguali per tutte le sue fasi, e il trasporto era del fornitore. Ora:

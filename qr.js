@@ -29,6 +29,7 @@ const QR_TIPI = {
   oda: 'Ordine di acquisto',
   odl: 'Ordine di lavoro',
   ubi: 'Ubicazione',   // dalla 0.101.0: il QR sullo scaffale
+  fase: 'Fase di produzione',   // dalla 0.132.0: la scheda di reparto, «ODP-2026-014/20»
 };
 
 // ─── L'indirizzo ───
@@ -88,6 +89,16 @@ function qrResolve(tipo, codice) {
     odl: () => perNumero(db.workOrders),
     // Ultima: un codice nudo che è sia un articolo sia un'ubicazione è l'articolo.
     ubi: () => ubicazioneRec(c),
+    // Numero dell'ODP e fase, divisi dall'ultima barra. rec = { odp, fase }.
+    fase: () => {
+      const i = c.lastIndexOf('/');
+      if (i < 1) return null;
+      const n = c.slice(0, i).toLowerCase(), seq = c.slice(i + 1);
+      const odp = (db.prodOrders || []).find(o => String(o.number || '').trim().toLowerCase() === n)
+        || (db.prodOrders || []).find(o => o.id === c.slice(0, i));
+      const fase = odp && (odp.phases || []).find(f => String(f.seq) === seq || f.id === seq);
+      return fase ? { odp, fase } : null;
+    },
   };
   const tipi = tipo && cerca[tipo] ? [tipo] : Object.keys(cerca);
   for (const t of tipi) {
@@ -307,8 +318,10 @@ function qrApri(letto) {
   }
   // Un'ubicazione, un ODP o un ODL di un'area spenta: la scheda porterebbe a
   // finestre che non ci sono.
-  const vista = { ubi: 'stock', odp: 'odp', odl: 'odl' }[r.tipo];
+  const vista = { ubi: 'stock', odp: 'odp', odl: 'odl', fase: 'odp' }[r.tipo];
   if (vista && !vistaAttiva(vista)) { showToast(`${AREE[areaDiVista(vista)].nome}: area spenta in Gestione → Aree e moduli`, 'error'); return false; }
+  // Senza il modulo Officina la scheda di reparto non c'è: si apre l'ordine.
+  if (r.tipo === 'fase' && !moduloAttivo('officina')) { qrSchedaModal('odp', r.rec.odp); return true; }
   qrSchedaModal(r.tipo, r.rec);
   return true;
 }
@@ -322,6 +335,14 @@ function qrBtn(testo, icona, azione, primario) {
   return `<button class="${primario ? 'add-btn-sm' : 'btn-outline'}" onclick="closeModal(); ${azione}">${ico(icona, primario ? '' : 'tinted', '')} ${esc(testo)}</button>`;
 }
 function qrSchedaHtml(tipo, rec) {
+  // La scheda della fase è quella del reparto, con i suoi pulsanti; si
+  // ridisegna da sola a ogni gesto (repartoAggiornaScheda, officina.js).
+  if (tipo === 'fase') {
+    const { odp: o, fase: f } = rec;
+    return `<h3>${ico('factory', 'tinted pill', '')} Fase ${esc(String(f.seq))} di ${esc(o.number || '')}</h3>
+      <div id="reparto-qr-scheda" data-odp="${esc(o.id)}" data-fase="${esc(f.id)}">${f.supplierId ? '' : repartoCardHtml(o, f, opStatoFase(o, f))}</div>
+      <div class="qr-azioni">${qrBtn("Apri l'ordine", 'factory', `openOdpFromPlan('${o.id}')`)}</div>`;
+  }
   if (tipo === 'art') {
     const it = rec, u = itemUom(it);
     const bottoni = [qrBtn('Scheda completa', 'eye', `itemInfoModal('${it.id}')`)];

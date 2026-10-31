@@ -16,6 +16,10 @@
 // Ogni operatore timbra con il suo utente: una persona ha al più una
 // timbratura aperta, e cominciare una fase mette in pausa quella in corso.
 //
+// La schermata (dalla 0.132.0): i centri in una barra a sinistra; ogni scheda
+// ha in cima la situazione (da avviare, avviata, in ritardo sulle date
+// pianificate dell'ODP, terminata) e in fondo se si lavora o si è in pausa.
+//
 // ─── La manutenzione ───
 // Piani per centro (ogni N giorni, ogni N ore lavorate, o tutti e due) con i
 // ricambi di serie; gli interventi registrati, con i ricambi che escono dal
@@ -70,13 +74,66 @@ function repartoCentroScelto() {
   try { repartoCentro = localStorage.getItem(REPARTO_CENTRO_KEY) || ''; } catch (e) { repartoCentro = ''; }
   return repartoCentro;
 }
+// Come si dispongono le schede (dalla 0.132.0): in colonne per codice, per
+// giorno di inizio previsto o per ODP. Preferenza del dispositivo, come il centro.
+const REPARTO_ORDINI = { codice: 'Codice', data: 'Data', odp: 'ODP' };
+const REPARTO_ORDINE_KEY = 'bomtrack_reparto_ordine';
+let repartoOrdine = null;
+function repartoOrdineScelto() {
+  if (repartoOrdine != null) return repartoOrdine;
+  try { repartoOrdine = localStorage.getItem(REPARTO_ORDINE_KEY) || ''; } catch (e) { repartoOrdine = ''; }
+  if (!REPARTO_ORDINI[repartoOrdine]) repartoOrdine = 'data';
+  return repartoOrdine;
+}
+function repartoSetOrdine(o) {
+  repartoOrdine = REPARTO_ORDINI[o] ? o : 'data';
+  try { localStorage.setItem(REPARTO_ORDINE_KEY, repartoOrdine); } catch (e) { /* preferenza non salvata */ }
+  renderReparto();
+}
+// Le colonne: [{ chiave, titolo, sotto, oggi, fasi }]. Per codice, una colonna
+// per parte con le sue fasi in ordine di ODP e di fase; per data, una per
+// giorno di inizio previsto (le fasi senza data in fondo); per ODP, una per
+// ordine, per data di consegna, con le fasi in sequenza.
+function repartoColonne(fasi, ordine) {
+  const mappa = new Map();
+  const chiaveDi = x => ordine === 'codice' ? (x.o.itemId || x.o.code || '') : ordine === 'odp' ? x.o.id : String(x.f.plannedStart || '').slice(0, 10);
+  fasi.forEach(x => {
+    const k = chiaveDi(x);
+    if (!mappa.has(k)) mappa.set(k, []);
+    mappa.get(k).push(x);
+  });
+  const oggi = oggiISO();
+  const per = (a, b) => String(a).localeCompare(String(b));
+  const colonne = Array.from(mappa, ([chiave, lista]) => {
+    const { o } = lista[0];
+    if (ordine === 'codice') {
+      lista.sort((a, b) => per(a.o.dueDate || '9999', b.o.dueDate || '9999') || per(a.o.number, b.o.number) || a.f.seq - b.f.seq);
+      return { chiave, ordina: o.code || '', titolo: o.code || '—', sotto: o.name || '', fasi: lista };
+    }
+    if (ordine === 'odp') {
+      lista.sort((a, b) => a.f.seq - b.f.seq);
+      return { chiave, ordina: (o.dueDate || '9999') + '|' + (o.number || ''), titolo: o.number || '', sotto: `${o.code || ''}${o.dueDate ? ' · serve il ' + fmtDateIt(o.dueDate) : ''}`, fasi: lista };
+    }
+    lista.sort((a, b) => REPARTO_GRUPPO[a.stato] - REPARTO_GRUPPO[b.stato] || per(a.o.dueDate || '9999', b.o.dueDate || '9999') || per(a.o.number, b.o.number));
+    if (!chiave) return { chiave, ordina: '9999', titolo: 'Senza data', sotto: 'fasi non pianificate', fasi: lista };
+    const g = new Date(chiave + 'T00:00:00');
+    const nome = isFinite(g) ? g.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }) : chiave;
+    return { chiave, ordina: chiave, titolo: nome.charAt(0).toUpperCase() + nome.slice(1), sotto: chiave === oggi ? 'oggi' : chiave < oggi ? 'giorno passato' : '', oggi: chiave === oggi, fasi: lista };
+  });
+  return colonne.sort((a, b) => per(a.ordina, b.ordina));
+}
 function repartoSetCentro(id) {
   repartoCentro = id || '';
   try { localStorage.setItem(REPARTO_CENTRO_KEY, repartoCentro); } catch (e) { /* preferenza non salvata */ }
   renderReparto();
 }
-// Le fasi interne su cui si può lavorare adesso: avviabili o in corso.
-function repartoFasi(centroId) {
+// Le fasi interne su cui si può lavorare adesso: avviabili o in corso. Con
+// `tutte` (la schermata, dalla 0.132.0) anche le fasi future, in attesa della
+// precedente, per inizio previsto, e in fondo quelle già terminate degli
+// ordini ancora aperti: una timbratura rimasta aperta su una fase che un
+// collega ha chiuso si può ancora fermare.
+const REPARTO_GRUPPO = { avviabile: 0, corso: 0, attesa: 1, chiusa: 2 };
+function repartoFasi(centroId, tutte) {
   const out = [];
   (db.prodOrders || []).forEach(o => {
     if (!ODP_APERTI.includes(o.status)) return;
@@ -85,12 +142,54 @@ function repartoFasi(centroId) {
       // Il filtro è un centro, o una macchina («m:<id>», modulo Macchine utensili).
       if (centroId && (String(centroId).startsWith('m:') ? f.machineId !== centroId.slice(2) : f.workCenterId !== centroId)) return;
       const stato = opStatoFase(o, f);
-      if (stato !== 'avviabile' && stato !== 'corso') return;
+      if (stato !== 'avviabile' && stato !== 'corso' && !tutte) return;
       out.push({ o, f, stato });
     });
   });
-  return out.sort((a, b) => String(a.o.dueDate || '9999').localeCompare(String(b.o.dueDate || '9999'))
+  return out.sort((a, b) => REPARTO_GRUPPO[a.stato] - REPARTO_GRUPPO[b.stato]
+    || (a.stato === 'attesa' ? String(a.f.plannedStart || '9999').localeCompare(String(b.f.plannedStart || '9999')) : 0)
+    || String(a.o.dueDate || '9999').localeCompare(String(b.o.dueDate || '9999'))
     || String(a.o.number).localeCompare(String(b.o.number)) || (a.f.seq - b.f.seq));
+}
+// La situazione della fase, nella riga in cima alla scheda (dalla 0.132.0):
+// da avviare, avviata, in ritardo sulle date pianificate dell'ODP, terminata.
+// Il ritardo vince sugli altri due: una fase non partita che doveva partire,
+// o una che doveva già finire.
+function repartoSituazione(o, f, stato) {
+  if (stato === 'chiusa') return { id: 'terminata', label: 'Terminata', nota: '' };
+  const oggi = oggiISO();
+  const avviata = stato === 'corso';
+  if (f.plannedEnd && f.plannedEnd < oggi) return { id: 'ritardo', label: 'In ritardo', nota: `doveva finire il ${fmtDateIt(f.plannedEnd)}` };
+  if (!avviata && f.plannedStart && f.plannedStart < oggi) return { id: 'ritardo', label: 'In ritardo', nota: `doveva iniziare il ${fmtDateIt(f.plannedStart)}` };
+  if (avviata) return { id: 'avviata', label: 'Avviata', nota: '' };
+  const prec = stato === 'attesa' ? opPrecedente(o, f) : null;
+  return { id: 'avviare', label: 'Da avviare', nota: prec ? `dopo la fase ${prec.seq}` : '' };
+}
+// Da quanto si lavora senza interruzioni: dalla timbratura aperta più vecchia
+// della fase. Zero se nessuno ci lavora.
+function repartoOreSessione(odpId, faseId) {
+  const aperti = logsDiFase(odpId, faseId).filter(l => !l.endedAt);
+  return aperti.reduce((m, l) => Math.max(m, logOre(l)), 0);
+}
+// I tempi delle schede si aggiornano da soli ogni minuto, senza ridisegnare la
+// schermata: chi sta scrivendo una nota o ha il fuoco su un pulsante non lo perde.
+function repartoTempo(odpId, faseId, tipo) {
+  const v = tipo === 'sessione' ? repartoOreSessione(odpId, faseId) : oreTimbrate(odpId, faseId);
+  return `<span class="reparto-tempo" data-odp="${esc(odpId)}" data-fase="${esc(faseId)}" data-tipo="${tipo}">${fmtOre(v)}</span>`;
+}
+function repartoAggiornaTempi() {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll('#view-reparto .reparto-tempo, #reparto-qr-scheda .reparto-tempo').forEach(el => {
+    const v = el.dataset.tipo === 'sessione' ? repartoOreSessione(el.dataset.odp, el.dataset.fase) : oreTimbrate(el.dataset.odp, el.dataset.fase);
+    el.textContent = fmtOre(v);
+  });
+}
+let _repartoGiro = null;
+// Chi ci sta lavorando adesso: le timbrature aperte sulla fase, «tu» per primo.
+function repartoChiLavora(o, f, chi) {
+  const aperti = timeLogs().filter(l => !l.endedAt && l.odpId === o.id && l.phaseId === f.id);
+  const nomi = aperti.map(l => l.userId === chi ? 'tu' : ((typeof getUser === 'function' && getUser(l.userId) || {}).name || 'un collega'));
+  return nomi.sort((a, b) => (b === 'tu') - (a === 'tu'));
 }
 function repartoInizia(odpId, faseId) {
   const o = getOdp(odpId); const f = o && (o.phases || []).find(x => x.id === faseId);
@@ -115,6 +214,83 @@ function fmtOre(h) {
   return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}'`;
 }
 
+// La scheda di una fase: la stessa nella schermata, nella scheda rapida del
+// suo QR e sul foglio stampato.
+function repartoCardHtml(o, f, stato) {
+  const chi = utenteId();
+  const scrive = canWriteShop('docs');
+  const conMacchine = moduloAttivo('macchine');
+  const aperto = logApertoDiFase(o.id, f.id, chi);
+  const sit = repartoSituazione(o, f, stato);
+  const lavorano = repartoChiLavora(o, f, chi);
+  const ore = oreTimbrate(o.id, f.id);
+  const attesa = stato === 'attesa';
+  const pezzi = attesa ? opAttesiFase(o, f) : opDaFare(o, f);
+  const previste = (Number(f.hours) || 0) * pezzi;
+  const bottoni = !scrive ? '' : aperto
+    ? `<button class="add-btn-sm reparto-btn" onclick="repartoPausa('${o.id}','${f.id}')">${ico('clock', '', '')} Pausa</button>
+       ${stato !== 'chiusa' ? `<button class="btn-outline reparto-btn" onclick="repartoFine('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Fine e dichiara</button>` : ''}`
+    : stato === 'chiusa' || attesa ? ''
+    : `<button class="add-btn-sm reparto-btn" onclick="repartoInizia('${o.id}','${f.id}')">${ico('factory', '', '')} ${stato === 'corso' && ore > 0 ? 'Riprendi' : 'Inizia'}</button>
+       ${stato === 'corso' ? `<button class="btn-outline reparto-btn" onclick="opDichiaraModal('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Dichiara</button>` : ''}`;
+  // La riga in fondo: si lavora o no, adesso. Una fase terminata la mostra
+  // solo se qualcuno ha ancora una timbratura aperta.
+  const lavoro = lavorano.length
+    ? `<div class="reparto-lavoro on">${ico('factory', '', '')} <span>In lavorazione da ${repartoTempo(o.id, f.id, 'sessione')} · ${esc(lavorano.join(', '))}</span></div>`
+    : stato === 'corso' ? `<div class="reparto-lavoro pausa">${ico('clock', '', '')} <span>In pausa${ore > 0 ? '' : ' · nessuna timbratura'}</span></div>`
+    : stato === 'avviabile' ? `<div class="reparto-lavoro">Non ancora iniziata</div>`
+    : attesa ? `<div class="reparto-lavoro">In attesa · ${esc(opAvviabile(o, f).motivo || '')}</div>` : '';
+  const codiceQr = repartoCodiceQr(o, f);
+  return `<div class="reparto-card${lavorano.length ? ' attiva' : ''}" data-odp="${esc(o.id)}" data-fase="${esc(f.id)}">
+    <div class="reparto-sit ${sit.id}"><strong>${esc(sit.label)}</strong>${sit.nota ? `<span>${esc(sit.nota)}</span>` : ''}</div>
+    <div class="reparto-corpo">
+    <div class="reparto-testa"><span class="reparto-codice">${esc(o.code || '')}</span>
+      <button type="button" class="btn-ghost reparto-stampa" onclick="repartoStampa('${o.id}','${f.id}')" title="Stampa questa scheda, con il suo QR" aria-label="Stampa la scheda">${ico('printer', 'tinted', '')}</button></div>
+    <div class="reparto-descr">${esc(o.name || '')}</div>
+    <div class="reparto-fase">Fase <strong>${esc(String(f.seq))}</strong> · ${esc(f.wcName || '')}${conMacchine && f.machineId ? ` · ${ico('wrench', 'tinted', '')} ${esc(machineLabel(getMachine(f.machineId)) || f.machineName || '')}` : ''}</div>
+    <div class="reparto-odp">${esc(o.number || '')}</div>
+    <div class="reparto-date">Inizio previsto <strong>${f.plannedStart ? esc(fmtDateIt(f.plannedStart)) : 'non pianificato'}</strong>${f.plannedEnd ? ` · fine ${esc(fmtDateIt(f.plannedEnd))}` : ''}${o.dueDate ? ` · serve il ${esc(fmtDateIt(o.dueDate))}` : ''}</div>
+    <div class="reparto-numeri">
+      <div><span class="reparto-num-l">${stato === 'chiusa' ? 'Fatti' : attesa ? 'Attesi' : 'Da fare'}</span>
+        <strong>${stato === 'chiusa' ? fmtQtyIt(opFatti(o, f)) : attesa ? fmtQtyIt(pezzi) : `${fmtQtyIt(opResidua(o, f))} <span class="reparto-num-di">di ${fmtQtyIt(opDaFare(o, f))}</span>`} pz</strong></div>
+      <div><span class="reparto-num-l">Tempo lavorato</span>
+        <strong>${repartoTempo(o.id, f.id, 'totale')}</strong>${previste > 0 ? ` <span class="reparto-num-di">su ${fmtOre(previste)} previste</span>` : ''}</div>
+    </div>
+    ${f.note ? `<div class="reparto-nota"><span class="reparto-num-l">Note</span>${esc(f.note)}</div>` : ''}
+    ${bottoni ? `<div class="reparto-azioni">${bottoni}</div>` : ''}
+    ${typeof qrSvg === 'function' && qrDisponibile() ? `<div class="reparto-qr">${qrSvg(qrLink('fase', codiceQr), 96)}<span>${esc(codiceQr)}</span></div>` : ''}
+    </div>
+    ${lavoro}</div>`;
+}
+
+// Il codice del QR della scheda (dalla 0.132.0): numero dell'ODP e fase,
+// leggibili a occhio come gli altri codici (qr.js).
+function repartoCodiceQr(o, f) { return `${o.number || o.id}/${f.seq}`; }
+// La scheda aperta dal suo QR, se c'è, segue i gesti come la schermata.
+function repartoAggiornaScheda() {
+  const el = typeof document !== 'undefined' && document.getElementById('reparto-qr-scheda');
+  if (!el) return;
+  const o = getOdp(el.dataset.odp); const f = o && (o.phases || []).find(x => x.id === el.dataset.fase);
+  if (f) el.innerHTML = repartoCardHtml(o, f, opStatoFase(o, f));
+}
+// Stampa: tutte le schede della schermata (il centro scelto), o una sola.
+function repartoStampa(odpId, faseId) {
+  if (typeof document === 'undefined') return;
+  const una = !!(odpId && faseId);
+  document.body.classList.add('reparto-stampa');
+  if (una) {
+    document.body.classList.add('reparto-stampa-una');
+    document.querySelectorAll('#view-reparto .reparto-card').forEach(c => c.classList.toggle('stampa-sola', c.dataset.odp === odpId && c.dataset.fase === faseId));
+  }
+  const pulisci = () => {
+    document.body.classList.remove('reparto-stampa', 'reparto-stampa-una');
+    document.querySelectorAll('.reparto-card.stampa-sola').forEach(c => c.classList.remove('stampa-sola'));
+    window.removeEventListener('afterprint', pulisci);
+  };
+  window.addEventListener('afterprint', pulisci);
+  printView();
+}
+
 function renderReparto() {
   const host = document.getElementById('view-reparto'); if (!host) return;
   invalidateCaches();
@@ -122,41 +298,37 @@ function renderReparto() {
   let centro = repartoCentroScelto();
   const conMacchine = moduloAttivo('macchine');
   if (centro && !(centro.startsWith('m:') ? conMacchine && machines().some(m => 'm:' + m.id === centro) : centri.some(w => w.id === centro))) centro = '';
-  const fasi = repartoFasi(centro);
+  const fasi = repartoFasi(centro, true);
+  const ordine = repartoOrdineScelto();
   const chi = utenteId();
   const mio = logAperto(chi);
-  const scrive = canWriteShop('docs');
-  const card = ({ o, f, stato }) => {
-    const aperto = logApertoDiFase(o.id, f.id, chi);
-    const altri = timeLogs().filter(l => !l.endedAt && l.odpId === o.id && l.phaseId === f.id && l.userId !== chi).length;
-    const ore = oreTimbrate(o.id, f.id);
-    const previste = (Number(f.hours) || 0) * opDaFare(o, f);
-    const bottoni = !scrive ? '' : aperto
-      ? `<button class="add-btn-sm reparto-btn" onclick="repartoPausa('${o.id}','${f.id}')">${ico('clock', '', '')} Pausa</button>
-         <button class="btn-outline reparto-btn" onclick="repartoFine('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Fine e dichiara</button>`
-      : `<button class="add-btn-sm reparto-btn" onclick="repartoInizia('${o.id}','${f.id}')">${ico('factory', '', '')} ${stato === 'corso' && ore > 0 ? 'Riprendi' : 'Inizia'}</button>
-         ${stato === 'corso' ? `<button class="btn-outline reparto-btn" onclick="opDichiaraModal('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Dichiara</button>` : ''}`;
-    return `<div class="reparto-card${aperto ? ' attiva' : ''}">
-      <div class="reparto-testa"><strong>${esc(o.number || '')}</strong> · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}${conMacchine && f.machineId ? ' · ' + esc(machineLabel(getMachine(f.machineId)) || f.machineName || '') : ''}
-        <span class="doc-badge">${aperto ? 'In lavorazione' : esc(ODP_FASE_LABELS[stato] || stato)}</span></div>
-      <div>${esc(o.code || '')} ${esc(o.name || '')}${o.dueDate ? ` <span class="empty-text" style="padding:0">· serve il ${esc(fmtDateIt(o.dueDate))}</span>` : ''}</div>
-      <div class="empty-text" style="text-align:left;padding:4px 0">Da fare ${fmtQtyIt(opResidua(o, f))} di ${fmtQtyIt(opDaFare(o, f))} pz · timbrate ${fmtOre(ore)}${previste > 0 ? ` su ${fmtOre(previste)} previste` : ''}${altri ? ` · ${altri === 1 ? 'un collega ci sta lavorando' : altri + ' colleghi ci stanno lavorando'}` : ''}</div>
-      ${f.note ? `<div class="empty-text" style="text-align:left;padding:0 0 4px">${esc(f.note)}</div>` : ''}
-      <div class="reparto-azioni">${bottoni}</div></div>`;
+  // La barra dei centri: ognuno con le fasi da lavorare (non le terminate).
+  const voce = (id, nome, sotto) => {
+    const n = repartoFasi(id).length;
+    const on = id === centro;
+    return `<button type="button" class="reparto-centro${sotto ? ' sotto' : ''}${on ? ' on' : ''}" aria-pressed="${on}" onclick="repartoSetCentro('${esc(id)}')">
+      <span>${sotto ? '↳ ' : ''}${esc(nome)}</span><span class="reparto-centro-n">${n}</span></button>`;
   };
+  const barra = voce('', 'Tutti i centri') + centri.map(w => voce(w.id, w.name)
+    + (conMacchine ? macchineDelCentro(w.id).filter(m => m.active !== false).map(m => voce('m:' + m.id, machineLabel(m), true)).join('') : '')).join('');
+  if (!_repartoGiro && typeof setInterval === 'function') _repartoGiro = setInterval(repartoAggiornaTempi, 60000);
   host.innerHTML = `<div class="manage-wrap">
     <div class="bom-toolbar"><div class="bom-toolbar-left">
-      <h2 class="section-title">${ico('factory', 'tinted pill', '')} Reparto</h2></div></div>
-    <div class="catalog-filters">
-      <select onchange="repartoSetCentro(this.value)" aria-label="Centro di lavoro">
-        <option value="">Tutti i centri</option>
-        ${centri.map(w => `<option value="${esc(w.id)}" ${w.id === centro ? 'selected' : ''}>${esc(w.name)}</option>`
-          + (conMacchine ? macchineDelCentro(w.id).filter(m => m.active !== false).map(m => `<option value="m:${esc(m.id)}" ${'m:' + m.id === centro ? 'selected' : ''}>&nbsp;&nbsp;↳ ${esc(machineLabel(m))}</option>`).join('') : '')).join('')}
-      </select>
+      <h2 class="section-title">${ico('factory', 'tinted pill', '')} Reparto</h2></div>
+      <div class="bom-toolbar-right"><div class="reparto-ordina" role="group" aria-label="Ordina le schede per"><span>Ordina per</span>${Object.keys(REPARTO_ORDINI).map(k => `<button type="button" class="${k === ordine ? 'on' : ''}" aria-pressed="${k === ordine}" onclick="repartoSetOrdine('${k}')">${REPARTO_ORDINI[k]}</button>`).join('')}</div>
+        <button class="btn-outline" onclick="repartoStampa()" ${fasi.length ? '' : 'disabled'}>${ico('printer', 'tinted', '')} Stampa le schede</button></div></div>
+    <div class="reparto-layout">
+      <nav class="reparto-centri" aria-label="Centri di lavoro">${barra}</nav>
+      <div>
+        ${mio && !fasi.some(x => x.o.id === mio.odpId && x.f.id === mio.phaseId) ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Hai una timbratura aperta su un'altra fase: ${esc((getOdp(mio.odpId) || {}).number || '')}. Cominciando questa, quella va in pausa.</div>` : ''}
+        ${fasi.length ? `<div class="reparto-colonne">${repartoColonne(fasi, ordine).map(c => `<section class="reparto-col${c.oggi ? ' oggi' : ''}">
+          <header class="reparto-col-testa"><div><strong>${esc(c.titolo)}</strong>${c.sotto ? `<span>${esc(c.sotto)}</span>` : ''}</div><span class="reparto-centro-n">${c.fasi.length}</span></header>
+          ${c.fasi.map(x => repartoCardHtml(x.o, x.f, x.stato)).join('')}</section>`).join('')}</div>` : ''}
+        <div class="reparto-lista">${fasi.length ? '' : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
+      </div>
     </div>
-    ${mio && !fasi.some(x => x.o.id === mio.odpId && x.f.id === mio.phaseId) ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Hai una timbratura aperta su un'altra fase: ${esc((getOdp(mio.odpId) || {}).number || '')}. Cominciando questa, quella va in pausa.</div>` : ''}
-    <div class="reparto-lista">${fasi.length ? fasi.map(card).join('') : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
   </div>`;
+  repartoAggiornaScheda();
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -1758,6 +1758,9 @@ function cycleOpsTable(opRows) {
         <button class="mini-btn" title="Sposta giù" onclick="moveCycleOp(${k},1)" ${k === last ? 'disabled' : ''}>↓</button>
       </span>
       <button class="mini-btn danger" title="Elimina" onclick="delCycleRow(${i})">${ico('trash', 'tinted', 'Elimina')}</button>
+      <label class="cycle-op-nota"><span>Note per il reparto</span><input type="text" maxlength="500" value="${esc(r.note || '')}" id="cyc-opnote-${i}"
+        placeholder="es. controllare il diametro ogni 10 pezzi" title="Vanno sull'ordine di produzione al lancio, e sulla scheda della fase in Reparto"
+        onchange="updateCycleNote(${i})"></label>
     </div>`;
   }).join('');
 }
@@ -1885,6 +1888,16 @@ function updateCycleRow(idx) {
   touch(it); saveDB();
   refreshCycleCosts(it);
 }
+// Le note della fase (dalla 0.132.0): le istruzioni per chi la lavora. Le
+// porta l'ODP, che le congela al lancio come il resto della fase, e le mostra
+// la scheda di reparto.
+function updateCycleNote(idx) {
+  const it = currentCycleItem(); if (!it) return;
+  if (!roleGuard('catalog')) { renderCycles(); return; }
+  const row = (it.cycle || [])[idx]; if (!row || row.kind !== 'op') return;
+  row.note = val('cyc-opnote-' + idx).trim();
+  touch(it); saveDB();
+}
 // Cambiare il fornitore di una lavorazione a costo orario ripropone la
 // tariffa (quella registrata per quel fornitore sul centro di lavoro, o
 // quella del centro) prima di salvare — resta comunque un campo modificabile.
@@ -1985,6 +1998,7 @@ function addCycleOpRow() {
     <div class="modal-grid" id="cyc-opmode-orario" style="display:none">
       <div class="modal-field"><label>Tariffa (${cur()}/h)</label><input type="number" id="cyc-oprate" min="0" step="0.5" value="0"></div>
     </div>
+    <div class="modal-field"><label>Note per il reparto</label><input type="text" id="cyc-opnote" maxlength="500" placeholder="es. controllare il diametro ogni 10 pezzi" autocomplete="off"></div>
     <div class="cycle-actions">
       <button class="btn-ghost" onclick="closeCyclePicker()">Annulla</button>
       <button class="add-btn-sm" onclick="pickCycleOp()">Aggiungi</button>
@@ -2048,7 +2062,7 @@ function pickCycleOp() {
   const row = { kind: 'op', workCenterId: wcId, supplierId,
     costMode: orario ? 'orario' : 'fisso',
     hours: (!esterna || orario) ? numVal('cyc-ophours', 0) : 0,
-    days: esterna ? numVal('cyc-opdays', 0) : 0, note: '' };
+    days: esterna ? numVal('cyc-opdays', 0) : 0, note: val('cyc-opnote').trim() };
   if (!esterna) row.operators = Math.max(1, Math.round(numVal('cyc-opop', 1)));
   // Tutte e tre su ogni fase, a zero dove non servono, come le scrive la
   // migrazione: la colonna c'è per tutte le righe.

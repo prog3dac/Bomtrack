@@ -187,6 +187,22 @@ describe('Righe: aggiunta, modifica, eliminazione', () => {
     approx(app.eval('costOf("p").total'), 3 * 2 + 5 + 10 + 20 + 30 + 7);
   });
 
+  it('le note della fase: si scrivono aggiungendola e sulla riga, e il lancio dell\'ODP le porta', () => {
+    const app = conDb(dbMisto());
+    app.eval('currentCycleItemId = "p"');
+    app.el('cyc-wc').value = 'w1';
+    app.el('cyc-opnote').value = '  sbavare i fori  ';
+    app.eval('pickCycleOp()');
+    assert.equal(app.eval('getItem("p").cycle[5].note'), 'sbavare i fori');
+    app.eval('renderCycles()');
+    app.el('cyc-opnote-1').value = 'controllo al primo pezzo';
+    app.eval('updateCycleNote(1)');
+    assert.equal(app.eval('getItem("p").cycle[1].note'), 'controllo al primo pezzo');
+    assert.equal(app.eval('getItem("p").cycle[1].cost'), 10, 'la nota non tocca il resto della fase');
+    const fasi = JSON.parse(app.eval('JSON.stringify(opFreezePhases(getItem("p")).map(f => f.note))'));
+    assert.deepEqual(fasi, ['controllo al primo pezzo', '', '', 'sbavare i fori']);
+  });
+
   it('la quantità di una riga della distinta della parte si cambia dalla Distinta, e il costo segue', () => {
     const app = conDb(dbMisto());
     app.eval('currentBomId = "p"; editComponentModal(0)');
