@@ -74,6 +74,54 @@ function repartoCentroScelto() {
   try { repartoCentro = localStorage.getItem(REPARTO_CENTRO_KEY) || ''; } catch (e) { repartoCentro = ''; }
   return repartoCentro;
 }
+// Come si dispongono le schede (dalla 0.132.0): in colonne per codice, per
+// giorno di inizio previsto o per ODP. Preferenza del dispositivo, come il centro.
+const REPARTO_ORDINI = { codice: 'Codice', data: 'Data', odp: 'ODP' };
+const REPARTO_ORDINE_KEY = 'bomtrack_reparto_ordine';
+let repartoOrdine = null;
+function repartoOrdineScelto() {
+  if (repartoOrdine != null) return repartoOrdine;
+  try { repartoOrdine = localStorage.getItem(REPARTO_ORDINE_KEY) || ''; } catch (e) { repartoOrdine = ''; }
+  if (!REPARTO_ORDINI[repartoOrdine]) repartoOrdine = 'data';
+  return repartoOrdine;
+}
+function repartoSetOrdine(o) {
+  repartoOrdine = REPARTO_ORDINI[o] ? o : 'data';
+  try { localStorage.setItem(REPARTO_ORDINE_KEY, repartoOrdine); } catch (e) { /* preferenza non salvata */ }
+  renderReparto();
+}
+// Le colonne: [{ chiave, titolo, sotto, oggi, fasi }]. Per codice, una colonna
+// per parte con le sue fasi in ordine di ODP e di fase; per data, una per
+// giorno di inizio previsto (le fasi senza data in fondo); per ODP, una per
+// ordine, per data di consegna, con le fasi in sequenza.
+function repartoColonne(fasi, ordine) {
+  const mappa = new Map();
+  const chiaveDi = x => ordine === 'codice' ? (x.o.itemId || x.o.code || '') : ordine === 'odp' ? x.o.id : String(x.f.plannedStart || '').slice(0, 10);
+  fasi.forEach(x => {
+    const k = chiaveDi(x);
+    if (!mappa.has(k)) mappa.set(k, []);
+    mappa.get(k).push(x);
+  });
+  const oggi = oggiISO();
+  const per = (a, b) => String(a).localeCompare(String(b));
+  const colonne = Array.from(mappa, ([chiave, lista]) => {
+    const { o } = lista[0];
+    if (ordine === 'codice') {
+      lista.sort((a, b) => per(a.o.dueDate || '9999', b.o.dueDate || '9999') || per(a.o.number, b.o.number) || a.f.seq - b.f.seq);
+      return { chiave, ordina: o.code || '', titolo: o.code || '—', sotto: o.name || '', fasi: lista };
+    }
+    if (ordine === 'odp') {
+      lista.sort((a, b) => a.f.seq - b.f.seq);
+      return { chiave, ordina: (o.dueDate || '9999') + '|' + (o.number || ''), titolo: o.number || '', sotto: `${o.code || ''}${o.dueDate ? ' · serve il ' + fmtDateIt(o.dueDate) : ''}`, fasi: lista };
+    }
+    lista.sort((a, b) => REPARTO_GRUPPO[a.stato] - REPARTO_GRUPPO[b.stato] || per(a.o.dueDate || '9999', b.o.dueDate || '9999') || per(a.o.number, b.o.number));
+    if (!chiave) return { chiave, ordina: '9999', titolo: 'Senza data', sotto: 'fasi non pianificate', fasi: lista };
+    const g = new Date(chiave + 'T00:00:00');
+    const nome = isFinite(g) ? g.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }) : chiave;
+    return { chiave, ordina: chiave, titolo: nome.charAt(0).toUpperCase() + nome.slice(1), sotto: chiave === oggi ? 'oggi' : chiave < oggi ? 'giorno passato' : '', oggi: chiave === oggi, fasi: lista };
+  });
+  return colonne.sort((a, b) => per(a.ordina, b.ordina));
+}
 function repartoSetCentro(id) {
   repartoCentro = id || '';
   try { localStorage.setItem(REPARTO_CENTRO_KEY, repartoCentro); } catch (e) { /* preferenza non salvata */ }
@@ -251,6 +299,7 @@ function renderReparto() {
   const conMacchine = moduloAttivo('macchine');
   if (centro && !(centro.startsWith('m:') ? conMacchine && machines().some(m => 'm:' + m.id === centro) : centri.some(w => w.id === centro))) centro = '';
   const fasi = repartoFasi(centro, true);
+  const ordine = repartoOrdineScelto();
   const chi = utenteId();
   const mio = logAperto(chi);
   // La barra dei centri: ognuno con le fasi da lavorare (non le terminate).
@@ -266,12 +315,16 @@ function renderReparto() {
   host.innerHTML = `<div class="manage-wrap">
     <div class="bom-toolbar"><div class="bom-toolbar-left">
       <h2 class="section-title">${ico('factory', 'tinted pill', '')} Reparto</h2></div>
-      <div class="bom-toolbar-right"><button class="btn-outline" onclick="repartoStampa()" ${fasi.length ? '' : 'disabled'}>${ico('printer', 'tinted', '')} Stampa le schede</button></div></div>
+      <div class="bom-toolbar-right"><div class="reparto-ordina" role="group" aria-label="Ordina le schede per"><span>Ordina per</span>${Object.keys(REPARTO_ORDINI).map(k => `<button type="button" class="${k === ordine ? 'on' : ''}" aria-pressed="${k === ordine}" onclick="repartoSetOrdine('${k}')">${REPARTO_ORDINI[k]}</button>`).join('')}</div>
+        <button class="btn-outline" onclick="repartoStampa()" ${fasi.length ? '' : 'disabled'}>${ico('printer', 'tinted', '')} Stampa le schede</button></div></div>
     <div class="reparto-layout">
       <nav class="reparto-centri" aria-label="Centri di lavoro">${barra}</nav>
       <div>
         ${mio && !fasi.some(x => x.o.id === mio.odpId && x.f.id === mio.phaseId) ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Hai una timbratura aperta su un'altra fase: ${esc((getOdp(mio.odpId) || {}).number || '')}. Cominciando questa, quella va in pausa.</div>` : ''}
-        <div class="reparto-lista">${fasi.length ? fasi.map(x => repartoCardHtml(x.o, x.f, x.stato)).join('') : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
+        ${fasi.length ? `<div class="reparto-colonne">${repartoColonne(fasi, ordine).map(c => `<section class="reparto-col${c.oggi ? ' oggi' : ''}">
+          <header class="reparto-col-testa"><div><strong>${esc(c.titolo)}</strong>${c.sotto ? `<span>${esc(c.sotto)}</span>` : ''}</div><span class="reparto-centro-n">${c.fasi.length}</span></header>
+          ${c.fasi.map(x => repartoCardHtml(x.o, x.f, x.stato)).join('')}</section>`).join('')}</div>` : ''}
+        <div class="reparto-lista">${fasi.length ? '' : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
       </div>
     </div>
   </div>`;

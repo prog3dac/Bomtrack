@@ -1034,6 +1034,19 @@ button:disabled{opacity:.4;cursor:not-allowed}
   .reparto-centro.sotto{margin-left:0}
 }
 .reparto-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+/* Le colonne (dalla 0.132.0): una per codice, giorno o ODP, da scorrere di lato. */
+.reparto-ordina{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card)}
+.reparto-ordina>span{padding:0 10px;font-size:12px;color:var(--text-dim)}
+.reparto-ordina button{border:none;border-left:1px solid var(--border);background:transparent;color:var(--text);padding:8px 14px;font-size:14px;cursor:pointer;min-height:40px}
+.reparto-ordina button.on{background:var(--accent-soft-hi);color:var(--accent-solid);font-weight:700}
+/* Il reparto si guarda spesso su uno schermo grande: le colonne prendono la larghezza. */
+@media screen{body:has(#view-reparto.active) #app-main{max-width:1800px}}
+.reparto-colonne{display:flex;gap:12px;overflow-x:auto;align-items:flex-start;padding-bottom:8px;scroll-snap-type:x proximity}
+.reparto-col{flex:0 0 min(310px,86vw);display:flex;flex-direction:column;gap:10px;padding:8px;border-radius:14px;background:color-mix(in srgb,var(--text) 4%,transparent);scroll-snap-align:start}
+.reparto-col.oggi{background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.reparto-col-testa{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:4px 6px}
+.reparto-col-testa strong{display:block;font-size:15px}
+.reparto-col-testa div span{display:block;font-size:12px;color:var(--text-dim)}
 .reparto-card{border:1px solid var(--border);border-radius:12px;background:var(--card);overflow:hidden;display:flex;flex-direction:column}
 .reparto-card.attiva{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
 .reparto-corpo{padding:12px 14px;flex:1}
@@ -1070,6 +1083,13 @@ button:disabled{opacity:.4;cursor:not-allowed}
   #view-reparto .reparto-centri,#view-reparto .rfq-warn,#view-reparto .reparto-azioni{display:none!important}
   #view-reparto .reparto-layout{display:block}
   #view-reparto .reparto-lista{grid-template-columns:1fr 1fr;gap:6mm}
+  #view-reparto .reparto-ordina{display:none!important}
+  #view-reparto .reparto-colonne{display:block;overflow:visible}
+  #view-reparto .reparto-col{display:grid;grid-template-columns:1fr 1fr;gap:6mm;background:none;box-shadow:none;padding:0;margin-bottom:6mm}
+  #view-reparto .reparto-col-testa{grid-column:1/-1;border-bottom:1px solid #888;padding:0 0 2px}
+  body.reparto-stampa-una #view-reparto .reparto-col:not(:has(.stampa-sola)){display:none}
+  body.reparto-stampa-una #view-reparto .reparto-col{grid-template-columns:1fr;max-width:130mm}
+  body.reparto-stampa-una #view-reparto .reparto-col-testa{display:none}
   .reparto-card{break-inside:avoid;page-break-inside:avoid;box-shadow:none!important;border:1px solid #888!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .reparto-corpo{position:relative;padding-right:100px;min-height:104px}
   .reparto-qr{display:flex;flex-direction:column;align-items:center;gap:2px;position:absolute;top:8px;right:8px;font-size:9px;font-family:var(--mono)}
