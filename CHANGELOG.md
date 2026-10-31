@@ -12,6 +12,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - in fondo una riga dice se la fase è **in lavorazione**, da quanto e da chi, o **in pausa**. I tempi si aggiornano da soli ogni minuto;
 - le schede si **stampano**: tutte quelle del centro scelto con *Stampa le schede*, o una sola con l'icona della stampante sulla scheda. Sul foglio ogni scheda ha il suo **QR**, che inquadrato apre proprio la scheda di quella fase con Inizia, Pausa e Fine. Il codice è il numero dell'ODP e la fase (`ODP-2026-014/20`), e si legge anche dal pulsante *Scansiona*;
 - ogni fase del **ciclo** ha il campo **Note per il reparto**, nella riga sotto la fase e nella finestra *+ Lavorazione*. L'ODP le prende al lancio e la scheda di reparto le mostra in evidenza, anche stampata. Gli ODP già lanciati tengono le note che avevano;
+- **Ordina per** *Codice*, *Data* o *ODP*: le schede si dispongono in **colonne**, una per codice con le sue fasi, una per giorno di inizio previsto (oggi evidenziato, le fasi senza data in fondo) o una per ODP; la scelta resta sul dispositivo e la pagina usa tutta la larghezza dello schermo. Ogni scheda mette in evidenza il **codice**, poi descrizione, fase e macchina, e l'**ODP**;
 - compaiono anche le **fasi future** degli ODP lanciati, in attesa della fase precedente, ordinate per inizio previsto e senza pulsanti, e in fondo le fasi **terminate** degli ordini ancora aperti. Una timbratura rimasta aperta su una fase che un collega ha chiuso si può così ancora mettere in pausa.
 
 Nessun cambio a `supabase/schema.sql`.

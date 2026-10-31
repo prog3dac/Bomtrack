@@ -102,6 +102,18 @@ describe('Terminale di reparto', () => {
     assert.match(h, /id="reparto-qr-scheda"[^>]*>\s*<div class="reparto-card/);
     assert.match(h, /repartoPausa\('A','fa'\)|repartoInizia\('A','fa'\)/);
   });
+  it('le colonne: per codice, per giorno di inizio previsto, per ODP', () => {
+    const a = app({ officina: true });
+    a.eval(`getOdp('A').phases[0].plannedStart = '2026-10-28'; getOdp('B').phases[0].plannedStart = '2026-10-30';
+      getOdp('A').phases.push({ id: 'fa2', seq: 20, opIndex: 1, workCenterId: 'w1', wcName: 'Tornio', costMode: 'orario', hours: 1, rate: 50, cost: 0, plannedStart: '' })`);
+    const col = m => JSON.parse(a.eval(`JSON.stringify(repartoColonne(repartoFasi('', true), '${m}').map(c => c.titolo + ':' + c.fasi.map(x => x.f.id).join(',')))`));
+    assert.deepEqual(col('codice'), ['P1:fa,fa2,fb']);
+    assert.deepEqual(col('odp'), ['ODP-A:fa,fa2', 'ODP-B:fb']);
+    assert.deepEqual(col('data'), ['Mercoledì 28 ottobre:fa', 'Venerdì 30 ottobre:fb', 'Senza data:fa2']);
+    a.eval("repartoSetOrdine('odp')");
+    assert.match(a.html('view-reparto'), /class="reparto-colonne"[^]*ODP-A[^]*ODP-B/);
+    assert.match(a.html('view-reparto'), /aria-pressed="true" onclick="repartoSetOrdine\('odp'\)"/);
+  });
   it('la vista si disegna, e senza il modulo non si apre', () => {
     const a = app({ officina: true });
     a.eval("setView('reparto')");

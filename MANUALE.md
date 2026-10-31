@@ -2972,6 +2972,12 @@ quest'ordine:
 - le **fasi future**, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;
 - le fasi **terminate** degli ordini ancora aperti.
 
+**Ordina per**, in alto a destra, dispone le schede in **colonne** da scorrere di lato: *Codice*
+(una colonna per parte, con le sue fasi per consegna e numero di fase), *Data* (una per giorno di
+inizio previsto, con oggi evidenziato e in fondo le fasi senza data) o *ODP* (una per ordine, per
+data di consegna). Il dispositivo ricorda la scelta. Ogni scheda mostra in grande il **codice**,
+sotto la descrizione, la fase con centro e macchina, e l'**ODP** evidenziato.
+
 In cima a ogni scheda una riga colorata dice la **situazione**: *Da avviare* (blu), *Avviata*
 (giallo), *In ritardo* (rosso: secondo le date pianificate dell'ODP doveva già iniziare o finire),
 *Terminata* (verde). Sotto ci sono l'**inizio previsto** e la fine della fase, e la data in cui il
