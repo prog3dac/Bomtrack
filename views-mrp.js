@@ -958,8 +958,68 @@ function mrpLoadEntries(plans) {
   });
   return Array.from(map.values());
 }
+// ─── Le ore degli ODP che nessun piano conta ───
+// Il carico nasce dall'esplosione dei piani, e un ordine di produzione legato
+// al suo piano ci sta già dentro: le sue ore sono quelle del «da fare» del
+// piano. Restavano fuori gli ordini che il piano non vede — scritti a mano,
+// legati a un piano chiuso, o su una parte che in anagrafica si **compra** e
+// che questa volta si fa in casa (il fabbisogno non ne esplode il ciclo). Le
+// loro fasi interne occupano i centri come le altre, e Capacità finita e
+// Reparto già le mettono in fila: il carico non poteva non vederle.
+//
+// Le ore sono quelle che restano, come in capacita.js: i pezzi attesi dalla
+// fase meno i lavorati, più l'attrezzaggio se la fase non è partita. Stanno
+// nella settimana d'inizio pianificata della fase, o della consegna.
+// `piano`: 'tutti' per la vista globale (ogni ODP fuori dai piani aperti), o
+// l'id di un piano (solo i suoi ODP che la sua esplosione non copre).
+const ODP_CARICANO = ['bozza', 'lanciato', 'corso'];
+function odpCopertoDalPiano(o, p) {
+  if (!p) return false;
+  const exp = mrpExplodePlan(p);
+  return exp.make.concat(exp.asm).some(e => e.item.id === o.itemId);
+}
+function odpLoadEntries(piano, plans) {
+  const aperti = new Map((plans || (db.plans || []).filter(p => p.active !== false)).map(p => [p.id, p]));
+  const map = new Map();
+  (db.prodOrders || []).forEach(o => {
+    if (o.active === false || !ODP_CARICANO.includes(o.status)) return;
+    const suo = o.planId ? aperti.get(o.planId) : null;
+    if (piano === 'tutti') { if (suo && odpCopertoDalPiano(o, suo)) return; }
+    else if (!piano || o.planId !== piano || !suo || odpCopertoDalPiano(o, suo)) return;
+    const it = getItem(o.itemId) || { id: o.itemId, code: o.code || '', name: o.name || '' };
+    const sue = new Map();
+    (o.phases || []).forEach(f => {
+      if (f.supplierId || !f.workCenterId || opChiusa(o, f)) return;
+      const resta = Math.max(0, opAttesiFase(o, f) - opProcessati(o, f));
+      if (!(resta > 0.000001)) return;
+      const setup = opAvviata(o, f) ? 0 : faseAttrezzaggio(f);
+      mrpAddLoad(sue, f.workCenterId, String(f.plannedStart || o.dueDate || '').slice(0, 10), Number(f.hours) || 0, resta, it, f.seq, setup);
+    });
+    // Nel dettaglio di una cella, al posto del piano si legge l'ordine.
+    sue.forEach(e => e.voci.forEach(v => Object.assign(v, { planId: o.planId || null, planNumber: o.number || '', odpId: o.id })));
+    mrpLoadMetti(map, Array.from(sue.values()));
+  });
+  return Array.from(map.values());
+}
+function mrpLoadMetti(map, entries) {
+  entries.forEach(e => {
+    const k = e.workCenterId + '|' + e.week;
+    let t = map.get(k);
+    if (!t) { t = { workCenterId: e.workCenterId, week: e.week, hours: 0, voci: [] }; map.set(k, t); }
+    t.hours += e.hours; t.voci.push(...e.voci);
+  });
+}
+// Le due liste nella stessa forma: si fondono per centro e settimana.
+function mrpLoadUnisci(a, b) {
+  const map = new Map();
+  mrpLoadMetti(map, a); mrpLoadMetti(map, b);
+  return Array.from(map.values());
+}
 function mrpLoad(plan) { return mrpLoadTable(mrpLoadEntries([plan])); }
-function mrpLoadAll() { return mrpLoadTable(mrpLoadEntries((db.plans || []).filter(p => p.active !== false))); }
+function mrpLoadAll() {
+  const piani = (db.plans || []).filter(p => p.active !== false);
+  return mrpLoadTable(mrpLoadUnisci(mrpLoadEntries(piani), odpLoadEntries('tutti', piani)));
+}
 // Dalla lista piatta alla tavola centro × settimana, pronta da disegnare.
 // La colonna «senza data» sta in testa: quelle ore esistono e non hanno una
 // settimana, e ometterle farebbe tornare un totale sbagliato.
@@ -1034,7 +1094,10 @@ function loadPiani() {
   const piano = loadSoloPiano ? getPlan(loadSoloPiano) : null;
   return piano ? [piano] : (db.plans || []).filter(p => p.active !== false);
 }
-function loadEntries() { return mrpLoadEntries(loadPiani()); }
+function loadEntries() {
+  const piani = loadPiani();
+  return mrpLoadUnisci(mrpLoadEntries(piani), odpLoadEntries(loadSoloPiano || 'tutti', loadSoloPiano ? null : piani));
+}
 
 function renderLoad() {
   const host = document.getElementById('view-load'); if (!host) return;
@@ -1062,7 +1125,7 @@ function renderLoad() {
         ${tab.righe.map(r => `<option value="${esc(r.workCenterId)}" ${r.workCenterId === loadSoloCentro ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
       </select>
     </div>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Le ore che i piani chiedono a ciascun centro, settimana per settimana, contro la capacità dichiarata in <em>Gestione → Centri di lavoro</em>. Le ore stanno nella settimana in cui <strong>la fase comincia</strong>, programmata a ritroso dalla consegna sul calendario di fabbrica (montaggi, fasi interne e tratte di conto lavoro in sequenza). La capacità è <strong>infinita</strong>: le date dicono quando ciascuna fase deve partire perché la consegna regga, il sovraccarico si vede ma non si sposta.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Le ore che i piani chiedono a ciascun centro, settimana per settimana — più quelle degli ordini di produzione che nessun piano conta, come quelli scritti a mano — contro la capacità dichiarata in <em>Gestione → Centri di lavoro</em>. Le ore stanno nella settimana in cui <strong>la fase comincia</strong>, programmata a ritroso dalla consegna sul calendario di fabbrica (montaggi, fasi interne e tratte di conto lavoro in sequenza). La capacità è <strong>infinita</strong>: le date dicono quando ciascuna fase deve partire perché la consegna regga, il sovraccarico si vede ma non si sposta.</p>
     ${senzaCap ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} ${senzaCap} ${senzaCap === 1 ? 'centro non ha' : 'centri non hanno'} una capacità dichiarata: le ore si vedono, il sovraccarico no. Si imposta in <em>Gestione → Centri di lavoro</em>.</p>` : ''}
     ${loadOverloadHtml(tab)}
     ${loadChartHtml(tab)}

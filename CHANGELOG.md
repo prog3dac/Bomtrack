@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.133.0 — 2026-10-31
+
+**Un articolo si approvvigiona a mano anche in una forma diversa da quella della scheda.** La scheda articolo continua a decidere gli automatismi (costo, fabbisogno, esplosione della distinta), e a mano:
+- una parte **acquistata** in anagrafica, se ha un ciclo, si fabbrica con un **ODP** e i suoi **ODL**: fasi, prelievo del materiale, conto lavoro, versamento a magazzino, Reparto e capacità finita funzionano come per una parte prodotta in casa. La scheda *+ Nuovo ordine di produzione* ricorda che il fabbisogno continua a proporla in acquisto;
+- una parte **prodotta in casa** si compra con un **ODA** scritto a mano, e il ricevuto carica il magazzino;
+- il **Carico centri** conta anche le ore degli ODP che nessun piano conta: scritti a mano, legati a un piano chiuso, o su una parte acquistata. Prima quelle ore si vedevano solo in capacità finita e in Reparto. Le ore di un ODP generato dal piano non si sommano due volte. Nel dettaglio di cella compare il numero dell'ODP.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.132.0 — 2026-10-30
 
 **Il terminale di reparto si legge a colpo d'occhio.** In *Produzione → Reparto*:
