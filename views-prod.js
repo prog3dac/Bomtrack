@@ -1623,11 +1623,19 @@ function odpNewFromPick(ids) {
         <input class="num" type="number" id="odp-new-qty" min="0" step="any" value="1"></div>
       <div class="modal-field"><label>Serve per</label><input type="date" id="odp-new-due"></div>
     </div>
-    <p class="empty-text" style="text-align:left;padding:8px 0">Nasce in <strong>bozza</strong>: fasi e materiale si congelano al lancio, e da lì in poi non si toccano più. Un ordine scritto a mano <strong>non è legato a nessun piano</strong>, e nel fabbisogno quella parte continuerà a risultare da fabbricare.</p>
+    <p class="empty-text" style="text-align:left;padding:8px 0">Nasce in <strong>bozza</strong>: fasi e materiale si congelano al lancio, e da lì in poi non si toccano più. Un ordine scritto a mano <strong>non è legato a nessun piano</strong>${odpNotaAcquistata(part) ? '.' : ', e nel fabbisogno quella parte continuerà a risultare da fabbricare.'}</p>${odpNotaAcquistata(part)}
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="odpNewSave('${esc(part.id)}')">Crea</button>
     </div>`, false, 'form');
+}
+// Una parte che in anagrafica si compra si può fabbricare lo stesso, questa
+// volta: l'ordine fa tutto quello che fa per le altre (fasi, materiale,
+// versamento, centri). Ma il fabbisogno segue l'anagrafica e continua a
+// proporla in acquisto: si dice prima di creare, non dopo.
+function odpNotaAcquistata(part) {
+  if (!part || part.type !== 'parte' || partSourcing(part) !== 'buy') return '';
+  return `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('cart', 'tinted', '')} In anagrafica questa parte si <strong>acquista</strong>: l'ordine la produce comunque con il suo ciclo e la sua distinta, ma il fabbisogno continua a proporla come acquisto e non esplode il suo materiale.</p>`;
 }
 function odpNewSave(partId) {
   const part = getItem(partId); if (!part || !roleGuard('docs')) return;

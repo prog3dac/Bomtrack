@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.132.0**
+**Versione dell'app documentata: 0.133.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2510,6 +2510,14 @@ Due strade, e producono lo stesso documento:
 - **a mano**, con *+ Nuovo ordine di produzione*: si sceglie la parte o l'assieme fra quelli che un
   ciclo ce l'hanno, i pezzi e la data.
 
+**Una parte che in anagrafica si acquista si può fabbricare lo stesso.** A mano conta solo che
+abbia un ciclo: l'ODP congela fasi e materiale, preleva all'avvio, genera gli ordini di lavoro
+per le fasi dal terzista, versa la parte a magazzino, va in *Reparto*, in capacità finita e nel
+*Carico centri* come ogni altro. La scheda di creazione ricorda che l'anagrafica resta quella:
+il fabbisogno continua a proporre la parte **in acquisto** e non esplode il suo materiale.
+Allo stesso modo una parte prodotta in casa si può mettere su un **ordine d'acquisto** scritto a
+mano: si riceve e carica il magazzino come un commerciale.
+
 **L'ODP di un assieme** (dalla 0.124.0) ha per fasi quelle del ciclo di montaggio e per materiale
 i **componenti diretti a magazzino** della distinta, con lo scarto e le sostituzioni del piano,
 come un montaggio dichiarato: i sottoassiemi non escono, si montano col loro ordine. Un assieme non
@@ -2871,6 +2879,14 @@ solo. Cliccando il nome di un centro, le letture si restringono a quello.
 
 **Il dettaglio di cella.** Cliccando una cella si apre **chi** ha portato quelle ore: parte, fase,
 piano.
+
+**Gli ordini di produzione che nessun piano conta** (dalla 0.133.0): un ODP scritto a mano, legato
+a un piano chiuso, o su una parte che in anagrafica si acquista porta nel carico le ore delle sue
+fasi interne ancora da fare (i pezzi attesi meno i lavorati, più l'attrezzaggio se la fase non è
+partita), nella settimana d'inizio pianificata della fase. Nel dettaglio di cella, al posto del
+piano, si legge il numero dell'ODP. Un ODP generato dal piano non si somma: le sue ore sono già
+quelle del piano. Con un piano solo nel filtro compaiono soltanto i suoi ODP che il piano non
+esplode. Bozze, lanciati e in corso caricano; completati, chiusi e annullati no.
 
 **Da sapere — quattro avvertimenti**, perché il prospetto non prometta più di quel che dà:
 
