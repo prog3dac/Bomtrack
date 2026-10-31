@@ -196,9 +196,11 @@ function repartoCardHtml(o, f, stato) {
   return `<div class="reparto-card${lavorano.length ? ' attiva' : ''}" data-odp="${esc(o.id)}" data-fase="${esc(f.id)}">
     <div class="reparto-sit ${sit.id}"><strong>${esc(sit.label)}</strong>${sit.nota ? `<span>${esc(sit.nota)}</span>` : ''}</div>
     <div class="reparto-corpo">
-    <div class="reparto-testa"><span><strong>${esc(o.number || '')}</strong> · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}${conMacchine && f.machineId ? ' · ' + esc(machineLabel(getMachine(f.machineId)) || f.machineName || '') : ''}</span>
+    <div class="reparto-testa"><span class="reparto-codice">${esc(o.code || '')}</span>
       <button type="button" class="btn-ghost reparto-stampa" onclick="repartoStampa('${o.id}','${f.id}')" title="Stampa questa scheda, con il suo QR" aria-label="Stampa la scheda">${ico('printer', 'tinted', '')}</button></div>
-    <div>${esc(o.code || '')} ${esc(o.name || '')}</div>
+    <div class="reparto-descr">${esc(o.name || '')}</div>
+    <div class="reparto-fase">Fase <strong>${esc(String(f.seq))}</strong> · ${esc(f.wcName || '')}${conMacchine && f.machineId ? ` · ${ico('wrench', 'tinted', '')} ${esc(machineLabel(getMachine(f.machineId)) || f.machineName || '')}` : ''}</div>
+    <div class="reparto-odp">${esc(o.number || '')}</div>
     <div class="reparto-date">Inizio previsto <strong>${f.plannedStart ? esc(fmtDateIt(f.plannedStart)) : 'non pianificato'}</strong>${f.plannedEnd ? ` · fine ${esc(fmtDateIt(f.plannedEnd))}` : ''}${o.dueDate ? ` · serve il ${esc(fmtDateIt(o.dueDate))}` : ''}</div>
     <div class="reparto-numeri">
       <div><span class="reparto-num-l">${stato === 'chiusa' ? 'Fatti' : attesa ? 'Attesi' : 'Da fare'}</span>
