@@ -157,6 +157,12 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .modal-field label{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
 .modal-field input,.modal-field select,.modal-field textarea{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;width:100%}
 .modal-field input:focus,.modal-field select:focus,.modal-field textarea:focus{border-color:var(--accent)}
+/* Il selettore colore ha un'altezza propria di 27px: con il padding dei campi
+   il campione sparisce e resta solo il suo bordo, una riga grigia. */
+.modal-field input[type=color]{height:39px;padding:4px;cursor:pointer}
+.modal-field input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.modal-field input[type=color]::-webkit-color-swatch{border:none;border-radius:5px}
+.modal-field input[type=color]::-moz-color-swatch{border:none;border-radius:5px}
 .modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:520px){.modal-grid{grid-template-columns:1fr}}
 /* Conferme in scheda (al posto di confirm()) */
