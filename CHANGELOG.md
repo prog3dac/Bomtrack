@@ -2,6 +2,12 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.134.0 — 2026-11-02
+
+**Dall'albero si apre la distinta di un gruppo.** In *Tecnico → Gestione DB* ogni riga di un **gruppo** o di un **sottogruppo**, anche annidata, ha come ultima icona a destra nella colonna Azioni il pulsante **Apri la distinta**: porta subito a quella distinta, senza cercarla nel menu in alto. La colonna Azioni è un poco più larga, così il costo di riga non viene coperto.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.133.1 — 2026-11-02
 
 **Il colore dell'utente si vede di nuovo.** Nella finestra *Modifica utente* (Gestione → Utenti) il campo **Colore** mostrava solo una riga grigia: il riquadro del colore era schiacciato dai margini interni dei campi della finestra, e un colore scelto non si vedeva. Ora il campo ha l'altezza degli altri e mostra il colore pieno, che cambia appena lo scegli.

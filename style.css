@@ -398,7 +398,7 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 
 /* Distinta tree */
 .bom-tree{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:8px 0;overflow-x:auto}
-.bom-head,.bom-node{display:grid;grid-template-columns:minmax(280px,2fr) 70px 70px 90px 110px 110px 96px;align-items:center;gap:8px;padding:9px 18px;font-size:13px}
+.bom-head,.bom-node{display:grid;grid-template-columns:minmax(280px,2fr) 70px 70px 90px 110px 110px 128px;align-items:center;gap:8px;padding:9px 18px;font-size:13px}
 .bom-head{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);position:sticky;top:0}
 .bom-node{border-bottom:1px solid var(--hairline)}
 .bom-node:hover{background:var(--card-hover)}
