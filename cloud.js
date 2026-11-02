@@ -1721,7 +1721,8 @@ function cloudPannello() {
     ${admin ? `<div class="modal-field"><label>Link di collegamento per i colleghi</label>
       <div style="display:flex;gap:6px"><input id="cl-link" readonly value="${esc(link)}" style="flex:1">
       <button class="btn-outline" onclick="cloudCopiaLink()">${ico('copy', 'tinted', '')} Copia</button></div></div>
-      <p class="cl-nota">Mettilo anche in Supabase come <strong>Site URL</strong> (Authentication → URL Configuration): gli inviti e il recupero password riportano qui.</p>` : ''}
+      <p class="cl-nota">Mettilo anche in Supabase come <strong>Site URL</strong> (Authentication → URL Configuration): gli inviti e il recupero password riportano qui.</p>
+      ${cloudQrLinkHtml(link)}` : ''}
     <div class="modal-actions">
       ${dentro && Store.hasPendingChanges() ? `<button class="btn-outline" onclick="cloudPannelloScartaRifiutati()" title="Manda le modifiche in attesa a pezzi: quelle che il server rifiuta tornano come sul server, le altre partono">Scarta solo i rifiutati</button>` : ''}
       ${dentro ? `<button class="btn-outline" onclick="cloudPannelloRiscarica()">Scarta e riscarica</button>` : ''}
@@ -1745,6 +1746,62 @@ async function cloudPannelloCollega() {
   } catch (e) { cloudEsito(cloudMsgErrore(e), true); return; }
   // Il modo condiviso si accende al caricamento dell'archivio: si riparte.
   location.reload();
+}
+// Il QR del link di collegamento (dalla 0.134.0): il collega lo inquadra con
+// la fotocamera del telefono o del tablet e si ritrova l'app già puntata al
+// progetto, senza ricopiare un indirizzo lungo. Si stampa anche su un foglio
+// A4 da appendere in reparto. Da `file://` non si mostra: un telefono non
+// apre il disco di questo PC, e un QR che non porta da nessuna parte confonde.
+function cloudQrLinkApribile(link) { return /^https?:\/\//i.test(String(link || '')); }
+function cloudQrLinkHtml(link) {
+  if (!link) return '';
+  if (!cloudQrLinkApribile(link)) {
+    return `<p class="cl-nota">Il QR del link compare quando l'app è aperta da un indirizzo web (<code>https://…</code>): un telefono non apre un file sul disco di questo PC.</p>`;
+  }
+  const svg = typeof qrSvg === 'function' ? qrSvg(link, 168) : '';
+  if (!svg) return '';
+  return `<div class="cl-qr">
+      <div class="cl-qr-img">${svg}</div>
+      <div class="cl-qr-testo">
+        <strong>QR del link di collegamento</strong>
+        <p class="cl-nota">Il collega lo inquadra con la fotocamera del telefono o del tablet: l'app si apre già collegata al progetto e chiede l'accesso con la sua email.</p>
+        <button class="btn-outline" onclick="cloudStampaQrLink()">${ico('printer', 'tinted', '')} Stampa il QR</button>
+      </div>
+    </div>`;
+}
+// Un foglio A4 con il QR grande, l'indirizzo del progetto e due righe su cosa
+// fare. Il link intero sta in fondo, piccolo: serve solo a chi non ha la
+// fotocamera. La chiave è quella pubblica, la stessa che il link già porta.
+function cloudStampaQrLink() {
+  const c = cloudConfig();
+  const link = cloudLinkCollegamento(c);
+  if (!link || !cloudQrLinkApribile(link)) { showToast('Il QR del link si stampa con l\'app aperta da un indirizzo web', 'error'); return false; }
+  if (typeof qrDisponibile !== 'function' || !qrDisponibile()) { showToast('Libreria QR non disponibile: manca vendor/qrcode.js', 'error'); return false; }
+  const jsPDF = requirePdf(); if (!jsPDF) return false;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const W = 210;
+  doc.setTextColor(0);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(20);
+  doc.text('Bomtrack: collegati all\'archivio condiviso', W / 2, 30, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+  doc.text('Progetto: ' + c.url, W / 2, 39, { align: 'center' });
+  const lato = 110;
+  qrPdfDraw(doc, link, (W - lato) / 2, 50, lato);
+  let y = 50 + lato + 14;
+  doc.setFontSize(12);
+  [
+    '1. Inquadra il QR con la fotocamera del telefono o del tablet e apri il link.',
+    '2. Bomtrack chiede se collegarsi a questo progetto: conferma.',
+    '3. Accedi con la tua email e la password che ti ha dato l\'amministratore.',
+  ].forEach(r => { doc.splitTextToSize(r, 160).forEach(t => { doc.text(t, 25, y); y += 6.5; }); });
+  y += 6;
+  doc.setFontSize(8); doc.setTextColor(90);
+  doc.text('Senza fotocamera, apri questo indirizzo:', 25, y); y += 4.5;
+  doc.setFont('courier', 'normal');
+  doc.splitTextToSize(link, 160).forEach(t => { if (y < 285) { doc.text(t, 25, y); y += 3.8; } });
+  doc.save(`bomtrack_qr_collegamento_${typeof oggiISO === 'function' ? oggiISO() : new Date().toISOString().slice(0, 10)}.pdf`);
+  showToast('QR del link pronto da stampare');
+  return true;
 }
 function cloudCopiaLink() {
   const el = document.getElementById('cl-link'); if (!el) return;

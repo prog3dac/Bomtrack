@@ -1,5 +1,5 @@
 // Il pulsante «Apri la distinta» sulle righe di gruppi e sottogruppi
-// dell'albero di Gestione DB (0.134.0).
+// dell'albero di Gestione DB (0.135.0).
 const assert = require('node:assert/strict');
 const { describe, it } = require('./tap.js');
 const { loadApp } = require('./harness.js');

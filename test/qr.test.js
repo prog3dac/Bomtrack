@@ -237,3 +237,55 @@ describe('QR — impostazioni', () => {
     assert.deepEqual(JSON.parse(a.eval('JSON.stringify(db.settings.qr)')), { baseUrl: 'https://esempio.it/bt/', formato: 'a4-3x8' });
   });
 });
+
+// 0.134.0: il QR del link di collegamento all'archivio condiviso, nella
+// scheda della nuvola. Il collega lo inquadra e l'app si apre già puntata al
+// progetto: il link deve tornare intero, chiave compresa.
+describe('QR — il link di collegamento', () => {
+  const { makeStorage } = require('./harness.js');
+  function appCollegata(href) {
+    const storage = makeStorage();
+    storage.setItem('bomtrack_cloud', JSON.stringify({ url: 'https://abcd.supabase.co', chiave: 'sb_publishable_Xy-12_ab', allineato: true }));
+    const a = loadApp({ silent: true, storage });
+    a.eval(VENDOR('qrcode.js'));
+    const u = new URL(href);
+    a.ctx.location = { href, origin: u.protocol === 'file:' ? 'null' : u.origin, pathname: u.pathname, protocol: u.protocol };
+    return a;
+  }
+  it('il QR mostrato si rilegge e riporta il link intero, chiave compresa', () => {
+    const a = appCollegata('https://esempio.it/bt/index.html#/home');
+    const link = a.eval('cloudLinkCollegamento(cloudConfig())');
+    assert.equal(link, 'https://esempio.it/bt/index.html?supabase=https%3A%2F%2Fabcd.supabase.co&chiave=sb_publishable_Xy-12_ab');
+    const html = a.eval(`cloudQrLinkHtml(${JSON.stringify(link)})`);
+    assert.match(html, /<svg class="qr-svg"/);
+    assert.match(html, /cloudStampaQrLink\(\)/);
+    assert.equal(leggi(a, link), link);
+  });
+  it('da file:// non mostra un QR che il telefono non saprebbe aprire', () => {
+    const a = appCollegata('file:///C:/Bomtrack/index.html');
+    const link = a.eval('cloudLinkCollegamento(cloudConfig())');
+    const html = a.eval(`cloudQrLinkHtml(${JSON.stringify(link)})`);
+    assert.doesNotMatch(html, /<svg/);
+    assert.match(html, /indirizzo web/);
+    a.eval('window.jspdf = { jsPDF: function () { throw new Error("non doveva partire"); } }');
+    assert.equal(a.eval('cloudStampaQrLink()'), false);
+  });
+  it('il foglio A4 porta il QR, il progetto e il link per chi non ha la fotocamera', () => {
+    const a = appCollegata('https://esempio.it/bt/index.html');
+    a.eval(`window.__pdf = { testi: [], rect: 0, salvato: '', formato: null };
+      window.jspdf = { jsPDF: function (o) { const st = window.__pdf; st.formato = o.format;
+        this.setFillColor = this.setTextColor = this.setFont = this.setFontSize = function () {};
+        this.rect = function () { st.rect++; };
+        this.text = function (t) { st.testi.push(String(t)); };
+        this.splitTextToSize = function (t) { return [String(t)]; };
+        this.save = function (n) { st.salvato = n; };
+      } };`);
+    assert.equal(a.eval('cloudStampaQrLink()'), true);
+    const s = JSON.parse(a.eval('JSON.stringify(window.__pdf)'));
+    assert.equal(s.formato, 'a4');
+    assert.ok(s.rect > 10, 'il QR è disegnato');
+    assert.ok(s.testi.includes('Progetto: https://abcd.supabase.co'));
+    assert.ok(s.testi.some(t => t.includes('chiave=sb_publishable_Xy-12_ab')));
+    assert.match(s.salvato, /^bomtrack_qr_collegamento_\d{4}-\d{2}-\d{2}\.pdf$/);
+  });
+});

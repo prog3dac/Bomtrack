@@ -2,9 +2,30 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.134.0 — 2026-11-02
+### 0.135.0 — 2026-11-02
 
 **Dall'albero si apre la distinta di un gruppo.** In *Tecnico → Gestione DB* ogni riga di un **gruppo** o di un **sottogruppo**, anche annidata, ha come ultima icona a destra nella colonna Azioni il pulsante **Apri la distinta**: porta subito a quella distinta, senza cercarla nel menu in alto. La colonna Azioni è un poco più larga, così il costo di riga non viene coperto.
+
+Nessun cambio a `supabase/schema.sql`.
+
+### 0.134.0 — 2026-11-02
+
+**Il link di collegamento ha il suo QR.** Nella scheda dell'**archivio condiviso** (il simbolo della nuvola nell'intestazione, o *Gestione → Backup → Archivio condiviso*), sotto il **link di collegamento per i colleghi**, l'amministratore trova ora il **QR** dello stesso link:
+- il collega lo inquadra con la fotocamera del telefono o del tablet e l'app si apre già collegata al progetto, poi chiede l'accesso con la sua email: niente più indirizzo lungo da ricopiare;
+- **Stampa il QR** prepara un foglio A4 con il QR grande, l'indirizzo del progetto, i tre passi da fare e, in piccolo, il link intero per chi non ha la fotocamera. Si può appendere in reparto;
+- con l'app aperta da un file sul disco (`file://`) il QR non compare, e la scheda spiega perché: un telefono non apre un file sul disco di quel PC.
+
+Nessun cambio a `supabase/schema.sql`.
+
+### 0.133.3 — 2026-11-02
+
+**Elenchi di Gestione allineati.** In *Centri di lavoro*, *Fornitori*, *Clienti* e *Utenti* ogni riga andava a capo in un punto diverso secondo la lunghezza dei dettagli, e lo stato (*Attivo*/*Sospeso*) e i pulsanti finivano a metà riga o sotto. Ora il nome sta sopra i dettagli, che vanno a capo nella loro colonna, e stato e pulsanti sono sempre nella stessa colonna a destra, uguali in tutte le righe. Al telefono i dettagli prendono tutta la larghezza e stato e pulsanti stanno sotto, sempre nello stesso posto. Nei dettagli di fornitori e clienti non restano più separatori «·» vuoti quando manca un campo.
+
+Nessun cambio a `supabase/schema.sql`.
+
+### 0.133.2 — 2026-11-02
+
+**Le note della fase del ciclo si vedono sulle schede di Reparto.** In *Produzione → Reparto* ogni scheda di fase mostra in evidenza le **Note per il reparto** scritte sulla fase del ciclo, con l'etichetta *Note fase ciclo*: sullo schermo, sulla scheda aperta dal QR e sul foglio stampato. Prima la scheda mostrava solo la nota congelata dall'ODP al lancio, e gli ordini lanciati prima che la nota ci fosse non la mostravano. Ora la nota si legge dal ciclo di oggi; se l'ODP ne ha congelata una diversa, la scheda mostra anche quella, come *Note dell'ODP*.
 
 Nessun cambio a `supabase/schema.sql`.
 

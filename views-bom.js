@@ -183,7 +183,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
       ? `<button class="mini-btn" title="Modifica" onclick="editComponentModal(${idx})">${ico('edit', 'tinted', 'Modifica')}</button>
          <button class="mini-btn danger" title="Elimina" onclick="delComponent(${idx})">${ico('trash', 'tinted', 'Elimina')}</button>`
       : '')
-    // Dalla 0.134.0 gruppi e sottogruppi, a ogni livello, aprono la loro
+    // Dalla 0.135.0 gruppi e sottogruppi, a ogni livello, aprono la loro
     // distinta senza passare dal menu in alto: l'ultima icona a destra.
     + (isAsmApribile(child) && !cyc
       ? `<button class="mini-btn" title="Apri la distinta di ${esc(child.code)}" onclick="openBomFor('${child.id}')">${ico('tree', 'tinted', 'Apri la distinta di ' + child.code)}</button>` : '');
