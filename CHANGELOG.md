@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.134.0 — 2026-11-02
+
+**Il link di collegamento ha il suo QR.** Nella scheda dell'**archivio condiviso** (il simbolo della nuvola nell'intestazione, o *Gestione → Backup → Archivio condiviso*), sotto il **link di collegamento per i colleghi**, l'amministratore trova ora il **QR** dello stesso link:
+- il collega lo inquadra con la fotocamera del telefono o del tablet e l'app si apre già collegata al progetto, poi chiede l'accesso con la sua email: niente più indirizzo lungo da ricopiare;
+- **Stampa il QR** prepara un foglio A4 con il QR grande, l'indirizzo del progetto, i tre passi da fare e, in piccolo, il link intero per chi non ha la fotocamera. Si può appendere in reparto;
+- con l'app aperta da un file sul disco (`file://`) il QR non compare, e la scheda spiega perché: un telefono non apre un file sul disco di quel PC.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.133.1 — 2026-11-02
 
 **Il colore dell'utente si vede di nuovo.** Nella finestra *Modifica utente* (Gestione → Utenti) il campo **Colore** mostrava solo una riga grigia: il riquadro del colore era schiacciato dai margini interni dei campi della finestra, e un colore scelto non si vedeva. Ora il campo ha l'altezza degli altri e mostra il colore pieno, che cambia appena lo scegli.

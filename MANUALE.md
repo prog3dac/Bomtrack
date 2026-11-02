@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.133.1**
+**Versione dell'app documentata: 0.134.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3792,6 +3792,10 @@ impedisce il server.
 
 Il collega che usa un altro PC può anche aprire il **link di collegamento** che gli mandi tu:
 l'app chiede se collegarsi a quel progetto, mostrandone l'indirizzo, e poi chiede l'accesso.
+Dal telefono o dal tablet fa prima con il **QR del link di collegamento**, che sta sotto il link
+nella stessa scheda della nuvola: lo inquadra con la fotocamera e si ritrova nello stesso punto.
+**Stampa il QR** ne fa un foglio A4 da appendere in reparto, con i passi da seguire e il link
+scritto per intero. Il QR compare solo con l'app aperta da un indirizzo web (`https://…`).
 
 **Per togliere qualcuno lo si sospende**, non lo si elimina: chi è sospeso non legge più niente,
 anche con la sessione aperta, e se è dentro l'app lo fa uscire al giro di sincronizzazione
