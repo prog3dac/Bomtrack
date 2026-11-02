@@ -79,6 +79,20 @@ describe('Terminale di reparto', () => {
     a.eval("timbraPausa('A', 'fa'); renderReparto()");
     assert.match(a.html('view-reparto'), /In pausa/);
   });
+  it('la scheda mostra la nota della fase del ciclo di oggi, anche su un ODP lanciato prima', () => {
+    const a = app({ officina: true });
+    a.eval("getItem('p1').cycle = [{ kind: 'op', workCenterId: 'w1', costMode: 'orario', hours: 1, note: 'sbavare i fori' }]");
+    const note = () => JSON.parse(a.eval("JSON.stringify(repartoNoteFase(getOdp('A'), getOdp('A').phases[0]))"));
+    assert.deepEqual(note(), [{ label: 'Note fase ciclo', testo: 'sbavare i fori', ciclo: true }], 'l\'ODP non la aveva congelata');
+    a.eval("setView('reparto')");
+    assert.match(a.html('view-reparto'), /class="reparto-nota ciclo"><span[^>]*>Note fase ciclo<\/span>sbavare i fori/);
+    a.eval("getOdp('A').phases[0].note = 'sbavare i fori'");
+    assert.equal(note().length, 1, 'la stessa nota non si ripete');
+    a.eval("getOdp('A').phases[0].note = 'lotto urgente'");
+    assert.deepEqual(note().map(n => n.label), ['Note fase ciclo', "Note dell'ODP"]);
+    a.eval("getItem('p1').cycle[0].workCenterId = 'w2'");
+    assert.deepEqual(note().map(n => n.label), ['Note'], 'al suo posto c\'è un\'altra fase: resta la nota dell\'ODP');
+  });
   it('il tempo della sessione è la timbratura aperta più vecchia', () => {
     const a = app({ officina: true }, { timeLogs: [
       { id: 't1', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: '2026-10-27T08:00:00.000Z', endedAt: '2026-10-27T10:00:00.000Z', active: true },
