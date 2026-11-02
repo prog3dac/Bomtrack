@@ -2,6 +2,12 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.135.0 — 2026-11-02
+
+**Dall'albero si apre la distinta di un gruppo.** In *Tecnico → Gestione DB* ogni riga di un **gruppo** o di un **sottogruppo**, anche annidata, ha come ultima icona a destra nella colonna Azioni il pulsante **Apri la distinta**: porta subito a quella distinta, senza cercarla nel menu in alto. La colonna Azioni è un poco più larga, così il costo di riga non viene coperto.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.134.0 — 2026-11-02
 
 **Il link di collegamento ha il suo QR.** Nella scheda dell'**archivio condiviso** (il simbolo della nuvola nell'intestazione, o *Gestione → Backup → Archivio condiviso*), sotto il **link di collegamento per i colleghi**, l'amministratore trova ora il **QR** dello stesso link:

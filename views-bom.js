@@ -149,6 +149,9 @@ function kpi(label, value, cls, opz) {
 // e sotto ogni padre la numerazione riparte da 1.
 function bomPos(parentPos, idx) { return parentPos ? parentPos + '.' + (idx + 1) : String(idx + 1); }
 
+// Le righe dell'albero che hanno il pulsante «Apri distinta».
+function isAsmApribile(it) { return !!it && (it.type === 'gruppo' || it.type === 'sottogruppo'); }
+
 // Render ricorsivo di un nodo (componente). editable = riga di primo livello dell'articolo aperto.
 function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancestorIds, pos) {
   const child = getItem(comp.itemId);
@@ -179,7 +182,11 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     + (editable
       ? `<button class="mini-btn" title="Modifica" onclick="editComponentModal(${idx})">${ico('edit', 'tinted', 'Modifica')}</button>
          <button class="mini-btn danger" title="Elimina" onclick="delComponent(${idx})">${ico('trash', 'tinted', 'Elimina')}</button>`
-      : '');
+      : '')
+    // Dalla 0.135.0 gruppi e sottogruppi, a ogni livello, aprono la loro
+    // distinta senza passare dal menu in alto: l'ultima icona a destra.
+    + (isAsmApribile(child) && !cyc
+      ? `<button class="mini-btn" title="Apri la distinta di ${esc(child.code)}" onclick="openBomFor('${child.id}')">${ico('tree', 'tinted', 'Apri la distinta di ' + child.code)}</button>` : '');
 
   let h = `<div class="bom-node" style="padding-left:${18 + indent}px">
     <span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${toggle}

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.134.0**
+**Versione dell'app documentata: 0.135.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1177,6 +1177,9 @@ parte*, sotto).
   **Costo totale** · **Prezzo vendita**.
 - L'**albero** multi-livello, con la **numerazione di posizione**: `1`, `1.1`, `1.1.1`, `1.2`,
   `2`… Colonne: Articolo, Q.tà, U.M., Costo un., **Scarto %**, Costo riga, Azioni.
+- Nella colonna **Azioni**, sulle righe di un **gruppo** o di un **sottogruppo** (a qualunque
+  livello dell'albero), l'ultima icona a destra 🌳 **apre la sua distinta** al posto di quella
+  corrente, senza cercarla nel menu (dalla 0.135.0).
 
 **Comandi.**
 
