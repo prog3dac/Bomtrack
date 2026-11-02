@@ -641,6 +641,19 @@ tr{border-bottom:1px solid var(--hairline)}
 .mgmt-item-name{font-weight:600;font-size:14px;flex:1;min-width:120px}
 .mgmt-item-meta{font-size:12px;color:var(--text-dim);font-family:var(--mono)}
 .mgmt-item-actions{display:flex;gap:4px}
+/* Riga a colonne fisse: nome e dettagli a sinistra (i dettagli vanno a capo
+   dentro la loro colonna), stato e pulsanti sempre allineati a destra. */
+.mgmt-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 12px;align-items:center}
+.mgmt-item-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mgmt-row .mgmt-item-name{min-width:0;overflow-wrap:anywhere}
+.mgmt-row .mgmt-item-main .mgmt-item-meta{line-height:1.5;overflow-wrap:anywhere}
+.mgmt-item-badges{display:flex;gap:6px;justify-content:center;min-width:84px}
+.mgmt-row .mgmt-item-actions{justify-content:flex-end}
+@media (max-width:640px){
+  .mgmt-row{grid-template-columns:minmax(0,1fr) auto}
+  .mgmt-row .mgmt-item-main{grid-column:1/-1}
+  .mgmt-row .mgmt-item-badges{justify-content:flex-start;min-width:0}
+}
 .status-badge{font-size:11px;padding:2px 10px;border-radius:12px;font-weight:600}
 .mgmt-form{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .mgmt-form input,.mgmt-form select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:220px}
