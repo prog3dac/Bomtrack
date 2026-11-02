@@ -2,6 +2,12 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.133.2 — 2026-11-02
+
+**Le note della fase del ciclo si vedono sulle schede di Reparto.** In *Produzione → Reparto* ogni scheda di fase mostra in evidenza le **Note per il reparto** scritte sulla fase del ciclo, con l'etichetta *Note fase ciclo*: sullo schermo, sulla scheda aperta dal QR e sul foglio stampato. Prima la scheda mostrava solo la nota congelata dall'ODP al lancio, e gli ordini lanciati prima che la nota ci fosse non la mostravano. Ora la nota si legge dal ciclo di oggi; se l'ODP ne ha congelata una diversa, la scheda mostra anche quella, come *Note dell'ODP*.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.133.1 — 2026-11-02
 
 **Il colore dell'utente si vede di nuovo.** Nella finestra *Modifica utente* (Gestione → Utenti) il campo **Colore** mostrava solo una riga grigia: il riquadro del colore era schiacciato dai margini interni dei campi della finestra, e un colore scelto non si vedeva. Ora il campo ha l'altezza degli altri e mostra il colore pieno, che cambia appena lo scegli.
