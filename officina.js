@@ -214,6 +214,28 @@ function fmtOre(h) {
   return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}'`;
 }
 
+// Le note della scheda (dalla 0.133.2). La nota della fase del ciclo si legge
+// dal ciclo di oggi, non da quella congelata al lancio: un ODP lanciato prima
+// che la nota ci fosse, o prima che cambiasse, la mostra lo stesso. La fase del
+// ciclo è quella al suo posto (opIndex) sullo stesso centro: se il ciclo è
+// stato riordinato e al suo posto c'è un'altra fase, non si mostra nulla.
+// La nota congelata sull'ODP resta, a parte, solo se dice altro.
+function repartoNotaCiclo(o, f) {
+  const it = o && o.itemId && typeof getItem === 'function' ? getItem(o.itemId) : null;
+  if (!it || f.opIndex == null) return '';
+  const r = cicloFasi(it)[f.opIndex];
+  if (!r || String(r.workCenterId || '') !== String(f.workCenterId || '')) return '';
+  return String(r.note || '').trim();
+}
+function repartoNoteFase(o, f) {
+  const ciclo = repartoNotaCiclo(o, f);
+  const odp = String(f.note || '').trim();
+  const out = [];
+  if (ciclo) out.push({ label: 'Note fase ciclo', testo: ciclo, ciclo: true });
+  if (odp && odp !== ciclo) out.push({ label: ciclo ? 'Note dell\'ODP' : 'Note', testo: odp, ciclo: false });
+  return out;
+}
+
 // La scheda di una fase: la stessa nella schermata, nella scheda rapida del
 // suo QR e sul foglio stampato.
 function repartoCardHtml(o, f, stato) {
@@ -256,7 +278,7 @@ function repartoCardHtml(o, f, stato) {
       <div><span class="reparto-num-l">Tempo lavorato</span>
         <strong>${repartoTempo(o.id, f.id, 'totale')}</strong>${previste > 0 ? ` <span class="reparto-num-di">su ${fmtOre(previste)} previste</span>` : ''}</div>
     </div>
-    ${f.note ? `<div class="reparto-nota"><span class="reparto-num-l">Note</span>${esc(f.note)}</div>` : ''}
+    ${repartoNoteFase(o, f).map(n => `<div class="reparto-nota${n.ciclo ? ' ciclo' : ''}"><span class="reparto-num-l">${esc(n.label)}</span>${esc(n.testo)}</div>`).join('')}
     ${bottoni ? `<div class="reparto-azioni">${bottoni}</div>` : ''}
     ${typeof qrSvg === 'function' && qrDisponibile() ? `<div class="reparto-qr">${qrSvg(qrLink('fase', codiceQr), 96)}<span>${esc(codiceQr)}</span></div>` : ''}
     </div>
