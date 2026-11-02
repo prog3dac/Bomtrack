@@ -2,6 +2,12 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.133.1 — 2026-11-02
+
+**Il colore dell'utente si vede di nuovo.** Nella finestra *Modifica utente* (Gestione → Utenti) il campo **Colore** mostrava solo una riga grigia: il riquadro del colore era schiacciato dai margini interni dei campi della finestra, e un colore scelto non si vedeva. Ora il campo ha l'altezza degli altri e mostra il colore pieno, che cambia appena lo scegli.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.133.0 — 2026-10-31
 
 **Un articolo si approvvigiona a mano anche in una forma diversa da quella della scheda.** La scheda articolo continua a decidere gli automatismi (costo, fabbisogno, esplosione della distinta), e a mano:

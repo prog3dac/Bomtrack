@@ -186,3 +186,14 @@ describe('Gestione: elenchi in ordine alfanumerico (0.128.0)', () => {
     assert.deepEqual(ordine(h, /termsDel\('payment',(\d+)\)/g), ['1', '2', '0']);
   });
 });
+
+describe('Modifica utente: il selettore colore si vede (0.133.1)', () => {
+  it('nelle finestre il campo colore ha un\'altezza sua e un padding piccolo', () => {
+    // Il padding 10px dei campi su un input colore alto 27px lasciava solo
+    // il bordo del campione: una riga grigia al posto del colore.
+    const r = CSS.match(/\.modal-field input\[type=color\]\{([^}]*)\}/);
+    assert.ok(r, 'manca la regola per .modal-field input[type=color]');
+    assert.match(r[1], /height:\s*\d+px/);
+    assert.match(r[1], /padding:\s*[0-4]px/);
+  });
+});
