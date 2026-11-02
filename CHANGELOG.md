@@ -2,6 +2,12 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.133.2 — 2026-11-02
+
+**Elenchi di Gestione allineati.** In *Centri di lavoro*, *Fornitori*, *Clienti* e *Utenti* ogni riga andava a capo in un punto diverso secondo la lunghezza dei dettagli, e lo stato (*Attivo*/*Sospeso*) e i pulsanti finivano a metà riga o sotto. Ora il nome sta sopra i dettagli, che vanno a capo nella loro colonna, e stato e pulsanti sono sempre nella stessa colonna a destra, uguali in tutte le righe. Al telefono i dettagli prendono tutta la larghezza e stato e pulsanti stanno sotto, sempre nello stesso posto. Nei dettagli di fornitori e clienti non restano più separatori «·» vuoti quando manca un campo.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.133.1 — 2026-11-02
 
 **Il colore dell'utente si vede di nuovo.** Nella finestra *Modifica utente* (Gestione → Utenti) il campo **Colore** mostrava solo una riga grigia: il riquadro del colore era schiacciato dai margini interni dei campi della finestra, e un colore scelto non si vedeva. Ora il campo ha l'altezza degli altri e mostra il colore pieno, che cambia appena lo scegli.

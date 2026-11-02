@@ -197,3 +197,37 @@ describe('Modifica utente: il selettore colore si vede (0.133.1)', () => {
     assert.match(r[1], /padding:\s*[0-4]px/);
   });
 });
+
+describe('Gestione: righe degli elenchi allineate', () => {
+  // Con i dettagli lunghi la riga andava a capo in punti diversi e stato e
+  // pulsanti finivano a metà riga o sotto. Ora nome e dettagli stanno in una
+  // colonna, stato e pulsanti in due colonne fisse a destra.
+  const righe = html => html.match(/<div class="mgmt-item mgmt-row"[^>]*>[\s\S]*?<\/div><\/div>/g) || [];
+  it('centri, fornitori, clienti e utenti usano la riga a colonne', () => {
+    const a = app();
+    a.eval(`db.workCenters = [{ id: 'w1', name: 'Fresatura', hourlyRate: 75, capacityHours: 80, hoursPerDay: 8, queueDays: 1, suppliers: [{ supplierId: 'x' }], active: true },
+      { id: 'w2', name: 'Montaggio', hourlyRate: 50, active: true }];
+      db.suppliers = [{ id: 's1', name: 'Acme', email: 'a@x.it', active: true }];
+      db.customers = [{ id: 'c1', name: 'Rossi', active: false }]`);
+    for (const [tab, n] of [['workcenters', 2], ['suppliers', 1], ['customers', 1]]) {
+      const r = righe(pagina(a, tab));
+      assert.equal(r.length, n, tab);
+      r.forEach(x => {
+        assert.match(x, /<div class="mgmt-item-main"><span class="mgmt-item-name">/, tab + ': nome e dettagli nella stessa colonna');
+        assert.match(x, /<\/span><\/div>\s*<div class="mgmt-item-badges">/, tab + ': lo stato ha la sua colonna');
+        assert.match(x, /<div class="mgmt-item-actions">/, tab + ': i pulsanti hanno la loro colonna');
+      });
+    }
+    a.eval(`db.users = [{ id: 'u1', name: 'Anna', email: 'a@x.it', role: 'admin', color: '#3A7BE8', active: true }]`);
+    assert.match(pagina(a, 'users'), /class="mgmt-item mgmt-row"[\s\S]*<div class="mgmt-item-badges">/);
+  });
+  it('i dettagli di fornitori e clienti non lasciano separatori vuoti', () => {
+    const a = app();
+    a.eval(`db.suppliers = [{ id: 's1', name: 'Acme', email: 'a@x.it', city: 'Brescia', active: true }]`);
+    assert.match(pagina(a, 'suppliers'), /<span class="mgmt-item-meta">a@x\.it · Brescia<\/span>/);
+  });
+  it('il foglio di stile fissa le colonne, e al telefono i dettagli prendono tutta la riga', () => {
+    assert.match(CSS, /\.mgmt-row\{display:grid;grid-template-columns:minmax\(0,1fr\) auto auto/);
+    assert.match(CSS, /@media \(max-width:640px\)\{\s*\.mgmt-row\{grid-template-columns:minmax\(0,1fr\) auto\}\s*\.mgmt-row \.mgmt-item-main\{grid-column:1\/-1\}/);
+  });
+});

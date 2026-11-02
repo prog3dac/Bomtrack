@@ -99,11 +99,11 @@ function renderUsers() {
   const list = inOrdineAlfa(userList(), u => u.name).map(u => {
     const me = currentUser && u.id === currentUser.id;
     const susp = u.active === false;
-    return `<div class="mgmt-item" style="border-left:3px solid ${safeColor(u.color)}">
-      <span class="mgmt-item-name">${esc(u.name)}${me ? ' <span class="mgmt-item-meta">(tu)</span>' : ''}</span>
-      <span class="mgmt-item-meta">${esc(u.email || '—')}${u.username ? ' · @' + esc(u.username) : ''}</span>
-      <span class="doc-badge">${esc(roleLabel(u.role))}</span>
-      <span class="doc-badge ${susp ? 'st-sospeso' : 'st-attivo'}">${susp ? 'Sospeso' : 'Attivo'}</span>
+    return `<div class="mgmt-item mgmt-row" style="border-left:3px solid ${safeColor(u.color)}">
+      <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(u.name)}${me ? ' <span class="mgmt-item-meta">(tu)</span>' : ''}</span>
+      <span class="mgmt-item-meta">${esc(u.email || '—')}${u.username ? ' · @' + esc(u.username) : ''}</span></div>
+      <div class="mgmt-item-badges"><span class="doc-badge">${esc(roleLabel(u.role))}</span>
+      <span class="doc-badge ${susp ? 'st-sospeso' : 'st-attivo'}">${susp ? 'Sospeso' : 'Attivo'}</span></div>
       <div class="mgmt-item-actions">
         <button class="mini-btn" onclick="editUserModal('${u.id}')" title="Modifica">${ico('edit', 'tinted', 'Modifica')}</button>
         ${cloud
@@ -371,10 +371,10 @@ function activeBtn(coll, r, nome) {
 function renderSuppliers() {
   const list = inOrdineAlfa(db.suppliers, s => s.name).map(s => {
     const loc = [s.city, s.province ? '(' + s.province + ')' : ''].filter(Boolean).join(' ');
-    return `<div class="mgmt-item">
-    <span class="mgmt-item-name">${esc(s.name)}</span>
-    <span class="mgmt-item-meta">${esc(s.referente || '')} ${s.email ? '· ' + esc(s.email) : ''} ${s.phone ? '· ' + esc(s.phone) : ''} ${loc ? '· ' + esc(loc) : ''}</span>
-    ${activeBadge(s)}
+    return `<div class="mgmt-item mgmt-row">
+    <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(s.name)}</span>
+    <span class="mgmt-item-meta">${[s.referente, s.email, s.phone, loc].filter(Boolean).map(esc).join(' · ')}</span></div>
+    <div class="mgmt-item-badges">${activeBadge(s)}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('suppliers', s, 'Fornitore')}
       <button class="mini-btn" onclick="editSupplierModal('${s.id}')" title="Modifica fornitore">${ico('edit', 'tinted', 'Modifica fornitore')}</button>
@@ -499,10 +499,10 @@ function delSupplier(id) {
 function renderCustomers() {
   const list = inOrdineAlfa(db.customers, c => c.name).map(c => {
     const loc = [c.city, c.province ? '(' + c.province + ')' : ''].filter(Boolean).join(' ');
-    return `<div class="mgmt-item">
-    <span class="mgmt-item-name">${esc(c.name)}</span>
-    <span class="mgmt-item-meta">${esc(c.referente || '')} ${c.email ? '· ' + esc(c.email) : ''} ${c.phone ? '· ' + esc(c.phone) : ''} ${loc ? '· ' + esc(loc) : ''}</span>
-    ${activeBadge(c)}
+    return `<div class="mgmt-item mgmt-row">
+    <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(c.name)}</span>
+    <span class="mgmt-item-meta">${[c.referente, c.email, c.phone, loc].filter(Boolean).map(esc).join(' · ')}</span></div>
+    <div class="mgmt-item-badges">${activeBadge(c)}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('customers', c, 'Cliente')}
       <button class="mini-btn" onclick="editCustomerModal('${c.id}')" title="Modifica cliente">${ico('edit', 'tinted', 'Modifica cliente')}</button>
@@ -748,10 +748,10 @@ function delSubFamily(familyId, subId) {
 }
 
 function renderWorkCenters() {
-  const list = inOrdineAlfa(db.workCenters, w => w.name).map(w => `<div class="mgmt-item">
-    <span class="mgmt-item-name">${esc(w.name)}</span>
-    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda proposta ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}${moduloAttivo('macchine') && macchineDelCentro(w.id).length ? ' · ' + macchineDelCentro(w.id).length + (macchineDelCentro(w.id).length === 1 ? ' macchina' : ' macchine') : ''}</span>
-    ${activeBadge(w)}
+  const list = inOrdineAlfa(db.workCenters, w => w.name).map(w => `<div class="mgmt-item mgmt-row">
+    <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(w.name)}</span>
+    <span class="mgmt-item-meta">${fmtN(w.hourlyRate)}/h${Number(w.capacityHours) > 0 ? ' · ' + fmtQtyIt(w.capacityHours) + ' h/sett' : ''}${Number(w.hoursPerDay) > 0 ? ' · ' + fmtQtyIt(w.hoursPerDay) + ' h/gg per operatore' : ''}${Number(w.queueDays) > 0 ? ' · coda proposta ' + fmtQtyIt(w.queueDays) + ' gg' : ''}${(w.suppliers || []).length ? ' · ' + (w.suppliers || []).length + ((w.suppliers || []).length === 1 ? ' fornitore conto lavoro' : ' fornitori conto lavoro') : ''}${moduloAttivo('macchine') && macchineDelCentro(w.id).length ? ' · ' + macchineDelCentro(w.id).length + (macchineDelCentro(w.id).length === 1 ? ' macchina' : ' macchine') : ''}</span></div>
+    <div class="mgmt-item-badges">${activeBadge(w)}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('workCenters', w, 'Centro di lavoro')}
       <button class="mini-btn" onclick="editWcModal('${w.id}')" title="Modifica centro di lavoro">${ico('edit', 'tinted', 'Modifica centro di lavoro')}</button>
