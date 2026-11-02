@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.133.1**
+**Versione dell'app documentata: 0.133.2**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1389,7 +1389,7 @@ posto per infilarne una in mezzo).
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
 | **Trasporto (trasp.)** | Fase in **conto lavoro** (dalla 0.131.0): i giorni di trasporto verso e dal terzista, andata più ritorno. Proposti dal fornitore, si cambiano qui. In una tratta di più fasi consecutive dello stesso terzista vale quello della **prima** fase: il pezzo va e torna una volta sola, e sulle altre il campo è spento |
 | **Costo (€)** o **Tariffa (€/h)** | Secondo il modo scelto |
-| **Note per il reparto** | Testo libero, nella riga sotto la fase (dalla 0.132.0 si scrive anche qui, oltre che aggiungendo la fase). Finisce sull'ordine di lavoro e sull'ordine di produzione, che la congela al lancio, e si legge sulla scheda della fase in *Reparto* e sul foglio stampato |
+| **Note per il reparto** | Testo libero, nella riga sotto la fase (dalla 0.132.0 si scrive anche qui, oltre che aggiungendo la fase). Finisce sull'ordine di lavoro e sull'ordine di produzione, che la congela al lancio, e si legge sulla scheda della fase in *Reparto* e sul foglio stampato (dalla 0.133.2 dal ciclo di oggi, anche per gli ODP già lanciati) |
 
 Il ciclo **non calcola giorni** (dalla 0.131.0): non sa quanti pezzi si faranno. I giorni di ogni fase li calcolano il fabbisogno, gli ordini di produzione e la capacità finita, dove la quantità c'è.
 
@@ -3000,6 +3000,12 @@ In cima a ogni scheda una riga colorata dice la **situazione**: *Da avviare* (bl
 pezzo serve. Il riquadro dei numeri dice i pezzi e il **tempo lavorato**, cioè la somma delle
 timbrature di tutti, con le ore previste dal ciclo. In fondo una riga dice se la fase è **in
 lavorazione** (da quanto e chi ci lavora) o **in pausa**. I tempi si aggiornano da soli ogni minuto.
+
+Le **note della fase del ciclo** (*Note per il reparto*) sono in evidenza sotto i numeri, con
+l'etichetta *Note fase ciclo*, sullo schermo, sulla scheda aperta dal QR e sul foglio stampato.
+Dalla 0.133.2 la scheda le legge dal ciclo di oggi: compaiono anche sugli ODP lanciati prima che
+la nota fosse scritta, e una nota corretta nel ciclo si vede subito. Se l'ODP ha congelato al
+lancio una nota diversa, la scheda mostra anche quella, come *Note dell'ODP*.
 
 **Stampa le schede** stampa le schede del centro scelto, due per riga; l'icona della stampante su
 una scheda stampa solo quella. Sul foglio ogni scheda porta un **QR** con il numero dell'ODP e la
