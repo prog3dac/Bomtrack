@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.135.0**
+**Versione dell'app documentata: 0.135.1**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2989,7 +2989,7 @@ quest'ordine:
 
 - le fasi interne che si possono lavorare adesso, per data di consegna;
 - le **fasi future**, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;
-- le fasi **terminate** degli ordini ancora aperti.
+- le fasi **terminate**, con la fascia verde *Terminata*: restano anche quando l'ordine è **completato** (tutte le fasi dichiarate) e spariscono solo quando l'ordine si chiude (dalla 0.135.1).
 
 **Ordina per**, in alto a destra, dispone le schede in **colonne** da scorrere di lato: *Codice*
 (una colonna per parte, con le sue fasi per consegna e numero di fase), *Data* (una per giorno di

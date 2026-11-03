@@ -129,14 +129,16 @@ function repartoSetCentro(id) {
 }
 // Le fasi interne su cui si può lavorare adesso: avviabili o in corso. Con
 // `tutte` (la schermata, dalla 0.132.0) anche le fasi future, in attesa della
-// precedente, per inizio previsto, e in fondo quelle già terminate degli
-// ordini ancora aperti: una timbratura rimasta aperta su una fase che un
-// collega ha chiuso si può ancora fermare.
+// precedente, per inizio previsto, e in fondo quelle già terminate: una
+// timbratura rimasta aperta su una fase che un collega ha chiuso si può ancora
+// fermare. Dalla 0.135.1 la schermata tiene anche gli ordini **completati**
+// (tutte le fasi dichiarate): chiusa l'ultima fase, le schede dell'ordine non
+// spariscono più tutte insieme, e restano finché l'ordine non si chiude.
 const REPARTO_GRUPPO = { avviabile: 0, corso: 0, attesa: 1, chiusa: 2 };
 function repartoFasi(centroId, tutte) {
   const out = [];
   (db.prodOrders || []).forEach(o => {
-    if (!ODP_APERTI.includes(o.status)) return;
+    if (!ODP_APERTI.includes(o.status) && !(tutte && o.status === 'completato')) return;
     (o.phases || []).forEach(f => {
       if (f.supplierId) return;
       // Il filtro è un centro, o una macchina («m:<id>», modulo Macchine utensili).
