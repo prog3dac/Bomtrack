@@ -272,7 +272,7 @@ function itemInfoComposizione(it) {
     const righeOp = ops.map((o, k) => {
       const wc = getWorkCenter(o.workCenterId);
       const sup = o.supplierId ? supplierName(o.supplierId) : '';
-      const tempo = o.supplierId ? fmtUom(Number(o.days) || 0, 'gg') : fmtUom(o.hours, 'h');
+      const tempo = o.supplierId ? fmtUom(Number(o.days) || 0, 'gg') : fmtMin(o.hours) + '/pz';
       return `<tr><td><span class="cycle-phase">${cyclePhaseNumber(k)}</span></td><td>${ico('wrench', 'tinted')} ${esc(wc ? wc.name : '?')}${sup ? ' · ' + esc(sup) : ''}</td>
         <td style="font-family:var(--mono);text-align:right">${tempo}</td><td>—</td>
         <td style="font-family:var(--mono);text-align:right">${fmtN(cycleRowCost(o))}</td></tr>`;

@@ -55,7 +55,7 @@ describe('Costo della fase: operatore + macchina', () => {
   });
   it('il tooltip dice da dove viene il costo', () => {
     const t = app({ macchine: true }).eval("costoFaseDettaglio(getItem('p1').cycle[0])");
-    assert.match(t, /Operatore: 2 h × 30 = 60/);
+    assert.match(t, /Operatore: 120 min \(2 h\) × 30 = 60/);
     assert.match(t, /Macchina T01 Tornio CNC: 1 h × 25 = 25/);
   });
 });

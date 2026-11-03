@@ -785,14 +785,14 @@ function editWcModal(id) {
     <div class="settings-group-title">${ico('clock', 'tinted', '')} Tempi per la programmazione</div>
     <div class="modal-grid">
       <div class="modal-field"><label>Ore al giorno di un operatore</label><input id="ew-hpd" type="number" min="0" max="24" step="0.5" value="${Number(w.hoursPerDay) || 0}"></div>
-      <div class="modal-field"><label>Attrezzaggio proposto (h)</label><input id="ew-setup" type="number" min="0" step="0.25" value="${Number(w.setupHours) || 0}"
+      <div class="modal-field"><label>Attrezzaggio proposto (min)</label><input id="ew-setup" type="number" min="0" step="1" value="${minDaOre(w.setupHours)}"
         title="Si propone alle fasi nuove su questo centro: l'attrezzaggio vero è quello scritto sulla fase, nel ciclo"></div>
       <div class="modal-field"><label>Coda proposta (gg)</label><input id="ew-queue" type="number" min="0" max="99" step="1" value="${Number(w.queueDays) || 0}"
         title="Si propone alle fasi nuove su questo centro: la coda vera è quella scritta sulla fase, nel ciclo"></div>
     </div>
     ${fasiPropostaCheck('ew-fasi', fasiConValore(r => !r.supplierId && r.workCenterId === id, 'setupHours', Number(w.setupHours) || 0)
       + fasiConValore(r => !r.supplierId && r.workCenterId === id, 'queueDays', Number(w.queueDays) || 0), 'attrezzaggio o coda')}
-    <p class="empty-text" style="text-align:left;padding:4px 0 0">Da qui il fabbisogno ricava quanti <strong>giorni lavorativi</strong> dura una fase interna: (attrezzaggio della fase + ore/pz × pezzi) ÷ (ore al giorno di un operatore × operatori della fase), arrotondato al giorno, più i giorni di coda della fase (il tempo in cui il pezzo aspetta il suo turno). Attrezzaggio, coda e operatori si scrivono sulla fase, nel ciclo; i due valori qui sopra si propongono alle fasi nuove. La capacità qui non entra: è la coda a capacità finita a dividere le ore del centro fra le fasi. <strong>Ore al giorno a zero</strong> = 8.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0 0">Da qui il fabbisogno ricava quanti <strong>giorni lavorativi</strong> dura una fase interna: (attrezzaggio della fase + tempo fase × pezzi, in minuti e poi in ore) ÷ (ore al giorno di un operatore × operatori della fase), arrotondato al giorno, più i giorni di coda della fase (il tempo in cui il pezzo aspetta il suo turno). Attrezzaggio, coda e operatori si scrivono sulla fase, nel ciclo; i due valori qui sopra si propongono alle fasi nuove. La capacità qui non entra: è la coda a capacità finita a dividere le ore del centro fra le fasi. <strong>Ore al giorno a zero</strong> = 8.</p>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveWc('${id}')">Salva</button></div>
     <div class="settings-group-title">${ico('factory', 'tinted', '')} Fornitori conto lavoro</div>
@@ -810,7 +810,7 @@ function saveWc(id) {
   if (isNeg('ew-hpd') || isNeg('ew-setup') || isNeg('ew-queue')) { showToast('I tempi non possono essere negativi', 'error'); return; }
   w.name = nome; w.hourlyRate = numVal('ew-rate', 0); w.capacityHours = numVal('ew-cap', 0);
   const prima = { setupHours: Number(w.setupHours) || 0, queueDays: Number(w.queueDays) || 0 };
-  w.hoursPerDay = numVal('ew-hpd', 0, 24); w.setupHours = numVal('ew-setup', 0);
+  w.hoursPerDay = numVal('ew-hpd', 0, 24); w.setupHours = oreDaCampoMin('ew-setup', prima.setupHours);
   w.queueDays = Math.round(numVal('ew-queue', 0, 99));
   let fasi = 0;
   if (isChecked('ew-fasi')) {

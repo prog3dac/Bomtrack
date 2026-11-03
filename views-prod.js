@@ -1684,7 +1684,7 @@ function odpDocSpec(o) {
   const fasi = (o.phases || []).map(f => [String(f.seq), f.wcName,
     f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : (faseMacchinaNome(f) || 'Interna'),
     f.supplierId ? (f.days ? f.days + ' gg' : '')
-      : [f.hours ? fmtQtyIt(f.hours) + ' h/pz' : '', faseAttrezzaggio(f) ? '+ ' + fmtQtyIt(faseAttrezzaggio(f)) + ' h att.' : ''].filter(Boolean).join(' '),
+      : [f.hours ? fmtMin(f.hours) + '/pz' : '', faseAttrezzaggio(f) ? '+ ' + fmtMin(faseAttrezzaggio(f)) + ' att.' : ''].filter(Boolean).join(' '),
     opDaFare(o, f), opFatti(o, f), opScarti(o, f),
     ODP_FASE_LABELS[opStatoFase(o, f)] || '']);
   const mat = opMaterialeResiduo(o).map(m => [m.code, m.name, m.uom, m.qty, m.gia, m.residuo]);
