@@ -2,6 +2,14 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.137.0 — 2026-11-03
+
+**Tempo fase e attrezzaggio in minuti.** Nel **ciclo di lavorazione** il tempo di una fase interna si scrive ora in **minuti per pezzo** (*Tempo fase (min/pz)*) e l'attrezzaggio in **minuti** (*Attrezzaggio (min)*), sia nella riga della fase sia quando se ne aggiunge una; anche l'*Attrezzaggio proposto* del centro di lavoro è in minuti. In minuti anche il foglio Excel del ciclo, l'anteprima dell'articolo, il documento dell'ODP («15 min/pz + 30 min att.»), il Carico centri (*Codici da produrre* e il suo export) e il dettaglio del consuntivo.
+
+I **valori già inseriti restano giusti**: sotto l'app continua a salvare in ore, come le tariffe orarie, le capacità e le timbrature, e li mostra convertiti (0,25 h → 15 min). Nessun costo, data o carico cambia. Le **ore fatturate** dal terzista su una fase in conto lavoro a costo orario restano in ore, accanto alla tariffa. Nel foglio *Centri di lavoro* delle impostazioni la colonna diventa *Attrezzaggio min*; un file esportato prima, con *Attrezzaggio h*, si reimporta ancora in ore.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.136.0 — 2026-11-03
 
 **Le timbrature di una fase si correggono a mano.** In *Produzione → Reparto*, sotto il *Tempo lavorato* di ogni scheda, chi gestisce gli ordini di produzione (amministratore e ufficio acquisti, non l'officina) trova **Correggi i tempi**. Si apre l'elenco delle timbrature della fase, con chi le ha fatte, la durata, l'**inizio** e la **fine**:

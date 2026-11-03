@@ -487,9 +487,9 @@ function settingsSheets() {
   // I tempi per la programmazione a ritroso (0.88.0) stanno in coda, prima di
   // «Attivo» no: un foglio vecchio, senza quelle colonne, li lascia com'erano.
   out.push({ key: 'workcenters', name: 'Centri di lavoro', cols: [{ wch: 30 }, { wch: 16 }, { wch: 18 }, { wch: 8 }, { wch: 12 }, { wch: 16 }, { wch: 10 }],
-    aoa: [['Nome', 'Tariffa oraria', 'Capacità h/sett', 'Attivo', 'Ore/giorno', 'Attrezzaggio h', 'Coda gg']].concat((db.workCenters || [])
+    aoa: [['Nome', 'Tariffa oraria', 'Capacità h/sett', 'Attivo', 'Ore/giorno', 'Attrezzaggio min', 'Coda gg']].concat((db.workCenters || [])
       .map(w => [w.name || '', Number(w.hourlyRate) || 0, Number(w.capacityHours) || 0, siNo(w.active),
-        Number(w.hoursPerDay) || 0, Number(w.setupHours) || 0, Number(w.queueDays) || 0])) });
+        Number(w.hoursPerDay) || 0, minDaOre(w.setupHours), Number(w.queueDays) || 0])) });
 
   out.push({ key: 'uoms', name: 'Unità di misura', cols: [{ wch: 12 }, { wch: 30 }, { wch: 12 }],
     aoa: [['Codice', 'Descrizione', 'Predefinita']].concat(
@@ -739,13 +739,18 @@ function applyWorkCentersSheet(rows, rep) {
     }
     // I tempi: colonna assente = invariato, come la capacità.
     const tempi = {};
-    for (const [campo, nomi, etichetta] of [['hoursPerDay', ['Ore/giorno', 'Ore al giorno'], 'ore al giorno'],
-      ['setupHours', ['Attrezzaggio h', 'Attrezzaggio'], 'attrezzaggio'], ['queueDays', ['Coda gg', 'Coda'], 'coda']]) {
+    // L'attrezzaggio si scrive in minuti (dalla 0.137.0): «Attrezzaggio min», o
+    // solo «Attrezzaggio». Un file di prima ha «Attrezzaggio h», in ore, e
+    // rientra com'era. Sotto si salva sempre in ore.
+    for (const [campo, nomi, etichetta, conv] of [['hoursPerDay', ['Ore/giorno', 'Ore al giorno'], 'ore al giorno'],
+      ['setupHours', ['Attrezzaggio min', 'Attrezzaggio'], 'attrezzaggio', oreDaMin],
+      ['setupHours', ['Attrezzaggio h'], 'attrezzaggio'], ['queueDays', ['Coda gg', 'Coda'], 'coda']]) {
+      if (campo in tempi) continue;
       const raw = cell(row, ...nomi);
       if (raw === null || raw === '') continue;
       const n = numOr(raw, NaN);
       if (isNaN(n) || n < 0) { rep.errors.push(`Centri di lavoro, riga ${i + 2}: ${etichetta} non valida ("${esc(raw)}")`); return; }
-      tempi[campo] = campo === 'queueDays' ? Math.round(n) : n;
+      tempi[campo] = campo === 'queueDays' ? Math.round(n) : conv ? conv(n) : n;
     }
     if (!Array.isArray(db.workCenters)) db.workCenters = [];
     const w = db.workCenters.find(x => (x.name || '').toLowerCase() === name.toLowerCase());

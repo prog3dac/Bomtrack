@@ -141,7 +141,7 @@ describe('Tempi sulla fase: valori proposti', () => {
     assert.match(h, /id="cyc-opqueue-0"/);
     assert.match(h, /id="cyc-optransit-1"/);
     assert.match(h, /id="cyc-optransit-2"[^>]*disabled|disabled[^>]*id="cyc-optransit-2"/);
-    a.eval("document.getElementById('cyc-opsetup-0').value = '2.5'; updateCycleRow(0)");
+    a.eval("document.getElementById('cyc-opsetup-0').value = '150'; updateCycleRow(0)");
     assert.equal(a.eval("getItem('p').cycle[0].setupHours"), 2.5);
     a.eval("document.getElementById('cyc-optransit-1').value = '4'; updateCycleRow(1)");
     assert.equal(a.eval("getItem('p').cycle[1].transitDays"), 4);

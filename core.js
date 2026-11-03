@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.136.0';
+const APP_VERSION = '0.137.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -133,6 +133,23 @@ function uomSuffix(u) { return u ? ' ' + esc(u) : ''; }
 function fmtUom(n, u) { return fmtQtyIt(n) + uomSuffix(u); }
 function fmtPer(n, u) { return fmtN(n) + (u ? '/' + esc(u) : ''); }
 function labelUom(testo, u) { return u ? `${testo} (${esc(u)})` : String(testo); }
+// ─── Tempo fase e attrezzaggio in minuti (dalla 0.137.0) ───
+// Nel ciclo il tempo di una fase interna (per pezzo) e il suo attrezzaggio si
+// scrivono e si leggono in **minuti**. Sotto restano in ore (`hours`,
+// `setupHours`), come le tariffe orarie, le capacità, le timbrature e il
+// carico dei centri: nessun dato salvato cambia e nessun conto si sposta, è
+// solo l'unità di chi li scrive e li legge. Due decimali di minuto bastano:
+// 0,01 min sono sei decimi di secondo.
+function minDaOre(h) { return +((Number(h) || 0) * 60).toFixed(2); }
+function oreDaMin(m) { return (Number(m) || 0) / 60; }
+function fmtMin(h) { return fmtQtyIt(minDaOre(h)) + ' min'; }
+// Il campo in minuti riletto in ore. Se a video c'è ancora il valore di prima
+// tornano le ore di prima, intatte: 0,33 h fanno 19,8 min, e riconvertirli
+// non deve cambiare il dato a chi ha solo passato il campo col tabulatore.
+function oreDaCampoMin(id, orePrima) {
+  const m = numVal(id, 0);
+  return orePrima != null && m === minDaOre(orePrima) ? Math.max(0, Number(orePrima) || 0) : oreDaMin(m);
+}
 // L'unità di un articolo, pronta da appendere. `itemUom(null)` non lancia:
 // molte righe puntano ad articoli che possono essere spariti.
 function itemUom(it) { return (it && it.uom) || ''; }

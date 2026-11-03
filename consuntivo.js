@@ -137,7 +137,7 @@ function consReale(jobId) {
       // L'attrezzaggio si è speso quando la fase è partita.
       const att = opAvviata(d, f) ? costoAttrezzaggio(f) : 0;
       v = n * consFaseCostoPezzo(f) + att;
-      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtQtyIt(n)} pz${att > 0 ? `, più attrezzaggio ${fmtOre(faseAttrezzaggio(f))}` : ''}`;
+      testo = `${d.number || 'ODP'} fase ${f.seq} ${f.wcName || ''} — ${fmtQtyIt(n)} pz${att > 0 ? `, più attrezzaggio ${fmtMin(faseAttrezzaggio(f))}` : ''}`;
     }
     if (!v) return;
     lavorazioni += v;

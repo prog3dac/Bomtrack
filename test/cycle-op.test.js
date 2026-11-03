@@ -126,7 +126,7 @@ describe('Ciclo: una fase nuova nasce con le ore', () => {
     app.eval('currentCycleItemId = "p"');
     app.el('cyc-wc').value = 'w1';
     app.el('cyc-opmode').value = 'fisso';
-    app.el('cyc-ophours').value = '1.5';
+    app.el('cyc-opmin').value = '90';
     app.el('cyc-opcost').value = '20';
     app.eval('pickCycleOp()');
     const r = riga(app);
@@ -141,7 +141,7 @@ describe('Ciclo: una fase nuova nasce con le ore', () => {
     app.eval('currentCycleItemId = "p"');
     app.el('cyc-wc').value = 'w1';
     app.el('cyc-opmode').value = 'orario';
-    app.el('cyc-ophours').value = '2';
+    app.el('cyc-opmin').value = '120';
     app.el('cyc-oprate').value = '60';
     app.eval('pickCycleOp()');
     const r = riga(app);
@@ -222,7 +222,7 @@ describe('Ciclo: ore e giorni sono due tempi diversi', () => {
     app.asRole('admin');
     app.eval('currentCycleItemId = "p"');
     app.el('cyc-sup-0').value = '';
-    app.el('cyc-ophours-0').value = '3';
+    app.el('cyc-opmin-0').value = '180';
     app.eval('updateCycleRow(0)');
     const r = riga(app);
     assert.equal(r.hours, 3);
@@ -256,7 +256,7 @@ describe('Ciclo: ore e giorni sono due tempi diversi', () => {
     app.eval('currentCycleItemId = "p"');
     // Il campo "Ore" era quello a video (fase interna): il valore c'è ancora,
     // anche se la riga non si è ancora ridisegnata dopo il cambio.
-    app.el('cyc-ophours-0').value = '3';
+    app.el('cyc-opmin-0').value = '180';
     app.el('cyc-sup-0').value = 'beta';
     app.el('cyc-cost-in-0').value = '10';
     app.eval('onCycleRowSupplierChange(0)');

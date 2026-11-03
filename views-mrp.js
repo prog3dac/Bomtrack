@@ -1245,7 +1245,7 @@ function loadItemsHtml(entries) {
     <td style="font-family:var(--mono)">${codeLink(r.itemId, r.code)}</td>
     <td>${esc(r.name)}</td>
     <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(+r.qty.toFixed(3))}</td>
-    <td>${r.fasi.map(f => `<span class="cycle-phase">${esc(String(f.faseNo || '—'))}</span> ${esc(f.wcName)} <span class="empty-text" style="padding:0">${fmtQtyIt(f.hoursUnit)} h/pz · ${fmtQtyIt(+f.hours.toFixed(2))} h</span>`).join('<br>')}</td>
+    <td>${r.fasi.map(f => `<span class="cycle-phase">${esc(String(f.faseNo || '—'))}</span> ${esc(f.wcName)} <span class="empty-text" style="padding:0">${fmtMin(f.hoursUnit)}/pz · ${fmtQtyIt(+f.hours.toFixed(2))} h</span>`).join('<br>')}</td>
     <td style="font-family:var(--mono);text-align:right"><strong>${fmtQtyIt(+r.hours.toFixed(2))}</strong></td></tr>`).join('');
   const tot = righe.reduce((s, r) => s + r.hours, 0);
   return `${testa}
@@ -1284,7 +1284,7 @@ function loadCellModal(wcId, week, planId) {
         <span style="width:110px;font-family:var(--mono)">${codeLink(v.itemId, v.code)}</span>
         <span style="flex:1">${esc(v.name)}${v.faseNo ? ` <span class="cycle-phase">fase ${esc(String(v.faseNo))}</span>` : ''}</span>
         <span class="empty-text" style="padding:0;width:120px">${esc(v.planNumber || '')}</span>
-        <span class="empty-text" style="padding:0;width:150px;text-align:right">${fmtQtyIt(v.qty)} pz × ${fmtQtyIt(v.hoursUnit)} h${v.setup > 0 ? ` + ${fmtQtyIt(v.setup)} h att.` : ''}</span>
+        <span class="empty-text" style="padding:0;width:150px;text-align:right">${fmtQtyIt(v.qty)} pz × ${fmtMin(v.hoursUnit)}${v.setup > 0 ? ` + ${fmtMin(v.setup)} att.` : ''}</span>
         <span style="font-family:var(--mono);width:80px;text-align:right">${fmtQtyIt(+v.hours.toFixed(2))} h</span>
       </div>`).join('')}
     </div>
@@ -1313,7 +1313,7 @@ function loadExportSpec() {
   const codici = [];
   mrpLoadItems(entries, loadSoloCentro).forEach(r => r.fasi.forEach(f => {
     codici.push([r.week || '(senza data)', lunediDiSettimana(r.week) || '', r.code, r.name,
-      f.faseNo || '', f.wcName, +f.qty.toFixed(3), +f.hoursUnit.toFixed(4), +f.hours.toFixed(2)]);
+      f.faseNo || '', f.wcName, +f.qty.toFixed(3), minDaOre(f.hoursUnit), +f.hours.toFixed(2)]);
   }));
   return {
     titolo: 'Carico dei centri di lavoro',
@@ -1335,7 +1335,7 @@ function loadExportSpec() {
         { h: 'Settimana', w: 14 }, { h: 'Lunedì', w: 14, data: true },
         { h: 'Codice', w: 18 }, { h: 'Descrizione', w: 32 },
         { h: 'Fase', w: 8, num: true }, { h: 'Centro', w: 22 },
-        { h: 'Pezzi', w: 12, num: true }, { h: 'Ore/pz', w: 12, num: true }, { h: 'Ore', w: 12, num: true },
+        { h: 'Pezzi', w: 12, num: true }, { h: 'Tempo fase (min/pz)', w: 18, num: true }, { h: 'Ore', w: 12, num: true },
       ],
       righe: codici,
       totali: null,
