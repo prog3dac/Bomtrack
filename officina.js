@@ -214,6 +214,162 @@ function fmtOre(h) {
   return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}'`;
 }
 
+// ─── Correggere a mano le timbrature (dalla 0.136.0) ───
+// Una timbratura sbagliata — la fase lasciata attiva la sera, una pausa
+// dimenticata, un Inizia mai premuto — si corregge dalla scheda della fase:
+// l'elenco delle sue timbrature, con inizio e fine da cambiare, quelle da
+// togliere e quelle da aggiungere. È di chi gestisce gli ordini di produzione
+// (area `docs`), non dell'operatore: le ore entrano nel consuntivo. Ogni
+// modifica passa dallo storico, come le altre, e una timbratura tolta va nel
+// cestino.
+function timbratureCorreggibili() { return canWrite('docs'); }
+// «2026-10-27T08:00:00.000Z» → «2026-10-27T10:00», l'ora del campo, che è locale.
+function isoALocale(iso) {
+  const t = Date.parse(iso || '');
+  if (!isFinite(t)) return '';
+  const d = new Date(t);
+  return new Date(t - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function localeAIso(v) {
+  if (!v) return null;
+  const t = new Date(v).getTime();   // senza fuso: ora locale
+  return isFinite(t) ? new Date(t).toISOString() : null;
+}
+function nomeOperatore(id) {
+  const u = id && typeof getUser === 'function' ? getUser(id) : null;
+  return u ? u.name || u.email || 'utente' : (id ? 'utente rimosso' : 'nessun utente');
+}
+// Le correzioni, tutte insieme: [{ id?, userId, startedAt, endedAt, elimina }].
+// Una riga senza id è una timbratura nuova. Controlla prima, scrive dopo: o
+// passano tutte o nessuna. Restituisce { ok, errore?, cambiate }.
+function timbratureApplica(odpId, faseId, righe, adesso) {
+  const o = getOdp(odpId); const f = o && (o.phases || []).find(x => x.id === faseId);
+  if (!f) return { ok: false, errore: 'Fase non trovata' };
+  const ora = Date.parse(adesso || nowISO()) + 60000;   // un minuto di tolleranza sull'orologio
+  const proprie = new Map(logsDiFase(odpId, faseId).map(l => [l.id, l]));
+  const tenute = [];
+  for (const r of righe) {
+    if (r.id && !proprie.has(r.id)) return { ok: false, errore: 'Una timbratura non c\'è più: chiudi e riapri la finestra' };
+    if (r.elimina) continue;
+    const a = Date.parse(r.startedAt || ''), b = r.endedAt ? Date.parse(r.endedAt) : null;
+    const chi = nomeOperatore(r.userId);
+    if (!isFinite(a)) return { ok: false, errore: `Manca l'inizio di una timbratura di ${chi}` };
+    if (b != null && !isFinite(b)) return { ok: false, errore: `La fine di una timbratura di ${chi} non si legge` };
+    if (a > ora || (b != null && b > ora)) return { ok: false, errore: `Una timbratura di ${chi} è nel futuro` };
+    if (b != null && b <= a) return { ok: false, errore: `In una timbratura di ${chi} la fine viene prima dell'inizio` };
+    if (!r.id && b == null) return { ok: false, errore: `Una timbratura aggiunta a mano va chiusa: scrivi la fine` };
+    tenute.push({ r, a, b: b == null ? ora : b });
+  }
+  // Una persona lavora a una cosa alla volta: le timbrature cambiate o nuove
+  // non si sovrappongono alle altre sue, su questa fase e sulle altre.
+  const altre = timeLogs().filter(l => !proprie.has(l.id)).map(l => ({ r: l, a: Date.parse(l.startedAt), b: l.endedAt ? Date.parse(l.endedAt) : ora }));
+  const cambiata = x => {
+    const l = x.r.id && proprie.get(x.r.id);
+    return !l || l.startedAt !== x.r.startedAt || (l.endedAt || null) !== (x.r.endedAt || null) || l.userId !== x.r.userId;
+  };
+  for (const x of tenute.filter(cambiata)) {
+    const sopra = tenute.concat(altre).find(y => y !== x && y.r.userId === x.r.userId && y.a < x.b && x.a < y.b);
+    if (sopra) return { ok: false, errore: `Le timbrature di ${nomeOperatore(x.r.userId)} si sovrappongono (${fmtStamp(sopra.r.startedAt)})` };
+    if (!x.r.endedAt && altre.some(y => y.r.userId === x.r.userId && !y.r.endedAt)) return { ok: false, errore: `${nomeOperatore(x.r.userId)} ha già una timbratura aperta su un'altra fase` };
+  }
+  let cambiate = 0;
+  righe.forEach(r => {
+    if (r.id && r.elimina) { Store.remove('timeLogs', r.id); cambiate++; return; }
+    if (r.elimina) return;
+    const x = tenute.find(t => t.r === r);
+    if (r.id) {
+      if (!cambiata(x)) return;
+      Store.update('timeLogs', r.id, { startedAt: r.startedAt, endedAt: r.endedAt || null });
+    } else {
+      Store.insert('timeLogs', { id: gid(), odpId, phaseId: faseId, workCenterId: f.workCenterId || null, machineId: f.machineId || null, userId: r.userId || null,
+        startedAt: r.startedAt, endedAt: r.endedAt, note: 'aggiunta a mano', active: true });
+    }
+    cambiate++;
+  });
+  if (cambiate) saveDB();
+  return { ok: true, cambiate };
+}
+
+// La finestra: le righe in bozza finché non si salva.
+let _tmb = null;
+function timbratureModal(odpId, faseId) {
+  if (!roleGuard('docs')) return;
+  const o = getOdp(odpId); const f = o && (o.phases || []).find(x => x.id === faseId);
+  if (!f) return;
+  const righe = logsDiFase(odpId, faseId).slice().sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
+    .map(l => ({ id: l.id, userId: l.userId, inizio: isoALocale(l.startedAt), fine: isoALocale(l.endedAt), elimina: false, prima: l }));
+  _tmb = { odpId, faseId, righe };
+  openModal(`<h3>${ico('clock', 'tinted pill', '')} Correggi le timbrature</h3>
+    <p><strong>${esc(o.number || '')}</strong> · ${esc(o.code || '')} · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}</p>
+    <div id="tmb-righe">${timbratureRigheHtml()}</div>
+    <button type="button" class="btn-ghost" onclick="timbratureAggiungi()">${ico('plus', 'tinted', '')} Aggiungi una timbratura</button>
+    <p class="empty-text" style="text-align:left;padding:8px 0 0">Una fase rimasta attiva per errore si chiude scrivendo la fine; una fine vuota vuol dire che si lavora ancora. Le modifiche finiscono nello storico, e una timbratura eliminata va nel cestino.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="timbratureSalva()">Salva</button>
+    </div>`, false, 'form');
+}
+function timbratureRigheHtml() {
+  if (!_tmb) return '';
+  if (!_tmb.righe.length) return '<div class="empty-text" style="text-align:left">Nessuna timbratura su questa fase.</div>';
+  const utenti = userList().filter(u => u.active !== false);
+  return _tmb.righe.map((r, i) => {
+    const a = Date.parse(localeAIso(r.inizio) || ''), b = r.fine ? Date.parse(localeAIso(r.fine) || '') : Date.now();
+    const durata = isFinite(a) && isFinite(b) && b > a ? fmtOre((b - a) / 3600000) : '—';
+    const chi = r.id ? `<strong>${esc(nomeOperatore(r.userId))}</strong>`
+      : `<select id="tmb-u-${i}" aria-label="Operatore">${utenti.map(u => `<option value="${esc(u.id)}"${u.id === r.userId ? ' selected' : ''}>${esc(u.name || u.email || '')}</option>`).join('')}</select>`;
+    return `<div class="tmb-riga${r.elimina ? ' via' : ''}${r.id ? '' : ' nuova'}">
+      <div class="tmb-testa">${chi}<span class="tmb-durata">${r.elimina ? 'da eliminare' : `${durata}${r.fine ? '' : ' · in corso'}`}</span>
+        <button type="button" class="btn-ghost tmb-via" onclick="timbratureElimina(${i})" title="${r.elimina ? 'Tieni' : 'Elimina'} questa timbratura" aria-label="${r.elimina ? 'Tieni' : 'Elimina'} la timbratura">${r.elimina ? ico('refresh', 'tinted', '') : ico('trash', 'tinted', '')}</button></div>
+      <div class="tmb-ore">
+        <div class="modal-field"><label for="tmb-a-${i}">Inizio</label><input id="tmb-a-${i}" type="datetime-local" value="${esc(r.inizio)}"${r.elimina ? ' disabled' : ''} onchange="timbratureLeggi(true)"></div>
+        <div class="modal-field"><label for="tmb-b-${i}">Fine</label><input id="tmb-b-${i}" type="datetime-local" value="${esc(r.fine)}"${r.elimina ? ' disabled' : ''} onchange="timbratureLeggi(true)"></div>
+      </div></div>`;
+  }).join('');
+}
+// I campi nella bozza; con `ridisegna` anche le durate.
+function timbratureLeggi(ridisegna) {
+  if (!_tmb || typeof document === 'undefined') return;
+  _tmb.righe.forEach((r, i) => {
+    const a = document.getElementById('tmb-a-' + i), b = document.getElementById('tmb-b-' + i), u = document.getElementById('tmb-u-' + i);
+    if (a && !a.disabled) r.inizio = a.value;
+    if (b && !b.disabled) r.fine = b.value;
+    if (u && !r.id) r.userId = u.value;
+  });
+  if (ridisegna) { const el = document.getElementById('tmb-righe'); if (el) el.innerHTML = timbratureRigheHtml(); }
+}
+function timbratureElimina(i) {
+  timbratureLeggi();
+  const r = _tmb && _tmb.righe[i]; if (!r) return;
+  if (!r.id) _tmb.righe.splice(i, 1); else r.elimina = !r.elimina;
+  timbratureLeggi(true);
+}
+// Una timbratura nuova parte dalla fine dell'ultima, per un'ora, a nome di chi
+// ha timbrato per ultimo la fase (o di chi corregge).
+function timbratureAggiungi() {
+  if (!_tmb) return;
+  timbratureLeggi();
+  const ultima = _tmb.righe.filter(r => !r.elimina).slice(-1)[0];
+  const base = ultima && ultima.fine ? new Date(localeAIso(ultima.fine)).getTime() : Date.now() - 3600000;
+  const inizio = Math.min(base, Date.now() - 3600000);
+  _tmb.righe.push({ id: null, userId: (ultima && ultima.userId) || utenteId(), inizio: isoALocale(new Date(inizio).toISOString()), fine: isoALocale(new Date(inizio + 3600000).toISOString()), elimina: false });
+  timbratureLeggi(true);
+}
+function timbratureSalva() {
+  if (!_tmb || !roleGuard('docs')) return;
+  timbratureLeggi();
+  // Il campo non ha i secondi: un orario non toccato resta quello timbrato.
+  const ora = (v, iso) => (iso && v === isoALocale(iso) ? iso : (v ? localeAIso(v) : null));
+  const righe = _tmb.righe.map(r => ({ id: r.id, userId: r.userId, elimina: r.elimina,
+    startedAt: ora(r.inizio, r.prima && r.prima.startedAt), endedAt: r.fine ? ora(r.fine, r.prima && r.prima.endedAt) : null }));
+  const esito = timbratureApplica(_tmb.odpId, _tmb.faseId, righe);
+  if (!esito.ok) { showToast(esito.errore, 'error'); return; }
+  _tmb = null;
+  closeModal();
+  if (document.getElementById('view-reparto')) renderReparto();
+  savedToast(esito.cambiate ? 'Timbrature corrette' : 'Nessuna modifica');
+}
+
 // Le note della scheda (dalla 0.133.2). La nota della fase del ciclo si legge
 // dal ciclo di oggi, non da quella congelata al lancio: un ODP lanciato prima
 // che la nota ci fosse, o prima che cambiasse, la mostra lo stesso. La fase del
@@ -276,7 +432,8 @@ function repartoCardHtml(o, f, stato) {
       <div><span class="reparto-num-l">${stato === 'chiusa' ? 'Fatti' : attesa ? 'Attesi' : 'Da fare'}</span>
         <strong>${stato === 'chiusa' ? fmtQtyIt(opFatti(o, f)) : attesa ? fmtQtyIt(pezzi) : `${fmtQtyIt(opResidua(o, f))} <span class="reparto-num-di">di ${fmtQtyIt(opDaFare(o, f))}</span>`} pz</strong></div>
       <div><span class="reparto-num-l">Tempo lavorato</span>
-        <strong>${repartoTempo(o.id, f.id, 'totale')}</strong>${previste > 0 ? ` <span class="reparto-num-di">su ${fmtOre(previste)} previste</span>` : ''}</div>
+        <strong>${repartoTempo(o.id, f.id, 'totale')}</strong>${previste > 0 ? ` <span class="reparto-num-di">su ${fmtOre(previste)} previste</span>` : ''}
+        ${scrive && timbratureCorreggibili() ? `<button type="button" class="reparto-correggi" onclick="timbratureModal('${o.id}','${f.id}')" title="Correggi a mano le timbrature di questa fase">${ico('edit', '', '')} Correggi i tempi</button>` : ''}</div>
     </div>
     ${repartoNoteFase(o, f).map(n => `<div class="reparto-nota${n.ciclo ? ' ciclo' : ''}"><span class="reparto-num-l">${esc(n.label)}</span>${esc(n.testo)}</div>`).join('')}
     ${bottoni ? `<div class="reparto-azioni">${bottoni}</div>` : ''}

@@ -458,6 +458,7 @@ const STORICO_CAMPI = {
   email: 'Email', passwordHash: 'Password', transport: 'Trasporto', payment: 'Pagamento',
   number: 'Numero', leadDays: 'Giorni di consegna', weight: 'Peso', workCenterId: 'Centro di lavoro',
   itemId: 'Articolo', jobId: 'Commessa', planId: 'Piano', makeOrBuy: 'Fare o comprare',
+  startedAt: 'Inizio', endedAt: 'Fine', userId: 'Operatore',
   // Articoli
   unitCost: 'Costo unitario', purchasePrice: 'Prezzo d\'acquisto', subFamilyId: 'Sottofamiglia',
   altUom: 'U.M. alternativa', altFactor: 'Fattore di conversione', conceptId: 'Concetto',
@@ -493,7 +494,7 @@ const STORICO_CAMPI = {
 };
 const STORICO_RIF = { supplierId: 'suppliers', customerId: 'customers', familyId: 'families',
   workCenterId: 'workCenters', itemId: 'items', jobId: 'jobs', planId: 'plans',
-  machineItemId: 'items', groupItemId: 'items', replacedById: 'items', altItemId: 'items', rfqId: 'rfqs', odpId: 'prodOrders', docId: 'attachmentDocs' };
+  userId: 'users', machineItemId: 'items', groupItemId: 'items', replacedById: 'items', altItemId: 'items', rfqId: 'rfqs', odpId: 'prodOrders', docId: 'attachmentDocs' };
 // Valori in codice che hanno un nome per chi legge.
 const STORICO_VALORI = {
   sourcing: { make: 'produzione interna', buy: 'acquisto' },
@@ -515,6 +516,8 @@ function _storicoNomeRif(k, v, e) {
     const it = e && e.c === 'items' ? (db.items || []).find(x => x && x.id === e.id) : null;
     return storicoQuotazione(it, v) || 'quotazione non più a listino';
   }
+  // Le ore di una timbratura (dalla 0.136.0): come si leggono, non in ISO.
+  if ((k === 'startedAt' || k === 'endedAt') && e && e.c === 'timeLogs') return _storicoQuando(v) || v;
   if (k === 'subFamilyId') {
     for (const f of db.families || []) {
       const s = (f.subs || []).find(x => x && x.id === v);
