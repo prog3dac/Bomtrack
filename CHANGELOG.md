@@ -13,6 +13,12 @@ Prima di salvare l'app controlla che la fine venga dopo l'inizio, che niente sia
 
 Nessun cambio a `supabase/schema.sql`.
 
+### 0.135.1 — 2026-11-03
+
+**Le schede delle fasi fatte restano in Reparto.** In *Produzione → Reparto*, quando si dichiarava l'ultima fase di un ordine l'ordine passava a *Completato* e tutte le sue schede sparivano insieme, anche quelle già terminate prima. Ora restano in vista con la fascia verde *Terminata*, in fondo alla loro colonna, finché l'ordine non viene **chiuso**. Ordinamento per codice, data e ODP e stampa delle schede le comprendono; il numero accanto a ogni centro conta ancora solo le fasi da lavorare.
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.135.0 — 2026-11-02
 
 **Dall'albero si apre la distinta di un gruppo.** In *Tecnico → Gestione DB* ogni riga di un **gruppo** o di un **sottogruppo**, anche annidata, ha come ultima icona a destra nella colonna Azioni il pulsante **Apri la distinta**: porta subito a quella distinta, senza cercarla nel menu in alto. La colonna Azioni è un poco più larga, così il costo di riga non viene coperto.

@@ -2989,7 +2989,7 @@ quest'ordine:
 
 - le fasi interne che si possono lavorare adesso, per data di consegna;
 - le **fasi future**, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;
-- le fasi **terminate** degli ordini ancora aperti.
+- le fasi **terminate**, con la fascia verde *Terminata*: restano anche quando l'ordine è **completato** (tutte le fasi dichiarate) e spariscono solo quando l'ordine si chiude (dalla 0.135.1).
 
 **Ordina per**, in alto a destra, dispone le schede in **colonne** da scorrere di lato: *Codice*
 (una colonna per parte, con le sue fasi per consegna e numero di fase), *Data* (una per giorno di
