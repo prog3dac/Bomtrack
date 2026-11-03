@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.135.1**
+**Versione dell'app documentata: 0.136.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3029,6 +3029,22 @@ corso. Il **QR**
 dell'ODP, con il modulo acceso, porta gli stessi pulsanti. Le ore timbrate entrano nel
 **consuntivo** della commessa al posto delle ore del ciclo, e fanno scadere le manutenzioni «ogni
 N ore».
+
+**Correggere le timbrature** (dalla 0.136.0). Chi gestisce gli ordini di produzione (amministratore e
+ufficio acquisti; non l'officina) trova **Correggi i tempi** sotto il *Tempo lavorato* su ogni scheda. Si
+apre l'elenco delle timbrature della fase, con l'operatore, la durata, l'inizio e la fine:
+
+- una fase rimasta **attiva per errore**, per esempio una pausa dimenticata, si chiude scrivendo
+  l'ora giusta in *Fine*; una fine vuota vuol dire che si lavora ancora;
+- il **cestino** su una riga la segna da eliminare (un secondo clic la tiene); salvando, la
+  timbratura finisce nel cestino dell'app;
+- **Aggiungi una timbratura** registra un lavoro per cui nessuno ha premuto *Inizia*, con
+  l'operatore scelto e inizio e fine scritti a mano.
+
+**Salva** controlla che la fine venga dopo l'inizio, che niente sia nel futuro e che le timbrature
+di una persona non si sovrappongano, su questa fase o sulle altre: se qualcosa non torna non salva
+niente e dice cosa. Ogni correzione entra nello **storico delle modifiche** (*Timbratura ODP-… fase
+…*, con chi l'ha fatta e gli orari di prima e di dopo).
 
 ### Manutenzione (modulo Officina, dalla 0.123.0)
 

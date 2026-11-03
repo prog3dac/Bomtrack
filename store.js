@@ -1983,6 +1983,12 @@ function storicoFotografa() {
 // Il nome con cui una persona riconosce il record, preso al momento.
 function storicoEtichetta(r) {
   if (!r) return '';
+  // Una timbratura non ha nome: si riconosce dall'ODP e dalla fase.
+  if (r.odpId && r.phaseId && 'startedAt' in r) {
+    const o = (db && db.prodOrders || []).find(x => x && x.id === r.odpId);
+    const f = o && (o.phases || []).find(x => x && x.id === r.phaseId);
+    if (o) return `${o.number || o.code || ''}${f ? ' fase ' + f.seq : ''}`.slice(0, STORICO_LUNG);
+  }
   return String(r.code || r.number || r.name || r.title || r.username || r.email || r.id || '').slice(0, STORICO_LUNG);
 }
 function _storicoValore(v) {

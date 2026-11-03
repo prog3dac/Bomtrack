@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.136.0 — 2026-11-03
+
+**Le timbrature di una fase si correggono a mano.** In *Produzione → Reparto*, sotto il *Tempo lavorato* di ogni scheda, chi gestisce gli ordini di produzione (amministratore e ufficio acquisti, non l'officina) trova **Correggi i tempi**. Si apre l'elenco delle timbrature della fase, con chi le ha fatte, la durata, l'**inizio** e la **fine**:
+- una fase rimasta **attiva per errore** (la pausa dimenticata la sera) si chiude scrivendo l'ora giusta della fine; una fine vuota vuol dire che si lavora ancora;
+- l'icona del cestino **elimina** una timbratura (si può ripensarci prima di salvare; dopo, è nel cestino);
+- **Aggiungi una timbratura** registra a mano un lavoro per cui nessuno ha premuto Inizia, scegliendo l'operatore.
+
+Prima di salvare l'app controlla che la fine venga dopo l'inizio, che niente sia nel futuro e che le timbrature di una persona non si sovrappongano, né su questa fase né sulle altre. Ogni correzione finisce nello **storico delle modifiche**, con l'ODP e la fase, chi l'ha fatta e gli orari di prima e di dopo; le ore corrette entrano subito nel consuntivo e nelle manutenzioni «ogni N ore».
+
+Nessun cambio a `supabase/schema.sql`.
+
 ### 0.135.1 — 2026-11-03
 
 **Le schede delle fasi fatte restano in Reparto.** In *Produzione → Reparto*, quando si dichiarava l'ultima fase di un ordine l'ordine passava a *Completato* e tutte le sue schede sparivano insieme, anche quelle già terminate prima. Ora restano in vista con la fascia verde *Terminata*, in fondo alla loro colonna, finché l'ordine non viene **chiuso**. Ordinamento per codice, data e ODP e stampa delle schede le comprendono; il numero accanto a ogni centro conta ancora solo le fasi da lavorare.
