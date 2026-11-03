@@ -68,7 +68,7 @@ function timbraPausa(odpId, faseId) {
 
 // ─── I gesti del terminale ───
 let repartoCentro = null;   // null = da leggere dalla preferenza del browser
-const REPARTO_CENTRO_KEY = 'bomtrack_reparto_centro';
+const REPARTO_CENTRO_KEY = chiaveOrg('bomtrack_reparto_centro');
 function repartoCentroScelto() {
   if (repartoCentro != null) return repartoCentro;
   try { repartoCentro = localStorage.getItem(REPARTO_CENTRO_KEY) || ''; } catch (e) { repartoCentro = ''; }
@@ -77,7 +77,7 @@ function repartoCentroScelto() {
 // Come si dispongono le schede (dalla 0.132.0): in colonne per codice, per
 // giorno di inizio previsto o per ODP. Preferenza del dispositivo, come il centro.
 const REPARTO_ORDINI = { codice: 'Codice', data: 'Data', odp: 'ODP' };
-const REPARTO_ORDINE_KEY = 'bomtrack_reparto_ordine';
+const REPARTO_ORDINE_KEY = 'bomtrack_reparto_ordine';   // preferenza di chi guarda: comune a tutte le organizzazioni
 let repartoOrdine = null;
 function repartoOrdineScelto() {
   if (repartoOrdine != null) return repartoOrdine;

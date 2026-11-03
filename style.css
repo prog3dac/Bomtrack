@@ -1133,6 +1133,16 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .user-pill{display:flex;align-items:center;gap:5px;padding:3px 10px 3px 7px;border-radius:20px;border:1.5px solid var(--border);font-size:13px;font-weight:500;white-space:nowrap}
 .user-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .user-role{color:var(--text-dim);font-size:11px}
+/* L'organizzazione aperta, accanto all'utente: solo con più organizzazioni sul PC (dalla 0.136.0). */
+.user-org{margin-left:4px;padding:1px 7px;border-radius:10px;background:var(--bg);border:1px solid var(--border);font-size:11px;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.login-org-label{display:block;font-size:13px;color:var(--text-dim);margin-bottom:4px}
+.org-elenco{width:100%;border-collapse:collapse;margin:8px 0 4px}
+.org-elenco td{padding:8px 4px;border-top:1px solid var(--border);vertical-align:middle}
+.org-elenco tr:first-child td{border-top:none}
+.org-azioni{text-align:right;white-space:nowrap}
+.org-azioni button{margin-left:4px}
+.org-badge{display:inline-block;padding:0 6px;border-radius:8px;font-size:11px;font-weight:600;color:var(--accent);border:1px solid var(--accent)}
+@media (max-width:600px){.org-elenco td{display:block;border-top:none;padding:4px 0}.org-elenco tr{display:block;border-top:1px solid var(--border);padding:6px 0}.org-azioni{text-align:left}.org-azioni button{margin:4px 4px 0 0}}
 /* Sola lettura per ruolo: la UI nasconde creazione ed eliminazione, le guardie bloccano comunque */
 .view-readonly .add-btn-sm,.view-readonly .add-btn,.view-readonly .mini-btn.danger{display:none}
 .ro-banner{background:var(--orange-soft);border:1px solid var(--orange);color:var(--orange);border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px}

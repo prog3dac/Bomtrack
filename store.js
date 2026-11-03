@@ -6,18 +6,18 @@
 //  docs/cloud-schema.md.
 // ═══════════════════════════════════════════════════════════
 
-const DB_KEY = 'bomtrack_v1';       // non rinominare: la versione vive dentro il blob
+const DB_KEY = chiaveOrg('bomtrack_v1');       // non rinominare: la versione vive dentro il blob
 // Dove finisce un blob che non si riesce più a leggere. Un JSON troncato —
 // scrittura interrotta, spazio finito a metà, chiavetta sfilata — è quasi tutto
 // ancora lì, e un recupero a mano ne salva la maggior parte. Fino alla 0.59 si
 // ripartiva dai dati demo e li si salvava sopra: l'unica copia rimasta spariva
 // prima che qualcuno potesse guardarla.
-const DB_KEY_RESCUE = 'bomtrack_v1_illeggibile';
+const DB_KEY_RESCUE = chiaveOrg('bomtrack_v1_illeggibile');
 // Il contatore di revisione dell'archivio. Sta in una chiave **sua**, minuscola,
 // e non dentro il blob: si legge prima di ogni salvataggio, e rileggere e
 // analizzare qualche megabyte di JSON a ogni scrittura costerebbe molto più del
 // salvataggio stesso.
-const DB_KEY_REV = 'bomtrack_v1_rev';
+const DB_KEY_REV = chiaveOrg('bomtrack_v1_rev');
 const SCHEMA_VERSION = 2;           // v1 = id interi legacy (implicita), v2 = uuid + timestamp
 const TRASH_DAYS = 30;              // per quanto un'eliminazione resta recuperabile
 
@@ -1744,10 +1744,10 @@ let adapter = LocalAdapter;
 // lì. Accanto all'archivio si salva anche la revisione a cui è stato scritto:
 // se una scheda con una versione vecchia dell'app scrive ancora in localStorage
 // dopo il trasloco, la sua revisione è più alta e al caricamento vince lei.
-const IDB_NOME = 'bomtrack_archivio';
+const IDB_NOME = chiaveOrg('bomtrack_archivio');
 // Messo dopo il trasloco: da lì in poi l'archivio vero sta in IndexedDB, e
 // localStorage vuoto non vuol dire «archivio nuovo».
-const DB_KEY_IN_IDB = 'bomtrack_v1_in_indexeddb';
+const DB_KEY_IN_IDB = chiaveOrg('bomtrack_v1_in_indexeddb');
 const IDB_STORE = 'archivio';
 // Le chiavi che stanno in IndexedDB accanto all'archivio. `cloudBase`: la
 // fotografia dell'ultimo invio all'archivio condiviso, che in localStorage

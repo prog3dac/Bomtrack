@@ -54,7 +54,7 @@
 // («Archivio: Disegni»): il riferimento vero sta in IndexedDB e non è una
 // stringa. Tenerne una copia qui permette di disegnare la scheda senza aspettare
 // una promessa, come fa tutto il resto dell'app.
-const ARCHIVIO_NOME_KEY = 'bomtrack_archivio_nome';
+const ARCHIVIO_NOME_KEY = chiaveOrg('bomtrack_archivio_nome');
 const ARCHIVIO_CONFIG_STORE = 'config';
 const ARCHIVIO_CONFIG_KEY = 'cartella';
 // Quanto in profondità scendere nelle sottocartelle. Un archivio organizzato per

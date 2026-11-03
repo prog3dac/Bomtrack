@@ -41,10 +41,17 @@
 // e a proteggere i dati sono le policy — ma non stanno nel codice: il codice è
 // lo stesso per tutti, il progetto no. La chiave di servizio non passa mai di qui.
 
-const CLOUD_KEY = 'bomtrack_cloud';                 // { url, chiave, allineato, since }
-const CLOUD_SESS_KEY = 'bomtrack_cloud_sessione';   // la sessione di Supabase Auth
-const CLOUD_BASE_KEY = 'bomtrack_cloud_base';       // la fotografia dell'ultimo invio riuscito
-const CLOUD_SCOLLEGATO_KEY = 'bomtrack_scollegato_da';   // { id } dell'amministratore che ha scollegato
+// Ogni chiave è dell'organizzazione attiva (organizzazioni.js, dalla 0.136.0):
+// collegamento, sessione e fotografia di un'organizzazione non si vedono
+// dalle altre.
+const CLOUD_KEY = chiaveOrg(ORG_CLOUD_KEY_BASE);                        // { url, chiave, allineato, since }
+const CLOUD_SESS_KEY = chiaveOrg('bomtrack_cloud_sessione');            // la sessione di Supabase Auth
+const CLOUD_BASE_KEY = chiaveOrg('bomtrack_cloud_base');                // la fotografia dell'ultimo invio riuscito
+const CLOUD_SCOLLEGATO_KEY = chiaveOrg('bomtrack_scollegato_da');       // { id } dell'amministratore che ha scollegato
+const CLOUD_NUOVAPW_KEY = chiaveOrg('bomtrack_cloud_nuovapassword');    // l'invito o il recupero da completare
+// La versione di supabase/schema.sql che questa app si aspetta (dalla
+// 0.136.0, vedi archivio_stato). Si alza insieme a quella del file.
+const CLOUD_SCHEMA_VERSIONE = 1;
 const CLOUD_GIRO_MS = 25000;
 const CLOUD_ATTESA_MS = 1500;
 const CLOUD_RIPROVA_MS = 5000;   // senza collegamento: ogni quanto si riprova
@@ -144,13 +151,24 @@ async function cloudHttp(percorso, opz) {
 }
 
 // ── Sessione di Supabase Auth ──
-function cloudSessione() { return cloudLeggi(CLOUD_SESS_KEY); }
+// La sessione porta l'indirizzo del progetto che l'ha emessa (dalla 0.136.0):
+// una sessione che non è di questo collegamento non si usa, né si manda a
+// questo server. Con le chiavi separate per organizzazione non dovrebbe mai
+// succedere; se succede, è un errore da fermare, non un token da provare.
+// Una sessione di prima non ha l'indirizzo e resta buona.
+function cloudSessione() {
+  const s = cloudLeggi(CLOUD_SESS_KEY);
+  if (!s || !s.url) return s;
+  const c = cloudConfig();
+  return c && c.url === s.url ? s : null;
+}
 function cloudSalvaSessione(s) {
   if (!s || !s.access_token) { cloudScrivi(CLOUD_SESS_KEY, null); return null; }
   const x = {
     access_token: s.access_token, refresh_token: s.refresh_token,
     expires_at: s.expires_at || (Math.floor(Date.now() / 1000) + (Number(s.expires_in) || 3600)),
     user: s.user ? { id: s.user.id, email: s.user.email } : null,
+    url: (cloudConfig() || {}).url || null,
     // L'ultimo uso, per la durata della sessione (Gestione → Accesso): un
     // rinnovo avviene solo con l'app aperta, ed è uso anche quello.
     ts: nowISO(),
@@ -1407,11 +1425,27 @@ async function cloudDopoAccesso() {
   // La sessione arrivata da un invito non sa chi è: lo dice il profilo.
   const s = cloudSessione();
   if (s && !s.user) cloudSalvaSessione(Object.assign({}, s, { user: { id: p.id, email: p.email } }));
+  cloudControllaSchema(st);
   const c = cloudConfig();
   if (!c.allineato) return { primo: true, stato: st };
   // Già allineato: si scarica quello che è cambiato e si entra.
   if (!getUser(p.id)) await cloudRiceviForzato();
   return { primo: false, stato: st };
+}
+// Lo schema del progetto è più vecchio dell'app: non si blocca — le funzioni
+// che mancano rispondono già con il loro errore (PGRST202) — ma lo si dice
+// subito, con il nome dell'organizzazione, prima che un invio fallisca.
+function cloudSchemaIndietro(st) {
+  const v = Number(st && st.schema_versione) || 0;
+  return v < CLOUD_SCHEMA_VERSIONE;
+}
+function cloudControllaSchema(st) {
+  if (!cloudSchemaIndietro(st)) return false;
+  const chi = typeof orgPiuDiUna === 'function' && orgPiuDiUna() ? ' di ' + orgNome() : '';
+  const msg = 'Lo schema del progetto Supabase' + chi + ' è più vecchio di questa versione dell\'app: un amministratore riesegua supabase/schema.sql nel SQL Editor di quel progetto';
+  _cloud.messaggio = msg;
+  if (typeof showToast === 'function') showToast(msg, 'error');
+  return true;
 }
 // ── Lo scaricamento completo, a pagine (dalla 0.105.4) ──
 // pull_changes() senza `since` rimanda l'intero archivio in una risposta: su
@@ -1646,7 +1680,11 @@ async function cloudScaricaArchivio() {
 function cloudLinkCollegamento(c) {
   if (!c || typeof location === 'undefined') return '';
   const base = location.origin && location.origin !== 'null' ? location.origin + location.pathname : location.href.split(/[?#]/)[0];
-  return base + '?supabase=' + encodeURIComponent(c.url) + '&chiave=' + encodeURIComponent(c.chiave);
+  // Il nome dell'organizzazione, se gliel'hanno dato: il PC che apre il link
+  // la ritrova con lo stesso nome (dalla 0.136.0).
+  const voce = orgElenco().find(o => o.id === orgAttiva());
+  const nome = voce && voce.nome ? '&nome=' + encodeURIComponent(voce.nome) : '';
+  return base + '?supabase=' + encodeURIComponent(c.url) + '&chiave=' + encodeURIComponent(c.chiave) + nome;
 }
 function cloudCollega(url, chiave) {
   const u = cloudNormalizzaUrl(url);
@@ -1704,6 +1742,7 @@ function cloudPannello() {
       <div class="modal-field"><label>Indirizzo del progetto</label><input id="cl-url" placeholder="https://xxxx.supabase.co" autocomplete="off"></div>
       <div class="modal-field"><label>Chiave pubblica</label><input id="cl-chiave" placeholder="eyJ… oppure sb_publishable_…" autocomplete="off"></div>
       <p class="cl-esito" id="cl-esito"></p>
+      <p class="cl-nota">Collegando, i dati di <strong>${esc(orgNome())}</strong> su questo PC vanno nel progetto al primo accesso. Per lavorare su un'<strong>altra</strong> organizzazione, con dati separati, usa invece <a href="#" onclick="orgPannelloAggiungi();return false">Aggiungi organizzazione</a>.</p>
       <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
         <button class="btn-outline" onclick="cloudPannelloProva()">Prova</button>
         <button class="add-btn-sm" onclick="cloudPannelloCollega()">Collega questo PC</button></div>`);
@@ -1713,7 +1752,7 @@ function cloudPannello() {
   const da = Store.hasPendingChanges() ? 'Ci sono modifiche non ancora inviate.' : 'Niente in attesa di invio.';
   const link = cloudLinkCollegamento(c);
   openModal(`<h3>${ico('cloud', 'tinted pill', '')} Archivio condiviso</h3>
-    <p><strong>Progetto</strong>: ${esc(c.url)}<br>
+    <p>${orgPiuDiUna() ? `<strong>Organizzazione</strong>: ${esc(orgNome())}<br>` : ''}<strong>Progetto</strong>: ${esc(c.url)}<br>
       <strong>Accesso</strong>: ${esc((s && s.user && s.user.email) || 'nessuno')}<br>
       <strong>Stato</strong>: ${esc(CLOUD_STATI[_cloud.stato] || 'non attivo')}${_cloud.ultimo ? ' · ultimo giro alle ' + esc(_cloud.ultimo.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })) : ''}<br>
       ${esc(da)}${_cloud.messaggio ? '<br><span class="cl-err">' + esc(_cloud.messaggio) + '</span>' : ''}
@@ -1726,6 +1765,7 @@ function cloudPannello() {
     <div class="modal-actions">
       ${dentro && Store.hasPendingChanges() ? `<button class="btn-outline" onclick="cloudPannelloScartaRifiutati()" title="Manda le modifiche in attesa a pezzi: quelle che il server rifiuta tornano come sul server, le altre partono">Scarta solo i rifiutati</button>` : ''}
       ${dentro ? `<button class="btn-outline" onclick="cloudPannelloRiscarica()">Scarta e riscarica</button>` : ''}
+      <button class="btn-outline" onclick="orgPannello()">${ico('building', 'tinted', '')} Organizzazioni</button>
       ${!dentro || admin ? `<button class="btn-outline" style="color:var(--red);border-color:var(--red)" onclick="cloudPannelloScollega()">Scollega questo PC</button>` : ''}
       ${dentro ? `<button class="add-btn-sm" onclick="cloudPannelloSincronizza()">${ico('refresh', 'tinted', '')} Sincronizza ora</button>` : `<button class="add-btn-sm" onclick="closeModal()">Chiudi</button>`}
     </div>`);
@@ -1961,7 +2001,7 @@ function cloudDaIndirizzo() {
   const q = new URLSearchParams(location.search || '');
   const h = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
   const out = {};
-  if (q.get('supabase') && q.get('chiave')) out.config = { url: q.get('supabase'), chiave: q.get('chiave') };
+  if (q.get('supabase') && q.get('chiave')) out.config = { url: q.get('supabase'), chiave: q.get('chiave'), nome: String(q.get('nome') || '').trim().slice(0, 60) };
   if (h.get('access_token')) out.sessione = {
     access_token: h.get('access_token'), refresh_token: h.get('refresh_token'),
     expires_at: Number(h.get('expires_at')) || null, expires_in: Number(h.get('expires_in')) || 3600, tipo: h.get('type') || '',
@@ -1977,21 +2017,51 @@ function cloudPulisciIndirizzo() {
 function cloudAllAvvio() {
   const x = cloudDaIndirizzo();
   if (!x) return false;
+  // Un link di un progetto che sul PC è già un'altra organizzazione (dalla
+  // 0.136.0): si passa a quella e si ricarica **con l'indirizzo intatto**, così
+  // l'invito o il recupero si completano dentro l'organizzazione giusta, con
+  // le sue chiavi. Mai il token di un progetto nelle chiavi di un altro.
+  if (x.config) {
+    const altra = orgPerUrl(x.config.url);
+    if (altra !== null && altra !== orgAttiva() && orgScegli(altra) && typeof location !== 'undefined' && typeof location.reload === 'function') {
+      location.reload();
+      return true;
+    }
+  }
   cloudPulisciIndirizzo();
   if (x.errore) { setTimeout(() => _loginError('Link non valido o scaduto: ' + x.errore), 60); }
   if (x.config) {
     const c = cloudConfig();
-    const stesso = c && c.url === cloudNormalizzaUrl(x.config.url) && c.chiave === x.config.chiave;
+    const url = cloudNormalizzaUrl(x.config.url);
+    const stesso = c && c.url === url && c.chiave === x.config.chiave;
     if (!stesso) {
       // Un link può puntare l'app a un server qualsiasi: si chiede prima, e si
       // mostra a quale. Chi lo conferma deve riconoscere il proprio progetto.
-      const host = (() => { try { return new URL(cloudNormalizzaUrl(x.config.url)).host; } catch (e) { return x.config.url; } })();
-      setTimeout(() => askConfirm(`Collegare questo PC all'archivio condiviso su ${host}?` +
-        (cloudConteggio(db) ? ' I dati che ci sono ora su questo PC verranno sostituiti al primo accesso, se l\'archivio condiviso ne contiene già.' : ''), () => {
-        try { cloudCollega(x.config.url, x.config.chiave); } catch (e) { showToast(cloudMsgErrore(e), 'error'); return; }
+      const host = (() => { try { return new URL(url).host; } catch (e) { return x.config.url; } })();
+      const dopo = () => {
         if (x.sessione) cloudSalvaSessione(Object.assign({}, x.sessione, { user: null }));
-        if (x.sessione) cloudScrivi('bomtrack_cloud_nuovapassword', x.sessione.tipo || 'invite');
+        if (x.sessione) cloudScrivi(CLOUD_NUOVAPW_KEY, x.sessione.tipo || 'invite');
         location.reload();
+      };
+      if (c && c.url === url) {
+        // Stesso progetto, chiave nuova (una chiave ruotata in Supabase).
+        setTimeout(() => askConfirm(`Aggiornare la chiave pubblica dell'archivio condiviso su ${host}?`, () => {
+          cloudAggiornaConfig({ chiave: String(x.config.chiave).trim() });
+          dopo();
+        }, { title: 'Archivio condiviso', ok: 'Aggiorna', safe: true }), 60);
+        return true;
+      }
+      // Questa organizzazione è già collegata a un altro progetto, oppure ha
+      // dati suoi: il progetto nuovo diventa un'organizzazione nuova, vuota.
+      // I dati di questa restano qui, e nel progetto nuovo non arriva niente.
+      if (c || cloudConteggio(db)) {
+        setTimeout(() => cloudLinkNuovaOrganizzazione(x, url, host), 60);
+        return true;
+      }
+      setTimeout(() => askConfirm(`Collegare questo PC all'archivio condiviso su ${host}?`, () => {
+        try { cloudCollega(x.config.url, x.config.chiave); } catch (e) { showToast(cloudMsgErrore(e), 'error'); return; }
+        if (x.config.nome) orgRinomina(orgAttiva(), x.config.nome);
+        dopo();
       }, { title: 'Archivio condiviso', ok: 'Collega', safe: true }), 60);
       return true;
     }
@@ -2003,9 +2073,174 @@ function cloudAllAvvio() {
   }
   return false;
 }
+// Il link di un progetto che sul PC non c'è ancora, mentre l'organizzazione
+// aperta ha già un collegamento o dei dati suoi.
+//  - Già collegata a un altro progetto: il progetto nuovo può solo diventare
+//    un'organizzazione nuova, vuota. Fino alla 0.135.0 il link sostituiva il
+//    collegamento, e l'archivio di qui restava a fare da base a quello nuovo.
+//  - Senza collegamento ma con dei dati: si può collegarla, come sempre (i
+//    dati di qui vanno nel progetto, o li sostituisce il suo archivio), oppure
+//    tenerla com'è e aggiungere il progetto come organizzazione separata.
+let _cloudLinkInAttesa = null;
+function cloudLinkNuovaOrganizzazione(x, url, host) {
+  _cloudLinkInAttesa = { x, url };
+  const locale = !cloudConfig();
+  const nome = `<div class="modal-field"><label for="cl-org-nome">Nome della nuova organizzazione</label><input id="cl-org-nome" maxlength="60" value="${esc(x.config.nome || '')}" placeholder="${esc(host)}"></div>`;
+  openModal(locale
+    ? `<h3>${ico('cloud', 'tinted pill', '')} Archivio condiviso</h3>
+      <p>Collegare questo PC all'archivio condiviso su <strong>${esc(host)}</strong>? I dati che ci sono ora su questo PC verranno caricati nel progetto, o sostituiti al primo accesso se l'archivio condiviso ne contiene già.</p>
+      <p>Se invece quel progetto è di <strong>un'altra organizzazione</strong>, aggiungilo come organizzazione separata: i dati di questo PC restano qui, e i due archivi non si toccano.</p>
+      ${nome}
+      <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+        <button class="btn-outline" onclick="cloudLinkScelta(true)">Aggiungi come organizzazione separata</button>
+        <button class="add-btn-sm" onclick="cloudLinkScelta(false)">Collega</button></div>`
+    : `<h3>${ico('building', 'tinted pill', '')} Archivio condiviso su ${esc(host)}</h3>
+      <p>Questo link porta a un progetto Supabase che su questo PC non c'è ancora. Diventa un'<strong>organizzazione nuova</strong>, con il suo archivio, separato da quello di <strong>${esc(orgNome())}</strong>: nessun dato passa dall'una all'altra.</p>
+      ${nome}
+      <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+        <button class="add-btn-sm" onclick="cloudLinkScelta(true)">Aggiungi organizzazione</button></div>`);
+}
+function cloudLinkScelta(nuova) {
+  const p = _cloudLinkInAttesa;
+  if (!p) return closeModal();
+  _cloudLinkInAttesa = null;
+  const { x, url } = p;
+  try {
+    if (nuova) {
+      const id = orgAggiungi(val('cl-org-nome'), url, String(x.config.chiave).trim());
+      // La sessione dell'invito si salva solo dopo, dentro l'organizzazione
+      // nuova: si ricarica con il link com'era, e lo raccoglie lei.
+      orgScegli(id);
+      const q = new URLSearchParams({ supabase: url, chiave: String(x.config.chiave).trim() });
+      const h = x.sessione ? new URLSearchParams({ access_token: x.sessione.access_token, refresh_token: x.sessione.refresh_token || '',
+        expires_in: String(x.sessione.expires_in || 3600), type: x.sessione.tipo || '' }).toString() : '';
+      try { history.replaceState(null, '', location.pathname + '?' + q.toString() + (h ? '#' + h : '')); } catch (e) { /* senza: si accede con la password */ }
+      location.reload();
+      return;
+    }
+    // Collegare è possibile solo senza un collegamento (lo garantisce la
+    // scheda): si ricontrolla, perché qui si sostituirebbe.
+    if (cloudConfig()) return closeModal();
+    cloudCollega(x.config.url, x.config.chiave);
+    if (x.config.nome) orgRinomina(orgAttiva(), x.config.nome);
+  } catch (e) { showToast(cloudMsgErrore(e), 'error'); return; }
+  if (x.sessione) cloudSalvaSessione(Object.assign({}, x.sessione, { user: null }));
+  if (x.sessione) cloudScrivi(CLOUD_NUOVAPW_KEY, x.sessione.tipo || 'invite');
+  location.reload();
+}
+// ═══════════════════════════════════════════════════════════
+//  Organizzazioni (dalla 0.136.0)
+// ═══════════════════════════════════════════════════════════
+// L'elenco delle organizzazioni di questo PC: si apre, si rinomina, si toglie,
+// se ne aggiunge una. Le regole stanno in organizzazioni.js; qui solo la
+// scheda. Dalla schermata d'accesso la vede chiunque (non c'è ancora un
+// utente, e aggiungere un'organizzazione non tocca i dati di nessuna); dentro
+// l'app togliere è da amministratore, perché toglie anche la copia locale.
+function orgPuoTogliere() {
+  const dentro = typeof currentUser !== 'undefined' && !!currentUser;
+  return !dentro || canWriteRuolo('manage');
+}
+function orgPannello() {
+  const togli = orgPuoTogliere();
+  const righe = orgElenco().map(o => {
+    const attiva = o.id === orgAttiva();
+    const host = orgHost(o.id);
+    return `<tr${attiva ? ' class="org-attiva"' : ''}>
+      <td><strong>${esc(orgNome(o.id))}</strong>${attiva ? ' <span class="org-badge">aperta</span>' : ''}<br>
+        <span class="cl-nota">${host ? esc(host) : 'solo questo PC, senza archivio condiviso'}</span></td>
+      <td class="org-azioni">
+        ${attiva ? '' : `<button class="add-btn-sm" onclick="orgApri('${esc(o.id)}')">Apri</button>`}
+        <button class="btn-outline" onclick="orgPannelloRinomina('${esc(o.id)}')">Rinomina</button>
+        ${!attiva && o.id && togli ? `<button class="btn-outline" style="color:var(--red);border-color:var(--red)" onclick="orgPannelloTogli('${esc(o.id)}')">Togli</button>` : ''}
+      </td></tr>`;
+  }).join('');
+  openModal(`<h3>${ico('building', 'tinted pill', '')} Organizzazioni</h3>
+    <p>Ogni organizzazione ha il suo progetto Supabase, i suoi utenti e il suo archivio su questo PC. I dati restano separati: passare da una all'altra ricarica l'app.</p>
+    <table class="org-elenco"><tbody>${righe}</tbody></table>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button>
+      <button class="add-btn-sm" onclick="orgPannelloAggiungi()">${ico('plus', 'tinted', '')} Aggiungi organizzazione</button></div>`);
+}
+// Apre un'altra organizzazione: salva la scelta e ricarica. La sessione di
+// questa resta (con la sua durata, come sempre): tornandoci si rientra. Le
+// modifiche in coda restano nell'archivio di questa e partono al prossimo
+// accesso qui. Un documento a metà o un salvataggio non ancora su disco
+// fermano il cambio: ricaricare adesso li perderebbe.
+function orgApri(id) {
+  if (id === orgAttiva() || !orgEsiste(id)) return;
+  if (typeof lavoroInSospeso === 'function' && lavoroInSospeso()) {
+    showToast('C\'è un documento aperto o un salvataggio in corso: chiudilo o salvalo, poi cambia organizzazione', 'error');
+    return;
+  }
+  const vai = () => {
+    if (typeof cloudFerma === 'function' && cloudAttivo()) cloudFerma();
+    orgPassaA(id);
+  };
+  if (cloudAttivo() && typeof Store !== 'undefined' && Store.hasPendingChanges && Store.hasPendingChanges()) {
+    askConfirm(`Ci sono modifiche di ${orgNome()} non ancora inviate. Restano su questo PC, nell'archivio di ${orgNome()}, e partono al prossimo accesso qui. Aprire ${orgNome(id)}?`, vai,
+      { title: 'Cambia organizzazione', ok: 'Apri ' + orgNome(id), safe: true });
+    return;
+  }
+  vai();
+}
+function orgPannelloRinomina(id) {
+  openModal(`<h3>${ico('edit', 'tinted pill', '')} Rinomina organizzazione</h3>
+    <div class="modal-field"><label for="org-nome">Nome</label><input id="org-nome" maxlength="60" value="${esc((orgElenco().find(o => o.id === id) || {}).nome || '')}" placeholder="${esc(orgHost(id) || 'Questo PC')}"></div>
+    <p class="cl-nota">Il nome serve solo su questo PC, per riconoscerla. Lasciato vuoto, si vede l'indirizzo del progetto.</p>
+    <div class="modal-actions"><button class="btn-ghost" onclick="orgPannello()">Indietro</button>
+      <button class="add-btn-sm" onclick="orgRinomina('${esc(id)}', val('org-nome'));orgDopoModifica()">Salva</button></div>`);
+}
+function orgPannelloTogli(id) {
+  if (!orgPuoTogliere()) return;
+  askConfirm(`Togliere ${orgNome(id)} da questo PC? Se ne va anche la sua copia locale: archivio, allegati, sessione e modifiche non ancora inviate. I dati nel suo progetto Supabase restano: per riaverla basta il link di collegamento.`, () => {
+    orgTogli(id, false);
+    showToast(orgNome(id) + ' tolta da questo PC');
+    orgDopoModifica();
+  }, { title: 'Togli organizzazione', ok: 'Togli' });
+}
+function orgDopoModifica() {
+  if (typeof currentUser !== 'undefined' && currentUser) { if (typeof renderUserPill === 'function') renderUserPill(); }
+  else if (typeof renderLogin === 'function') renderLogin();
+  orgPannello();
+}
+function orgPannelloAggiungi() {
+  openModal(`<h3>${ico('building', 'tinted pill', '')} Aggiungi organizzazione</h3>
+    <p>Un altro progetto Supabase, con i suoi utenti. Parte vuota su questo PC: al primo accesso scarica il suo archivio, e niente dell'organizzazione aperta ora passa di là. Dati in <strong>Project Settings → API</strong>; la chiave è quella <strong>pubblica</strong>, mai quella di servizio. Più comodo: apri il link di collegamento che ti manda l'amministratore di quell'organizzazione.</p>
+    <div class="modal-field"><label for="cl-org-nome">Nome</label><input id="cl-org-nome" maxlength="60" placeholder="es. Officina Rossi" autocomplete="off"></div>
+    <div class="modal-field"><label for="cl-url">Indirizzo del progetto</label><input id="cl-url" placeholder="https://xxxx.supabase.co" autocomplete="off"></div>
+    <div class="modal-field"><label for="cl-chiave">Chiave pubblica</label><input id="cl-chiave" placeholder="eyJ… oppure sb_publishable_…" autocomplete="off"></div>
+    <p class="cl-esito" id="cl-esito"></p>
+    <div class="modal-actions"><button class="btn-ghost" onclick="orgPannello()">Indietro</button>
+      <button class="btn-outline" onclick="cloudPannelloProva()">Prova</button>
+      <button class="add-btn-sm" onclick="orgPannelloAggiungiConferma()">Aggiungi e apri</button></div>`);
+}
+async function orgPannelloAggiungiConferma() {
+  const url = cloudNormalizzaUrl(val('cl-url')), chiave = val('cl-chiave');
+  const gia = orgPerUrl(url);
+  if (gia !== null) return cloudEsito('Questo progetto è già su questo PC: ' + orgNome(gia), true);
+  try { await cloudProva(url, chiave); } catch (e) { cloudEsito(cloudMsgErrore(e), true); return; }
+  let id;
+  try { id = orgAggiungi(val('cl-org-nome'), url, chiave); } catch (e) { cloudEsito(cloudMsgErrore(e), true); return; }
+  orgApri(id);
+}
+// Il selettore della schermata d'accesso: compare con almeno due organizzazioni.
+function orgDisegnaLogin() {
+  const riga = document.getElementById('login-org-row');
+  const sel = document.getElementById('login-org');
+  if (!riga || !sel) return;
+  const piu = orgPiuDiUna();
+  riga.style.display = piu ? '' : 'none';
+  if (!piu) return;
+  sel.innerHTML = orgElenco().map(o => {
+    const host = orgHost(o.id), nome = orgNome(o.id);
+    const etichetta = host && host !== nome ? nome + ' — ' + host : nome;
+    return `<option value="${esc(o.id)}"${o.id === orgAttiva() ? ' selected' : ''}>${esc(etichetta)}</option>`;
+  }).join('');
+}
+function loginCambiaOrg(id) { if (id !== orgAttiva()) orgApri(id); }
+
 // Dopo un invito o un recupero: si sceglie la password, poi si entra.
 function cloudNuovaPassword(tipo) {
-  cloudScrivi('bomtrack_cloud_nuovapassword', null);
+  cloudScrivi(CLOUD_NUOVAPW_KEY, null);
   openModal(`<h3>${ico('key', 'tinted pill', '')} ${tipo === 'recovery' ? 'Nuova password' : 'Benvenuto: scegli la tua password'}</h3>
     <div class="modal-field"><label>Password</label><input type="password" id="cl-pw1" autocomplete="new-password"></div>
     <div class="modal-field"><label>Ripeti la password</label><input type="password" id="cl-pw2" autocomplete="new-password"></div>
@@ -2033,7 +2268,7 @@ async function cloudLoginCompleta() {
 function cloudRipristinaSessione() {
   const c = cloudConfig(), s = cloudSessione();
   if (!c || !s) return false;
-  const nuova = cloudLeggi('bomtrack_cloud_nuovapassword');
+  const nuova = cloudLeggi(CLOUD_NUOVAPW_KEY);
   if (nuova) { renderLogin(); setTimeout(() => cloudNuovaPassword(nuova), 60); return true; }
   if (!c.allineato || !s.user) { renderLogin(); setTimeout(() => cloudLoginCompleta().catch(e => _loginError(cloudMsgErrore(e))), 60); return true; }
   // La durata della sessione vale anche qui (dalla 0.105.4): prima la

@@ -50,7 +50,7 @@
 // esisteva prima continua a vedere tutti gli allegati di un articolo senza
 // sapere niente di questa divisione.
 
-const ALLEGATI_DB = 'bomtrack_allegati';
+const ALLEGATI_DB = chiaveOrg('bomtrack_allegati');
 const ALLEGATI_STORE = 'file';
 // Oltre questa soglia si rifiuta. Non è un limite tecnico di IndexedDB — che
 // regge molto di più — ma un argine al caso in cui qualcuno appende il video

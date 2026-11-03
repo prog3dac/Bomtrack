@@ -12,8 +12,8 @@
 // doLogin/logout): quando i dati passeranno a Supabase basterà sostituire il
 // corpo di verifyCredentials() con supa.auth.signInWithPassword() e il caricamento
 // utenti con la tabella `profiles`. Tutto il resto — ruoli, guardie, UI — resta.
-const SESSION_KEY = 'bomtrack_session';
-const SAVED_EMAIL_KEY = 'bomtrack_saved_email';
+const SESSION_KEY = chiaveOrg('bomtrack_session');
+const SAVED_EMAIL_KEY = chiaveOrg('bomtrack_saved_email');
 
 // L'email ricordata su questo PC. Difesa da try/catch come ogni altro accesso
 // all'archivio locale dell'app (theme.js, columns.js, filters.js, inspector.js,
@@ -83,9 +83,14 @@ function renderLogin() {
   // La riga sotto il modulo dice dove stanno i dati, e da lì si collega o si
   // controlla l'archivio condiviso.
   const nota = document.getElementById('login-note');
-  if (nota) nota.innerHTML = cloudInUso()
+  const orgLink = ` · <a href="#" onclick="orgPannello();return false">Organizzazioni</a>`;
+  if (nota) nota.innerHTML = (cloudInUso()
     ? `${ico('cloud', 'tinted', '')} Archivio condiviso: accedi con l'email e la password di Supabase. <a href="#" onclick="cloudPasswordDimenticata();return false">Password dimenticata?</a> · <a href="#" onclick="cloudPannello();return false">Collegamento</a>`
-    : `I dati risiedono in questo browser: l'accesso separa i ruoli tra colleghi, non protegge i dati. <a href="#" onclick="cloudPannello();return false">Collega un archivio condiviso…</a>`;
+    : `I dati risiedono in questo browser: l'accesso separa i ruoli tra colleghi, non protegge i dati. <a href="#" onclick="cloudPannello();return false">Collega un archivio condiviso…</a>`) + orgLink;
+  // Il selettore delle organizzazioni e il titolo della scheda del browser,
+  // che dice in quale si è anche con la finestra ridotta (dalla 0.136.0).
+  if (typeof orgDisegnaLogin === 'function') orgDisegnaLogin();
+  orgTitoloPagina();
   const saved = !setup && emailRicordata();
   if (saved) {
     setVal('login-email', saved);
@@ -252,13 +257,26 @@ function logout(daCloud) {
   setVal('login-password', '');
   renderLogin();
 }
+// Con più organizzazioni sul PC il nome di quella aperta sta nel titolo della
+// scheda e accanto all'utente: lavorare nell'archivio sbagliato deve essere
+// difficile anche solo per distrazione.
+function orgTitoloPagina() {
+  if (typeof document === 'undefined') return;
+  const piu = typeof orgPiuDiUna === 'function' && orgPiuDiUna();
+  try { document.title = piu ? 'Bomtrack · ' + orgNome() : 'Bomtrack'; } catch (e) { /* titolo invariato */ }
+}
 function renderUserPill() {
   const pill = document.getElementById('user-pill');
   if (!pill || !currentUser) return;
+  const piu = typeof orgPiuDiUna === 'function' && orgPiuDiUna();
   pill.style.borderColor = safeColor(currentUser.color);
-  pill.title = `${currentUser.name} · ${roleLabel(currentUser.role)}`;
+  pill.title = `${currentUser.name} · ${roleLabel(currentUser.role)}${piu ? ' · ' + orgNome() : ''}`;
   pill.innerHTML = `<span class="user-dot" style="background:${safeColor(currentUser.color)}"></span>${esc(currentUser.name.split(' ')[0])}
-    <span class="user-role">${esc(roleLabel(currentUser.role))}</span>`;
+    <span class="user-role">${esc(roleLabel(currentUser.role))}</span>${piu ? `<span class="user-org" title="Organizzazione aperta">${esc(orgNome())}</span>` : ''}`;
+  // Da qui si cambia organizzazione senza cercare il pannello del cloud.
+  pill.onclick = piu ? () => orgPannello() : null;
+  pill.style.cursor = piu ? 'pointer' : '';
+  orgTitoloPagina();
   if (typeof adattaHeader === 'function') adattaHeader();   // un nome lungo cambia lo spazio che resta
 }
 // Orologio dell'header: data per esteso e ora, allineato al minuto

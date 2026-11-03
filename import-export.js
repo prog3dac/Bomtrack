@@ -1069,8 +1069,8 @@ function dbSizeLine() {
 // falso su ogni PC dove lo si ripristina.
 // Il riferimento (`…_dal`) è il primo giorno in cui l'app ha contato: senza,
 // un'installazione nuova partirebbe già «senza backup da sempre».
-const BACKUP_DATA_KEY = 'bomtrack_ultimo_backup';
-const BACKUP_DAL_KEY = 'bomtrack_ultimo_backup_dal';
+const BACKUP_DATA_KEY = chiaveOrg('bomtrack_ultimo_backup');
+const BACKUP_DAL_KEY = chiaveOrg('bomtrack_ultimo_backup_dal');
 const BACKUP_AVVISO_GG = 7, BACKUP_ALLARME_GG = 30;
 function _lsLeggi(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
 function _lsScrivi(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
@@ -1138,7 +1138,7 @@ function persistenzaLine() {
 // **senza chiedere**; se non c'è, il backup è «in pausa» e il Riepilogo lo
 // dice con un pulsante che lo riprende — il clic è il gesto che serve.
 const BACKUP_AUTO_KEY = 'cartellaBackup';
-const BACKUP_AUTO_NOME_KEY = 'bomtrack_backup_cartella_nome';
+const BACKUP_AUTO_NOME_KEY = chiaveOrg('bomtrack_backup_cartella_nome');
 const BACKUP_AUTO_TENERE = 14;
 const BACKUP_AUTO_OGNI_MS = 30 * 60 * 1000;
 const BACKUP_AUTO_FILE_RE = /^bomtrack_backup_\d{4}-\d{2}-\d{2}\.json$/;

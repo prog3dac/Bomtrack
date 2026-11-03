@@ -13,7 +13,7 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 // Stessa sequenza di index.html: i file si caricano nello stesso contesto e
 // condividono lo scope globale, esattamente come i <script> della pagina.
-const SRC = ['icons.js', 'theme.js', 'store.js', 'cloud-map.js', 'cloud.js', 'core.js', 'auth.js', 'costing.js', 'calendario.js', 'shell.js', 'worklist.js',
+const SRC = ['icons.js', 'theme.js', 'organizzazioni.js', 'store.js', 'cloud-map.js', 'cloud.js', 'core.js', 'auth.js', 'costing.js', 'calendario.js', 'shell.js', 'worklist.js',
   'views-bom.js', 'views-rev.js', 'views-stock.js', 'views-catalog.js', 'views-report.js', 'views-jobs.js', 'views-home.js', 'views-dash.js', 'produzione.js', 'views-mrp.js', 'alternativi.js', 'varianti.js', 'consuntivo.js', 'officina.js', 'capacita.js', 'macchine.js', 'allegati.js', 'archivio.js', 'documenti.js', 'views-item.js',
   'views-docs.js', 'views-prod.js', 'views-avanzamento.js', 'views-manage.js', 'export-lists.js', 'import-catalog.js', 'columns.js', 'filters.js', 'inspector.js', 'qr.js', 'inventario.js', 'combo.js', 'import-export.js'];
 
@@ -93,7 +93,12 @@ function loadApp(opts) {
     // vm: lo usa sha256Hex() per convertire la stringa in byte UTF-8.
     TextEncoder,
     TextDecoder,
+    // C'è in ogni browser: lo usano i link di collegamento (cloud.js). URL
+    // si aggiunge più sotto, insieme ai download finti.
+    URLSearchParams,
     localStorage: storage,
+    // La scheda: dove sta l'organizzazione scelta (organizzazioni.js).
+    sessionStorage: o.sessionStorage || makeStorage(),
     // Volutamente assenti: `document` e `window`. La guardia in fondo a import-export.js
     // (`if (typeof document !== 'undefined') init()`) impedisce l'avvio dell'app.
   };
@@ -165,9 +170,11 @@ function loadApp(opts) {
   // verificare che cosa l'app avrebbe consegnato e con che nome.
   sandbox.scaricati = [];
   sandbox.Blob = function Blob(parti) { this.parti = parti || []; this._testo = (parti || []).join(''); };
-  sandbox.URL = {
-    createObjectURL(b) { sandbox.scaricati.push({ contenuto: b && b._testo }); return 'blob:finto/' + sandbox.scaricati.length; },
-    revokeObjectURL() {},
+  // Il vero URL di Node, con i due metodi dei download sostituiti: si legge
+  // un indirizzo come nel browser, e un download si annota invece di partire.
+  sandbox.URL = class extends URL {
+    static createObjectURL(b) { sandbox.scaricati.push({ contenuto: b && b._testo }); return 'blob:finto/' + sandbox.scaricati.length; }
+    static revokeObjectURL() {}
   };
   // ── IndexedDB finto ──
   // Dove finiscono i byte degli allegati (allegati.js). È una mappa in memoria

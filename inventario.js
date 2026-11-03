@@ -25,7 +25,7 @@
 // movimento finisce nella differenza: si registra a fine giro, non il giorno
 // dopo.
 
-const INV_KEY = 'bomtrack_inventario';
+const INV_KEY = chiaveOrg('bomtrack_inventario');
 let _inv = null;           // { titolo, ids, conteggi: { id: qty }, pos, mostra, creato, chi }
 let _invUltimaLettura = { testo: '', t: 0 };
 

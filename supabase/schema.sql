@@ -1429,6 +1429,10 @@ select public.profilo_crea(a.id, a.email, a.raw_user_meta_data->>'name')
 -- l'archivio è ancora vuoto, cioè se tocca a questo PC caricarlo.
 -- `security definer` perché un profilo sospeso non legge niente per policy;
 -- restituisce solo la propria riga e un sì/no, nient'altro.
+-- `schema_versione` (dalla 0.136.0): con più organizzazioni, cioè più progetti,
+-- è facile che uno resti indietro. L'app la confronta con CLOUD_SCHEMA_VERSIONE
+-- (cloud.js) e dice quale organizzazione va aggiornata. Si alza insieme a
+-- quella costante quando questo file cambia in un modo da cui l'app dipende.
 create or replace function public.archivio_stato() returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
@@ -1437,7 +1441,8 @@ language sql stable security definer set search_path = public as $$
     'vuoto', not (exists (select 1 from public.items) or exists (select 1 from public.suppliers)
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
-    'ora', public.pull_istante())
+    'ora', public.pull_istante(),
+    'schema_versione', 1)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

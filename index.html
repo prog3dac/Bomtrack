@@ -85,6 +85,12 @@
            l'unica che ogni utente attraversa per forza. Le etichette restano
            visibili solo ai lettori di schermo (.sr-only): il disegno della
            scheda d'accesso vive sui placeholder e non cambia. -->
+      <!-- Con più organizzazioni sul PC si sceglie qui quale aprire
+           (organizzazioni.js): cambiarla ricarica l'app con i dati di quella. -->
+      <div class="login-field" id="login-org-row" style="display:none">
+        <label class="login-org-label" for="login-org">Organizzazione</label>
+        <select id="login-org" onchange="loginCambiaOrg(this.value)"></select>
+      </div>
       <div class="login-field" id="login-setup-fields" style="display:none">
         <label class="sr-only" for="login-name">Nome e cognome</label>
         <input type="text" id="login-name" placeholder="Nome e cognome" autocomplete="name" onkeydown="if(event.key==='Enter')submitLogin()">
@@ -497,6 +503,9 @@
 <script src="icons.js"></script>
 <!-- Dopo icons.js: al caricamento riempie il pulsante del tema con sole o luna. -->
 <script src="theme.js"></script>
+<!-- Prima di tutto ciò che legge o scrive dati: decide l'organizzazione della
+     pagina, e con lei il nome di ogni chiave e di ogni database del browser. -->
+<script src="organizzazioni.js"></script>
 <script src="store.js"></script>
 <!-- Traduzione annidato ↔ normalizzato: legge SCHEMA da store.js, non dipende
      da altro. Nessun codice di rete: l'app resta locale. -->

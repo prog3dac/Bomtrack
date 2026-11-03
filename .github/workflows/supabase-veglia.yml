@@ -29,17 +29,35 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      # Più organizzazioni, cioè più progetti (dalla 0.136.0): una riga per
+      # progetto, «indirizzo chiave-pubblica» separati da uno spazio. Si
+      # aggiunge a SUPABASE_URL e SUPABASE_KEY, che restano il primo.
+      SUPABASE_PROGETTI: ${{ secrets.SUPABASE_PROGETTI }}
     steps:
       - name: Supabase sveglio
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+          elenco=""
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_KEY" ]; then elenco="$SUPABASE_URL $SUPABASE_KEY"$'\n'; fi
+          elenco+="$SUPABASE_PROGETTI"
+          if [ -z "$(printf '%s' "$elenco" | tr -d '[:space:]')" ]; then
             echo "::notice::SUPABASE_URL o SUPABASE_KEY non impostati: nessun segnale a Supabase (manuale, cap. 31)."
             exit 0
           fi
-          codice=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 10 \
-            -H "apikey: $SUPABASE_KEY" "${SUPABASE_URL%/}/auth/v1/health")
-          if [ "$codice" != 200 ]; then
-            echo "::error::Supabase risponde $codice: il progetto potrebbe essere sospeso. Riprendilo dal pannello di Supabase (Restore project)."
-            exit 1
-          fi
-          echo "Supabase risponde."
+          # Il log di un repo pubblico lo legge chiunque: i progetti si
+          # chiamano per numero, mai per indirizzo.
+          n=0; ko=0
+          while read -r url chiave _; do
+            [ -z "$url" ] && continue
+            n=$((n + 1))
+            if [ -z "$chiave" ]; then echo "::error::Progetto $n: manca la chiave pubblica dopo l'indirizzo."; ko=1; continue; fi
+            echo "::add-mask::$url"
+            codice=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 10 \
+              -H "apikey: $chiave" "${url%/}/auth/v1/health") || true
+            if [ "$codice" != 200 ]; then
+              echo "::error::Progetto $n: Supabase risponde $codice, il progetto potrebbe essere sospeso. Riprendilo dal pannello di Supabase (Restore project)."
+              ko=1
+            else
+              echo "Progetto $n: Supabase risponde."
+            fi
+          done <<< "$elenco"
+          exit $ko

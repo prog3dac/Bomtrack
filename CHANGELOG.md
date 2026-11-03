@@ -2,6 +2,21 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.136.0 — 2026-11-03
+
+**Più organizzazioni sullo stesso PC, con i dati separati.** Chi lavora per più aziende, ognuna con il suo progetto Supabase e i suoi utenti, ora le tiene tutte nella stessa app:
+- con due o più organizzazioni la **schermata d'accesso** ha il campo **Organizzazione**: si sceglie, l'app si ricarica con i dati di quella e si accede con l'utente di quel progetto;
+- dentro l'app il **nome dell'organizzazione aperta** compare accanto al tuo nome e nel titolo della scheda del browser; un clic sul tuo nome apre l'**elenco delle organizzazioni**, da cui si apre, si rinomina, si toglie o se ne aggiunge una;
+- il **link di collegamento** (e il suo QR) di un progetto che non c'è ancora **aggiunge** un'organizzazione nuova invece di sostituire il collegamento di quella aperta. Un PC senza collegamento ma con dei dati sceglie se portarli nel progetto, come prima, o tenerli separati. Il link porta anche il nome dell'organizzazione;
+- **i dati restano separati**: su questo PC ogni organizzazione ha il suo archivio, i suoi allegati, le sue modifiche in coda, la sua sessione e la sua email ricordata. Cambiare organizzazione ricarica l'app, così niente resta in memoria. Una sessione emessa da un altro progetto non viene mai usata. Restano comuni solo tema, colonne, filtri e ordinamenti;
+- **chi usa già Bomtrack non nota niente**: il collegamento e l'archivio di oggi diventano la prima organizzazione, senza spostare un dato. Con una sola organizzazione la schermata d'accesso non cambia;
+- ogni **scheda del browser** resta sull'organizzazione con cui è stata aperta;
+- il **controllo notturno** su GitHub tiene svegli anche gli altri progetti, con il segreto `SUPABASE_PROGETTI` (manuale, cap. 31).
+
+**Lo schema dice la sua versione.** All'accesso l'app controlla che il progetto abbia lo schema di questa versione e, se è rimasto indietro, lo dice con il nome dell'organizzazione. Con più progetti è facile dimenticarne uno.
+
+Cambio a `supabase/schema.sql`: `archivio_stato()` restituisce anche `schema_versione`. Va rieseguito in **ogni** progetto; finché non lo si fa tutto funziona, ma all'accesso compare l'avviso.
+
 ### 0.135.0 — 2026-11-02
 
 **Dall'albero si apre la distinta di un gruppo.** In *Tecnico → Gestione DB* ogni riga di un **gruppo** o di un **sottogruppo**, anche annidata, ha come ultima icona a destra nella colonna Azioni il pulsante **Apri la distinta**: porta subito a quella distinta, senza cercarla nel menu in alto. La colonna Azioni è un poco più larga, così il costo di riga non viene coperto.

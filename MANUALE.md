@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.135.0**
+**Versione dell'app documentata: 0.136.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3980,6 +3980,57 @@ scollegamento **l'amministratore che ha scollegato** entra con la sua email e un
 scelta (almeno 4 caratteri), che diventa la sua password su questo PC. Gli altri utenti la ricevono poi da lui, in
 *Gestione → Utenti*. Questa strada si chiude appena qualcuno ha una password locale.
 
+### Più organizzazioni sullo stesso PC
+
+Dalla 0.136.0 lo stesso PC (o telefono) può lavorare per **più organizzazioni**, ognuna con il suo
+progetto Supabase, i suoi utenti e i suoi dati. Serve a chi segue più aziende, o a un'azienda con
+archivi che devono restare divisi.
+
+**I dati restano separati.** Su questo PC ogni organizzazione ha il suo archivio, i suoi allegati,
+le sue modifiche in attesa di invio, la sua sessione e la sua email ricordata. Passare da una
+all'altra **ricarica l'app**: niente di quella che si lascia resta in memoria, e niente passa
+nell'altra. Sul server la separazione c'è già: sono progetti diversi, e la sessione di uno viene
+rifiutata dagli altri. Restano comuni solo le comodità di chi guarda lo schermo: tema, vista
+compatta, colonne, filtri e ordinamenti.
+
+**Aggiungere un'organizzazione.** Il modo più semplice è il **link** (o il QR) di collegamento
+che ti manda l'amministratore di quell'organizzazione:
+
+- se il PC è già collegato a un altro progetto, il link **aggiunge** un'organizzazione nuova, con
+  il nome che le dai, e la apre. Il collegamento di prima resta com'era (fino alla 0.135.0 il link
+  lo sostituiva);
+- se il PC non è collegato ma ha dei dati suoi, scegli: **Collega** porta quei dati nel progetto,
+  come prima; **Aggiungi come organizzazione separata** li lascia qui e apre il progetto a parte;
+- se il PC è nuovo, il link collega come sempre;
+- se l'organizzazione è già sul PC, il link la apre.
+
+Si aggiunge anche a mano: dalla schermata d'accesso, **Organizzazioni → Aggiungi organizzazione**,
+con nome, indirizzo del progetto e chiave pubblica. Un'organizzazione nuova parte vuota e, al
+primo accesso, scarica il suo archivio dal suo progetto.
+
+**Scegliere quale aprire.** Con due o più organizzazioni, la schermata d'accesso ha il campo
+**Organizzazione** sopra l'email. Dentro l'app il nome di quella aperta compare accanto al tuo
+nome in alto a destra e nel titolo della scheda del browser; un clic sul tuo nome apre l'elenco,
+da cui **Apri** un'altra. Se ci sono modifiche non ancora inviate, l'app lo dice prima: restano
+nell'archivio di quell'organizzazione e partono al prossimo accesso lì.
+
+Ogni scheda del browser resta sull'organizzazione con cui l'hai aperta: puoi tenerne due aperte
+su due organizzazioni. Una scheda nuova si apre sull'ultima scelta.
+
+**Rinominare e togliere.** Dall'elenco delle organizzazioni (**Organizzazioni** nella schermata
+d'accesso o nella scheda dell'archivio condiviso). Il nome serve solo su questo PC, e viaggia nel
+link di collegamento. **Togli** cancella da questo PC l'organizzazione e la sua copia locale,
+modifiche non inviate comprese; i dati nel suo progetto Supabase restano, e per riaverla basta il
+link. Non si toglie quella aperta, né la prima. Dentro l'app lo fa solo un amministratore.
+
+**Una per progetto, uno schema per progetto.** Ogni progetto va preparato come al passo 2
+(`supabase/schema.sql`) e al passo della funzione `bomtrack-utenti`, e **ogni aggiornamento dello
+schema va eseguito in ogni progetto**. Dalla 0.136.0 l'app controlla la versione dello schema
+all'accesso e, se un progetto è rimasto indietro, lo dice con il nome dell'organizzazione.
+
+**Su un PC condiviso**, chi può aprire il browser ha le copie locali di tutte le organizzazioni
+usate lì, come oggi ha quella dell'unica. Togli quelle che non servono più.
+
 ### Il backup resta
 
 1. **Il piano gratuito non ha backup automatici**: se il progetto si perde, si perde. L'export
@@ -4013,6 +4064,11 @@ variables → Actions → New repository secret**.
 - **GitHub spegne i lavori notturni** di un repository in cui non si pubblica niente da 60 giorni,
   e lo dice per email. Si riaccende da **Actions → supabase-veglia → Enable workflow**.
 - Senza segreti il lavoro non fa niente e lo scrive, senza errori.
+- **Più organizzazioni** (dalla 0.136.0): aggiungi il segreto `SUPABASE_PROGETTI`, con **una riga
+  per ogni altro progetto**: indirizzo, uno spazio, chiave pubblica. Il lavoro li tocca tutti; se
+  uno non risponde finisce rosso e il log dice quale per numero (*Progetto 2*), mai per indirizzo,
+  perché il log del repository è pubblico. La copia del database qui sotto si fa una volta per
+  progetto, con un file per ciascuno.
 
 ### Una copia intera del database, dal tuo PC
 
@@ -4326,6 +4382,14 @@ Con l'**archivio condiviso** se ne aggiungono altre, sempre di questo PC:
 | `bomtrack_cloud_nuovapassword` | Solo fra l'apertura di un invito e la scelta della password | Le due cartelle, archivio e backup, stanno fra queste di proposito: ogni PC ha la
 sua, e importarla da un backup imporrebbe a tutti la lettera di unità del primo che l'ha scelta.
 
+**Con più organizzazioni** (dalla 0.136.0) la prima tiene tutti i nomi qui sopra. Ogni altra ha i
+suoi, con il suffisso `@<id>`: `bomtrack_archivio@<id>`, `bomtrack_allegati@<id>`,
+`bomtrack_cloud@<id>`, `bomtrack_session@<id>` e così via. Le preferenze personali (tema, colonne,
+densità, filtri) restano senza suffisso, comuni a tutte. L'elenco sta in
+`bomtrack_organizzazioni`, l'ultima scelta in `bomtrack_org_attiva`; quella di ogni scheda sta
+nella scheda stessa (`sessionStorage`). `test/organizzazioni.test.js` fa fallire la suite se una
+chiave nuova non dice da che parte sta.
+
 **Fuori dall'archivio** stanno due cose, entrambe fatte di file. In **IndexedDB**, in un database
 a parte (`bomtrack_allegati`), i byte degli allegati caricati dentro l'app prima della 0.78.0. Nella **cartella d'archivio** i PDF dei
 documenti (→ [cap. 8](#8-la-scheda-articolo-campo-per-campo)): quella cartella non appartiene a
@@ -4381,6 +4445,7 @@ fasi, `kind: 'op'`, con `workCenterId`, `supplierId`, `costMode`, `hours`, `oper
 | `style.css` | Foglio di stile unico, tema chiaro/scuro, regole di stampa |
 | `icons.js` | Le icone SVG |
 | `theme.js` | Il tema |
+| `organizzazioni.js` | Più organizzazioni sullo stesso PC: l'elenco, quella aperta, i nomi separati di chiavi e database |
 | `store.js` | **Il layer dati**: schema, migrazioni, API, persistenza, hash password, cestino |
 | `core.js` | Stato applicativo, utility, ruoli e permessi, `APP_VERSION`, scorciatoie |
 | `auth.js` | Accesso, sessione, primo amministratore |
