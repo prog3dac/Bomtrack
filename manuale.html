@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="brand">
       <div class="brand-top">
         <span class="brand-name">Bomtrack</span>
-        <span class="chip">v0.135.0</span>
+        <span class="chip">v0.135.1</span>
       </div>
       <div class="brand-sub">Manuale d&rsquo;uso</div>
     </div>
@@ -1000,7 +1000,7 @@ prezzo vendita = costo totale × (1 + margine %)</code></pre>
 <hr>
 <h3 id="terminale-di-reparto-modulo-officina-dalla-01230">Terminale di reparto (modulo Officina, dalla 0.123.0)</h3>
 <p><em>Produzione → Reparto</em> è la schermata di chi lavora alla macchina, a pulsanti grandi per il telefono. Si sceglie il <strong>centro</strong> nella barra a sinistra (sul telefono, la fila sopra le schede; l'app lo ricorda su quel dispositivo). Ogni centro dice quante fasi ha da lavorare. Compaiono, in quest'ordine:</p>
-<ul><li>le fasi interne che si possono lavorare adesso, per data di consegna;</li><li>le <strong>fasi future</strong>, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;</li><li>le fasi <strong>terminate</strong> degli ordini ancora aperti.</li></ul>
+<ul><li>le fasi interne che si possono lavorare adesso, per data di consegna;</li><li>le <strong>fasi future</strong>, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;</li><li>le fasi <strong>terminate</strong>, con la fascia verde <em>Terminata</em>: restano anche quando l'ordine è <strong>completato</strong> (tutte le fasi dichiarate) e spariscono solo quando l'ordine si chiude (dalla 0.135.1).</li></ul>
 <p><strong>Ordina per</strong>, in alto a destra, dispone le schede in <strong>colonne</strong> da scorrere di lato: <em>Codice</em> (una colonna per parte, con le sue fasi per consegna e numero di fase), <em>Data</em> (una per giorno di inizio previsto, con oggi evidenziato e in fondo le fasi senza data) o <em>ODP</em> (una per ordine, per data di consegna). Il dispositivo ricorda la scelta. Ogni scheda mostra in grande il <strong>codice</strong>, sotto la descrizione, la fase con centro e macchina, e l'<strong>ODP</strong> evidenziato.</p>
 <p>In cima a ogni scheda una riga colorata dice la <strong>situazione</strong>: <em>Da avviare</em> (blu), <em>Avviata</em> (giallo), <em>In ritardo</em> (rosso: secondo le date pianificate dell'ODP doveva già iniziare o finire), <em>Terminata</em> (verde). Sotto ci sono l'<strong>inizio previsto</strong> e la fine della fase, e la data in cui il pezzo serve. Il riquadro dei numeri dice i pezzi e il <strong>tempo lavorato</strong>, cioè la somma delle timbrature di tutti, con le ore previste dal ciclo. In fondo una riga dice se la fase è <strong>in lavorazione</strong> (da quanto e chi ci lavora) o <strong>in pausa</strong>. I tempi si aggiornano da soli ogni minuto.</p>
 <p>Le <strong>note della fase del ciclo</strong> (<em>Note per il reparto</em>) sono in evidenza sotto i numeri, con l'etichetta <em>Note fase ciclo</em>, sullo schermo, sulla scheda aperta dal QR e sul foglio stampato. Dalla 0.133.2 la scheda le legge dal ciclo di oggi: compaiono anche sugli ODP lanciati prima che la nota fosse scritta, e una nota corretta nel ciclo si vede subito. Se l'ODP ha congelato al lancio una nota diversa, la scheda mostra anche quella, come <em>Note dell'ODP</em>.</p>
