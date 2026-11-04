@@ -1715,7 +1715,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions'] loop
+  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions', 'nonconformities'] loop
     begin
       execute format('create unique index if not exists %I on public.%I (%I) where %I ~ %L',
         t || '_numero_unico', t, public.colonna_numero(t), public.colonna_numero(t), '^[A-Z]{2,3}-[0-9]{4}-[0-9]+$');
