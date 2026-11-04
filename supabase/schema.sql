@@ -86,6 +86,7 @@ create table if not exists public.suppliers (
   name text, referente text, email text, phone text, vat text,
   street text, street_number text, zip text, city text, province text, country text,
   default_transport text, default_payment text, transit_days numeric, notes text, active boolean,
+  contacts jsonb,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -94,7 +95,7 @@ create table if not exists public.customers (
   id uuid primary key,
   name text, referente text, email text, phone text, vat text,
   street text, street_number text, zip text, city text, province text, country text,
-  notes text, active boolean,
+  notes text, active boolean, contacts jsonb,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -175,6 +176,8 @@ create table if not exists public.items (
   replaced_by_id uuid references public.items(id) on delete set null deferrable initially deferred,
   configured_from_id uuid references public.items(id) on delete set null deferrable initially deferred,
   config_choices jsonb, config_key text, config_hash text,
+  weight_kg numeric, volume_m3 numeric, length_m numeric, width_m numeric, height_m numeric,
+  manufacturer text, manufacturer_code text, material text, finish text, treatment text,
   child_sets text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
@@ -202,6 +205,22 @@ alter table public.items add column if not exists configured_from_id uuid refere
 alter table public.items add column if not exists config_choices jsonb;
 alter table public.items add column if not exists config_key text;
 alter table public.items add column if not exists config_hash text;
+-- 0.138.0: dati tecnici dell'articolo (peso, volume, dimensioni), il
+-- produttore con il suo codice, e materiale, finitura e trattamento.
+alter table public.items add column if not exists weight_kg numeric;
+alter table public.items add column if not exists volume_m3 numeric;
+alter table public.items add column if not exists length_m numeric;
+alter table public.items add column if not exists width_m numeric;
+alter table public.items add column if not exists height_m numeric;
+alter table public.items add column if not exists manufacturer text;
+alter table public.items add column if not exists manufacturer_code text;
+alter table public.items add column if not exists material text;
+alter table public.items add column if not exists finish text;
+alter table public.items add column if not exists treatment text;
+-- 0.138.0: i contatti di fornitori e clienti (nome, ruolo, email, telefono).
+-- Un elenco che si legge sempre insieme alla sua anagrafica: jsonb.
+alter table public.suppliers add column if not exists contacts jsonb;
+alter table public.customers add column if not exists contacts jsonb;
 -- A6: `unique (code)` va aggiunto dopo la bonifica dei duplicati storici
 -- (Gestione › Backup › codici duplicati). Prima, rifiuterebbe dati veri.
 
@@ -212,7 +231,7 @@ create table if not exists public.item_components (
   id text primary key,
   item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
   child_item_id uuid references public.items(id) deferrable initially deferred,
-  qty numeric, scrap_pct numeric, cond text, qty_expr text, cost_override numeric, pos int,
+  qty numeric, scrap_pct numeric, cond text, qty_expr text, cost_override numeric, op_index int, pos int,
   synced_at timestamptz not null default clock_timestamp()
 );
 
@@ -275,6 +294,8 @@ alter table public.item_components add column if not exists qty_expr text;
 -- 0.125.0: anche le parti hanno la distinta (il materiale che prima stava nel
 -- ciclo), e una riga di distinta di una parte può forzare il costo di riga.
 alter table public.item_components add column if not exists cost_override numeric;
+-- 0.138.0: la fase del ciclo in cui si consuma la riga (indice fra le fasi, da 0).
+alter table public.item_components add column if not exists op_index int;
 
 -- ─── Documenti ──────────────────────────────────────────────
 create table if not exists public.production_plans (
@@ -422,10 +443,12 @@ create table if not exists public.production_order_materials (
   id uuid primary key,
   production_order_id uuid not null references public.production_orders(id) on delete cascade deferrable initially deferred,
   item_id uuid references public.items(id) deferrable initially deferred,
-  code text, name text, uom text, per_pezzo numeric, qty numeric,
+  code text, name text, uom text, per_pezzo numeric, qty numeric, op_index int,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.138.0: la fase di consumo della riga, come in item_components.
+alter table public.production_order_materials add column if not exists op_index int;
 
 create table if not exists public.work_orders (
   id uuid primary key,

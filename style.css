@@ -165,6 +165,8 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .modal-field input[type=color]::-moz-color-swatch{border:none;border-radius:5px}
 .modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:520px){.modal-grid{grid-template-columns:1fr}}
+.contact-row{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:end;margin-bottom:4px}
+@media(max-width:520px){.contact-row{grid-template-columns:1fr 1fr}}
 /* Conferme in scheda (al posto di confirm()) */
 .confirm-text{font-size:14px;line-height:1.55;color:var(--text);margin-bottom:12px}
 .btn-danger{background:var(--red)!important}

@@ -76,7 +76,7 @@ describe('Export impostazioni — un foglio per scheda di Gestione', () => {
   const nomi = sheets(a).map(s => s.name);
 
   it('esporta tutte le schede di Gestione, nessuna esclusa', () => {
-    assert.deepEqual(nomi, ['Azienda', 'Utenti', 'Fornitori', 'Clienti', 'Condizioni offerta',
+    assert.deepEqual(nomi, ['Azienda', 'Utenti', 'Fornitori', 'Clienti', 'Contatti', 'Condizioni offerta',
       'Famiglie commerciali', 'Famiglie materie prime', 'Famiglie parti',
       'Concetti', 'Centri di lavoro', 'Unità di misura', 'Impostazioni']);
   });

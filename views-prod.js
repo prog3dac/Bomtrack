@@ -125,20 +125,20 @@ function opFreezePhases(part) {
 function opFreezeMaterials(part, qty, planId) {
   if (part && isAssembly(part.type)) {
     return montaggioComponenti(part, Number(qty) || 0, planId).stock.map(x => ({ id: newId(), itemId: x.item.id,
-      code: x.item.code || '', name: x.item.name || '', uom: itemUom(x.item), perPezzo: x.perPezzo, qty: x.qty }));
+      code: x.item.code || '', name: x.item.name || '', uom: itemUom(x.item), perPezzo: x.perPezzo, qty: x.qty, opIndex: x.opIndex || 0 }));
   }
-  let righe = clMaterialsOf(part, Number(qty) || 0).map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo, qty: x.qty }));
+  let righe = clMaterialsOf(part, Number(qty) || 0).map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo, qty: x.qty, opIndex: x.opIndex || 0 }));
   if (planId && typeof sostituzioniPrelievo === 'function') {
     const orig = new Map(righe.map(r => [r.itemId, r]));
     righe = sostituzioniPrelievo(planId, righe).map(r => {
       const o = orig.get(r.sostituisce || r.itemId);
-      return Object.assign({}, r, { perPezzo: o && o.qty > 0 ? o.perPezzo * r.qty / o.qty : r.perPezzo });
+      return Object.assign({}, r, { perPezzo: o && o.qty > 0 ? o.perPezzo * r.qty / o.qty : r.perPezzo, opIndex: o ? o.opIndex : 0 });
     });
   }
   return righe.map(r => {
     const it = getItem(r.itemId);
     return { id: newId(), itemId: r.itemId, code: (it && it.code) || '', name: (it && it.name) || '',
-      uom: itemUom(it), perPezzo: r.perPezzo, qty: r.qty };
+      uom: itemUom(it), perPezzo: r.perPezzo, qty: r.qty, opIndex: r.opIndex || 0 };
   }).filter(r => r.code || r.name);
 }
 
@@ -1121,6 +1121,13 @@ function odpPhaseActions(o, f, st, legame) {
   return `<div class="line-cl-actions">${cmd.join('')}</div>`;
 }
 
+// La fase in cui si usa una riga di materiale dell'ordine (dalla 0.138.0):
+// quella del ciclo congelato con lo stesso indice fra le fasi.
+function odpFaseConsumoLabel(o, m) {
+  const k = Number(m.opIndex) || 0;
+  const f = (o.phases || []).find(x => Number(x.opIndex) === k) || (o.phases || [])[k];
+  return f ? `fase ${f.seq}${f.wcName ? ' ' + f.wcName : ''}` : 'fase ' + cyclePhaseNumber(k);
+}
 function odpMaterialBlock(o) {
   const righe = opMaterialeResiduo(o);
   if (!righe.length) {
@@ -1128,16 +1135,18 @@ function odpMaterialBlock(o) {
       <p class="empty-text" style="text-align:left">${odpDiAssieme(o) ? "Questo assieme non ha componenti diretti a magazzino: i suoi sottoassiemi si montano ciascuno col proprio ordine." : "Il ciclo di questa parte non ha materiale a magazzino: lo mette chi la lavora."} Non c'è niente da prelevare, e infatti non c'è niente da scaricare.</p></div>`;
   }
   const prima = opPrima(o);
+  const conFase = righe.some(m => Number(m.opIndex) > 0);
   const resto = opPuoPrelevareResto(o) && canWriteShop('docs')
     ? `<button class="add-btn-sm" onclick="opPrelevaRestoModal('${esc(o.id)}')" title="Fa uscire il materiale non prelevato all'avvio">Preleva il resto</button>` : '';
   return `<div class="mrp-section">
     <div class="cycle-section-head"><h3>${ico('package', 'tinted pill', '')} Materiale del ciclo</h3>${resto}</div>
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Esce <strong>una volta sola</strong>, all'avvio della fase ${prima ? esc(String(prima.seq)) : ''}${prima && prima.supplierId ? ` — e va da ${esc(prima.supplierName || '')}` : ''}. Le quantità vengono dal ciclo moltiplicate per i pezzi dell'ordine.</p>
+    ${conFase ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">La colonna <strong>Si usa</strong> è la fase di consumo scritta in distinta: dice per quando serve il materiale, e su quella data lo fa arrivare il fabbisogno.</p>` : ''}
     <div class="table-wrap"><table>
-      <thead><tr><th scope="col">Codice</th><th scope="col">Articolo</th><th scope="col" style="width:100px">Per pezzo</th>
+      <thead><tr><th scope="col">Codice</th><th scope="col">Articolo</th>${conFase ? '<th scope="col" style="width:150px">Si usa</th>' : ''}<th scope="col" style="width:100px">Per pezzo</th>
         <th scope="col" style="width:100px">Previsto</th><th scope="col" style="width:100px">Uscito</th><th scope="col" style="width:100px">Residuo</th></tr></thead>
       <tbody>${righe.map(m => `<tr>
-        <td>${codeLink(m.itemId, m.code)}</td><td>${esc(m.name)}</td>
+        <td>${codeLink(m.itemId, m.code)}</td><td>${esc(m.name)}</td>${conFase ? `<td>${esc(odpFaseConsumoLabel(o, m))}</td>` : ''}
         <td class="num">${fmtQtyIt(m.perPezzo)} ${esc(m.uom)}</td>
         <td class="num">${fmtQtyIt(m.qty)}</td>
         <td class="num">${fmtQtyIt(m.gia)}</td>

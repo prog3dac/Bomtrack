@@ -192,7 +192,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     <span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${toggle}
       <span class="bom-code">${codeLink(child.id, child.code)}</span>
       <span class="bom-type-tag tt-${typeKey(child.type)}">${typeShort(child.type)}</span>
-      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}${altMarker(child)}${varTagRiga(comp, getItem(parentId))}</span>
+      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}${altMarker(child)}${varTagRiga(comp, getItem(parentId))}${bomFaseTag(comp, getItem(parentId))}</span>
     </span>
     <span class="num">${qty}</span>
     <span>${esc(child.uom || '')}</span>
@@ -210,6 +210,11 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
   return h;
 }
 
+// La fase di consumo della riga, quando non è la prima (dalla 0.138.0).
+function bomFaseTag(comp, padre) {
+  const k = padre ? faseConsumo(comp, padre) : 0;
+  return k > 0 ? ` <span class="rfq-clavoro-tag" title="Si usa alla fase ${cyclePhaseNumber(k)} del ciclo">fase ${cyclePhaseNumber(k)}</span>` : '';
+}
 // Riga radice: mostra l'articolo padre (macchina/gruppo selezionata) come prima riga dell'albero.
 function renderBomRootNode(it) {
   const unit = costOf(it.id).total;
@@ -409,6 +414,13 @@ function editComponentModal(idx) {
     ? `<div class="modal-field"><label>Costo riga forzato (${esc(cur())})</label><input type="number" id="cmp-ovr" min="0" step="0.01"
         value="${comp.costOverride != null && comp.costOverride !== '' ? comp.costOverride : ''}" placeholder="${cycleRowComputed(comp).toFixed(2)}"
         title="Costo della riga intera, non di un'unità. Vuoto = calcolato dall'anagrafica"></div>` : '';
+  // La fase di consumo (dalla 0.138.0): solo se il padre ha più di una fase,
+  // perché con una sola, o nessuna, tutto serve all'inizio comunque.
+  const fasi = cicloFasi(it);
+  const faseCampo = fasi.length > 1
+    ? `<div class="modal-field"><label>Fase di consumo</label><select id="cmp-phase" title="La fase del ciclo in cui si usa la riga: il fabbisogno la fa arrivare per l'inizio di quella fase">
+        ${fasi.map((r, k) => { const wc = getWorkCenter(r.workCenterId); return `<option value="${k}" ${faseConsumo(comp, it) === k ? 'selected' : ''}>${cyclePhaseNumber(k)} · ${esc(wc ? wc.name : '?')}${r.supplierId ? ' (' + esc(supplierName(r.supplierId)) + ')' : ''}</option>`; }).join('')}
+      </select></div>` : '';
   window.__pickerCandidates = pickerCandidates(it.type, it.id);
   openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica componente</h3>
     <p class="empty-text" style="text-align:left;padding:0 0 10px">${allowedHint(it.type)}</p>
@@ -417,6 +429,7 @@ function editComponentModal(idx) {
       <div class="modal-field"><label id="cmp-qty-label">${labelUom('Quantità', itemUom(getItem(comp.itemId)))}</label><input type="number" id="cmp-qty" min="0" step="0.001" value="${comp.qty}"></div>
       <div class="modal-field"><label>Scarto %</label><input type="number" id="cmp-scrap" min="0" step="0.1" value="${comp.scrapPct || 0}"></div>
       ${forzato}
+      ${faseCampo}
     </div>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveComponentEdit(${idx})">Salva</button></div>`);
@@ -438,6 +451,10 @@ function saveComponentEdit(idx) {
   if (it.type === 'parte' && isNeg('cmp-ovr')) { showToast('Il costo non può essere negativo', 'error'); return; }
   comp.itemId = itemId; comp.qty = numVal('cmp-qty', 0); comp.scrapPct = numVal('cmp-scrap', 0, 100);
   if (it.type === 'parte') { const o = val('cmp-ovr'); comp.costOverride = o === '' || o == null ? null : numVal('cmp-ovr', 0); }
+  if (document.getElementById('cmp-phase')) {
+    const k = Math.floor(Number(val('cmp-phase')) || 0);
+    if (k > 0) comp.opIndex = k; else delete comp.opIndex;
+  }
   touch(it);
   saveDB(); closeModal(); renderBom(); savedToast('Componente aggiornato');
 }

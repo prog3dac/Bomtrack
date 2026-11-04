@@ -1168,6 +1168,66 @@ function itemLockNote(lock) {
   const extra = lock.nameLocked ? '' : ' Come amministratore puoi comunque correggere nome/concetto/descrizione.';
   return `<p class="empty-text" style="text-align:left;padding:0 0 10px">${ico('lock', 'tinted', '')} Articolo già utilizzato: i campi identificativi non sono più modificabili.${extra}</p>`;
 }
+// ── Dati tecnici nella scheda di modifica (dalla 0.138.0) ──
+// [campo dell'articolo, id dell'input, numerico]
+const ITEM_TECH_FIELDS = [
+  ['lengthM', 'it-len', true], ['widthM', 'it-wid', true], ['heightM', 'it-hei', true],
+  ['weightKg', 'it-weight', true], ['volumeM3', 'it-volume', true],
+  ['manufacturer', 'it-mfr', false], ['manufacturerCode', 'it-mfrcode', false],
+  ['material', 'it-material', false], ['finish', 'it-finish', false], ['treatment', 'it-treatment', false],
+];
+// I valori già scritti su altri articoli, per scrivere «S235JR» sempre allo stesso modo.
+function itemTechValori(k) {
+  const set = new Set();
+  (db.items || []).forEach(i => { const v = String(i[k] || '').trim(); if (v) set.add(v); });
+  return [...set].sort((a, b) => a.localeCompare(b, 'it'));
+}
+function itemTechFieldsHtml(it) {
+  const v = k => it && it[k] != null ? esc(String(it[k])) : '';
+  const num = (id, k, label, ph) => `<div class="modal-field"><label>${label}</label>
+        <input type="number" id="${id}" min="0" step="any" value="${v(k)}" placeholder="${ph || ''}" oninput="itemTechVolumeHint()"></div>`;
+  const txt = (id, k, label, ph) => `<div class="modal-field"><label>${label}</label>
+        <input id="${id}" list="${id}-list" autocomplete="off" maxlength="80" value="${v(k)}" placeholder="${ph || ''}">
+        <datalist id="${id}-list">${itemTechValori(k).map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>`;
+  const vol = itemVolume(it);
+  return `<div class="modal-grid" id="fld-tech">
+      ${num('it-len', 'lengthM', 'Lunghezza (m)')}
+      ${num('it-wid', 'widthM', 'Larghezza (m)')}
+      ${num('it-hei', 'heightM', 'Altezza (m)')}
+      ${num('it-weight', 'weightKg', 'Peso (kg)', it && isAssembly(it.type) ? 'dalla distinta' : '')}
+      ${num('it-volume', 'volumeM3', 'Volume (m³)', vol && vol.calcolato ? fmtTech(vol.value) : 'L × P × H')}
+    </div>
+    <div class="modal-grid" id="fld-mfr">
+      ${txt('it-mfr', 'manufacturer', 'Produttore', 'es. SKF')}
+      ${txt('it-mfrcode', 'manufacturerCode', 'Codice produttore', 'es. 6204-2RSH')}
+    </div>
+    <div class="modal-grid" id="fld-matfin">
+      ${txt('it-material', 'material', 'Materiale', 'es. S235JR')}
+      ${txt('it-finish', 'finish', 'Finitura', 'es. Ra 1,6')}
+      ${txt('it-treatment', 'treatment', 'Trattamento', 'es. zincatura')}
+    </div>`;
+}
+// Un numero tecnico in italiano, senza zeri inutili.
+function fmtTech(n) { return n == null ? '' : String(+Number(n).toFixed(6)).replace('.', ','); }
+// Il volume vuoto suggerisce il prodotto delle dimensioni mentre si scrivono.
+function itemTechVolumeHint() {
+  const el = document.getElementById('it-volume'); if (!el) return;
+  const vol = itemVolume({ lengthM: val('it-len'), widthM: val('it-wid'), heightM: val('it-hei') });
+  el.placeholder = vol ? fmtTech(vol.value) : 'L × P × H';
+}
+function readItemTechFields(it) {
+  const t = it.type;
+  const visibile = k => (k === 'manufacturer' || k === 'manufacturerCode') ? (t === 'acquistato' || t === 'materiale')
+    : (k === 'material' || k === 'finish' || k === 'treatment') ? t === 'parte' : true;
+  ITEM_TECH_FIELDS.forEach(([k, id, isNum]) => {
+    if (!document.getElementById(id) || !visibile(k)) return;
+    const raw = String(val(id) == null ? '' : val(id)).trim();
+    if (isNum) {
+      const n = raw === '' ? null : numTecnico(parseFloat(raw.replace(',', '.')));
+      if (n == null) delete it[k]; else it[k] = n;
+    } else if (raw) it[k] = raw; else delete it[k];
+  });
+}
 function itemModalBody(it, scope) {
   const sc = CATALOG_SCOPES[scope] || CATALOG_SCOPES.buy;
   const t = it ? it.type : sc.types[0];
@@ -1222,6 +1282,7 @@ function itemModalBody(it, scope) {
            <button class="btn-outline" style="margin-left:8px" onclick="closeModal();openCycleFor('${it.id}')">${ico('wrench', 'tinted', '')} Apri il ciclo</button>`
         : `La distinta si gestisce in <strong>${ico('tree', 'tinted')} Gestione DB</strong> e il ciclo in <strong>${ico('wrench', 'tinted')} Cicli di lavorazione</strong>, dopo aver creato l'articolo.`}</span>
     </div>
+    ${itemTechFieldsHtml(it)}
     <div class="modal-grid" id="fld-flags">
       <div class="modal-field" id="fld-flag-fav"><label>Preferito</label>
         <label class="flag-check"><input type="checkbox" id="it-favorite" ${it && it.favorite ? 'checked' : ''}> ★ Segna come preferito</label></div>
@@ -1479,6 +1540,11 @@ function toggleItemFields() {
   mostra('fld-flag-fav', canFavorite(t));
   mostra('fld-flag-obs', true);
   mostra('fld-flags', true);
+  // Dati tecnici (dalla 0.138.0): misure e peso per tutti, il produttore su
+  // ciò che si compra già fatto, materiale, finitura e trattamento sulle parti.
+  mostra('fld-tech', true);
+  mostra('fld-mfr', t === 'acquistato' || t === 'materiale');
+  mostra('fld-matfin', t === 'parte');
   // Magazzino: solo su ciò che si tiene a scorta. Un assieme si produce, e la
   // sua giacenza sarebbe quella dei componenti contata due volte.
   mostra('fld-stock', hasStock({ type: t }) && giacenzeVisibili());
@@ -2153,6 +2219,7 @@ function applyItemSource(id) {
     if (typeof itemUomLabelsRefresh === 'function') itemUomLabelsRefresh();
   }
   if (src.type === 'parte') setVal('it-sourcing', partSourcingScritto(src));
+  ITEM_TECH_FIELDS.forEach(([k, id]) => setVal(id, src[k] != null ? src[k] : ''));
   setVal('it-notes', src.notes || '');
   setVal('it-code', '');
   refreshItemCode();
@@ -2196,6 +2263,7 @@ function readItemForm(it) {
   // cambiarla li reinterpreterebbe tutti senza toccarli.
   if (!lock.structLocked) it.uom = val('it-uom') || defaultUom();
   it.notes = val('it-notes');
+  readItemTechFields(it);
   // L'approvvigionamento prima del listino: la quotazione in uso si applica
   // solo a una parte comprata, e passando da «fabbrica» a «compra» il costo
   // restava quello vecchio (dalla 0.105.5).
