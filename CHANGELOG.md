@@ -2,6 +2,26 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.140.0 — 2026-11-04
+
+**Modulo Qualità: il collaudo della merce in entrata.** Spento di serie, si accende in *Gestione → Aree e moduli* (area Magazzino). Un articolo — o la sua famiglia — può chiedere il **controllo in entrata**: da quel momento ogni ricevimento di un ordine fornitore, e ogni rientro dall'ultima fase di un ordine di lavoro, apre da solo un **collaudo**.
+
+**La merce in collaudo è a scaffale ma non è libera.** Resta nell'esistente — è stata pagata e sullo scaffale c'è — e si sottrae dal **libero**, come l'impegnato. Nel Magazzino arrivano la colonna *In collaudo* (nascosta di serie), il filtro di stato *In collaudo* e, sull'etichetta QR dell'articolo, il pulsante **Collauda**. Il fabbisogno continua a contarla: è merce arrivata, e ricomprarla sarebbe peggio del male che si cura.
+
+**Tre esiti, in *Qualità → Collaudi*.** *Accettato* libera la quantità; *accettato in deroga* la libera lasciando scritto che è passata con riserva; *respinto* (tutto o in parte) rimanda la merce indietro per la strada da cui è venuta — su un ordine fornitore **scende il ricevuto** (la riga torna ad avere un residuo, l'ordine torna *Parziale*, il fabbisogno la aspetta di nuovo), su un ordine di lavoro i pezzi **escono verso il terzista**, e la terza scelta è tenerla e rottamarla, che la fa uscire come consumo. Prima di registrare, la scheda dice a parole che cosa succederà. Un esito non si corregge. Lo registrano *Officina e magazzino*, *Ufficio acquisti* e l'amministratore; i collaudi da fare compaiono nel Riepilogo.
+
+**Piani di controllo.** Per un articolo o una famiglia, eventualmente per un solo fornitore: le **caratteristiche** da verificare (misura con nominale e tolleranze, o controllo sì/no), il **campionamento** (tutto, un numero fisso, una percentuale, o **AQL** con il piano singolo normale ISO 2859-1 a livello II, frecce comprese) e il **salto lotti** (dopo N accettati di fila se ne collauda uno ogni K; al primo respinto, o con una non conformità aperta, si guarda tutto). Un piano attivo basta a far collaudare l'articolo. Il collaudo ne prende una copia: le misure si scrivono sulla scheda, una fuori tolleranza si colora di rosso e la scheda suggerisce l'esito. Certificato richiesto e non arrivato: si accetta solo in deroga. **Rapporto di collaudo** PDF in italiano e inglese, archiviabile.
+
+**Non conformità.** Nascono da sole da un collaudo respinto o accettato in deroga, o a mano (fornitore, produzione con gli scarti dell'ODP, reclamo cliente, interna). Causa da un elenco in *Gestione → Qualità*, gravità, decisione sulla merce, costo, scadenza, **azioni** con chi e entro quando. Si chiudono con decisione e causa; le scadute vanno nel Riepilogo. **Rapporto NC** PDF bilingue, archiviabile. Il numero `NC-` lo riserva il server.
+
+**Valutazione fornitori.** Lotti collaudati, accettati, deroghe, respinti, PPM, non conformità e **puntualità** rispetto alla data confermata, per periodo. Punteggio da 0 a 100 con pesi e soglie in Gestione, **classe A/B/C** anche nel listino e nell'anagrafica fornitori. Export Excel e PDF.
+
+Tutto il modulo ha il suo gruppo **Qualità** nella barra, che c'è solo con il modulo acceso.
+
+Spegnendo il modulo l'app torna quella di prima: collaudi, piani e non conformità restano scritti e nessuna trattenuta vale più.
+
+`supabase/schema.sql`: nuove tabelle `inspections`, `quality_plans` e `nonconformities`, colonne `qc`/`qc_cert` su `items` e `families` e `qc` su `sub_families`, serie `NC` con numero unico. Va eseguito prima di usare il modulo con l'archivio condiviso.
+
 ### 0.139.0 — 2026-11-04
 
 **La scheda articolo è divisa in sottoschede.** Creando o modificando un articolo, i campi stanno ora in quattro sottoschede per argomento, scelte da una barra verticale a sinistra (al telefono, una fila di pulsanti in alto):

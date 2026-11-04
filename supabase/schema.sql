@@ -130,7 +130,7 @@ create table if not exists public.machines (
 
 create table if not exists public.families (
   id uuid primary key,
-  name text, kind text, sigla text, child_sets text,
+  name text, kind text, sigla text, child_sets text, qc text, qc_cert text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -138,7 +138,7 @@ create table if not exists public.families (
 create table if not exists public.sub_families (
   id uuid primary key,
   family_id uuid not null references public.families(id) on delete cascade deferrable initially deferred,
-  name text, sigla text,
+  name text, sigla text, qc text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -180,6 +180,7 @@ create table if not exists public.items (
   manufacturer text, manufacturer_code text, material text, finish text, treatment text,
   gross_weight_kg numeric, barcode text, drawing_ref text,
   child_sets text,
+  qc text, qc_cert text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -628,6 +629,77 @@ alter table public.production_time_logs add column if not exists machine_id uuid
 alter table public.maintenance_plans add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 alter table public.maintenance_events add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 
+-- 0.140.0, modulo Qualità: il collaudo della merce in entrata. Nasce dal
+-- ricevimento di un ordine fornitore o dal rientro dall'ultima fase di un
+-- ordine di lavoro, e finché è aperto quella quantità non è merce libera.
+-- Collezione radice: vive più a lungo della riga che l'ha fatto nascere, e
+-- `order_id` può puntare a un ordine o a un ordine di lavoro (lo dice
+-- `source`), quindi niente chiave esterna — come per i movimenti.
+create table if not exists public.inspections (
+  id uuid primary key,
+  number text, source text, order_id uuid, line_id uuid,
+  item_id uuid references public.items(id) deferrable initially deferred,
+  supplier_id uuid references public.suppliers(id) deferrable initially deferred,
+  qty numeric, uom text, date date,
+  ddt text, supplier_lot text, cert text,
+  status text, esito text, qty_ok numeric, qty_ko numeric, destino text, note text,
+  closed_at timestamptz, active boolean,
+  plan_id uuid, plan_state text, sample_rule text, sample_size numeric, accept_no int, reject_no int,
+  defects numeric, skip_lot boolean, checks jsonb,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- Il piano di controllo dentro il collaudo (fase 2): la copia delle
+-- caratteristiche con le misure, il campione e i numeri di accettazione.
+-- `plan_id` senza chiave esterna: il collaudo tiene la sua copia e sopravvive
+-- al piano eliminato.
+alter table public.inspections add column if not exists plan_id uuid;
+alter table public.inspections add column if not exists plan_state text;
+alter table public.inspections add column if not exists sample_rule text;
+alter table public.inspections add column if not exists sample_size numeric;
+alter table public.inspections add column if not exists accept_no int;
+alter table public.inspections add column if not exists reject_no int;
+alter table public.inspections add column if not exists defects numeric;
+alter table public.inspections add column if not exists skip_lot boolean;
+alter table public.inspections add column if not exists checks jsonb;
+
+-- 0.140.0, modulo Qualità: i piani di controllo. Le caratteristiche sono una
+-- lista dentro il piano (jsonb): si leggono e si scrivono sempre insieme a lui.
+create table if not exists public.quality_plans (
+  id uuid primary key,
+  name text,
+  item_id uuid references public.items(id) on delete set null deferrable initially deferred,
+  family_id uuid references public.families(id) on delete set null deferrable initially deferred,
+  supplier_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
+  cert text, sampling text, sample_qty numeric, sample_pct numeric, aql numeric,
+  skip_after int, skip_every int, characteristics jsonb, notes text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+
+-- 0.140.0, modulo Qualità: le non conformità, con le azioni (jsonb). Il
+-- numero NC-… lo riserva il server come per gli ordini: il rapporto va al
+-- fornitore. `order_id` può essere l'ordine fornitore del collaudo o un ordine
+-- di produzione (lo dice `source`): niente chiave esterna, come nei collaudi.
+create table if not exists public.nonconformities (
+  id uuid primary key,
+  number text, source text,
+  inspection_id uuid references public.inspections(id) on delete set null deferrable initially deferred,
+  order_id uuid,
+  item_id uuid references public.items(id) on delete set null deferrable initially deferred,
+  supplier_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
+  qty numeric, uom text, date date, cause text, gravita text, description text, decision text,
+  actions jsonb, cost numeric, due_date date, status text, closed_at timestamptz, note text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- 0.140.0: il controllo in entrata su articoli e famiglie, per i database già creati.
+alter table public.items add column if not exists qc text;
+alter table public.items add column if not exists qc_cert text;
+alter table public.families add column if not exists qc text;
+alter table public.families add column if not exists qc_cert text;
+alter table public.sub_families add column if not exists qc text;
+
 create table if not exists public.trash (
   id uuid primary key,
   coll text, deleted_at timestamptz, deleted_by uuid, record jsonb,
@@ -681,6 +753,9 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('maintenance_plans', null, null, 'root'),
   ('maintenance_events', null, null, 'root'),
   ('machines', null, null, 'root'),
+  ('inspections', null, null, 'root'),
+  ('quality_plans', null, null, 'root'),
+  ('nonconformities', null, null, 'root'),
   ('trash', null, null, 'root')
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
 
@@ -771,7 +846,7 @@ end $$;
 create or replace function public.colonna_numero(tab text) returns text
 language sql immutable set search_path = public as $$
   select case when tab = 'item_revisions' then 'eco_number'
-              when tab in ('rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs') then 'number' end
+              when tab in ('rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'nonconformities') then 'number' end
 $$;
 
 -- ─── Invio ──────────────────────────────────────────────────
@@ -1205,6 +1280,14 @@ select t, a from (values
   ('maintenance_plans', 'manage'),
   -- Le macchine sono anagrafica dei centri, come i centri.
   ('machines', 'manage'),
+  -- Modulo Qualità: il collaudo lo registra chi sta in magazzino davanti alla
+  -- merce (`shop`) o chi scrive i documenti (`docs`). Un esito respinto
+  -- riscrive il ricevuto di un ordine, cioè tabelle che entrambi già toccano.
+  ('inspections', 'shop'), ('inspections', 'docs'),
+  -- I piani sono la regola: li scrive l'ufficio. Le non conformità le apre
+  -- anche chi registra un collaudo respinto (`shop`); le lavora l'ufficio.
+  ('quality_plans', 'docs'),
+  ('nonconformities', 'shop'), ('nonconformities', 'docs'),
   -- Il cestino e le lapidi li scrive chiunque elimini qualcosa, in qualunque area.
   ('trash', 'catalog'), ('trash', 'bom'), ('trash', 'docs'), ('trash', 'manage'), ('trash', 'agenda'), ('trash', 'shop'),
   ('sync_tombstones', 'catalog'), ('sync_tombstones', 'bom'), ('sync_tombstones', 'docs'),
@@ -1237,7 +1320,8 @@ language sql immutable set search_path = public as $$
     ('workOrders', 'work_orders'), ('plans', 'production_plans'), ('prodOrders', 'production_orders'),
     ('prodDecls', 'production_declarations'), ('jobs', 'jobs'), ('reminders', 'reminders'),
     ('timeLogs', 'production_time_logs'), ('maintPlans', 'maintenance_plans'), ('maintEvents', 'maintenance_events'),
-    ('machines', 'machines'),
+    ('machines', 'machines'), ('inspections', 'inspections'),
+    ('qualityPlans', 'quality_plans'), ('nonconformities', 'nonconformities'),
     ('trash', 'trash'), ('users', 'profiles')
   ) v(k, t) where k = c
 $$;
@@ -1518,6 +1602,7 @@ begin
   tab := case split_part(prefisso, '-', 1)
     when 'RFQ' then 'rfqs' when 'ODA' then 'orders' when 'ODL' then 'work_orders'
     when 'ODP' then 'production_orders' when 'FAB' then 'production_plans' when 'COM' then 'jobs'
+    when 'COL' then 'inspections' when 'NC' then 'nonconformities'
     when 'MT' then 'item_revisions' end;
   if tab = 'item_revisions' then col := 'eco_number'; end if;   -- le modifiche tecniche MT-…
   if tab is null or prefisso !~ '^[A-Z]{2,3}-[0-9]{4}-$' then
@@ -1612,7 +1697,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions'] loop
+  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions', 'nonconformities'] loop
     execute format('drop trigger if exists numeri_chiudi_impegno on public.%I', t);
     execute format('create trigger numeri_chiudi_impegno after insert or update on public.%I for each row execute function public.numeri_chiudi_impegno()', t);
   end loop;

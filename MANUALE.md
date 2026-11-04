@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.139.0**
+**Versione dell'app documentata: 0.140.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -88,7 +88,9 @@ in un'officina meccanica:
 - i **cicli di lavorazione** delle parti, con le fasi interne e quelle affidate fuori;
 - il **fabbisogno materiali** che nasce dalle commesse dei clienti;
 - il ciclo acquisti completo: **richieste di offerta**, **ordini a fornitore**,
-  **ordini di lavoro** al terzista, ricevimenti e **conto lavoro**.
+  **ordini di lavoro** al terzista, ricevimenti e **conto lavoro**;
+- la **qualità**, per chi la accende: il collaudo della merce in entrata con i piani di controllo,
+  le non conformità e la valutazione dei fornitori (→ [cap. 17](#17-magazzino)).
 
 È pensata per chi progetta, chi compra e chi manda in produzione, e tiene queste tre viste sullo
 stesso archivio: la parte che il progettista disegna è la stessa che l'ufficio acquisti ordina ed
@@ -1743,6 +1745,193 @@ movimenti. Quando si scrive *ricevuto 50* su una riga d'ordine, quei 50 entrano 
 > ⚠️ **Cancellare un ordine già ricevuto toglie la sua merce dal magazzino.** È coerente, ma chi
 > cancella un ordine vecchio va avvisato.
 
+### Il collaudo della merce in entrata (modulo, dalla 0.140.0)
+
+**A cosa serve.** A non montare materiale che nessuno ha guardato. Con il modulo **Qualità**
+acceso (*Gestione → Aree e moduli*), un articolo può chiedere il **controllo in entrata**: da quel
+momento, ogni volta che ne arriva — il ricevimento di un ordine fornitore, o i pezzi che rientrano
+dall'ultima fase di un ordine di lavoro — nasce da solo un **collaudo**, e quella quantità resta
+**in collaudo** finché qualcuno non registra l'esito.
+
+**Dove si accende il controllo.** Nella scheda articolo, sottoscheda *Magazzino*, il campo
+**Si collauda all'arrivo**: *sì*, *no*, oppure *come la famiglia*, che è il valore di serie. La
+regola vera è quasi sempre di categoria — tutti i cuscinetti sì, tutta la bulloneria no — e si
+scrive una volta sola sulla **macrofamiglia** (*Gestione → Famiglie*, casella *Controllo in
+entrata*). Una **sottofamiglia** può scostarsene, e un articolo vince su tutti. Accanto c'è il
+**certificato richiesto** (un testo: `3.1 EN 10204`, `Dichiarazione di conformità`), che compare
+sulla scheda del collaudo per ricordare che va chiesto.
+
+**Cosa cambia a magazzino.** La merce in collaudo **resta nell'esistente**: è a scaffale, ed è
+stata pagata. Quello che cambia è il **libero**, che è già la colonna che dice di quanto si può
+davvero disporre: da lì il collaudo si sottrae, esattamente come l'impegnato. Nel Magazzino
+compare la colonna **In collaudo** (nascosta di serie: si accende da *Colonne*), c'è il filtro di
+stato *In collaudo*, e l'etichetta QR dell'articolo lo dice con il pulsante **Collauda** —
+perché è davanti al bancale, col telefono in mano, che il controllo si fa davvero.
+
+> **Il fabbisogno continua a contarla.** È merce arrivata: ricomprarla perché aspetta un esito
+> sarebbe peggio del male che si vuole curare.
+
+**La scheda del collaudo.** *Qualità → Collaudi*, l'elenco a destra e la scheda al centro come
+negli ordini. In alto l'arrivo (articolo, fornitore, documento d'origine, quantità e data) con due
+campi da compilare mentre la merce è lì: il **DDT del fornitore** e il **lotto o colata**. Sotto,
+l'esito.
+
+**I tre esiti.**
+
+| Esito | Cosa succede |
+|---|---|
+| **Accettato** | La quantità diventa merce libera, e basta |
+| **Accettato in deroga** | Come sopra, ma resta scritto che è passata con riserva |
+| **Respinto** (tutto o in parte) | La merce torna indietro — vedi qui sotto |
+
+**Il respinto torna indietro per la strada da cui è venuto**, e non inventa movimenti nuovi:
+
+- **da un ordine fornitore**, il **ricevuto della riga scende**. È la stessa correzione che si
+  farebbe a mano scrivendo un numero più basso nella colonna *Ricevuto*: la giacenza cala, la riga
+  torna ad avere un residuo, l'ordine torna *Parziale*, la merce torna *in arrivo* e il fabbisogno
+  la aspetta di nuovo;
+- **da un ordine di lavoro**, i pezzi **escono verso il terzista** con un'uscita a conto lavoro, e
+  l'ordine torna ad aspettarli. Da lì in poi il prospetto *Presso terzi* li racconta come prima;
+- **tenuta e rottamata** è la terza scelta: la merce non torna a nessuno ed esce come consumo. Il
+  ricevuto resta — il fornitore ha consegnato — ma a scaffale non c'è più niente.
+
+Prima di premere, la scheda dice a parole che cosa succederà: «*30 pz diventano liberi; 10 pz
+tolgono il ricevuto dalla riga d'ordine…*». **Un esito non si corregge**: la merce si è già mossa,
+e quello che è tornato indietro si rivede sul documento d'origine.
+
+**Chi lo registra.** *Officina e magazzino* (è chi sta davanti alla merce), *Ufficio acquisti* e
+l'amministratore. I collaudi da fare compaiono nel **Riepilogo**.
+
+**Il certificato.** Se l'articolo, la famiglia o il piano chiedono un certificato, la scheda ha il
+campo **Certificato**: *non ancora arrivato* o *arrivato e conforme*. Finché manca, il lotto si
+può accettare **solo in deroga** (o respingere): accettarlo pulito vorrebbe dire dichiarare
+conforme una cosa di cui manca la prova. Il file del certificato si allega all'articolo.
+
+**Il rapporto di collaudo.** Il pulsante **Rapporto PDF** in testa alla scheda dà il rapporto in
+italiano e inglese — arrivo, campione, misure, esito — da mandare al fornitore o da tenere. Con la
+cartella d'archivio impostata, *Archivia il PDF* ne conserva una copia in `Documenti
+Bomtrack/COL/<anno>/`, come per gli ordini.
+
+**Da sapere.**
+
+- Un ricevuto corretto **in giù** non apre un collaudo: non è arrivato niente di nuovo.
+- Due arrivi sulla stessa riga aprono **due collaudi**: sono due lotti, e si guardano separatamente.
+- La quantità del collaudo è nell'**unità della riga d'ordine** (il fornitore consegna chili), la
+  trattenuta sul libero è in quella **di gestione** (il magazzino conta metri).
+- Eliminando l'ordine, i suoi collaudi aperti **si chiudono**: quella merce non c'è più, e tenere
+  trattenuto un libero che non esiste non servirebbe a nessuno.
+- Spegnendo il modulo l'app torna esattamente quella di prima: i collaudi scritti **restano**, e
+  nessuna trattenuta vale più. Riaccendendolo tornano a valere.
+- Con l'archivio condiviso va rilanciato `supabase/schema.sql`: aggiunge le tabelle `inspections`,
+  `quality_plans` e `nonconformities` e le colonne del controllo su articoli e famiglie, senza
+  toccare il resto.
+
+Tutto il modulo sta nel gruppo **Qualità** della barra, che c'è solo con il modulo acceso:
+*Collaudi*, *Non conformità*, *Piani di controllo*, *Valutazione fornitori*.
+
+### I piani di controllo (modulo Qualità)
+
+**A cosa servono.** A dire a chi collauda **che cosa misurare** e **su quanti pezzi**, e a lasciare
+scritto che cosa ha misurato. *Qualità → Piani di controllo*, **Nuovo piano**.
+
+**A che cosa si applica.** Un piano vale per **un articolo** o per **una famiglia**, e può
+restringersi a **un fornitore**. Se più piani vanno bene, vince il più specifico: articolo e
+fornitore, poi articolo, poi famiglia e fornitore, poi famiglia. **Un piano attivo basta a far
+collaudare** l'articolo, anche senza toccare il campo *Si collauda all'arrivo*; un articolo segnato
+espressamente **No** resta fuori lo stesso. Il piano può chiedere il suo certificato, che vince su
+quello dell'articolo.
+
+**Il campionamento.** Quattro regole:
+
+| Regola | Quanti pezzi | Quando si respinge |
+|---|---|---|
+| Tutti i pezzi | il lotto intero | al primo non conforme |
+| Numero fisso | quelli scritti (al massimo il lotto) | al primo non conforme |
+| Percentuale | la percentuale del lotto, arrotondata in su | al primo non conforme |
+| AQL | dalla tabella ISO 2859-1, piano singolo normale, livello generale II | dal numero di rifiuto *Re* |
+
+Con l'AQL l'app ricava la lettera di codice dal lotto, segue le frecce della tabella e scrive sul
+collaudo campione, *Ac* e *Re*: per esempio un lotto di 1000 pezzi ad AQL 2,5 è lettera J, 80 pezzi,
+si accetta con 5 non conformi e si respinge con 6. Gli AQL offerti vanno da 0,065 a 6,5 (pezzi non
+conformi per cento); la scheda del piano mostra subito che cosa vorrebbe dire su un lotto di 500.
+
+**Il salto lotti.** Due numeri: *dopo quanti accettati di fila* e *se ne collauda uno ogni*. Con 5 e
+3, dopo cinque lotti accettati di fila dallo stesso fornitore se ne guarda uno su tre: gli altri
+nascono come collaudo **saltato**, già chiusi e accettati — restano scritti, ma non trattengono
+niente. Se il piano chiede un certificato, il lotto saltato resta aperto solo per quello, con zero
+pezzi da guardare. **Al primo respinto**, o finché c'è una **non conformità aperta** su quell'articolo
+e quel fornitore, si passa al **rinforzato**: si guarda tutto il lotto, finché non tornano cinque
+accettati di fila. Una deroga interrompe la serie. Lo stato non si salva: si ricava ogni volta dalla
+storia, e la scheda del collaudo dice quale livello si è applicato e perché.
+
+> La norma passa da normale a ridotto e rinforzato con tabelle proprie (II-B e II-C). Qui si fa come
+> nella maggior parte dei gestionali: ridotto vuol dire saltare lotti, rinforzato guardare tutto. È
+> più severo della norma nel rinforzato e più semplice nel ridotto.
+
+**Le caratteristiche.** Una **misura** ha nominale, tolleranza in meno e in più (con il segno: `-0,05`
+e `+0,05`), unità e strumento; un **controllo sì/no** dice solo *passa* o *non passa*. Nel collaudo
+ogni caratteristica ha la sua casella: una misura fuori tolleranza si colora di rosso, e la scheda
+dice che cosa suggeriscono le misure (e i pezzi non conformi contati nel campione). **Suggerisce, non
+decide**: un pezzo fuori quota si può accettare in deroga, ed è giusto che lo dica chi collauda.
+
+**Il piano si copia nel collaudo.** Caratteristiche, campione e numeri di accettazione restano
+quelli del giorno dell'arrivo: cambiare il piano domani non riscrive i collaudi di ieri, ed
+eliminarlo non li tocca. I piani li scrive chi scrive i documenti (*Ufficio acquisti* e
+l'amministratore); l'officina li usa.
+
+### Le non conformità (modulo Qualità)
+
+**A cosa servono.** A dare a ogni problema un numero, un responsabile e una data di chiusura.
+*Qualità → Non conformità*.
+
+**Da dove nascono.** Da sole, da un collaudo **respinto** (decisione *reso* o *rottamazione*, la
+quantità respinta, il lotto e il DDT nella descrizione, la causa *fuori tolleranza* se una misura era
+fuori) o **accettato in deroga** (decisione *uso in deroga*). A mano, con **Nuova non conformità**:
+dal **fornitore**, dalla **produzione** — scegliendo l'ordine di produzione, articolo e quantità si
+compilano con i suoi scarti —, da un **reclamo del cliente** o **interna**.
+
+**Che cosa portano.** La **causa**, da un elenco che si tiene in *Gestione → Qualità*; la
+**gravità** (minore, maggiore, critica); la **decisione** sulla merce (reso, rilavorazione, uso in
+deroga, rottamazione, accettato com'è); il **costo**; la data **entro cui chiuderla** (di serie 30
+giorni, si cambia in Gestione); le **azioni**, ognuna con chi e entro quando, da spuntare man mano.
+
+**Chiuderla** chiede decisione e causa: una NC chiusa senza le due cose non insegna niente a chi la
+rilegge. Le azioni non ancora fatte non bloccano, ma l'app lo chiede prima. Chiusa, non si cambia:
+si riapre. **Scaduta** è una NC aperta oltre la sua data, o con un'azione aperta oltre la sua: il
+**Riepilogo** le elenca come avviso di gravità alta.
+
+**Il rapporto PDF**, in italiano e inglese, porta origine, riferimenti, causa, decisione,
+descrizione e azioni: è quello che si manda al fornitore. Le note interne restano dentro. Si
+archivia in `Documenti Bomtrack/NC/<anno>/`.
+
+**Il numero** `NC-2026-001` con l'archivio condiviso lo riserva il server, come per gli ordini: il
+rapporto esce dall'azienda, e due NC con lo stesso numero non si devono poter dare. Si elimina solo
+l'ultima della serie; le altre si chiudono.
+
+**Chi le lavora.** Le apre anche l'officina, registrando un collaudo respinto; causa, decisione,
+azioni e chiusura le scrivono *Ufficio acquisti* e l'amministratore.
+
+### La valutazione dei fornitori (modulo Qualità)
+
+*Qualità → Valutazione fornitori* è il riesame che la ISO 9001 chiede al punto 8.4, fatto con i dati
+che l'app ha già. Per ogni fornitore, nel periodo scelto (di serie gli ultimi dodici mesi):
+
+- i **lotti collaudati**, quanti accettati, in deroga e respinti, e i **PPM** (pezzi respinti per
+  milione arrivati). I lotti saltati si contano a parte: non guardati, non dicono niente;
+- le **non conformità** che lo riguardano, aperte e chiuse;
+- la **puntualità**: gli arrivi sulle righe dei suoi ordini rispetto alla data **confermata** (o
+  richiesta, se non l'ha confermata). L'arrivo si data dal ricevimento registrato con l'archivio
+  condiviso, oppure dal collaudo che ha aperto; una riga ancora aperta oltre la sua data conta come
+  un ritardo.
+
+**Il punteggio**, da 0 a 100, pesa due parti (di serie 60 e 40, si cambiano in *Gestione →
+Qualità*): la **qualità** è la quota di lotti accettati, con la deroga che vale mezzo, meno 10 punti
+per ogni non conformità che non viene da un collaudo (un reclamo, uno scarto); la **puntualità** è la
+quota di arrivi in tempo. Se una delle due non ha dati vale l'altra; senza nessuna il fornitore resta
+**senza classe**, invece di averne una inventata. La **classe** A, B o C segue le soglie (di serie 85
+e 70) e compare anche accanto al nome nel **listino fornitori** e in *Gestione → Fornitori*.
+L'elenco si esporta in **Excel** e **PDF**.
+
 ### Le etichette QR
 
 Ogni articolo può avere un'etichetta con un **codice QR** da attaccare allo scaffale o al
@@ -3277,6 +3466,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Officina: terminale di reparto e manutenzione (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Capacità finita (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
+| Qualità: collaudo in entrata, piani di controllo, non conformità, valutazione fornitori (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
@@ -4422,6 +4612,9 @@ timestamp). Le migrazioni sono **idempotenti**: un backup vecchio si auto-migra 
 | `prodDecls` | Le dichiarazioni di avanzamento: eventi, non stato | — |
 | `plans` | I piani di fabbisogno | `lines` |
 | `jobs` | Le commesse | — |
+| `inspections` | **I collaudi** della merce in entrata (modulo Qualità): da quale arrivo vengono, la quantità trattenuta, la copia del piano con le misure e l'esito | — |
+| `qualityPlans` | **I piani di controllo**: a che cosa si applicano, il campionamento, il salto lotti e le caratteristiche | — |
+| `nonconformities` | **Le non conformità**: origine, causa, decisione, costo, scadenza e le azioni | — |
 | `users` | Gli utenti (con `passwordHash` e `passwordSalt`) | — |
 | `trash` | Il cestino | — |
 
@@ -4465,6 +4658,8 @@ fasi, `kind: 'op'`, con `workCenterId`, `supplierId`, `costMode`, `hours`, `oper
 | `views-prod.js` | Ordini di produzione: fasi congelate, avanzamento, movimenti |
 | `views-manage.js` | Gestione |
 | `produzione.js` | Avanzamento di produzione |
+| `qualita.js` · `qualita-piani.js` | Modulo Qualità: collaudo della merce in entrata, la trattenuta sul libero, gli esiti · piani di controllo, campionamento ISO 2859-1, salto lotti, rapporto di collaudo |
+| `qualita-nc.js` · `qualita-fornitori.js` | Modulo Qualità: non conformità, azioni, rapporto NC e impostazioni · valutazione dei fornitori |
 | `allegati.js` · `archivio.js` | Allegati e documenti degli articoli · la cartella d'archivio (scelta, permesso, lettura, copia, verifica) |
 | `documenti.js` | Le copie dei documenti emessi nella cartella d'archivio: quando si archiviano, le revisioni, la sezione in scheda e la verifica |
 | `export-lists.js` · `import-catalog.js` · `import-export.js` | Export elenchi · import articoli · import distinte, backup, avvio |

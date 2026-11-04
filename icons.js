@@ -79,6 +79,8 @@ const ICONS = {
   key: '<circle cx="7.8" cy="15.8" r="3.8"/><path d="m10.6 13.1 9.6-9.6"/><path d="m17.4 6.3 2.4 2.4M15 8.7l2.4 2.4"/>',
   logout: '<path d="M9 20.6H5.4a1.9 1.9 0 0 1-1.9-1.9V5.3a1.9 1.9 0 0 1 1.9-1.9H9"/><path d="m16 16.8 4.8-4.8L16 7.2"/><path d="M20.5 12H9"/>',
   logo: '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
+  // Il modulo Qualità: uno scudo con la spunta, «controllato».
+  shield: '<path d="M12 3 4.6 5.8v5.6c0 4.6 3.1 8 7.4 9.6 4.3-1.6 7.4-5 7.4-9.6V5.8z"/><path d="m8.6 12.2 2.4 2.4 4.6-4.8"/>',
   book: '<path d="M4.4 4.8a1.8 1.8 0 0 1 1.8-1.8h11.4a1.8 1.8 0 0 1 1.8 1.8v14.4a1.8 1.8 0 0 1-1.8 1.8H6.2a1.8 1.8 0 0 1-1.8-1.8z"/><path d="M7.8 3v18"/><path d="M10.8 7.8h5.4M10.8 11.2h5.4M10.8 14.6h3.4"/>',
 };
 
@@ -110,7 +112,7 @@ const ICON_TINT = {
   factory: 'purple', tag: 'orange', clipboard: 'accent', chart: 'purple',
   list: 'accent', receipt: 'accent', scale: 'orange',
   building: 'accent', folder: 'orange', card: 'green', pause: 'orange',
-  save: 'accent', download: 'green', upload: 'accent', users: 'accent', ruler: 'purple',
+  save: 'accent', download: 'green', upload: 'accent', users: 'accent', ruler: 'purple', shield: 'green',
   // Header
   printer: 'text-dim', qr: 'accent', key: 'orange', logout: 'red', logo: 'accent', book: 'text-dim',
   menu: 'text-dim', more: 'text-dim',
@@ -150,7 +152,7 @@ const ICON_LABEL = {
   clipboard: 'Commessa', chart: 'Report', save: 'Salva',
   list: 'Fabbisogno', receipt: 'Ordine', scale: 'Rettifica giacenza',
   building: 'Azienda', folder: 'Famiglia', card: 'Pagamento', pause: 'Sospendi',
-  download: 'Esporta', upload: 'Importa', users: 'Utenti', ruler: 'Unità di misura',
+  download: 'Esporta', upload: 'Importa', users: 'Utenti', ruler: 'Unità di misura', shield: 'Qualità',
   printer: 'Stampa', qr: 'Codice QR', key: 'Password', logout: 'Esci', logo: 'Bomtrack',
 };
 

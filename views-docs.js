@@ -406,6 +406,11 @@ function docSetLine(k, id, lineId, field, value) {
     const totale = l.received;
     l.received = ricevutoPrima;
     registraRicevuto(K.coll, doc, l, totale);
+    // Merce entrata adesso su un articolo da controllare: nasce il collaudo,
+    // e da questo momento quella quantità non è libera (modulo Qualità).
+    if (K.coll === 'orders' && typeof qcDopoRicevimento === 'function') {
+      qcDopoRicevimento(doc, l, (Number(l.received) || 0) - (Number(ricevutoPrima) || 0));
+    }
   }
   // Lo stato si ricalcola solo se cambia ciò da cui dipende: ricevuto,
   // quantità, prezzo (per la richiesta). Una nota o una data confermata non
@@ -1786,7 +1791,11 @@ function ordDelLine(id, lineId) { docDelLine('order', id, lineId); }
 function ordMarkAllReceived(id) {
   if (!ordGuard(id, 'reception')) return false;
   const o = getOrder(id); if (!o) return false;
-  (o.lines || []).forEach(l => { registraRicevuto('orders', o, l, Number(l.qty) || 0); });
+  (o.lines || []).forEach(l => {
+    const prima = Number(l.received) || 0;
+    registraRicevuto('orders', o, l, Number(l.qty) || 0);
+    if (typeof qcDopoRicevimento === 'function') qcDopoRicevimento(o, l, (Number(l.received) || 0) - prima);
+  });
   ordAutoStatus(o); touch(o); orderMarkDirty(); renderOrders();
   return true;
 }
@@ -1848,7 +1857,7 @@ function renderOrderEdit(id) {
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="ordSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il fornitore ha confermato" onchange="ordSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" title="${l.phaseKey ? 'Pezzi rientrati dal terzista: portano questo ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.' : 'Quantità ricevuta'}" onchange="ordSetLine('${id}','${l.id}','received',this.value)">`,
-    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Residuo da ricevere">${fmtQtyIt(residual)}</span>`)}
+    `<span class="ln-residual ${residual > 0 ? 'pos' : ''}" title="Residuo da ricevere">${fmtQtyIt(residual)}</span>${typeof qcEtichettaRiga === 'function' ? qcEtichettaRiga('orders', o, l) : ''}`)}
       ${docLineActionsCell('ord', id, l)}
     </tr>`;
   }).join('') || `<tr><td colspan="7" class="empty-text">Nessuna riga. Aggiungi articoli dal catalogo o manualmente.</td></tr>`;
@@ -2205,7 +2214,13 @@ function odlDichiara(docId, lineId, dati) {
   if (qty > 0 && a.part && hasStock(a.part) && a.inKind) {
     const extra = { orderId: o.id, lineId: l.id, declId: decl.id };
     if (a.inKind === 'clStep') { extra.fromSupplierId = o.supplierId; addMovement(a.part.id, 'clStep', qty, note || `Pezzi dal terzista per ${o.number}`, extra); }
-    else { extra.supplierId = o.supplierId; addMovement(a.part.id, 'clIn', qty, note || `Rientro da ${o.number}`, extra); }
+    else {
+      extra.supplierId = o.supplierId;
+      addMovement(a.part.id, 'clIn', qty, note || `Rientro da ${o.number}`, extra);
+      // I pezzi lavorati fuori sono il caso in cui un controllo in entrata
+      // serve di più: il terzista ha lavorato roba nostra su disegno nostro.
+      if (typeof qcDopoRientro === 'function') qcDopoRientro(o, l, a.part, qty);
+    }
   }
   odlSpostaRientrati(o, a.sorelle, qty + scrap);
   ordAutoStatus(o); touch(o); saveDB();
@@ -2679,6 +2694,9 @@ function exportOdlExcel(id) {
 
 function delOrder(id) {
   docDel('order', id, () => {
+    // L'eliminazione porta via anche la merce ricevuta: un collaudo aperto su
+    // quell'arrivo resterebbe a trattenere un libero che non esiste più.
+    if (typeof qcChiudiOrfani === 'function') qcChiudiOrfani(id);
     if (currentOrderId === id) { currentOrderId = null; orderView = 'list'; }
   }, o => {
     // Un ordine con merce già arrivata non si cancella per sbaglio: il numero

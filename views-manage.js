@@ -32,6 +32,7 @@ const MGMT_TABS = [
   { id: 'costi', gruppo: 'Configurazione', label: ico('euro', 'tinted', '') + ' Costi e margini' },
   { id: 'codifica', gruppo: 'Configurazione', label: ico('tag', 'tinted', '') + ' Codifica articoli' },
   { id: 'qr', gruppo: 'Configurazione', label: ico('qr', 'tinted', '') + ' Etichette QR' },
+  { id: 'qualita', gruppo: 'Configurazione', label: ico('shield', 'tinted', '') + ' Qualità', modulo: 'qualita' },
   { id: 'import', gruppo: 'Dati', label: ico('upload', 'tinted', '') + ' Import' },
   { id: 'backup', gruppo: 'Dati', label: ico('save', 'tinted', '') + ' Backup' },
 ];
@@ -69,6 +70,7 @@ function renderManage() {
   else if (mgmtTab === 'costi') c.innerHTML = renderSettingsPage(renderCostSettings());
   else if (mgmtTab === 'codifica') c.innerHTML = renderSettingsPage(renderCodeSettings());
   else if (mgmtTab === 'qr') c.innerHTML = renderSettingsPage(renderQrSettings());
+  else if (mgmtTab === 'qualita') c.innerHTML = renderSettingsPage(renderQcSettings());
   else if (mgmtTab === 'import') c.innerHTML = renderImport();
   else if (mgmtTab === 'backup') c.innerHTML = renderBackup();
   a11yFields(c);
@@ -369,12 +371,14 @@ function activeBtn(coll, r, nome) {
   return `<button class="mini-btn" onclick="toggleActive('${coll}',${jsAttr(r.id)},${jsAttr(nome)})" title="${esc(testo)}">${susp ? ico('check', 'tinted', 'Riattiva') : ico('pause', 'tinted', 'Sospendi')}</button>`;
 }
 function renderSuppliers() {
+  // La classe della valutazione (modulo Qualità), calcolata una volta per tutti.
+  const classi = typeof qcClassiIndice === 'function' ? qcClassiIndice() : new Map();
   const list = inOrdineAlfa(db.suppliers, s => s.name).map(s => {
     const loc = [s.city, s.province ? '(' + s.province + ')' : ''].filter(Boolean).join(' ');
     return `<div class="mgmt-item mgmt-row">
     <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(s.name)}</span>
     <span class="mgmt-item-meta">${[s.referente, s.email, s.phone, loc, contattiMeta(s)].filter(Boolean).map(esc).join(' · ')}</span></div>
-    <div class="mgmt-item-badges">${activeBadge(s)}</div>
+    <div class="mgmt-item-badges">${activeBadge(s)}${typeof qcClasseBadge === 'function' ? qcClasseBadge(classi.get(s.id)) : ''}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('suppliers', s, 'Fornitore')}
       <button class="mini-btn" onclick="editSupplierModal('${s.id}')" title="Modifica fornitore">${ico('edit', 'tinted', 'Modifica fornitore')}</button>
@@ -737,6 +741,7 @@ function editFamilyModal(id) {
       <div class="modal-field"><label>Nome</label><input id="ef-name" value="${esc(f.name)}"></div>
       <div class="modal-field"><label>Sigla (per codifica)</label><input id="ef-sigla" value="${esc(f.sigla || siglaFromName(f.name))}" maxlength="6"></div>
     </div>
+    ${qcFamigliaCampiHtml(f, 'ef')}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveFamily('${id}')">Salva</button></div>`);
 }
@@ -752,6 +757,7 @@ function saveFamily(id) {
   const err = validateFamilySigla(sigla, f.kind, f.id, !sg);
   if (err) { showToast(err, 'error'); return; }
   f.name = nome; f.sigla = sigla;
+  qcFamigliaLeggiCampi(f, 'ef');
   touch(f);
   saveDB(); closeModal(); renderManage(); savedToast('Aggiornata');
 }
@@ -784,6 +790,7 @@ function editSubFamilyModal(familyId, subId) {
       <div class="modal-field"><label>Nome (in ${esc(f.name)})</label><input id="esf-name" value="${esc(s.name)}"></div>
       <div class="modal-field"><label>Sigla (per codifica)</label><input id="esf-sigla" value="${esc(s.sigla || siglaFromName(s.name))}" maxlength="6"></div>
     </div>
+    ${qcSottofamigliaCampiHtml(s, 'esf')}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveSubFamily('${familyId}','${subId}')">Salva</button></div>`);
 }
@@ -796,6 +803,7 @@ function saveSubFamily(familyId, subId) {
   const err = validateSubFamilySigla(sigla, familyId, subId, !sg);
   if (err) { showToast(err, 'error'); return; }
   s.name = nome; s.sigla = sigla;
+  qcSottofamigliaLeggiCampi(s, 'esf');
   touch(s);
   saveDB(); closeModal(); renderManage(); savedToast('Aggiornata');
 }
@@ -1293,6 +1301,8 @@ function saveSettings() {
   // niente, invece di salvare il resto e lasciare quello vecchio senza dirlo.
   const erroreQr = readQrSettings();
   if (erroreQr) { showToast(erroreQr, 'error'); return; }
+  const erroreQc = typeof readQcSettings === 'function' ? readQcSettings() : '';
+  if (erroreQc) { showToast(erroreQc, 'error'); return; }
   // Si legge solo quello che la pagina mostra (0.127.0): un campo che non è a
   // video tornerebbe vuoto, e azzererebbe il margine salvando il calendario.
   const c = id => !!document.getElementById(id);
