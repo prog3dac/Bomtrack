@@ -1143,7 +1143,7 @@ function clMaterialsOf(part, pezzi) {
     .filter(r => r.itemId)
     .map(r => {
       const pp = (Number(r.qty) || 0) * (1 + (Number(r.scrapPct) || 0) / 100);
-      return { item: getItem(r.itemId), perPezzo: pp, qty: pp * pezzi };
+      return { item: getItem(r.itemId), perPezzo: pp, qty: pp * pezzi, opIndex: faseConsumo(r, part) };
     })
     .filter(x => x.item && hasStock(x.item));
 }

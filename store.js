@@ -664,6 +664,61 @@ function parteDistintaViva(it) {
   }
   return it;
 }
+// ── Dati tecnici dell'articolo (dalla 0.138.0) ──
+// Peso in kg, volume in m³, dimensioni in m (lunghezza × larghezza × altezza).
+// Vuoto vuol dire «non scritto», mai zero.
+const ITEM_DIM_CAMPI = ['lengthM', 'widthM', 'heightM'];
+function numTecnico(v) { const n = Number(v); return v == null || v === '' || !isFinite(n) || n <= 0 ? null : n; }
+// Il volume: quello scritto, altrimenti il prodotto delle tre dimensioni se
+// ci sono tutte. `calcolato` dice da dove viene.
+function itemVolume(it) {
+  if (!it) return null;
+  const v = numTecnico(it.volumeM3);
+  if (v != null) return { value: v, calcolato: false };
+  const d = ITEM_DIM_CAMPI.map(k => numTecnico(it[k]));
+  return d.every(x => x != null) ? { value: d[0] * d[1] * d[2], calcolato: true } : null;
+}
+// Il peso: quello scritto, altrimenti la somma della distinta (quantità ×
+// scarto × peso del figlio). Un figlio gestito a kg pesa la sua quantità.
+// `completo` è falso se qualche riga non ha un peso: la somma è per difetto.
+function itemWeight(it, visti) {
+  if (!it) return null;
+  const w = numTecnico(it.weightKg);
+  if (w != null) return { value: w, calcolato: false, completo: true };
+  if (String(it.uom || '').toLowerCase() === 'kg') return { value: 1, calcolato: false, completo: true };
+  const righe = distintaRighe(it);
+  if (!righe.length) return null;
+  const v = visti || new Set();
+  if (v.has(it.id)) return null;
+  v.add(it.id);
+  let tot = 0, completo = true, qualcuno = false;
+  righe.forEach(r => {
+    const f = getItem(r.itemId);
+    const pf = f ? itemWeight(f, v) : null;
+    if (!pf) { completo = false; return; }
+    qualcuno = true;
+    if (!pf.completo) completo = false;
+    tot += (Number(r.qty) || 0) * (1 + (Number(r.scrapPct) || 0) / 100) * pf.value;
+  });
+  v.delete(it.id);
+  return qualcuno ? { value: tot, calcolato: true, completo } : null;
+}
+// Le dimensioni come si leggono: «1,2 × 0,8 × 0,5 m», con «–» per quella che manca.
+function itemDimLabel(it) {
+  const d = ITEM_DIM_CAMPI.map(k => numTecnico(it && it[k]));
+  if (d.every(x => x == null)) return '';
+  return d.map(x => x == null ? '–' : String(+x.toFixed(4)).replace('.', ',')).join(' × ') + ' m';
+}
+
+// ── La fase di consumo di una riga di distinta (dalla 0.138.0) ──
+// `opIndex` sulla riga dice in quale fase del ciclo del padre si consuma
+// (indice fra le sole fasi, da 0). Assente, o oltre l'ultima fase: la prima,
+// com'era sempre stato.
+function faseConsumo(riga, padre) {
+  const n = cicloFasi(padre).length;
+  const k = riga && riga.opIndex != null && riga.opIndex !== '' ? Math.floor(Number(riga.opIndex)) : 0;
+  return n && k > 0 && k < n ? k : 0;
+}
 // Un assieme con almeno una fase: si monta con un ordine di produzione.
 function asmHaCiclo(it) { return !!it && isAssembly(it.type) && cicloFasi(it).length > 0; }
 // Una lavorazione d'assieme di prima della 0.124.0 come fase di ciclo.

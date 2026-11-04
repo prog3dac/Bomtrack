@@ -373,7 +373,7 @@ function renderSuppliers() {
     const loc = [s.city, s.province ? '(' + s.province + ')' : ''].filter(Boolean).join(' ');
     return `<div class="mgmt-item mgmt-row">
     <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(s.name)}</span>
-    <span class="mgmt-item-meta">${[s.referente, s.email, s.phone, loc].filter(Boolean).map(esc).join(' · ')}</span></div>
+    <span class="mgmt-item-meta">${[s.referente, s.email, s.phone, loc, contattiMeta(s)].filter(Boolean).map(esc).join(' · ')}</span></div>
     <div class="mgmt-item-badges">${activeBadge(s)}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('suppliers', s, 'Fornitore')}
@@ -410,6 +410,65 @@ function readAddressFields(pfx) {
   return { street: val(pfx + '-street'), streetNumber: val(pfx + '-num'), zip: val(pfx + '-zip'),
     city: val(pfx + '-city'), province: val(pfx + '-prov').toUpperCase(), country: val(pfx + '-country') };
 }
+// ── Contatti di fornitori e clienti (dalla 0.138.0) ──
+// Oltre al referente, quanti contatti servono: l'ufficio acquisti, la
+// contabilità, il tecnico. Ciascuno con nome, ruolo, email e telefono. La
+// bozza vive in memoria finché la scheda è aperta, e si ridisegna a ogni riga
+// aggiunta o tolta dopo aver letto ciò che è già scritto.
+const CONTATTO_CAMPI = [['name', 'Nome'], ['role', 'Ruolo'], ['email', 'Email'], ['phone', 'Telefono']];
+let _contattiBozza = {};
+function contattiDi(r) { return (r && Array.isArray(r.contacts)) ? r.contacts : []; }
+function contattiEditorHtml(pfx, r) {
+  _contattiBozza[pfx] = contattiDi(r).map(c => Object.assign({}, c));
+  return `<div class="modal-field" style="grid-column:1/-1"><label>Contatti</label>
+      <div id="${pfx}-contacts">${contattiRigheHtml(pfx)}</div></div>`;
+}
+function contattiRigheHtml(pfx) {
+  const righe = (_contattiBozza[pfx] || []).map((c, i) => `<div class="contact-row">
+      ${CONTATTO_CAMPI.map(([k, l]) => `<input id="${pfx}-ct-${i}-${k}" value="${esc(c[k] || '')}" placeholder="${l}" aria-label="${l}"${k === 'role' ? ` list="ct-role-opts"` : ''}>`).join('')}
+      <button class="mini-btn danger" onclick="contattoTogli('${pfx}', ${i})" title="Togli il contatto">${ico('trash', 'tinted', 'Togli il contatto')}</button></div>`).join('');
+  const ruoli = [...new Set((db.suppliers || []).concat(db.customers || []).flatMap(x => contattiDi(x).map(c => c.role)).filter(Boolean))].sort();
+  return `${righe || '<div class="empty-text" style="text-align:left;padding:0 0 6px">Nessun contatto oltre al referente.</div>'}
+    <datalist id="ct-role-opts">${['Acquisti', 'Amministrazione', 'Commerciale', 'Tecnico', 'Qualità', 'Logistica'].concat(ruoli).filter((x, i, a) => a.indexOf(x) === i).map(o => `<option value="${esc(o)}">`).join('')}</datalist>
+    <button class="btn-outline" onclick="contattoAggiungi('${pfx}')">+ Aggiungi un contatto</button>`;
+}
+function contattiLeggiBozza(pfx) {
+  (_contattiBozza[pfx] || []).forEach((c, i) => {
+    CONTATTO_CAMPI.forEach(([k]) => { const el = document.getElementById(`${pfx}-ct-${i}-${k}`); if (el) c[k] = String(el.value || '').trim(); });
+  });
+}
+function contattiRidisegna(pfx) {
+  const box = document.getElementById(pfx + '-contacts');
+  if (box) box.innerHTML = contattiRigheHtml(pfx);
+}
+function contattoAggiungi(pfx) {
+  contattiLeggiBozza(pfx);
+  (_contattiBozza[pfx] = _contattiBozza[pfx] || []).push({ id: gid(), name: '', role: '', email: '', phone: '' });
+  contattiRidisegna(pfx);
+}
+function contattoTogli(pfx, i) {
+  contattiLeggiBozza(pfx);
+  (_contattiBozza[pfx] || []).splice(i, 1);
+  contattiRidisegna(pfx);
+}
+// I contatti da salvare: le righe tutte vuote cadono, le altre tengono il loro id.
+function contattiDaSalvare(pfx) {
+  contattiLeggiBozza(pfx);
+  return (_contattiBozza[pfx] || [])
+    .filter(c => CONTATTO_CAMPI.some(([k]) => c[k]))
+    .map(c => ({ id: c.id || gid(), name: c.name || '', role: c.role || '', email: c.email || '', phone: c.phone || '' }));
+}
+function contattiApplica(r, lista) {
+  if (lista.length) r.contacts = lista; else delete r.contacts;
+}
+// Il contatto in una riga: «Mario Rossi (Acquisti) · m.rossi@… · 059…».
+function contattoTesto(c) {
+  return [c.name ? c.name + (c.role ? ' (' + c.role + ')' : '') : c.role, c.email, c.phone].filter(Boolean).join(' · ');
+}
+function contattiMeta(r) {
+  const n = contattiDi(r).length;
+  return n ? `+${n} ${n === 1 ? 'contatto' : 'contatti'}` : '';
+}
 function editSupplierModal(id) {
   if (!roleGuard('manage')) return;
   const s = db.suppliers.find(x => x.id === id); if (!s) return;
@@ -427,6 +486,7 @@ function editSupplierModal(id) {
         <input id="es-dtransport" list="sup-transport-opts" value="${esc(s.defaultTransport || '')}" placeholder="es. Porto franco">
         <datalist id="sup-transport-opts">${(db.settings.transportOptions || []).map(o => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>
       ${addressFieldsHtml('es', s)}
+      ${contattiEditorHtml('es', s)}
       <div class="modal-field"><label>Trasporto conto lavoro (gg)</label><input id="es-transit" type="number" min="0" max="99" step="1" value="${Number(s.transitDays) || 0}"
         title="Giorni di trasporto verso e dal terzista, andata più ritorno: si propongono alle fasi di conto lavoro affidate a questo fornitore, che li possono cambiare"></div>
     </div>
@@ -446,6 +506,7 @@ function saveSupplier(id) {
   s.transitDays = Math.round(numVal('es-transit', 0, 99));
   const fasi = isChecked('es-transit-fasi') ? fasiAggiornaValore(r => r.supplierId === id, 'transitDays', prima, s.transitDays) : 0;
   Object.assign(s, readAddressFields('es'));
+  contattiApplica(s, contattiDaSalvare('es'));
   touch(s);
   saveDB(); closeModal(); renderManage(); savedToast(fasi ? `Aggiornato, con ${fasi} ${fasi === 1 ? 'fase' : 'fasi'} di ciclo` : 'Aggiornato');
 }
@@ -501,7 +562,7 @@ function renderCustomers() {
     const loc = [c.city, c.province ? '(' + c.province + ')' : ''].filter(Boolean).join(' ');
     return `<div class="mgmt-item mgmt-row">
     <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(c.name)}</span>
-    <span class="mgmt-item-meta">${[c.referente, c.email, c.phone, loc].filter(Boolean).map(esc).join(' · ')}</span></div>
+    <span class="mgmt-item-meta">${[c.referente, c.email, c.phone, loc, contattiMeta(c)].filter(Boolean).map(esc).join(' · ')}</span></div>
     <div class="mgmt-item-badges">${activeBadge(c)}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('customers', c, 'Cliente')}
@@ -543,6 +604,7 @@ function editCustomerModal(id) {
       <div class="modal-field"><label>Telefono</label><input id="ec-phone" value="${esc(c.phone || '')}"></div>
       <div class="modal-field"><label>P.IVA / C.F.</label><input id="ec-vat" value="${esc(c.vat || '')}"></div>
       ${addressFieldsHtml('ec', c)}
+      ${contattiEditorHtml('ec', c)}
       <div class="modal-field" style="grid-column:1/-1"><label>Note</label><input id="ec-notes" value="${esc(c.notes || '')}"></div>
     </div>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
@@ -560,6 +622,7 @@ function saveCustomer(id) {
   c.name = nome; c.referente = val('ec-ref'); c.email = val('ec-email');
   c.phone = val('ec-phone'); c.vat = val('ec-vat'); c.notes = val('ec-notes');
   Object.assign(c, readAddressFields('ec'));
+  contattiApplica(c, contattiDaSalvare('ec'));
   touch(c);
   const rinominate = renameJobCustomer(vecchio, nome);
   saveDB(); closeModal(); renderManage();

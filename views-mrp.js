@@ -182,8 +182,10 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
         mrpAddPhase(acc.intOps, it, r, k, qty, f.end, f.start);
       }
     });
+    // Ogni riga serve all'inizio della sua fase di consumo (dalla 0.138.0):
+    // la vernice della quarta fase non deve arrivare per la prima.
     distintaRighe(it).forEach(c =>
-      mrpDescend(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next, acc, perFigli));
+      mrpDescend(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next, acc, schedRigaDue(c, it, prog, perFigli)));
     return;
   }
   // assieme: il montaggio finisce quando l'assieme serve e comincia prima dei
@@ -208,7 +210,7 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
   // modello da configurare (varianti.js) conta la parte comune, come nel costo.
   varRigheComuni(it).forEach(c => {
     const f = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
-    mrpDescend(c.itemId, qty * f, next, acc, perFigli);
+    mrpDescend(c.itemId, qty * f, next, acc, schedRigaDue(c, it, prog, perFigli));
   });
 }
 
@@ -339,6 +341,14 @@ function schedChildDue(start) {
   const m = Math.max(0, Math.round(Number(((typeof db !== 'undefined' && db && db.settings) || {}).scheduleBufferDays) || 0));
   return schedBack(start, m);
 }
+// La data in cui serve una riga di distinta: all'inizio della sua fase di
+// consumo (faseConsumo, dalla 0.138.0), col margine fra livelli. Una riga
+// senza fase, o un padre senza fasi, serve all'inizio del lavoro: `primo`.
+function schedRigaDue(riga, padre, prog, primo) {
+  const k = faseConsumo(riga, padre);
+  const f = k > 0 && prog && prog.fasi ? prog.fasi[k] : null;
+  return f && f.start ? schedChildDue(f.start) : primo;
+}
 // Il programma del ciclo di una parte: per ogni fase (per indice fra le sole
 // lavorazioni, come mrpPhaseKey) l'inizio e la fine, e l'inizio della prima.
 // A ritroso dall'ultima: la fine di una fase è l'inizio di quella che segue.
@@ -434,7 +444,7 @@ function schedTree(itemId, qty, due, ancestors, lotti) {
     const figli = [];
     const perFigli = schedChildDue(prog.start);
     distintaRighe(it).forEach(c => {
-      const n = schedTree(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), perFigli, next, lotti);
+      const n = schedTree(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), schedRigaDue(c, it, prog, perFigli), next, lotti);
       if (n) figli.push(n);
     });
     return { item: it, kind: 'make', qty, start: prog.start, end: due || '', days: 0,
@@ -445,7 +455,7 @@ function schedTree(itemId, qty, due, ancestors, lotti) {
   const figli = [];
   varRigheComuni(it).forEach(c => {
     const f = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
-    const n = schedTree(c.itemId, qty * f, perFigli, next, lotti);
+    const n = schedTree(c.itemId, qty * f, schedRigaDue(c, it, prog, perFigli), next, lotti);
     if (n) figli.push(n);
   });
   return { item: it, kind: 'asm', qty, start: prog.start, end: due || '', days: prog.days,

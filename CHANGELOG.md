@@ -2,6 +2,20 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.138.0 — 2026-11-04
+
+**Più dati in anagrafica.**
+- **Dati tecnici dell'articolo**: lunghezza, larghezza e altezza in metri, **peso** in kg e **volume** in m³, su ogni tipo. Il volume lasciato vuoto è il prodotto delle tre dimensioni; il peso di un assieme lasciato vuoto è la somma della distinta (una materia prima a kg pesa la sua quantità), e la scheda dice se è per difetto.
+- **Produttore** e **codice produttore** su commerciali e materie prime, distinti da fornitore e codice del fornitore.
+- **Materiale**, **finitura** e **trattamento** sulle parti, con i valori già usati proposti mentre si scrive.
+- Tutto compare nella nuova sezione *Dati tecnici* della scheda in sola lettura, nello storico delle modifiche e nel file Excel degli articoli (colonne *Lunghezza m*, *Larghezza m*, *Altezza m*, *Peso kg*, *Volume m3*, *Produttore*, *Codice produttore*, *Materiale*, *Finitura*, *Trattamento*). Anche macchine, gruppi e sottogruppi hanno misure e peso nel loro foglio.
+
+**Contatti multipli su fornitori e clienti.** Oltre al referente, la scheda di modifica tiene quanti contatti servono, ciascuno con nome, ruolo, email e telefono. L'elenco dice quanti sono, e l'export delle impostazioni ha il nuovo foglio *Contatti*, che si reimporta.
+
+**Fase di consumo.** Una riga della distinta di una parte, o di un assieme con un ciclo, può dire in quale fase si usa (*Modifica componente → Fase di consumo*, o la colonna *Fase* nell'import delle distinte). Il fabbisogno la fa arrivare per l'inizio di quella fase invece che della prima, e così il programma e il Gantt; l'ordine di produzione la congela sul materiale e la mostra nella colonna *Si usa*. Il prelievo dal magazzino resta all'avvio della prima fase. Senza fase scritta non cambia niente.
+
+`supabase/schema.sql`: nuove colonne `items.weight_kg`, `volume_m3`, `length_m`, `width_m`, `height_m`, `manufacturer`, `manufacturer_code`, `material`, `finish`, `treatment`; `suppliers.contacts` e `customers.contacts` (jsonb); `item_components.op_index` e `production_order_materials.op_index`. Va eseguito prima di usare i nuovi campi con l'archivio condiviso.
+
 ### 0.137.0 — 2026-11-03
 
 **Tempo fase e attrezzaggio in minuti.** Nel **ciclo di lavorazione** il tempo di una fase interna si scrive ora in **minuti per pezzo** (*Tempo fase (min/pz)*) e l'attrezzaggio in **minuti** (*Attrezzaggio (min)*), sia nella riga della fase sia quando se ne aggiunge una; anche l'*Attrezzaggio proposto* del centro di lavoro è in minuti. In minuti anche il foglio Excel del ciclo, l'anteprima dell'articolo, il documento dell'ODP («15 min/pz + 30 min att.»), il Carico centri (*Codici da produrre* e il suo export) e il dettaglio del consuntivo.

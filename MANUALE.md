@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.137.0**
+**Versione dell'app documentata: 0.138.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -852,7 +852,17 @@ un costo che non c'è.
 | **Scorta minima** | magazzino | Sotto questa quantità l'articolo compare fra i segnali del Riepilogo, e il netto la ricostituisce. |
 | **Lotto di riordino** | magazzino | La quantità a cui si arrotondano gli acquisti. |
 | **Il lotto è** | magazzino | *un multiplo esatto* (si ordina 100, 200, 300) oppure *una quantità minima* (sotto 100 non si ordina, sopra si ordina il fabbisogno esatto). |
+| **Lunghezza** · **Larghezza** · **Altezza (m)** | facoltativo, tutti i tipi | Le misure d'ingombro, in metri. |
+| **Peso (kg)** | facoltativo, tutti i tipi | Su un assieme lasciato vuoto la scheda di sola lettura mostra la **somma della distinta** (quantità × scarto × peso di ogni riga; una materia prima gestita a kg pesa la sua quantità), e dice se è per difetto perché qualche riga non ha un peso. |
+| **Volume (m³)** | facoltativo, tutti i tipi | Vuoto: vale il prodotto delle tre dimensioni, che il campo propone mentre si scrivono. |
+| **Produttore** · **Codice produttore** | commerciali e materie prime | Chi fa l'articolo e con che codice, distinti da fornitore e codice del fornitore: lo stesso cuscinetto SKF si compra da più rivenditori. |
+| **Materiale** · **Finitura** · **Trattamento** | parti | Testo libero, con i valori già usati su altri articoli proposti mentre si scrive, così «S235JR» si scrive sempre allo stesso modo. |
 | **Note** | facoltativo | Testo libero interno. |
+
+Tutti i dati tecnici (dalla 0.138.0) compaiono nella sezione **Dati tecnici** della scheda di sola
+lettura, ed entrano ed escono dal file Excel degli articoli con le colonne *Lunghezza m*, *Larghezza
+m*, *Altezza m*, *Peso kg*, *Volume m3*, *Produttore*, *Codice produttore*, *Materiale*, *Finitura*,
+*Trattamento*.
 
 In modifica, la scheda mostra anche un **pannello giacenza** con la situazione a magazzino, e in
 fondo la **riga autore**: chi ha creato il record e chi l'ha aggiornato per ultimo, con data e ora.
@@ -1217,6 +1227,12 @@ sue fasi.
 - In più c'è il **costo riga forzato**: il costo della riga intera al posto di quello calcolato
   (vuoto = calcolato). Nell'albero la riga forzata ha un asterisco. Inserendo un articolo che è già
   in distinta la quantità si somma, ma non su una riga forzata: lì nasce una riga nuova.
+- **Fase di consumo** (dalla 0.138.0): se la parte ha più di una fase, la finestra *Modifica
+  componente* chiede in quale fase si usa la riga (10, 20, 30…). Vale anche nelle distinte degli
+  assiemi con un ciclo. Il fabbisogno fa arrivare la riga **per l'inizio di quella fase** invece che
+  della prima: la vernice della fase 30 non si ordina per il giorno del taglio. Nell'albero la riga
+  porta l'etichetta *fase 30*; vuota, o la prima, non si scrive niente. Nell'import delle distinte è
+  la colonna facoltativa **Fase**.
 - Una parte **acquistata** ha la distinta documentale: non entra né nel costo né nel fabbisogno, e
   la vista lo dice in testa.
 - Fino alla 0.124 il materiale si scriveva nella sezione *Distinta parte* del ciclo. All'avvio
@@ -2075,7 +2091,9 @@ lavorativo dopo. I dati salvati non cambiano: cambia solo come si contano.
 - Le date sono «il mattino in cui il pezzo è pronto»: una fase di un giorno che deve finire
   lunedì comincia venerdì, e la fase prima deve finire venerdì. Nessun buco, nessuna
   sovrapposizione.
-- Il **materiale del ciclo** di una parte serve all'inizio della **prima** fase: è lì che esce.
+- Il **materiale** di una parte o di un assieme serve all'inizio della **prima** fase, se in distinta
+  non ha una **fase di consumo** diversa (dalla 0.138.0): allora serve all'inizio di quella. Il
+  prelievo dal magazzino, nell'ordine di produzione, resta all'avvio della prima fase.
 - Una fase **senza tempi** (zero ore, zero giorni) non sposta niente: senza dati le date restano
   quelle della consegna, come prima della 0.88.0.
 - Lo stesso articolo chiesto da due rami con date diverse tiene **la data più vicina**.
@@ -3119,7 +3137,7 @@ Ragione sociale · Referente · Email · Telefono · P.IVA/C.F. · indirizzo.
 ### 🏭 Fornitori
 
 Nome · Referente · Email · Telefono · P.IVA/C.F. · **Pagamento predefinito** ·
-**Trasporto predefinito** · indirizzo · **Trasporto conto lavoro (gg)**.
+**Trasporto predefinito** · indirizzo · **Contatti** · **Trasporto conto lavoro (gg)**.
 I due predefiniti si riproporranno su ogni richiesta e ogni ordine a quel fornitore.
 I giorni di trasporto, andata più ritorno, si **propongono** alle fasi di conto lavoro affidate a
 quel terzista, che li possono cambiare; è il trasporto della fase a sommarsi all'attraversamento
@@ -3129,10 +3147,20 @@ Si possono **sospendere** (⏸).
 
 ### 📇 Clienti
 
-Nome (**unico**) · Referente · Email · Telefono · P.IVA/C.F. · indirizzo · Note.
+Nome (**unico**) · Referente · Email · Telefono · P.IVA/C.F. · indirizzo · **Contatti** · Note.
 I nomi si **propongono nel campo Cliente della commessa**.
 **Rinominare un cliente allinea le commesse** che lo citavano; un cliente citato da una commessa
 **non si elimina**.
+
+### I contatti di fornitori e clienti (dalla 0.138.0)
+
+Oltre al referente, nella scheda di modifica di un fornitore o di un cliente si aggiungono
+**quanti contatti servono** con **+ Aggiungi un contatto**: nome, ruolo (Acquisti, Amministrazione,
+Tecnico… o uno scritto da sé), email e telefono. Il cestino toglie una riga, e una riga lasciata
+vuota non si salva. Nell'elenco compare quanti sono («+2 contatti»). Nell'export delle impostazioni
+c'è il foglio **Contatti**, una riga per contatto con l'anagrafica a cui appartiene: reimportandolo,
+i contatti di un fornitore o cliente che compare nel foglio si sostituiscono con quelli del file,
+gli altri restano com'erano.
 
 ### 🚚 Condizioni offerta
 

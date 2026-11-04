@@ -219,7 +219,7 @@ describe('Template distinte', () => {
     const a = conXlsx();
     const w = workbookDi(a, 'downloadBomTemplate()');
     const head = w.aoa('Distinte')[0];
-    assert.deepEqual(head, ['CodicePadre', 'CodiceFiglio', 'Qta', 'Scarto%']);
+    assert.deepEqual(head, ['CodicePadre', 'CodiceFiglio', 'Qta', 'Scarto%', 'Fase']);
     // La verifica vera: pick() deve trovare ognuna di queste intestazioni.
     const riga = {};
     head.forEach((h, i) => { riga[h] = ['A', 'B', 2, 5][i]; });
@@ -237,7 +237,7 @@ describe('Template distinte', () => {
     const righe = w.aoa('Distinte').slice(1);
     assert.ok(righe.length >= 1);
     righe.forEach(r => {
-      assert.equal(r.length, 4);
+      assert.equal(r.length, 5);
       assert.equal(typeof r[2], 'number', 'la quantità è un numero, non testo che gli somiglia');
       assert.equal(typeof r[3], 'number');
     });

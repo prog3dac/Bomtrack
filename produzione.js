@@ -201,8 +201,11 @@ function montaggioComponenti(asm, pezzi, planId) {
     const perPezzo = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
     if (hasStock(it)) {
       const gia = stock.find(x => x.item.id === it.id);
-      if (gia) { gia.perPezzo += perPezzo; gia.qty = gia.perPezzo * n; }
-      else stock.push({ item: it, perPezzo, qty: perPezzo * n });
+      // La fase di consumo (dalla 0.138.0): due righe dello stesso codice
+      // servono alla prima delle due.
+      const k = faseConsumo(c, asm);
+      if (gia) { gia.perPezzo += perPezzo; gia.qty = gia.perPezzo * n; gia.opIndex = Math.min(gia.opIndex, k); }
+      else stock.push({ item: it, perPezzo, qty: perPezzo * n, opIndex: k });
     } else if (isAssembly(it.type)) sotto.push({ item: it, perPezzo, qty: perPezzo * n });
   });
   if (planId && typeof sostituzioniPrelievo === 'function' && sostituzioniPiano(planId).length) {
@@ -211,7 +214,7 @@ function montaggioComponenti(asm, pezzi, planId) {
       .map(r => {
         const o = orig.get(r.sostituisce || r.itemId);
         const quota = o && o.qty > 0 ? r.qty / o.qty : 0;
-        return { item: getItem(r.itemId), perPezzo: o ? o.perPezzo * quota : 0, qty: r.qty, sostituisce: r.sostituisce || null };
+        return { item: getItem(r.itemId), perPezzo: o ? o.perPezzo * quota : 0, qty: r.qty, sostituisce: r.sostituisce || null, opIndex: o ? o.opIndex : 0 };
       }).filter(x => x.item);
   }
   return { stock, sotto };

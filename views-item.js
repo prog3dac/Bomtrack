@@ -75,6 +75,7 @@ function itemInfoClose() { _itemInfoStack = []; window.__itemInfoId = null; clos
 // ha già suo. Il corpo è lo stesso — due copie divergerebbero al primo ritocco.
 function itemInfoBody(it) {
   return `${itemInfoAnagrafica(it)}
+    ${itemInfoTecnici(it)}
     ${itemInfoAcquisto(it)}
     ${itemInfoCosto(it)}
     ${itemInfoMagazzino(it)}
@@ -146,6 +147,26 @@ function itemInfoAnagrafica(it) {
     it.favorite ? ['Preferito', '★ sì'] : null,
     it.obsolete ? ['Obsoleto', rawHtml('<span style="color:var(--red)">' + ico('blocked', 'tinted', '') + ' non più utilizzabile</span>')] : null,
     it.notes ? ['Note', it.notes] : null,
+  ]));
+}
+
+// Dati tecnici (dalla 0.138.0). Il peso di un assieme senza peso scritto è la
+// somma della distinta, e lo si dice; se qualche riga non ha un peso, la
+// somma è per difetto e si dice anche quello.
+function itemInfoTecnici(it) {
+  const w = itemWeight(it), vol = itemVolume(it);
+  const pesoTxt = w && (w.calcolato || numTecnico(it.weightKg) != null)
+    ? fmtTech(+w.value.toFixed(3)) + ' kg' + (w.calcolato ? (w.completo ? ' (dalla distinta)' : ' (dalla distinta, per difetto: righe senza peso)') : '')
+    : '';
+  return itemInfoSection('Dati tecnici', itemInfoRows([
+    ['Dimensioni (L × P × H)', itemDimLabel(it)],
+    ['Peso', pesoTxt],
+    ['Volume', vol ? fmtTech(+vol.value.toFixed(6)) + ' m³' + (vol.calcolato ? ' (dalle dimensioni)' : '') : ''],
+    ['Produttore', it.manufacturer || ''],
+    ['Codice produttore', it.manufacturerCode ? rawHtml(_mono(it.manufacturerCode)) : ''],
+    ['Materiale', it.material || ''],
+    ['Finitura', it.finish || ''],
+    ['Trattamento', it.treatment || ''],
   ]));
 }
 
@@ -491,6 +512,10 @@ const STORICO_CAMPI = {
   // Modulo Alternativi
   alternatives: 'Alternativi', replacedById: 'Sostituito da', substitutions: 'Sostituzioni',
   altItemId: 'Alternativo',
+  // Dati tecnici e contatti (dalla 0.138.0)
+  weightKg: 'Peso (kg)', volumeM3: 'Volume (m³)', lengthM: 'Lunghezza (m)', widthM: 'Larghezza (m)', heightM: 'Altezza (m)',
+  manufacturer: 'Produttore', manufacturerCode: 'Codice produttore', material: 'Materiale', finish: 'Finitura',
+  treatment: 'Trattamento', contacts: 'Contatti', opIndex: 'Fase di consumo',
 };
 const STORICO_RIF = { supplierId: 'suppliers', customerId: 'customers', familyId: 'families',
   workCenterId: 'workCenters', itemId: 'items', jobId: 'jobs', planId: 'plans',
