@@ -125,12 +125,6 @@ function archivioScegli() {
       return false;
     });
 }
-function archivioDimentica() {
-  _archivioElenco = null;
-  try { localStorage.removeItem(ARCHIVIO_NOME_KEY); } catch (e) { /* niente da rompere */ }
-  return _archivioTx('readwrite', s => s.delete(ARCHIVIO_CONFIG_KEY)).catch(() => null);
-}
-
 // ─── Il permesso, chiesto quando serve ───
 function _permesso(h, chiedi) {
   if (!h || typeof h.queryPermission !== 'function') return Promise.resolve(true);

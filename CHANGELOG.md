@@ -2,6 +2,26 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.141.0 — 2026-11-04
+
+**Il database condiviso si difende da solo.** Le correzioni dell'analisi del codice del 4 novembre.
+- **Nessuna funzione si chiama senza accesso.** Postgres e Supabase davano a chiunque avesse indirizzo e chiave pubblica (che viaggiano nel link e nel QR di collegamento) il permesso di eseguire le funzioni del database: `riserva_numeri` poteva bruciare 500 numeri di documento a chiamata. Ora un blocco in fondo a `schema.sql` toglie il permesso all'utente anonimo su ogni funzione, anche su quelle che verranno, e `riserva_numeri`/`libera_numeri` rispondono solo a chi crea documenti numerati.
+- **Il codice articolo è unico anche sul server** (voce A6): un indice che non bada a maiuscole e spazi. Su un archivio con doppioni storici non si crea e lo dice.
+- **Nessuna distinta dentro sé stessa, nemmeno fra due PC** (voce A8): un controllo alla fine di ogni invio, che mette in fila due invii contemporanei.
+- **Un id con apici o tag dentro non entra**, né da un backup modificato a mano né dall'API: gli id finiscono negli `onclick` delle viste.
+- Un indice per ogni chiave esterna (89), la scrittura in tre policy invece di una che valeva anche per la lettura, `search_path` fisso sui quattro trigger che non l'avevano.
+- **All'accesso, l'app dice se lo schema del progetto è indietro** (`archivio_stato().schema_versione`).
+
+**L'app.**
+- Content-Security-Policy in `index.html`: gli script vengono solo dall'app e da `vendor/`, niente plugin né `<base>`. Provata in Chromium da file e da indirizzo web, in ogni vista e con un Excel e un PDF.
+- Il prospetto **Presso terzi** ha il suo export Excel e PDF, che il manuale prometteva e mancava. Nell'elenco di fornitori e clienti, il numero dei contatti dice chi sono al passaggio del mouse.
+- Tolte sette funzioni che nessuno chiamava; un test ora fallisce se ne resta una.
+- I tre file più lunghi sono divisi per argomento: `views-listino.js` e `views-cicli.js` da `views-catalog.js`, `views-mrp-documenti.js` da `views-mrp.js`, `views-oda.js` da `views-docs.js`. Stesso ordine di caricamento, nessun cambio di comportamento; un test ferma ogni script oltre le 3.000 righe.
+
+**Per chi sviluppa.** `tools/versione.js` dà il numero di versione all'ultimo passo prima del merge: fonde main, rinumera la voce del ramo e la scrive in `APP_VERSION`, `sw.js`, nel manuale e nei commenti «dalla 0.x.y» del ramo; si ferma davanti a un conflitto vero. Le regole stanno in `CLAUDE.md`. Il benchmark misura anche salvataggio e fabbisogno su 5.000 articoli e 15.000 movimenti.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Non cambia i dati; aggiunge l'indice sui codici, il controllo delle distinte, gli indici, le policy e i permessi.
+
 ### 0.140.0 — 2026-11-04
 
 **Modulo Qualità: il collaudo della merce in entrata.** Spento di serie, si accende in *Gestione → Aree e moduli* (area Magazzino). Un articolo — o la sua famiglia — può chiedere il **controllo in entrata**: da quel momento ogni ricevimento di un ordine fornitore, e ogni rientro dall'ultima fase di un ordine di lavoro, apre da solo un **collaudo**.

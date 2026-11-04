@@ -56,6 +56,9 @@ const CLOUD_LIMITE_MS = 90000;   // una richiesta senza risposta dopo questo val
 // del limite di Supabase per una richiesta (8 secondi). Fino alla 0.105.4 era
 // 5 secondi: le righe scritte all'inizio di un invio più lungo sfuggivano.
 const CLOUD_MARGINE_MS = 15000;
+// La versione dello schema che questa app si aspetta da archivio_stato()
+// (dalla 0.141.0): si alza insieme a `schema_versione` in supabase/schema.sql.
+const CLOUD_SCHEMA_VERSIONE = 1;
 const CLOUD_PULIZIA_MS = 6 * 3600 * 1000;   // ogni quanto un PC ricorda al server di pulire
 
 function cloudLeggi(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -1179,6 +1182,9 @@ function cloudGestisciErrore(e) {
   // non tutto il lavoro in attesa.
   if (e && e.codice === '23503') { cloudSegna('errore', 'Una modifica cita un elemento che non c\'è più sul server. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
   if (e && e.codice === '23505' && /_numero_unico"/.test(e.message || '')) { cloudSegna('errore', 'Un documento ha un numero che sul server è già di un altro: si riprova al prossimo giro'); return; }
+  // I due vincoli della 0.141.0: il codice unico e la distinta senza anelli.
+  if (e && e.codice === '23505' && /items_codice_unico/.test(e.message || '')) { cloudSegna('errore', 'Un articolo ha un codice che sul server è già di un altro articolo: cambialo, oppure usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
+  if (e && e.codice === '23514' && /distinta_senza_anelli/.test(e.message || '')) { cloudSegna('errore', 'Una distinta conterrebbe sé stessa (' + String(e.message).replace(/^.*distinta_senza_anelli:\s*/, '') + '): togli la riga, oppure usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
   const msg = (e && e.message) || String(e);
   cloudSegna('errore', Store.hasPendingChanges() ? msg + '. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)' : msg);
 }
@@ -1407,11 +1413,27 @@ async function cloudDopoAccesso() {
   // La sessione arrivata da un invito non sa chi è: lo dice il profilo.
   const s = cloudSessione();
   if (s && !s.user) cloudSalvaSessione(Object.assign({}, s, { user: { id: p.id, email: p.email } }));
+  cloudControllaSchema(st);
   const c = cloudConfig();
   if (!c.allineato) return { primo: true, stato: st };
   // Già allineato: si scarica quello che è cambiato e si entra.
   if (!getUser(p.id)) await cloudRiceviForzato();
   return { primo: false, stato: st };
+}
+// Lo schema del progetto è più vecchio dell'app (dalla 0.141.0): non si blocca
+// — le funzioni che mancano rispondono già con il loro errore (PGRST202), e
+// l'invio rifiuta le colonne che il server non ha — ma lo si dice subito,
+// all'accesso, prima che la sincronizzazione si fermi.
+function cloudSchemaIndietro(st) {
+  const v = Number(st && st.schema_versione) || 0;
+  return v < CLOUD_SCHEMA_VERSIONE;
+}
+function cloudControllaSchema(st) {
+  if (!cloudSchemaIndietro(st)) return false;
+  const msg = 'Lo schema del progetto Supabase è più vecchio di questa versione dell\'app: un amministratore riesegua supabase/schema.sql nel SQL Editor del progetto';
+  _cloud.messaggio = msg;
+  if (typeof showToast === 'function') showToast(msg, 'error');
+  return true;
 }
 // ── Lo scaricamento completo, a pagine (dalla 0.105.4) ──
 // pull_changes() senza `since` rimanda l'intero archivio in una risposta: su

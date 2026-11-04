@@ -245,9 +245,12 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `views-jobs.js` | commesse cliente e tracciabilità commessa → fabbisogno → richiesta → ordine |
 | `views-home.js` | riepilogo: cosa richiede attenzione, con il collegamento a dove si risolve |
 | `views-dash.js` | cruscotto: valore di magazzino, articoli fermi, sotto scorta, consegne scadute per fornitore |
-| `views-catalog.js` | anagrafiche, listino fornitori, scheda articolo, cicli di lavorazione |
+| `views-listino.js` | listino fornitori: le quotazioni di ogni articolo, lo storico prezzi e la vista d'insieme |
+| `views-catalog.js` | anagrafiche e scheda articolo |
+| `views-cicli.js` | cicli di lavorazione: le fasi di parti e assiemi |
 | `views-report.js` | costificazione e report |
 | `views-mrp.js` | fabbisogno materiali, programmazione a ritroso delle date (montaggi, fasi, tratte di conto lavoro, acquisti) e carico dei centri |
+| `views-mrp-documenti.js` | dal fabbisogno ai documenti: richieste, ordini, ordini di lavoro e di produzione che nascono da un piano |
 | `alternativi.js` | modulo **Alternativi**: equivalenti e sostitutivi degli articoli, le decisioni «usa l'alternativo» di un piano e il loro effetto su esplosione, montaggio, ordini di produzione e conto lavoro |
 | `consuntivo.js` | modulo **Costi reali**: il consuntivo di commessa, con il preventivo fotografato all'avvio della produzione e il reale letto da prelievi, ricevimenti, ODL e fasi lavorate (il costo medio d'acquisto sta in `views-stock.js`) |
 | `officina.js` | modulo **Officina**: il terminale di reparto con le timbrature Inizia / Pausa / Fine sulle fasi, e la manutenzione dei centri (piani a giorni o a ore, interventi con ricambi e fermi) |
@@ -260,7 +263,8 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 | `documenti.js` | le copie PDF dei documenti emessi (RFQ, ODA, ODL) nella cartella d'archivio, con revisioni e verifica |
 | `export-lists.js` | export PDF ed Excel degli elenchi: una specifica per vista, due traduttori |
 | `views-item.js` | scheda articolo di sola lettura e codice cliccabile; come si legge lo storico delle modifiche |
-| `views-docs.js` | richieste di offerta e ordini |
+| `views-docs.js` | la parte comune dei documenti verso i fornitori e le richieste di offerta |
+| `views-oda.js` | ordini a fornitore (ODA), ordini di lavoro in conto lavoro (ODL), avvio e dichiarazione sulla riga |
 | `views-prod.js` | ordini di produzione: congelamento del ciclo, successione delle fasi, avanzamento e i due movimenti di magazzino |
 | `views-avanzamento.js` | Pianificazione → Avanzamento: il Gantt del piano con quanto è stato fatto, letto da ordini, ODL e ODP; in sola lettura |
 | `views-manage.js` | gestione (utenti, anagrafiche di servizio, impostazioni) |
@@ -281,12 +285,13 @@ Il motivo è lo storico: finché lo stesso dato si poteva scrivere in due posti,
 - `test/` — suite di verifica del motore di costo, delle migrazioni, del salvataggio, dell'import Excel e dell'accesso. **Non serve all'app**: `index.html` non la carica, e copiando la cartella su un altro PC si può anche omettere.
 - `sw.js`, `manifest.webmanifest`, `icona.svg` — l'app installabile e funzionante offline. Il service worker mette in cache **il programma, mai i dati**; su `file://` non viene nemmeno registrato, e lì non cambia niente.
 - `.github/workflows/test.yml` — esegue la suite a ogni push. Come `test/`, non serve all'app.
+- `tools/versione.js` — dà il numero di versione all'ultimo passo prima del merge: fonde main, rinumera la voce del ramo e la scrive dappertutto (vedi `CLAUDE.md`). Non serve all'app.
 
 ### Test
 
 ```
 node test/run.js      # suite completa
-node test/bench.js    # benchmark del motore di costificazione
+node test/bench.js    # benchmark: costi, risalita, e salvataggio e fabbisogno su 5.000 articoli
 ```
 
 Richiede solo **Node 18 o superiore** — nessun `npm install`, nessuna dipendenza: la suite usa i moduli core e carica i sorgenti dell'app in un contesto isolato, nella stessa sequenza di `index.html`.

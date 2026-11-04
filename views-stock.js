@@ -1318,7 +1318,7 @@ function contoLavoroModal(soloItemId) {
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Le righe di un <strong>ordine di produzione</strong> non vengono dai movimenti e non potrebbero: fra una fase e l&rsquo;altra non se ne scrivono, perché i pezzi non sono più il materiale e non sono ancora la parte. Lì il luogo lo dà la <strong>fase corrente</strong> dell&rsquo;ordine, ed è marcato accanto al codice.</p>
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Il blocco <strong>«in casa, fra due fasi»</strong> sono i pezzi tornati da un terzista che devono ancora andare al successivo: non sono a magazzino — il codice prodotto si carica una volta sola, al rientro dell&rsquo;ultima fase — e non sono più da nessuno. Sono l&rsquo;unico posto in cui compaiono.</p>
     ${blocchi || '<div class="empty-text">Nessun materiale fuori: tutto quello che è uscito è rientrato.</div>'}
-    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'contolavoro');
+    <div class="modal-actions">${righe.length && !soloItemId ? listExportButtons('contoLavoroExportSpec') : ''}<button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'contolavoro');
 }
 // Il pulsante in toolbar del Magazzino: compare solo se c'è davvero qualcosa
 // fuori. Un pulsante permanente che apre una scheda vuota è rumore.

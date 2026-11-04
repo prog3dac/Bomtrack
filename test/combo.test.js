@@ -38,7 +38,9 @@ describe('Fornitori: il filtro mentre si scrive', () => {
 
 describe('Fornitori: quali campi si possono cercare', () => {
   it('i menu fornitore di documenti, listino, cicli, centri, filtri e magazzino sono marcati', () => {
-    const src = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    // Un file diviso nella 0.141.0 si legge con le sue parti.
+    const DIVISI = { 'views-catalog.js': ['views-listino.js', 'views-catalog.js', 'views-cicli.js'], 'views-docs.js': ['views-docs.js', 'views-oda.js'], 'views-mrp.js': ['views-mrp.js', 'views-mrp-documenti.js'] };
+    const src = f => (DIVISI[f] || [f]).map(x => fs.readFileSync(path.join(__dirname, '..', x), 'utf8')).join('\n');
     const conta = (f, re) => (src(f).match(re) || []).length;
     // Dalla 0.107.0 la testata dei tre documenti è una sola (docTestaHtml).
     assert.equal(conta('views-docs.js', /<select[^>]*sel-cerca[^>]*onchange="\$\{o\.pfx\}SetSupplier/g), 1, 'la testata comune');

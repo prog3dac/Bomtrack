@@ -377,7 +377,7 @@ function renderSuppliers() {
     const loc = [s.city, s.province ? '(' + s.province + ')' : ''].filter(Boolean).join(' ');
     return `<div class="mgmt-item mgmt-row">
     <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(s.name)}</span>
-    <span class="mgmt-item-meta">${[s.referente, s.email, s.phone, loc, contattiMeta(s)].filter(Boolean).map(esc).join(' · ')}</span></div>
+    <span class="mgmt-item-meta">${contattiRiga([s.referente, s.email, s.phone, loc], s)}</span></div>
     <div class="mgmt-item-badges">${activeBadge(s)}${typeof qcClasseBadge === 'function' ? qcClasseBadge(classi.get(s.id)) : ''}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('suppliers', s, 'Fornitore')}
@@ -473,6 +473,15 @@ function contattiMeta(r) {
   const n = contattiDi(r).length;
   return n ? `+${n} ${n === 1 ? 'contatto' : 'contatti'}` : '';
 }
+// La riga sotto il nome di un fornitore o di un cliente: referente, email,
+// telefono e luogo, poi quanti contatti ha. Passandoci sopra il numero dice
+// chi sono (dalla 0.141.0: contattoTesto c'era, ma non la usava nessuno).
+function contattiRiga(campi, r) {
+  const testo = campi.filter(Boolean).map(esc);
+  const meta = contattiMeta(r);
+  if (meta) testo.push(`<span class="contatti-meta" title="${esc(contattiDi(r).map(contattoTesto).join('\n'))}">${esc(meta)}</span>`);
+  return testo.join(' · ');
+}
 function editSupplierModal(id) {
   if (!roleGuard('manage')) return;
   const s = db.suppliers.find(x => x.id === id); if (!s) return;
@@ -566,7 +575,7 @@ function renderCustomers() {
     const loc = [c.city, c.province ? '(' + c.province + ')' : ''].filter(Boolean).join(' ');
     return `<div class="mgmt-item mgmt-row">
     <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(c.name)}</span>
-    <span class="mgmt-item-meta">${[c.referente, c.email, c.phone, loc, contattiMeta(c)].filter(Boolean).map(esc).join(' · ')}</span></div>
+    <span class="mgmt-item-meta">${contattiRiga([c.referente, c.email, c.phone, loc], c)}</span></div>
     <div class="mgmt-item-badges">${activeBadge(c)}</div>
     <div class="mgmt-item-actions">
       ${activeBtn('customers', c, 'Cliente')}
