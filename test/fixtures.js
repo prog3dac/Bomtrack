@@ -74,6 +74,7 @@ function dbCloudCompleto() {
         alternatives: [{ itemId: m1, note: 'stesse quote' }], replacedById: m1 }),
       st({ id: p1, code: 'PRT-001', name: 'Albero', type: 'parte', uom: 'pz', unitCost: 0, sourcing: 'make', active: true, lotSize: 10, lotMode: 'min', safetyStock: 5, priceList: [],
         weightKg: 1.1, volumeM3: 0.0004, material: 'C40', finish: 'Ra 1,6', treatment: 'bonifica',
+        grossWeightKg: 1.3, barcode: '8012345678901', drawingRef: 'DIS-001 rev. A',
         cycle: [{ kind: 'item', itemId: m1, qty: 1.2, costOverride: null },
           { kind: 'op', workCenterId: wc1, supplierId: null, costMode: 'orario', cost: 0, hours: 0.5, days: 0, rate: 40, note: 'tornitura', machineId: U(53), machineRate: 25 },
           { kind: 'op', workCenterId: wc1, supplierId: s2, costMode: 'fisso', cost: 3, hours: 0, days: 4, rate: 0, note: 'tempra' }] }),

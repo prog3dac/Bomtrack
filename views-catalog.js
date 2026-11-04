@@ -1170,41 +1170,83 @@ function itemLockNote(lock) {
 }
 // ── Dati tecnici nella scheda di modifica (dalla 0.138.0) ──
 // [campo dell'articolo, id dell'input, numerico]
+// Dalla 0.139.0 anche il peso lordo, il codice a barre e il riferimento disegno.
 const ITEM_TECH_FIELDS = [
   ['lengthM', 'it-len', true], ['widthM', 'it-wid', true], ['heightM', 'it-hei', true],
-  ['weightKg', 'it-weight', true], ['volumeM3', 'it-volume', true],
+  ['weightKg', 'it-weight', true], ['grossWeightKg', 'it-grossweight', true], ['volumeM3', 'it-volume', true],
   ['manufacturer', 'it-mfr', false], ['manufacturerCode', 'it-mfrcode', false],
   ['material', 'it-material', false], ['finish', 'it-finish', false], ['treatment', 'it-treatment', false],
+  ['drawingRef', 'it-drawing', false], ['barcode', 'it-barcode', false],
 ];
+// Su quali tipi vale ciascun campo: il produttore su ciò che si compra già
+// fatto, materiale, finitura e trattamento sulle parti, il disegno su ciò che
+// si progetta, il codice a barre su ciò che sta a scaffale. Misure e pesi
+// valgono per tutti. Una regola sola per la scheda, la lettura e l'import.
+function itemTechCampoVale(k, t) {
+  if (k === 'manufacturer' || k === 'manufacturerCode') return t === 'acquistato' || t === 'materiale';
+  if (k === 'material' || k === 'finish' || k === 'treatment') return t === 'parte';
+  if (k === 'drawingRef') return t === 'parte' || isAssembly(t);
+  if (k === 'barcode') return hasStock({ type: t });
+  return true;
+}
 // I valori già scritti su altri articoli, per scrivere «S235JR» sempre allo stesso modo.
 function itemTechValori(k) {
   const set = new Set();
   (db.items || []).forEach(i => { const v = String(i[k] || '').trim(); if (v) set.add(v); });
   return [...set].sort((a, b) => a.localeCompare(b, 'it'));
 }
+function itemTechVal(it, k) { return it && it[k] != null ? esc(String(it[k])) : ''; }
+function itemTechNum(it, id, k, label, ph) {
+  return `<div class="modal-field"><label>${label}</label>
+        <input type="number" id="${id}" min="0" step="any" value="${itemTechVal(it, k)}" placeholder="${ph || ''}" oninput="itemTechVolumeHint()"></div>`;
+}
+function itemTechTxt(it, id, k, label, ph, elenco) {
+  return `<div class="modal-field"><label>${label}</label>
+        <input id="${id}" ${elenco ? `list="${id}-list"` : ''} autocomplete="off" maxlength="80" value="${itemTechVal(it, k)}" placeholder="${ph || ''}">
+        ${elenco ? `<datalist id="${id}-list">${itemTechValori(k).map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : ''}</div>`;
+}
+// La parte «Dati fisici», produttore, materiale e disegno della sottoscheda Tecnico.
 function itemTechFieldsHtml(it) {
-  const v = k => it && it[k] != null ? esc(String(it[k])) : '';
-  const num = (id, k, label, ph) => `<div class="modal-field"><label>${label}</label>
-        <input type="number" id="${id}" min="0" step="any" value="${v(k)}" placeholder="${ph || ''}" oninput="itemTechVolumeHint()"></div>`;
-  const txt = (id, k, label, ph) => `<div class="modal-field"><label>${label}</label>
-        <input id="${id}" list="${id}-list" autocomplete="off" maxlength="80" value="${v(k)}" placeholder="${ph || ''}">
-        <datalist id="${id}-list">${itemTechValori(k).map(x => `<option value="${esc(x)}">`).join('')}</datalist></div>`;
   const vol = itemVolume(it);
-  return `<div class="modal-grid" id="fld-tech">
-      ${num('it-len', 'lengthM', 'Lunghezza (m)')}
-      ${num('it-wid', 'widthM', 'Larghezza (m)')}
-      ${num('it-hei', 'heightM', 'Altezza (m)')}
-      ${num('it-weight', 'weightKg', 'Peso (kg)', it && isAssembly(it.type) ? 'dalla distinta' : '')}
-      ${num('it-volume', 'volumeM3', 'Volume (m³)', vol && vol.calcolato ? fmtTech(vol.value) : 'L × P × H')}
+  const v = k => itemTechVal(it, k);
+  // Le tre misure stanno in un campo solo, «L × P × H»: tre etichette lunghe
+  // in fila non ci stanno su un telefono, e le misure si leggono insieme.
+  const dim = (id, k, lettera, nome) => `<input type="number" id="${id}" min="0" step="any" value="${v(k)}" placeholder="${lettera}" aria-label="${nome} (m)" title="${nome} (m)" oninput="itemTechVolumeHint()">`;
+  return `<div class="it-sec">Dati fisici</div>
+    <div id="fld-tech">
+      <div class="modal-grid modal-grid-3">
+        ${itemTechNum(it, 'it-weight', 'weightKg', 'Peso netto (kg)', it && isAssembly(it.type) ? 'dalla distinta' : '')}
+        ${itemTechNum(it, 'it-grossweight', 'grossWeightKg', 'Peso lordo (kg)', 'con imballo')}
+        ${itemTechNum(it, 'it-volume', 'volumeM3', 'Volume (m³)', vol && vol.calcolato ? fmtTech(vol.value) : 'L × P × H')}
+      </div>
+      <div class="modal-field"><label for="it-len">Dimensioni L × P × H (m)</label>
+        <div class="dim3">
+          ${dim('it-len', 'lengthM', 'L', 'Lunghezza')}
+          ${dim('it-wid', 'widthM', 'P', 'Larghezza')}
+          ${dim('it-hei', 'heightM', 'H', 'Altezza')}
+        </div></div>
+      <p class="empty-text it-hint">${it && isAssembly(it.type)
+        ? 'Il peso netto lasciato vuoto è la somma della distinta; si scrive quando la macchina è stata pesata.'
+        : 'Il volume lasciato vuoto è il prodotto delle tre dimensioni; si scrive a mano quando non lo è (sfuso, forme irregolari).'}</p>
     </div>
-    <div class="modal-grid" id="fld-mfr">
-      ${txt('it-mfr', 'manufacturer', 'Produttore', 'es. SKF')}
-      ${txt('it-mfrcode', 'manufacturerCode', 'Codice produttore', 'es. 6204-2RSH')}
+    <div id="fld-mfr">
+      <div class="it-sec">Produttore</div>
+      <div class="modal-grid">
+        ${itemTechTxt(it, 'it-mfr', 'manufacturer', 'Produttore', 'es. SKF', true)}
+        ${itemTechTxt(it, 'it-mfrcode', 'manufacturerCode', 'Codice produttore', 'es. 6204-2RSH', true)}
+      </div>
+      <p class="empty-text it-hint">Chi lo fabbrica, distinto dal fornitore che lo vende: fornitore, prezzo e codice del fornitore restano nel listino.</p>
     </div>
-    <div class="modal-grid" id="fld-matfin">
-      ${txt('it-material', 'material', 'Materiale', 'es. S235JR')}
-      ${txt('it-finish', 'finish', 'Finitura', 'es. Ra 1,6')}
-      ${txt('it-treatment', 'treatment', 'Trattamento', 'es. zincatura')}
+    <div id="fld-matfin">
+      <div class="it-sec">Materiale</div>
+      <div class="modal-grid modal-grid-3">
+        ${itemTechTxt(it, 'it-material', 'material', 'Materiale', 'es. S235JR', true)}
+        ${itemTechTxt(it, 'it-finish', 'finish', 'Finitura', 'es. Ra 1,6', true)}
+        ${itemTechTxt(it, 'it-treatment', 'treatment', 'Trattamento', 'es. zincatura', true)}
+      </div>
+    </div>
+    <div class="modal-grid" id="fld-drawing">
+      ${itemTechTxt(it, 'it-drawing', 'drawingRef', 'Riferimento disegno', 'es. DIS-0412 rev. B', false)}
     </div>`;
 }
 // Un numero tecnico in italiano, senza zeri inutili.
@@ -1216,11 +1258,8 @@ function itemTechVolumeHint() {
   el.placeholder = vol ? fmtTech(vol.value) : 'L × P × H';
 }
 function readItemTechFields(it) {
-  const t = it.type;
-  const visibile = k => (k === 'manufacturer' || k === 'manufacturerCode') ? (t === 'acquistato' || t === 'materiale')
-    : (k === 'material' || k === 'finish' || k === 'treatment') ? t === 'parte' : true;
   ITEM_TECH_FIELDS.forEach(([k, id, isNum]) => {
-    if (!document.getElementById(id) || !visibile(k)) return;
+    if (!document.getElementById(id) || !itemTechCampoVale(k, it.type)) return;
     const raw = String(val(id) == null ? '' : val(id)).trim();
     if (isNum) {
       const n = raw === '' ? null : numTecnico(parseFloat(raw.replace(',', '.')));
@@ -1228,11 +1267,91 @@ function readItemTechFields(it) {
     } else if (raw) it[k] = raw; else delete it[k];
   });
 }
+// Un codice a barre identifica un prodotto solo: lo stesso EAN su due articoli
+// farebbe trovare quello sbagliato a chi lo legge in magazzino.
+function barcodeErr(id, type) {
+  if (!itemTechCampoVale('barcode', type)) return null;
+  const b = String(val('it-barcode') || '').trim();
+  if (!b) return null;
+  const altro = (db.items || []).find(i => i.id !== id && String(i.barcode || '').trim() === b);
+  return altro ? `Codice a barre già usato da ${altro.code}` : null;
+}
+
+// ─── Le sottoschede della scheda articolo (dalla 0.139.0) ───
+// I campi sono tanti e di argomenti diversi: in una colonna sola la scorta
+// minima stava sotto la codifica della macchina, e i dati tecnici in fondo a
+// tutto. Ogni sottoscheda tiene un argomento. Tutti i campi restano nel DOM
+// anche quando la loro sottoscheda è nascosta: lettura, duplicazione e
+// controlli non sanno niente delle sottoschede.
+const ITEM_TABS = [
+  { k: 'ana', label: 'Anagrafica', icon: 'tag', sub: 'Chi è l\'articolo: codice, descrizione, classificazione e stato.' },
+  { k: 'acq', label: 'Acquisto', icon: 'cart', sub: 'Da chi si compra e come si quota. Fornitore e prezzo stanno nel listino.' },
+  { k: 'mag', label: 'Magazzino', icon: 'package', sub: 'Quanto ce n\'è, come si tiene a scaffale e quando si riordina.' },
+  { k: 'tec', label: 'Tecnico', icon: 'ruler', sub: 'Come è fatto: dati fisici, produttore, materiale, distinta e ciclo.' },
+];
+// Le sottoschede di un tipo: un assieme non si compra e non sta a scaffale.
+function itemTabsFor(t) {
+  return ITEM_TABS.map(x => x.k).filter(k =>
+    k === 'acq' ? hasPriceList({ type: t })
+      : k === 'mag' ? hasStock({ type: t }) && giacenzeVisibili()
+        : true);
+}
+let itemTabCorrente = 'ana';
+function itemTab(k) {
+  const tipo = document.getElementById('it-type');
+  const ammesse = itemTabsFor(tipo ? tipo.value : '');
+  if (!ammesse.includes(k)) k = 'ana';
+  itemTabCorrente = k;
+  ITEM_TABS.forEach(x => {
+    const pane = document.getElementById('it-tab-' + x.k);
+    const btn = document.getElementById('it-tabbtn-' + x.k);
+    const on = x.k === k;
+    if (pane) pane.style.display = on ? '' : 'none';
+    if (btn) {
+      btn.style.display = ammesse.includes(x.k) ? '' : 'none';
+      btn.className = 'it-tabbtn' + (on ? ' on' : '');
+      if (btn.setAttribute) { btn.setAttribute('aria-selected', on ? 'true' : 'false'); btn.setAttribute('tabindex', on ? '0' : '-1'); }
+    }
+  });
+}
+// Frecce su e giù (o sinistra e destra al telefono) fra le sottoschede, come
+// in ogni gruppo di schede: Tab porta direttamente ai campi.
+function itemTabKey(ev) {
+  const avanti = ev.key === 'ArrowDown' || ev.key === 'ArrowRight';
+  const indietro = ev.key === 'ArrowUp' || ev.key === 'ArrowLeft';
+  if (!avanti && !indietro) return;
+  ev.preventDefault();
+  const tipo = document.getElementById('it-type');
+  const ammesse = itemTabsFor(tipo ? tipo.value : '');
+  const i = ammesse.indexOf(itemTabCorrente);
+  const k = ammesse[(i + (avanti ? 1 : -1) + ammesse.length) % ammesse.length];
+  itemTab(k);
+  const b = document.getElementById('it-tabbtn-' + k);
+  if (b && b.focus) b.focus();
+}
+// Un errore al salvataggio porta alla sottoscheda del campo sbagliato:
+// l'avviso da solo parlerebbe di un campo che non si vede.
+function itemFormErr(msg, tab) {
+  itemTab(tab || 'ana');
+  showToast(msg, 'error');
+}
+function itemTabsHtml(panes) {
+  const nav = ITEM_TABS.map(x => `<button type="button" role="tab" id="it-tabbtn-${x.k}" class="it-tabbtn${x.k === 'ana' ? ' on' : ''}"
+      aria-controls="it-tab-${x.k}" aria-selected="${x.k === 'ana'}" tabindex="${x.k === 'ana' ? 0 : -1}"
+      onclick="itemTab('${x.k}')" onkeydown="itemTabKey(event)">${ico(x.icon, 'tinted', '')}<span>${x.label}</span></button>`).join('');
+  const corpo = ITEM_TABS.map(x => `<section class="it-pane" id="it-tab-${x.k}" role="tabpanel" aria-labelledby="it-tabbtn-${x.k}"${x.k === 'ana' ? '' : ' style="display:none"'}>
+      <h4 class="it-pane-title">${x.label}</h4><p class="it-pane-sub">${x.sub}</p>
+      ${panes[x.k] || ''}
+    </section>`).join('');
+  return `<div class="it-tabs"><nav class="it-nav" role="tablist" aria-label="Sezioni della scheda articolo" aria-orientation="vertical">${nav}</nav><div class="it-panes">${corpo}</div></div>`;
+}
 function itemModalBody(it, scope) {
   const sc = CATALOG_SCOPES[scope] || CATALOG_SCOPES.buy;
   const t = it ? it.type : sc.types[0];
   const lock = itemLockState(it);
   const dis = cond => cond ? 'disabled' : '';
+  const uomCorrente = it ? (it.uom || defaultUom()) : defaultUom();
+  // «Parti da» riempie tutte le sottoschede: sta sopra, fuori da tutte.
   const sourcePicker = it ? '' : `
     <div class="modal-field"><label>Parti da (opzionale)</label>
       <input type="text" id="src-search" class="search" placeholder="Duplica da un articolo esistente..." oninput="debounced('src', renderSourceResults)" autocomplete="off">
@@ -1240,7 +1359,7 @@ function itemModalBody(it, scope) {
     </div>`;
   // In modifica il tipo è bloccato: resta l'unica voce dell'articolo, qualunque sia lo scope
   const types = it ? [it.type] : sc.types;
-  return `${itemLockNote(lock)}${sourcePicker}
+  const ana = `${itemLockNote(lock)}
     <div class="modal-grid">
       <div class="modal-field"><label>Tipo</label>
         <select id="it-type" onchange="toggleItemFields()" ${it ? 'disabled' : ''}>
@@ -1260,20 +1379,64 @@ function itemModalBody(it, scope) {
         <span class="empty-text" style="padding:0">Descrizione: <strong id="part-name-preview"></strong></span></div>
     </div>
     <div class="modal-grid">
-      <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()" ${dis(lock.structLocked)} title="${lock.structLocked ? 'Articolo già usato: cambiare l\'unità reinterpreterebbe giacenza, distinte e costi' : ''}">${uomOptions(it ? (it.uom || defaultUom()) : defaultUom())}</select></div>
-      <div class="modal-field" id="fld-sourcing"><label>Approvvigionamento</label>
-        <select id="it-sourcing">${partSourcingOptions(it ? partSourcingScritto(it) : defaultPartSourcing())}</select></div>
-      <div class="modal-field" id="fld-assembly-note" style="grid-column:1/-1"><label>Composizione</label><span class="empty-text" style="padding:0">La distinta (componenti e lavorazioni) si gestisce in <strong>Tecnico → Gestione DB</strong>.</span></div>
+      <div class="modal-field"><label>Unità di misura</label><select id="it-uom" onchange="itemUomLabelsRefresh()" ${dis(lock.structLocked)} title="${lock.structLocked ? 'Articolo già usato: cambiare l\'unità reinterpreterebbe giacenza, distinte e costi' : ''}">${uomOptions(uomCorrente)}</select></div>
     </div>
-    <div class="modal-field" id="fld-pricing">
+    <div id="fld-family">
+      <div class="it-sec">Classificazione</div>
+      <div class="modal-grid">
+        <div class="modal-field"><label>Macrofamiglia</label><select id="it-family" onchange="onItemFamilyChange()" ${dis(lock.structLocked)}>${familyOptions(it ? it.familyId : '', usesFamily(t) ? t : '')}</select></div>
+        <div class="modal-field"><label>Sottofamiglia</label><select id="it-subfamily" onchange="onItemSubFamilyChange()" ${dis(lock.structLocked)}>${subFamilyOptions(it ? it.familyId : '', it ? it.subFamilyId : '')}</select></div>
+      </div>
+    </div>
+    <div class="it-sec" id="sec-coding">Codifica</div>
+    ${codingFieldsHtml(it, lock.structLocked)}
+    <div class="it-sec">Stato e note</div>
+    <div class="modal-grid" id="fld-flags">
+      <div class="modal-field" id="fld-flag-fav"><label>Preferito</label>
+        <label class="flag-check"><input type="checkbox" id="it-favorite" ${it && it.favorite ? 'checked' : ''}> ★ Segna come preferito</label></div>
+      <div class="modal-field" id="fld-flag-obs"><label>Obsoleto</label>
+        <label class="flag-check"><input type="checkbox" id="it-obsolete" ${it && it.obsolete ? 'checked' : ''}> ${ico('blocked', 'tinted')} Articolo obsoleto (non più utilizzabile)</label></div>
+    </div>
+    <div class="modal-field"><label>Note</label><textarea id="it-notes" rows="2">${it ? esc(it.notes || '') : ''}</textarea></div>`;
+  const acq = `<div class="modal-field" id="fld-pricing">
       <label>Fornitore e prezzo d'acquisto</label>
       ${itemPricingSummary(it)}
     </div>
-    <div class="modal-grid" id="fld-family">
-      <div class="modal-field"><label>Macrofamiglia</label><select id="it-family" onchange="onItemFamilyChange()" ${dis(lock.structLocked)}>${familyOptions(it ? it.familyId : '', usesFamily(t) ? t : '')}</select></div>
-      <div class="modal-field"><label>Sottofamiglia</label><select id="it-subfamily" onchange="onItemSubFamilyChange()" ${dis(lock.structLocked)}>${subFamilyOptions(it ? it.familyId : '', it ? it.subFamilyId : '')}</select></div>
-    </div>
-    ${codingFieldsHtml(it, lock.structLocked)}
+    <div id="fld-altuom">
+      <div class="it-sec">Unità d'acquisto</div>
+      <div class="modal-grid">
+        <div class="modal-field"><label>U.M. d'acquisto (se diversa)</label>
+          <select id="it-altuom" onchange="itemUomLabelsRefresh()">${uomOptions(it ? (it.altUom || '') : '')}</select></div>
+        <div class="modal-field"><label id="it-altfactor-label">${altFactorLabel(it ? (it.altUom || '') : '', uomCorrente)}</label>
+          <input type="number" id="it-altfactor" min="0" step="any" value="${it && it.altFactor != null ? it.altFactor : ''}" placeholder="es. 8"></div>
+      </div>
+      <p class="empty-text it-hint">Da usare quando il fornitore quota in un'unità diversa da quella con cui l'articolo si gestisce e si mette in distinta. Il fattore dice <strong>quante unità d'acquisto stanno in una di gestione</strong>: una barra gestita in <span style="font-family:var(--mono)">m</span> che pesa 8 kg al metro ha U.M. d'acquisto <span style="font-family:var(--mono)">kg</span> e fattore <span style="font-family:var(--mono)">8</span>.<br>Serve a non sbagliare il costo: senza, un prezzo a chilo finirebbe nella costificazione come se fosse al metro. Lasciare vuoto se le due unità coincidono.</p>
+    </div>`;
+  const mag = `${it ? stockPanelHtml(it) : ''}
+    <div id="fld-stock">
+      <div class="it-sec">Scorta e riordino</div>
+      <div class="modal-grid">
+        <div class="modal-field"><label id="it-safety-label">${labelUom('Scorta minima', uomCorrente)}</label>
+          <input type="number" id="it-safety" min="0" step="any" value="${it && it.safetyStock != null ? it.safetyStock : ''}" placeholder="0"></div>
+        <div class="modal-field"><label id="it-lot-label">${labelUom('Lotto di riordino', uomCorrente)}</label>
+          <input type="number" id="it-lot" min="0" step="any" value="${it && it.lotSize != null ? it.lotSize : ''}" placeholder="nessuno"></div>
+        <div class="modal-field"><label>Il lotto è</label>
+          <select id="it-lotmode">
+            <option value="multiple" ${(!it || it.lotMode !== 'min') ? 'selected' : ''}>un multiplo esatto (6, 12, 18…)</option>
+            <option value="min" ${(it && it.lotMode === 'min') ? 'selected' : ''}>una quantità minima (poi libera)</option>
+          </select></div>
+        <div class="modal-field"><label>Ubicazione a scaffale</label>
+          <input id="it-loc" list="it-loc-list" autocomplete="off" maxlength="40" value="${esc(it ? ubicazioneOf(it) : '')}" placeholder="es. A-03-2">
+          <datalist id="it-loc-list">${ubicazioniElenco().map(u => `<option value="${esc(u)}">`).join('')}</datalist></div>
+      </div>
+      <p class="empty-text it-hint">La <strong>scorta minima</strong> è la quantità che il fabbisogno netto vuole lasciare a magazzino dopo aver coperto il piano. Il <strong>lotto di riordino</strong> arrotonda per eccesso quanto si compra — vuoto: nessun arrotondamento; <strong>multiplo esatto</strong>: si compra solo a passi del lotto, come una barra da 6 m che non si taglia; <strong>quantità minima</strong>: sotto soglia si arrotonda al minimo, sopra si compra esattamente quanto serve.</p>
+      <div class="modal-grid" id="fld-barcode">
+        ${itemTechTxt(it, 'it-barcode', 'barcode', 'Codice a barre / EAN', 'es. 8012345678901', false)}
+      </div>
+    </div>`;
+  const tec = `<div class="modal-field" id="fld-sourcing"><label>Approvvigionamento</label>
+      <select id="it-sourcing">${partSourcingOptions(it ? partSourcingScritto(it) : defaultPartSourcing())}</select></div>
+    <div class="modal-field" id="fld-assembly-note"><label>Composizione</label><span class="empty-text" style="padding:0">La distinta (componenti e lavorazioni) si gestisce in <strong>Tecnico → Gestione DB</strong>.</span></div>
     <div class="modal-field" id="fld-cycle">
       <label>Distinta e ciclo di lavorazione</label>
       <span class="empty-text" style="padding:0">${it
@@ -1282,37 +1445,8 @@ function itemModalBody(it, scope) {
            <button class="btn-outline" style="margin-left:8px" onclick="closeModal();openCycleFor('${it.id}')">${ico('wrench', 'tinted', '')} Apri il ciclo</button>`
         : `La distinta si gestisce in <strong>${ico('tree', 'tinted')} Gestione DB</strong> e il ciclo in <strong>${ico('wrench', 'tinted')} Cicli di lavorazione</strong>, dopo aver creato l'articolo.`}</span>
     </div>
-    ${itemTechFieldsHtml(it)}
-    <div class="modal-grid" id="fld-flags">
-      <div class="modal-field" id="fld-flag-fav"><label>Preferito</label>
-        <label class="flag-check"><input type="checkbox" id="it-favorite" ${it && it.favorite ? 'checked' : ''}> ★ Segna come preferito</label></div>
-      <div class="modal-field" id="fld-flag-obs"><label>Obsoleto</label>
-        <label class="flag-check"><input type="checkbox" id="it-obsolete" ${it && it.obsolete ? 'checked' : ''}> ${ico('blocked', 'tinted')} Articolo obsoleto (non più utilizzabile)</label></div>
-    </div>
-    <div class="modal-grid" id="fld-altuom">
-      <div class="modal-field"><label>U.M. d'acquisto (se diversa)</label>
-        <select id="it-altuom" onchange="itemUomLabelsRefresh()">${uomOptions(it ? (it.altUom || '') : '')}</select></div>
-      <div class="modal-field"><label id="it-altfactor-label">${altFactorLabel(it ? (it.altUom || '') : '', it ? (it.uom || defaultUom()) : defaultUom())}</label>
-        <input type="number" id="it-altfactor" min="0" step="any" value="${it && it.altFactor != null ? it.altFactor : ''}" placeholder="es. 8"></div>
-      <div class="modal-field" style="grid-column:1/-1"><span class="empty-text" style="padding:0">Da usare quando il fornitore quota in un'unità diversa da quella con cui l'articolo si gestisce e si mette in distinta. Il fattore dice <strong>quante unità d'acquisto stanno in una di gestione</strong>: una barra gestita in <span style="font-family:var(--mono)">m</span> che pesa 8 kg al metro ha U.M. d'acquisto <span style="font-family:var(--mono)">kg</span> e fattore <span style="font-family:var(--mono)">8</span>.<br>Serve a non sbagliare il costo: senza, un prezzo a chilo finirebbe nella costificazione come se fosse al metro. Lasciare vuoto se le due unità coincidono.</span></div>
-    </div>
-    <div class="modal-grid" id="fld-stock">
-      <div class="modal-field"><label id="it-safety-label">${labelUom('Scorta minima', it ? (it.uom || defaultUom()) : defaultUom())}</label>
-        <input type="number" id="it-safety" min="0" step="any" value="${it && it.safetyStock != null ? it.safetyStock : ''}" placeholder="0"></div>
-      <div class="modal-field"><label id="it-lot-label">${labelUom('Lotto di riordino', it ? (it.uom || defaultUom()) : defaultUom())}</label>
-        <input type="number" id="it-lot" min="0" step="any" value="${it && it.lotSize != null ? it.lotSize : ''}" placeholder="nessuno"></div>
-      <div class="modal-field"><label>Il lotto è</label>
-        <select id="it-lotmode">
-          <option value="multiple" ${(!it || it.lotMode !== 'min') ? 'selected' : ''}>un multiplo esatto (6, 12, 18…)</option>
-          <option value="min" ${(it && it.lotMode === 'min') ? 'selected' : ''}>una quantità minima (poi libera)</option>
-        </select></div>
-      <div class="modal-field"><label>Ubicazione a scaffale</label>
-        <input id="it-loc" list="it-loc-list" autocomplete="off" maxlength="40" value="${esc(it ? ubicazioneOf(it) : '')}" placeholder="es. A-03-2">
-        <datalist id="it-loc-list">${ubicazioniElenco().map(u => `<option value="${esc(u)}">`).join('')}</datalist></div>
-      <div class="modal-field" style="grid-column:1/-1"><span class="empty-text" style="padding:0">La <strong>scorta minima</strong> è la quantità che il fabbisogno netto vuole lasciare a magazzino dopo aver coperto il piano. Il <strong>lotto di riordino</strong> arrotonda per eccesso quanto si compra — vuoto: nessun arrotondamento; <strong>multiplo esatto</strong>: si compra solo a passi del lotto, come una barra da 6 m che non si taglia; <strong>quantità minima</strong>: sotto soglia si arrotonda al minimo, sopra si compra esattamente quanto serve.</span></div>
-    </div>
-    ${it ? stockPanelHtml(it) : ''}
-    <div class="modal-field"><label>Note</label><textarea id="it-notes" rows="2">${it ? esc(it.notes || '') : ''}</textarea></div>
+    ${itemTechFieldsHtml(it)}`;
+  return `${sourcePicker}${itemTabsHtml({ ana, acq, mag, tec })}
     ${stampLine(it)}`;
 }
 // ─── Le etichette che seguono l'unità di misura ───
@@ -1542,9 +1676,13 @@ function toggleItemFields() {
   mostra('fld-flags', true);
   // Dati tecnici (dalla 0.138.0): misure e peso per tutti, il produttore su
   // ciò che si compra già fatto, materiale, finitura e trattamento sulle parti.
+  // Dalla 0.139.0 anche il disegno (ciò che si progetta) e il codice a barre
+  // (ciò che sta a scaffale): la regola è itemTechCampoVale, una per tutti.
   mostra('fld-tech', true);
-  mostra('fld-mfr', t === 'acquistato' || t === 'materiale');
-  mostra('fld-matfin', t === 'parte');
+  mostra('fld-mfr', itemTechCampoVale('manufacturer', t));
+  mostra('fld-matfin', itemTechCampoVale('material', t));
+  mostra('fld-drawing', itemTechCampoVale('drawingRef', t));
+  mostra('fld-barcode', itemTechCampoVale('barcode', t));
   // Magazzino: solo su ciò che si tiene a scorta. Un assieme si produce, e la
   // sua giacenza sarebbe quella dei componenti contata due volte.
   mostra('fld-stock', hasStock({ type: t }) && giacenzeVisibili());
@@ -1553,6 +1691,7 @@ function toggleItemFields() {
   mostra('fld-altuom', hasPriceList({ type: t }));
   // Codifica gerarchica: schema per la macchina, appartenenza per gli altri tipi
   const isChild = t === 'gruppo' || t === 'sottogruppo' || t === 'parte';
+  mostra('sec-coding', t === 'macchina' || isChild);
   mostra('fld-coding-mac', t === 'macchina');
   mostra('fld-coding-child', isChild);
   mostra('fld-coding-gsigla', t === 'gruppo');
@@ -1567,6 +1706,10 @@ function toggleItemFields() {
       if (famSel.value !== cur && subSel) subSel.innerHTML = subFamilyOptions('', '');
     }
   }
+  // Le sottoschede del tipo: cambiando tipo in creazione può sparire quella
+  // aperta (da parte a macchina non c'è più Magazzino), e allora si torna ad
+  // Anagrafica, dove sta il campo appena cambiato.
+  itemTab(itemTabCorrente);
   refreshItemCode();
 }
 function onItemFamilyChange() {
@@ -2167,6 +2310,7 @@ function newItemModal(scope) {
   window.__dupSourceId = null;
   window.__editingItemId = null;
   window.__itemScope = scope;
+  itemTabCorrente = 'ana';
   toggleItemFields();
 }
 // Ricerca live di un articolo sorgente da cui duplicare (tutti i tipi).
@@ -2219,7 +2363,9 @@ function applyItemSource(id) {
     if (typeof itemUomLabelsRefresh === 'function') itemUomLabelsRefresh();
   }
   if (src.type === 'parte') setVal('it-sourcing', partSourcingScritto(src));
-  ITEM_TECH_FIELDS.forEach(([k, id]) => setVal(id, src[k] != null ? src[k] : ''));
+  // Il codice a barre no: identifica quel prodotto, e sul duplicato sarebbe
+  // subito un doppione.
+  ITEM_TECH_FIELDS.forEach(([k, id]) => { if (k !== 'barcode') setVal(id, src[k] != null ? src[k] : ''); });
   setVal('it-notes', src.notes || '');
   setVal('it-code', '');
   refreshItemCode();
@@ -2374,13 +2520,15 @@ function validateItemName(type) {
 function saveNewItem() {
   if (!roleGuard('catalog')) return;
   const nameErr = validateItemName(val('it-type'));
-  if (nameErr) { showToast(nameErr, 'error'); return; }
+  if (nameErr) { itemFormErr(nameErr, 'ana'); return; }
   const codErr = validateItemCoding(null);
-  if (codErr) { showToast(codErr, 'error'); return; }
+  if (codErr) { itemFormErr(codErr, 'ana'); return; }
   const manErr = codeManualErr();
-  if (manErr) { showToast(manErr, 'error'); return; }
+  if (manErr) { itemFormErr(manErr, 'ana'); return; }
   const dupErr = validateItemCode(val('it-code'), null, null);
-  if (dupErr) { showToast(dupErr, 'error'); return; }
+  if (dupErr) { itemFormErr(dupErr, 'ana'); return; }
+  const barErr = barcodeErr(null, val('it-type'));
+  if (barErr) { itemFormErr(barErr, 'mag'); return; }
   const it = { id: gid(), type: val('it-type') };
   if (isAssembly(it.type)) { it.components = []; it.operations = []; it.cycle = []; }
   if (it.type === 'parte') { it.components = []; it.cycle = []; it.sourcing = defaultPartSourcing(); }
@@ -2454,6 +2602,7 @@ function editItemModal(id) {
   itemCodeAuto = false;
   window.__editingItemId = id;
   window.__itemScope = scope;
+  itemTabCorrente = 'ana';
   toggleItemFields();
   itemCodeAuto = !it.codeManual;
 }
@@ -2461,13 +2610,15 @@ function saveItemEdit(id) {
   if (!roleGuard('catalog')) return;
   const it = getItem(id); if (!it) return;
   const nameErr = validateItemName(it.type);
-  if (nameErr) { showToast(nameErr, 'error'); return; }
+  if (nameErr) { itemFormErr(nameErr, 'ana'); return; }
   const codErr = validateItemCoding(id);
-  if (codErr) { showToast(codErr, 'error'); return; }
+  if (codErr) { itemFormErr(codErr, 'ana'); return; }
   const manErr = codeManualErr();
-  if (manErr) { showToast(manErr, 'error'); return; }
+  if (manErr) { itemFormErr(manErr, 'ana'); return; }
   const dupErr = validateItemCode(val('it-code'), id, it.code);
-  if (dupErr) { showToast(dupErr, 'error'); return; }
+  if (dupErr) { itemFormErr(dupErr, 'ana'); return; }
+  const barErr = barcodeErr(id, it.type);
+  if (barErr) { itemFormErr(barErr, 'mag'); return; }
   const fare = () => {
     readItemForm(it);
     touch(it);

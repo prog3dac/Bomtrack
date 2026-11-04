@@ -178,6 +178,7 @@ create table if not exists public.items (
   config_choices jsonb, config_key text, config_hash text,
   weight_kg numeric, volume_m3 numeric, length_m numeric, width_m numeric, height_m numeric,
   manufacturer text, manufacturer_code text, material text, finish text, treatment text,
+  gross_weight_kg numeric, barcode text, drawing_ref text,
   child_sets text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
@@ -217,6 +218,10 @@ alter table public.items add column if not exists manufacturer_code text;
 alter table public.items add column if not exists material text;
 alter table public.items add column if not exists finish text;
 alter table public.items add column if not exists treatment text;
+-- 0.139.0: peso lordo, codice a barre (EAN) e riferimento disegno.
+alter table public.items add column if not exists gross_weight_kg numeric;
+alter table public.items add column if not exists barcode text;
+alter table public.items add column if not exists drawing_ref text;
 -- 0.138.0: i contatti di fornitori e clienti (nome, ruolo, email, telefono).
 -- Un elenco che si legge sempre insieme alla sua anagrafica: jsonb.
 alter table public.suppliers add column if not exists contacts jsonb;
