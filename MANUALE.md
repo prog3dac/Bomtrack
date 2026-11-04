@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.138.0**
+**Versione dell'app documentata: 0.139.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -831,41 +831,64 @@ un costo che non c'è.
 **Come ci si arriva.** **+ Nuovo articolo** in una delle due anagrafiche, oppure il comando
 *Modifica articolo* su una riga esistente.
 
+### Le sottoschede
+
+Dalla 0.139.0 la scheda è divisa per argomento: a sinistra la barra delle **sottoschede**, a destra
+i campi di quella scelta. Al telefono la barra diventa una fila di pulsanti in alto. Ogni tipo vede
+solo le sottoschede che gli servono:
+
+| Sottoscheda | Cosa contiene | Su quali tipi |
+|---|---|---|
+| **Anagrafica** | Chi è l'articolo: tipo, codice, descrizione, unità di misura, famiglia, codifica, preferito, obsoleto, note | tutti |
+| **Acquisto** | Fornitore e prezzo (dal listino), unità d'acquisto | commerciali, materie prime, parti |
+| **Magazzino** | Giacenza, scorta minima, lotto, ubicazione, codice a barre | commerciali, materie prime, parti, con l'area Magazzino accesa |
+| **Tecnico** | Approvvigionamento, distinta e ciclo, dati fisici, produttore, materiale, disegno | tutti |
+
+La scheda si apre sempre su **Anagrafica**. Si passa da una sottoscheda all'altra con un clic o,
+da tastiera, con le frecce. Se al **Salva** un campo non va (una descrizione vuota, un codice a
+barre già usato), la scheda porta da sola alla sottoscheda di quel campo. **Parti da**, in
+creazione, sta sopra le sottoschede perché le riempie tutte.
+
 ### I campi
 
-| Campo | Quando serve | Note |
-|---|---|---|
-| **Parti da** | solo in creazione | Ricerca live: si sceglie un articolo esistente e la scheda si precompila con i suoi dati. Facoltativo. |
-| **Tipo** | sempre | **Bloccato in modifica**: un commerciale non diventa una parte. |
-| **Codice** | sempre | Composto automaticamente e in sola lettura (→ [cap. 9](#9-i-codici-automatici)). Per scriverlo a mano si spunta **Manuale** e si conferma con **Sì**; il **motivo** è facoltativo. |
-| **Descrizione** | tutti i tipi tranne le parti | Testo libero. |
-| **Concetto** + **Descrizione** | **solo parti** | Il nome di una parte è composto: `ALBERO` + `motore 20×100` → `ALBERO motore 20×100`. Il concetto è **obbligatorio** e si sceglie dall'elenco di *Gestione → Concetti*. Sotto i due campi c'è l'anteprima del nome che ne esce. |
-| **Unità di misura** | sempre | Dall'elenco di *Gestione → Unità di misura*. |
-| **Approvvigionamento** | solo parti | *Produzione interna* / *Acquisto da fornitore* (→ [cap. 7](#7-tecnico--articoli-di-progetto)). |
-| **Fornitore e prezzo d'acquisto** | — | **Riquadro in sola lettura.** Mostra la quotazione in uso; il pulsante accanto apre il **listino**. |
-| **Macrofamiglia** / **Sottofamiglia** | consigliato | Servono ai filtri, ai raggruppamenti e ai codici automatici. |
-| **Macchina di appartenenza** / **Gruppo** / **Sigla** | codifica gerarchica | Dicono dove sta l'articolo nella struttura di prodotto, e da lì nasce il suo codice. |
-| **Distinta e ciclo** | solo parti | Non si compilano qui: la distinta in *Gestione DB*, il ciclo con il pulsante **Apri il ciclo**. |
-| **★ Preferito** | facoltativo | Ha un filtro dedicato nelle anagrafiche. |
-| **⛔ Obsoleto** | facoltativo | Non più utilizzabile; resta visibile, spento. |
-| **U.M. d'acquisto (se diversa)** + **Fattore di conversione** | quando si compra in un'unità e si usa in un'altra | Si compra la barra a pezzi da 6 m e la si consuma a metri. |
-| **Scorta minima** | magazzino | Sotto questa quantità l'articolo compare fra i segnali del Riepilogo, e il netto la ricostituisce. |
-| **Lotto di riordino** | magazzino | La quantità a cui si arrotondano gli acquisti. |
-| **Il lotto è** | magazzino | *un multiplo esatto* (si ordina 100, 200, 300) oppure *una quantità minima* (sotto 100 non si ordina, sopra si ordina il fabbisogno esatto). |
-| **Lunghezza** · **Larghezza** · **Altezza (m)** | facoltativo, tutti i tipi | Le misure d'ingombro, in metri. |
-| **Peso (kg)** | facoltativo, tutti i tipi | Su un assieme lasciato vuoto la scheda di sola lettura mostra la **somma della distinta** (quantità × scarto × peso di ogni riga; una materia prima gestita a kg pesa la sua quantità), e dice se è per difetto perché qualche riga non ha un peso. |
-| **Volume (m³)** | facoltativo, tutti i tipi | Vuoto: vale il prodotto delle tre dimensioni, che il campo propone mentre si scrivono. |
-| **Produttore** · **Codice produttore** | commerciali e materie prime | Chi fa l'articolo e con che codice, distinti da fornitore e codice del fornitore: lo stesso cuscinetto SKF si compra da più rivenditori. |
-| **Materiale** · **Finitura** · **Trattamento** | parti | Testo libero, con i valori già usati su altri articoli proposti mentre si scrive, così «S235JR» si scrive sempre allo stesso modo. |
-| **Note** | facoltativo | Testo libero interno. |
+| Campo | Sottoscheda | Quando serve | Note |
+|---|---|---|---|
+| **Parti da** | sopra le sottoschede | solo in creazione | Ricerca live: si sceglie un articolo esistente e la scheda si precompila con i suoi dati (tranne il codice a barre). Facoltativo. |
+| **Tipo** | Anagrafica | sempre | **Bloccato in modifica**: un commerciale non diventa una parte. |
+| **Codice** | Anagrafica | sempre | Composto automaticamente e in sola lettura (→ [cap. 9](#9-i-codici-automatici)). Per scriverlo a mano si spunta **Manuale** e si conferma con **Sì**; il **motivo** è facoltativo. |
+| **Descrizione** | Anagrafica | tutti i tipi tranne le parti | Testo libero. |
+| **Concetto** + **Descrizione** | Anagrafica | **solo parti** | Il nome di una parte è composto: `ALBERO` + `motore 20×100` → `ALBERO motore 20×100`. Il concetto è **obbligatorio** e si sceglie dall'elenco di *Gestione → Concetti*. Sotto i due campi c'è l'anteprima del nome che ne esce. |
+| **Unità di misura** | Anagrafica | sempre | Dall'elenco di *Gestione → Unità di misura*. |
+| **Macrofamiglia** / **Sottofamiglia** | Anagrafica | consigliato | Servono ai filtri, ai raggruppamenti e ai codici automatici. |
+| **Macchina di appartenenza** / **Gruppo** / **Sigla** | Anagrafica (Codifica) | codifica gerarchica | Dicono dove sta l'articolo nella struttura di prodotto, e da lì nasce il suo codice. |
+| **★ Preferito** | Anagrafica | facoltativo | Ha un filtro dedicato nelle anagrafiche. |
+| **⛔ Obsoleto** | Anagrafica | facoltativo | Non più utilizzabile; resta visibile, spento. |
+| **Note** | Anagrafica | facoltativo | Testo libero interno. |
+| **Fornitore e prezzo d'acquisto** | Acquisto | — | **Riquadro in sola lettura.** Mostra la quotazione in uso; il pulsante accanto apre il **listino**. |
+| **U.M. d'acquisto (se diversa)** + **Fattore di conversione** | Acquisto | quando si compra in un'unità e si usa in un'altra | Si compra la barra a pezzi da 6 m e la si consuma a metri. |
+| **Scorta minima** | Magazzino | magazzino | Sotto questa quantità l'articolo compare fra i segnali del Riepilogo, e il netto la ricostituisce. |
+| **Lotto di riordino** | Magazzino | magazzino | La quantità a cui si arrotondano gli acquisti. |
+| **Il lotto è** | Magazzino | magazzino | *un multiplo esatto* (si ordina 100, 200, 300) oppure *una quantità minima* (sotto 100 non si ordina, sopra si ordina il fabbisogno esatto). |
+| **Ubicazione a scaffale** | Magazzino | facoltativo | Dove sta l'articolo, con le ubicazioni già usate proposte. |
+| **Codice a barre / EAN** | Magazzino | facoltativo, ciò che sta a scaffale | Dalla 0.139.0. Un codice a barre è di un articolo solo: lo stesso su due articoli è rifiutato. |
+| **Approvvigionamento** | Tecnico | solo parti | *Produzione interna* / *Acquisto da fornitore* (→ [cap. 7](#7-tecnico--articoli-di-progetto)). |
+| **Distinta e ciclo** | Tecnico | solo parti | Non si compilano qui: la distinta in *Gestione DB*, il ciclo con il pulsante **Apri il ciclo**. |
+| **Peso netto (kg)** | Tecnico | facoltativo, tutti i tipi | Su un assieme lasciato vuoto la scheda di sola lettura mostra la **somma della distinta** (quantità × scarto × peso di ogni riga; una materia prima gestita a kg pesa la sua quantità), e dice se è per difetto perché qualche riga non ha un peso. |
+| **Peso lordo (kg)** | Tecnico | facoltativo, tutti i tipi | Dalla 0.139.0: il peso con l'imballo, per spedizioni e trasporti. |
+| **Volume (m³)** | Tecnico | facoltativo, tutti i tipi | Vuoto: vale il prodotto delle tre dimensioni, che il campo propone mentre si scrivono. |
+| **Dimensioni L × P × H (m)** | Tecnico | facoltativo, tutti i tipi | Lunghezza, larghezza e altezza d'ingombro, in metri, in tre caselle affiancate. |
+| **Produttore** · **Codice produttore** | Tecnico | commerciali e materie prime | Chi fa l'articolo e con che codice, distinti da fornitore e codice del fornitore: lo stesso cuscinetto SKF si compra da più rivenditori. |
+| **Materiale** · **Finitura** · **Trattamento** | Tecnico | parti | Testo libero, con i valori già usati su altri articoli proposti mentre si scrive, così «S235JR» si scrive sempre allo stesso modo. |
+| **Riferimento disegno** | Tecnico | parti e assiemi | Dalla 0.139.0: numero e revisione del disegno, es. *DIS-0412 rev. B*. |
 
 Tutti i dati tecnici (dalla 0.138.0) compaiono nella sezione **Dati tecnici** della scheda di sola
 lettura, ed entrano ed escono dal file Excel degli articoli con le colonne *Lunghezza m*, *Larghezza
-m*, *Altezza m*, *Peso kg*, *Volume m3*, *Produttore*, *Codice produttore*, *Materiale*, *Finitura*,
-*Trattamento*.
+m*, *Altezza m*, *Peso kg*, *Peso lordo kg*, *Volume m3*, *Produttore*, *Codice produttore*,
+*Materiale*, *Finitura*, *Trattamento*, *Riferimento disegno* e *Codice a barre*.
 
-In modifica, la scheda mostra anche un **pannello giacenza** con la situazione a magazzino, e in
-fondo la **riga autore**: chi ha creato il record e chi l'ha aggiornato per ultimo, con data e ora.
+In modifica, la sottoscheda **Magazzino** si apre con il **pannello giacenza**, la situazione a
+magazzino; in fondo alla scheda, fuori dalle sottoschede, c'è la **riga autore**: chi ha creato il
+record e chi l'ha aggiornato per ultimo, con data e ora.
 
 ### Le finestre che si aprono da qui
 

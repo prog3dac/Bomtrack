@@ -2,6 +2,20 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.139.0 — 2026-11-04
+
+**La scheda articolo è divisa in sottoschede.** Creando o modificando un articolo, i campi stanno ora in quattro sottoschede per argomento, scelte da una barra verticale a sinistra (al telefono, una fila di pulsanti in alto):
+- **Anagrafica**: tipo, codice, descrizione, unità di misura, famiglia, codifica, preferito, obsoleto e note;
+- **Acquisto**: fornitore e prezzo dal listino, unità d'acquisto e fattore di conversione;
+- **Magazzino**: il riquadro della giacenza in cima, poi scorta minima, lotto di riordino, ubicazione e codice a barre;
+- **Tecnico**: approvvigionamento, distinta e ciclo, dati fisici, produttore, materiale e disegno.
+
+Ogni tipo vede solo le sue: macchine, gruppi e sottogruppi hanno Anagrafica e Tecnico, e senza l'area Magazzino la sottoscheda Magazzino non c'è. La scheda si apre su Anagrafica; se al salvataggio un campo non va, porta da sola alla sottoscheda di quel campo. Nessun campo esistente cambia significato.
+
+**Tre campi nuovi.** **Peso lordo** (kg, su tutti i tipi), **codice a barre / EAN** (su ciò che sta a scaffale; lo stesso codice su due articoli è rifiutato, anche nell'import, e duplicando un articolo non si copia) e **riferimento disegno** (su parti e assiemi). Compaiono nella scheda in sola lettura, nello storico e nel file Excel degli articoli (colonne *Peso lordo kg*, *Codice a barre*, *Riferimento disegno*).
+
+`supabase/schema.sql`: nuove colonne `items.gross_weight_kg`, `barcode`, `drawing_ref`. Va eseguito prima di usare i nuovi campi con l'archivio condiviso.
+
 ### 0.138.0 — 2026-11-04
 
 **Più dati in anagrafica.**

@@ -161,12 +161,15 @@ function itemInfoTecnici(it) {
   return itemInfoSection('Dati tecnici', itemInfoRows([
     ['Dimensioni (L × P × H)', itemDimLabel(it)],
     ['Peso', pesoTxt],
+    ['Peso lordo', numTecnico(it.grossWeightKg) != null ? fmtTech(it.grossWeightKg) + ' kg' : ''],
     ['Volume', vol ? fmtTech(+vol.value.toFixed(6)) + ' m³' + (vol.calcolato ? ' (dalle dimensioni)' : '') : ''],
     ['Produttore', it.manufacturer || ''],
     ['Codice produttore', it.manufacturerCode ? rawHtml(_mono(it.manufacturerCode)) : ''],
     ['Materiale', it.material || ''],
     ['Finitura', it.finish || ''],
     ['Trattamento', it.treatment || ''],
+    ['Riferimento disegno', it.drawingRef || ''],
+    ['Codice a barre', it.barcode ? rawHtml(_mono(it.barcode)) : ''],
   ]));
 }
 
@@ -516,6 +519,8 @@ const STORICO_CAMPI = {
   weightKg: 'Peso (kg)', volumeM3: 'Volume (m³)', lengthM: 'Lunghezza (m)', widthM: 'Larghezza (m)', heightM: 'Altezza (m)',
   manufacturer: 'Produttore', manufacturerCode: 'Codice produttore', material: 'Materiale', finish: 'Finitura',
   treatment: 'Trattamento', contacts: 'Contatti', opIndex: 'Fase di consumo',
+  // Dalla 0.139.0
+  grossWeightKg: 'Peso lordo (kg)', barcode: 'Codice a barre', drawingRef: 'Riferimento disegno',
 };
 const STORICO_RIF = { supplierId: 'suppliers', customerId: 'customers', familyId: 'families',
   workCenterId: 'workCenters', itemId: 'items', jobId: 'jobs', planId: 'plans',

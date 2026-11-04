@@ -243,7 +243,7 @@ const CLOUD_TYPES = (() => {
   ['qty', 'price', 'minQty', 'leadDays', 'scrapPct', 'hours', 'days', 'rate', 'cost', 'costOverride',
     'unitCost', 'purchasePrice', 'altFactor', 'overheadPctOverride', 'marginPctOverride', 'hourlyRate',
     'capacityHours', 'hoursPerDay', 'operators', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size',
-    'weightKg', 'volumeM3', 'lengthM', 'widthM', 'heightM'].forEach(k => { t[k] = 'numeric'; });
+    'weightKg', 'volumeM3', 'lengthM', 'widthM', 'heightM', 'grossWeightKg'].forEach(k => { t[k] = 'numeric'; });
   ['pos', 'runFrom', 'runTo', 'seq', 'opIndex', 'passata', 'page', 'incrDigitsN', 'incrDigitsS', 'gCodeLen'].forEach(k => { t[k] = 'int'; });
   ['everyDays', 'everyHours', 'machineRate', 'hoursStart'].forEach(k => { t[k] = 'numeric'; });
   t.year = 'int';
