@@ -1469,7 +1469,8 @@ const TRASH_LABELS = { items: 'Articolo', suppliers: 'Fornitore', customers: 'Cl
   jobs: 'Commessa', movements: 'Movimento', receipts: 'Ricevimento', revisions: 'Revisione',
   prodOrders: 'Ordine di produzione', prodDecls: 'Dichiarazione di produzione', reminders: 'Promemoria',
   attachments: 'Allegato', attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione',
-  timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina', inspections: 'Collaudo' };
+  timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina', inspections: 'Collaudo',
+  qualityPlans: 'Piano di controllo', nonconformities: 'Non conformità' };
 function trashDescr(t) {
   const r = t.record || {};
   return r.number || r.code || r.name || r.title || '(senza nome)';

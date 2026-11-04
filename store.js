@@ -396,6 +396,10 @@ const SCHEMA = {
   // radice e non figlia dell'ordine: un collaudo nasce anche dal rientro di un
   // ordine di lavoro, e vive più a lungo della riga che lo ha fatto nascere.
   inspections: { table: 'inspections' },
+  // I piani di controllo (caratteristiche in jsonb: si leggono e si scrivono
+  // sempre col piano) e le non conformità, con le loro azioni.
+  qualityPlans: { table: 'quality_plans' },
+  nonconformities: { table: 'nonconformities' },
   // Allegati: **solo i dati**. I byte dei file stanno in IndexedDB (allegati.js)
   // e non passano né da qui né dal backup JSON — un disegno pesa più di tutto il
   // database, e localStorage non li reggerebbe. Il record dice che il file
@@ -557,6 +561,8 @@ const REFS = {
   // `orderId` e `lineId` restano fuori come nei movimenti: REFS non ha una
   // destinazione 'order'.
   inspections: { fields: { itemId: 'item', supplierId: 'supplier' } },
+  qualityPlans: { fields: { itemId: 'item', supplierId: 'supplier' } },
+  nonconformities: { fields: { itemId: 'item', supplierId: 'supplier' } },
   // `docId` resta fuori, come `orderId` sulle righe di movimento e per la stessa
   // ragione: REFS è la mappa degli id **legacy** da riscrivere nella migrazione
   // v2, e non ha (né avrebbe senso che avesse) una destinazione
@@ -891,6 +897,8 @@ function migrateDB() {
   if (!db.maintEvents) db.maintEvents = []; // interventi di manutenzione
   if (!db.machines) db.machines = [];       // macchine utensili dei centri
   if (!db.inspections) db.inspections = []; // collaudi della merce in entrata
+  if (!db.qualityPlans) db.qualityPlans = []; // piani di controllo
+  if (!db.nonconformities) db.nonconformities = []; // non conformità
   // Cestino: le eliminazioni recenti, recuperabili. Si svuota da solo passata
   // la finestra di ripristino, altrimenti crescerebbe finché lo spazio del
   // browser non finisce — e a quel punto il rimedio sarebbe peggio del male.

@@ -35,7 +35,7 @@ describe('Integrità della barra', () => {
 
   it('i gruppi sono quelli richiesti, nell\'ordine', () => {
     assert.deepEqual(nav(app()).map(g => g.label),
-      ['Riepilogo', 'Tecnico', 'Pianificazione', 'Acquisti', 'Produzione', 'Magazzino', 'Gestione']);
+      ['Riepilogo', 'Tecnico', 'Pianificazione', 'Acquisti', 'Produzione', 'Magazzino', 'Qualità', 'Gestione']);
   });
 
   it('ogni gruppo tiene le viste del suo processo', () => {
@@ -44,6 +44,7 @@ describe('Integrità della barra', () => {
     assert.deepEqual(g.plan, ['jobs', 'mrp', 'load', 'avz']);
     assert.deepEqual(g.buying, ['rfq', 'orders', 'pricelist']);
     assert.deepEqual(g.prod, ['odp', 'odl', 'reparto', 'manutenzione']);
+    assert.deepEqual(g.quality, ['collaudi', 'nc', 'pianiqc', 'fornitoriqc']);
   });
 });
 

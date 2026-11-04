@@ -36,6 +36,9 @@ const DOC_EMESSI_TIPI = {
   rfq: { cartella: 'RFQ', coll: 'rfqs', nome: 'richiesta', render: () => renderRfq() },
   order: { cartella: 'ODA', coll: 'orders', nome: 'ordine', render: () => renderOrders() },
   workOrder: { cartella: 'ODL', coll: 'workOrders', nome: 'ordine di lavoro', render: () => renderOdl() },
+  // Modulo Qualità: il rapporto di collaudo e quello di non conformità.
+  inspection: { cartella: 'COL', coll: 'inspections', nome: 'rapporto di collaudo', render: () => renderCollaudi() },
+  nonconformity: { cartella: 'NC', coll: 'nonconformities', nome: 'rapporto di non conformità', render: () => renderNc() },
 };
 
 // Le copie di un documento, dalla prima all'ultima.
@@ -140,7 +143,9 @@ function docPdfEmetti(kind, rec, doc, o) {
 // Il pulsante «Archivia» della scheda rigenera il PDF senza scaricarlo.
 function docEmessoArchiviaOra(kind, id) {
   if (!roleGuard('docs')) return;
-  const fn = { rfq: exportRfqPDF, order: exportOrderPDF, workOrder: exportOdlPDF }[kind];
+  const fn = { rfq: exportRfqPDF, order: exportOrderPDF, workOrder: exportOdlPDF,
+    inspection: typeof qcRapportoPdf === 'function' ? qcRapportoPdf : null,
+    nonconformity: typeof ncRapportoPdf === 'function' ? ncRapportoPdf : null }[kind];
   if (fn) fn(id, 'archivia');
 }
 

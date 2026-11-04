@@ -288,6 +288,8 @@ function plvBody(righe) {
       ? 'Nessuna quotazione registrata. Si aggiungono dal listino di un articolo, oppure tornano con i prezzi di una richiesta di offerta.'
       : 'Nessuna quotazione corrisponde ai filtri.'}</p>`;
   }
+  // La classe dei fornitori (modulo Qualità): una volta per disegno, non per riga.
+  const classi = typeof qcClassiIndice === 'function' ? qcClassiIndice() : new Map();
   return `<div class="table-wrap"><table class="price-table plv-table">
     <thead><tr><th scope="col"></th><th scope="col">Articolo</th><th scope="col">Descrizione</th><th scope="col">Fornitore</th>
       <th scope="col">Cod. fornitore</th><th scope="col" class="num">Prezzo</th><th scope="col" class="num">Q.tà min</th>
@@ -296,7 +298,7 @@ function plvBody(righe) {
       <td class="pl-flag">${x.attiva ? '<span title="Prezzo in uso nella costificazione">✓</span>' : ''}${x.best ? '<span class="price-best" title="Quotazione più bassa">↓</span>' : ''}${x.storico ? '<span class="price-tag-storico" title="Sostituita da una quotazione più recente dello stesso fornitore">storico</span>' : ''}</td>
       <td><span class="code">${esc(x.it.code)}</span></td>
       <td>${esc(x.it.name)} <span style="color:var(--text-dim)">· ${esc(typeLabel(x.it.type))}</span></td>
-      <td>${x.sup ? esc(x.sup.name) : '<span style="color:var(--text-dim)">—</span>'}</td>
+      <td>${x.sup ? esc(x.sup.name) + (typeof qcClasseBadge === 'function' ? qcClasseBadge(classi.get(x.sup.id)) : '') : '<span style="color:var(--text-dim)">—</span>'}</td>
       <td>${esc(x.r.code || '')}</td>
       <td class="num">${plvPrezzo(x)}</td>
       <td class="num">${x.r.minQty === '' || x.r.minQty == null ? '—' : esc(fmtQtyIt(x.r.minQty))}</td>

@@ -260,8 +260,8 @@ describe('La vista', () => {
 
   it('la voce di menu compare solo col modulo acceso', () => {
     const acceso = app();
-    assert.ok(acceso.eval('JSON.stringify(navVoci(NAV.find(g => g.id === "stock")).map(v => v.id))').includes('collaudi'));
+    assert.ok(acceso.eval('JSON.stringify(navVoci(NAV.find(g => g.id === "quality")).map(v => v.id))').includes('collaudi'));
     const spento = app(base({ spento: true }));
-    assert.ok(!spento.eval('JSON.stringify(navVoci(NAV.find(g => g.id === "stock")).map(v => v.id))').includes('collaudi'));
+    assert.ok(!spento.eval('JSON.stringify(navVoci(NAV.find(g => g.id === "quality")).map(v => v.id))').includes('collaudi'));
   });
 });

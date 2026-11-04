@@ -118,7 +118,16 @@ function dbCloudCompleto() {
     maintEvents: [st({ id: U(52), planId: U(51), workCenterId: wc1, machineId: U(53), date: '2026-03-10', downFrom: '2026-03-10', downTo: '2026-03-11', ricambi: [{ itemId: c1, qty: 1 }], note: 'fatto', active: true })],
     inspections: [st({ id: U(54), number: 'COL-2026-001', source: 'oda', orderId: ord, lineId: ol1, itemId: m1, supplierId: s1,
       qty: 40, uom: 'kg', date: '2026-03-03', ddt: 'DDT 1', supplierLot: 'L-77', cert: 'atteso',
-      status: 'aperto', esito: '', qtyOk: 0, qtyKo: 0, destino: 'sostituzione', note: '', closedAt: null, active: true })],
+      status: 'aperto', esito: '', qtyOk: 0, qtyKo: 0, destino: 'sostituzione', note: '', closedAt: null, active: true,
+      planId: U(55), planState: 'normale', sampleRule: 'AQL 1 · livello II · lettera F · Ac 0 Re 1', sampleSize: 20, acceptNo: 0, rejectNo: 1,
+      defects: 0, skipLot: false, checks: [{ id: 'k1', name: 'Diametro', kind: 'misura', nominal: 30, tolMin: -0.1, tolMax: 0.1, uom: 'mm', tool: 'Calibro', value: '30.02' }] })],
+    qualityPlans: [st({ id: U(55), name: 'Barre in acciaio', itemId: null, familyId: fam, supplierId: s1, cert: '3.1 EN 10204',
+      sampling: 'aql', sampleQty: 5, samplePct: 10, aql: 1, skipAfter: 5, skipEvery: 3,
+      characteristics: [{ id: 'k1', name: 'Diametro', kind: 'misura', nominal: 30, tolMin: -0.1, tolMax: 0.1, uom: 'mm', tool: 'Calibro' }], notes: 'A 20 °C', active: true })],
+    nonconformities: [st({ id: U(56), number: 'NC-2026-001', source: 'fornitore', inspectionId: U(54), orderId: ord, itemId: m1, supplierId: s1,
+      qty: 5, uom: 'kg', date: '2026-03-04', cause: 'Materiale non conforme', gravita: 'maggiore', description: 'Durezza fuori', decision: 'reso',
+      actions: [{ id: 'a1', text: 'Chiedere l\'8D', who: 'Acquisti', due: '2026-03-20', done: false }], cost: 120, dueDate: '2026-04-03',
+      status: 'aperta', closedAt: null, note: '', active: true })],
     trash: [{ id: trash, coll: 'suppliers', deletedAt: T0, deletedBy: usr, record: { id: U(99), name: 'Vecchio' } }],
   });
 }

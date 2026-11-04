@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  BOMTRACK — qualita.js  (modulo Qualità, fase 1: collaudo in entrata)
+//  BOMTRACK — qualita.js  (modulo Qualità: il collaudo in entrata)
 // ═══════════════════════════════════════════════════════════
 // Il controllo della merce che arriva, agganciato al ricevimento che l'app
 // registra già.
@@ -36,12 +36,12 @@
 // ricomprarla perché è in attesa di un esito sarebbe il difetto peggiore di
 // quello che si vuole curare.
 //
-// ── Quello che la fase 1 non fa ──
-// Niente piani di controllo con le caratteristiche da misurare, niente
-// campionamento, niente non conformità con le azioni correttive, niente
-// valutazione dei fornitori: sono le fasi 2, 3 e 4 della proposta. Qui c'è il
-// giro completo di una cosa sola — la merce non si usa prima che qualcuno
-// l'abbia guardata — e il resto si appoggia a questo.
+// ── Il resto del modulo ──
+// Qui c'è il giro di una cosa sola — la merce non si usa prima che qualcuno
+// l'abbia guardata. Il resto si appoggia a questo, ciascuno nel suo file:
+//   qualita-piani.js      che cosa misurare e su quanti pezzi (fase 2)
+//   qualita-nc.js         le non conformità con le loro azioni (fase 3)
+//   qualita-fornitori.js  la valutazione dei fornitori (fase 4)
 
 // ─── Il modulo è acceso? ───
 function qcAttivo() { return typeof moduloAttivo === 'function' && moduloAttivo('qualita'); }
@@ -63,10 +63,14 @@ function qcFamigliaRichiede(it) {
   if (sub && (sub.qc === 'si' || sub.qc === 'no')) return sub.qc === 'si';
   return f.qc === 'si';
 }
-function qcRichiesto(it) {
+// Con un fornitore, conta anche un piano di controllo (qualita-piani.js): un
+// piano attivo per l'articolo o la sua famiglia vale come «sì». Un «No»
+// scritto sull'articolo resta un no anche lì.
+function qcRichiesto(it, supplierId) {
   if (!qcAttivo() || !it || !hasStock(it)) return false;
   if (it.qc === 'si') return true;
   if (it.qc === 'no') return false;
+  if (typeof qcPianoPer === 'function' && qcPianoPer(it, supplierId || null)) return true;
   return qcFamigliaRichiede(it);
 }
 // Il certificato che il fornitore deve allegare, a parole. Vuoto: nessuno.
@@ -190,7 +194,7 @@ function qcIndice() {
 function qcCrea(dati) {
   const d = dati || {};
   const it = getItem(d.itemId);
-  if (!it || !qcRichiesto(it)) return null;
+  if (!it || !qcRichiesto(it, d.supplierId || null)) return null;
   const qty = Number(d.qty) || 0;
   if (!(qty > 0.000001)) return null;
   const rec = {
@@ -204,6 +208,8 @@ function qcCrea(dati) {
     status: 'aperto', esito: '', qtyOk: 0, qtyKo: 0, destino: 'sostituzione',
     note: '', closedAt: null, active: true,
   };
+  // Il piano di controllo, se c'è: caratteristiche, campione, salto lotti.
+  if (typeof qcApplicaPiano === 'function') qcApplicaPiano(rec, it);
   return Store.insert('inspections', rec);
 }
 // Dopo un ricevimento su una riga d'ordine fornitore. `delta` è quanto è
@@ -248,6 +254,12 @@ function qcRegistraEsito(id, dati) {
   // che entra entra pulito o con riserva.
   if (esito !== 'respinto' && ko > 0.000001) { showToast('Con dei pezzi respinti l\'esito è «respinto»', 'error'); return false; }
   if (esito === 'respinto' && !(ko > 0.000001)) { showToast('Un respinto senza pezzi respinti non è un respinto', 'error'); return false; }
+  // Certificato richiesto e non arrivato: la merce può entrare solo con la
+  // riserva scritta (in deroga) o tornare indietro. Accettarla «pulita»
+  // vorrebbe dire dichiarare conforme una cosa di cui manca la prova.
+  if (esito === 'accettato' && qcCertificatoRichiesto(insp) && insp.cert !== 'ok') {
+    showToast('Manca il certificato: si può accettare solo in deroga', 'error'); return false;
+  }
   const destino = QC_DESTINI[d.destino] ? d.destino : 'sostituzione';
   const note = String(d.note || '').trim();
   // Prima la merce, poi la chiusura: se il reso non si può registrare il
@@ -259,8 +271,21 @@ function qcRegistraEsito(id, dati) {
   Store.update('inspections', insp.id, patch);
   invalidateStock();
   showToast(`${insp.number}: ${QC_ESITI[esito]}${ko > 0.000001 ? ` · ${fmtQtyIt(ko)} ${insp.uom || ''}`.trimEnd() + ' respinti' : ''}`);
+  // Un respinto o una deroga aprono la non conformità (qualita-nc.js): il
+  // problema ha un numero e qualcuno che lo chiude.
+  if (esito !== 'accettato' && typeof ncDaCollaudo === 'function') ncDaCollaudo(qcGet(insp.id));
   return true;
 }
+// Il certificato che questo collaudo aspetta: quello del piano, se ne ha uno,
+// altrimenti quello dell'articolo o della famiglia.
+function qcCertificatoDi(insp) {
+  if (!insp) return '';
+  const dalPiano = typeof qcCertificatoPiano === 'function' ? qcCertificatoPiano(insp) : '';
+  if (dalPiano) return dalPiano;
+  const it = getItem(insp.itemId);
+  return it ? qcCertificato(it) : '';
+}
+function qcCertificatoRichiesto(insp) { return !!(insp && (insp.cert === 'atteso' || insp.cert === 'ok') && qcCertificatoDi(insp)); }
 // La merce che torna indietro. Due strade, una per origine, e nessuna delle
 // due inventa un movimento nuovo:
 //  - ordine fornitore: **scende il ricevuto**. È la stessa correzione che si
@@ -313,6 +338,7 @@ function qcSetCampo(id, campo, valore) {
   if (!qcGuard()) return false;
   if (!['ddt', 'supplierLot', 'cert', 'note'].includes(campo)) return false;
   const insp = qcGet(id); if (!insp) return false;
+  if (campo === 'cert' && valore !== 'ok' && valore !== 'atteso') return false;
   Store.update('inspections', id, { [campo]: String(valore == null ? '' : valore).trim() });
   return true;
 }
@@ -422,18 +448,27 @@ function renderCollaudi() {
 function qcSchedaHtml(x) {
   const it = getItem(x.itemId);
   const u = x.uom || (it ? itemUom(it) : '');
-  const cert = it ? qcCertificato(it) : '';
+  const cert = qcCertificatoDi(x);
   const scrivibile = x.status === 'aperto' && (typeof canWriteShop === 'function' ? canWriteShop('docs') : canWrite('docs'));
   const campo = (etichetta, chiave, placeholder) => `<div class="modal-field"><label>${esc(etichetta)}</label>
     <input value="${esc(x[chiave] || '')}" placeholder="${esc(placeholder || '')}" ${scrivibile ? '' : 'disabled'}
       onchange="qcSetCampo('${x.id}', '${chiave}', this.value)"></div>`;
   const dato = (etichetta, valore) => `<div class="modal-field"><label>${esc(etichetta)}</label><div class="qc-val">${valore}</div></div>`;
+  const certCampo = !cert ? '' : `<div class="modal-field"><label>Certificato ${esc(cert)}</label>
+    <select ${scrivibile ? '' : 'disabled'} onchange="qcSetCampo('${x.id}','cert',this.value);renderCollaudi()">
+      <option value="atteso" ${x.cert !== 'ok' ? 'selected' : ''}>Non ancora arrivato</option>
+      <option value="ok" ${x.cert === 'ok' ? 'selected' : ''}>Arrivato e conforme</option>
+    </select></div>`;
+  const nc = typeof ncDiCollaudo === 'function' ? ncDiCollaudo(x.id) : null;
   return `<div class="manage-wrap">
     <div class="bom-toolbar">
       <div class="bom-toolbar-left">
         <button class="btn-outline" onclick="qcChiudiScheda()" title="Chiudi il collaudo: l'elenco resta a destra">${ico('close', 'tinted', '')} Chiudi</button>
         <h2 class="section-title" style="font-family:var(--mono)">${esc(x.number)}</h2>
         ${qcBadge(x)}
+      </div>
+      <div class="bom-toolbar-right">
+        <button class="btn-outline" onclick="qcRapportoPdf('${x.id}')" title="Il rapporto di collaudo in PDF, in italiano e inglese">${ico('file', 'tinted', '')} Rapporto PDF</button>
       </div>
     </div>
     <div class="qc-card">
@@ -445,34 +480,80 @@ function qcSchedaHtml(x) {
         ${dato('Quantità arrivata', `<strong>${fmtQtyIt(x.qty)} ${esc(u)}</strong> · ${esc(fmtDateIt(x.date))}`)}
         ${campo('DDT del fornitore', 'ddt', 'es. DDT 88412 del 03/11')}
         ${campo('Lotto o colata del fornitore', 'supplierLot', 'es. L24-0871')}
-        ${cert ? dato('Certificato richiesto', `${ico('file', 'tinted', '')} ${esc(cert)}`) : ''}
+        ${certCampo}
       </div>
-      ${cert ? `<p class="empty-text qc-hint">Il certificato si allega all'articolo (scheda articolo → Allegati) e resta lì: qui si registra che è arrivato.</p>` : ''}
+      ${cert ? `<p class="empty-text qc-hint">Il certificato si allega all'articolo (scheda articolo → Allegati) e resta lì: qui si registra che è arrivato. Senza, il lotto si può accettare solo in deroga.</p>` : ''}
     </div>
+    ${qcControlloHtml(x, u, scrivibile)}
     ${x.status === 'aperto' ? qcEsitoHtml(x, u, scrivibile) : qcEsitoChiusoHtml(x, u)}
+    ${nc ? `<p class="empty-text qc-hint">${ico('warning', 'tinted', '')} Non conformità <a href="#" onclick="ncApriDaAltrove('${nc.id}');return false">${esc(nc.number)}</a> · ${esc(NC_STATI[nc.status] || nc.status)}</p>` : ''}
+    ${typeof docEmessiHtml === 'function' ? docEmessiHtml('inspection', x) : ''}
     ${stampLine(x)}
   </div>`;
 }
+// Il piano dentro il collaudo: quanti pezzi guardare, che cosa misurare, e le
+// misure man mano che si prendono. Senza piano la scheda resta quella della
+// fase 1: arrivo ed esito.
+function qcControlloHtml(x, u, scrivibile) {
+  if (!x.planId && !(x.checks || []).length && !x.sampleRule) return '';
+  const p = x.planId && typeof qcPianoGet === 'function' ? qcPianoGet(x.planId) : null;
+  const dis = scrivibile ? '' : 'disabled';
+  const stati = { normale: 'Normale', ridotto: 'Ridotto (salto lotti)', rinforzato: 'Rinforzato' };
+  const checks = x.checks || [];
+  const righe = checks.map((c, i) => {
+    const e = qcCheckEsito(c);
+    const cella = c.kind === 'ok'
+      ? `<select ${dis} onchange="qcSetCheck('${x.id}','${c.id}',this.value);renderCollaudi()" aria-label="Esito ${esc(c.name || 'caratteristica ' + (i + 1))}">
+          <option value="" ${!c.value ? 'selected' : ''}>—</option><option value="ok" ${c.value === 'ok' ? 'selected' : ''}>Passa</option><option value="ko" ${c.value === 'ko' ? 'selected' : ''}>Non passa</option></select>`
+      : `<input class="num ${e === 'ko' ? 'qc-ko-val' : ''}" inputmode="decimal" value="${esc(String(c.value || '').replace('.', ','))}" ${dis}
+          onchange="qcSetCheck('${x.id}','${c.id}',this.value.replace(',', '.'));renderCollaudi()" aria-label="Misura ${esc(c.name || 'caratteristica ' + (i + 1))}">`;
+    return `<tr class="${e === 'ko' ? 'qc-row-ko' : ''}">
+      <td>${esc(c.name || '—')}</td><td>${esc(qcTolleranzaTesto(c))}</td><td>${esc(c.tool || '—')}</td>
+      <td class="num">${cella}</td>
+      <td>${e === 'ok' ? '<span class="doc-badge st-evaso">OK</span>' : e === 'ko' ? '<span class="doc-badge st-annullato">Fuori</span>' : ''}</td></tr>`;
+  }).join('');
+  const sugg = x.status === 'aperto' ? qcEsitoSuggerito(x) : '';
+  return `<div class="qc-card">
+    <h3>Il controllo${p ? ` · ${esc(p.name)}` : ''}</h3>
+    <div class="modal-grid">
+      <div class="modal-field"><label>Campionamento</label><div class="qc-val">${esc(x.sampleRule || 'Tutti i pezzi')}</div></div>
+      <div class="modal-field"><label>Pezzi da guardare</label><div class="qc-val"><strong>${fmtQtyIt(x.sampleSize || 0)}</strong>${x.skipLot ? ' (lotto saltato)' : ''}</div></div>
+      ${x.planState ? `<div class="modal-field"><label>Livello</label><div class="qc-val">${esc(stati[x.planState] || x.planState)}</div></div>` : ''}
+      ${x.skipLot ? '' : `<div class="modal-field"><label>Pezzi non conformi nel campione</label>
+        <input type="number" min="0" step="1" value="${Number(x.defects) || 0}" ${dis} onchange="qcSetDifetti('${x.id}', this.value);renderCollaudi()"></div>`}
+    </div>
+    ${p && p.notes ? `<p class="empty-text qc-hint">${ico('book', 'tinted', '')} ${esc(p.notes)}</p>` : ''}
+    ${checks.length ? `<div class="table-wrap"><table class="qc-table">
+      <thead><tr><th scope="col">Caratteristica</th><th scope="col">Specifica</th><th scope="col">Strumento</th><th scope="col" class="num">Rilevato</th><th scope="col">Esito</th></tr></thead>
+      <tbody>${righe}</tbody></table></div>` : ''}
+    ${!x.skipLot && x.rejectNo != null ? `<p class="empty-text qc-hint">Si accetta con al massimo <strong>${Number(x.acceptNo) || 0}</strong> pezz${Number(x.acceptNo) === 1 ? 'o' : 'i'} non conform${Number(x.acceptNo) === 1 ? 'e' : 'i'}, si respinge da <strong>${Number(x.rejectNo) || 1}</strong>.${sugg ? ` Le misure dicono: <strong>${esc(QC_ESITI[sugg])}</strong>.` : ''}</p>` : ''}
+  </div>`;
+}
 function qcEsitoHtml(x, u, scrivibile) {
+  // Proposta dalle misure, se le misure dicono qualcosa; un certificato
+  // mancante sposta l'«accettato» sulla deroga.
+  let pre = (typeof qcEsitoSuggerito === 'function' ? qcEsitoSuggerito(x) : '') || 'accettato';
+  if (pre === 'accettato' && qcCertificatoRichiesto(x) && x.cert !== 'ok') pre = 'deroga';
+  const opt = (k, t) => `<option value="${k}" ${pre === k ? 'selected' : ''}>${t}</option>`;
   return `<div class="qc-card">
     <h3>L'esito</h3>
     <div class="modal-grid">
       <div class="modal-field"><label>Decisione</label>
         <select id="qc-esito" onchange="qcEsitoChange()" ${scrivibile ? '' : 'disabled'}>
-          <option value="accettato">Accettato</option>
-          <option value="deroga">Accettato in deroga</option>
-          <option value="respinto">Respinto (tutto o in parte)</option>
+          ${opt('accettato', 'Accettato')}
+          ${opt('deroga', 'Accettato in deroga')}
+          ${opt('respinto', 'Respinto (tutto o in parte)')}
         </select></div>
-      <div class="modal-field" id="qc-ko-field" style="display:none"><label>Pezzi respinti (${esc(u)})</label>
+      <div class="modal-field" id="qc-ko-field" style="${pre === 'respinto' ? '' : 'display:none'}"><label>Pezzi respinti (${esc(u)})</label>
         <input type="number" id="qc-ko" min="0" max="${Number(x.qty) || 0}" step="any" value="${Number(x.qty) || 0}" ${scrivibile ? '' : 'disabled'} oninput="qcEsitoChange()"></div>
-      <div class="modal-field" id="qc-destino-field" style="display:none"><label>Che fine fanno</label>
+      <div class="modal-field" id="qc-destino-field" style="${pre === 'respinto' ? '' : 'display:none'}"><label>Che fine fanno</label>
         <select id="qc-destino" ${scrivibile ? '' : 'disabled'}>
           ${Object.keys(QC_DESTINI).map(k => `<option value="${k}">${esc(QC_DESTINI[k])}</option>`).join('')}
         </select></div>
     </div>
     <div class="modal-field"><label>Nota</label>
       <textarea id="qc-note" rows="2" ${scrivibile ? '' : 'disabled'}>${esc(x.note || '')}</textarea></div>
-    <p class="empty-text qc-hint" id="qc-conseguenza">${qcConseguenzaTesto(x, 'accettato', 0)}</p>
+    <p class="empty-text qc-hint" id="qc-conseguenza">${qcConseguenzaTesto(x, pre, pre === 'respinto' ? Number(x.qty) || 0 : 0)}</p>
     ${scrivibile ? `<div class="modal-actions" style="justify-content:flex-start">
       <button class="add-btn-sm" onclick="qcRegistraDallaScheda('${x.id}')">${ico('check', 'tinted', '')} Registra l'esito</button>
     </div>` : ''}
@@ -498,12 +579,12 @@ function qcConseguenzaTesto(x, esito, ko) {
   const tot = Number(x.qty) || 0;
   const ok = Math.max(0, tot - (Number(ko) || 0));
   if (esito !== 'respinto') {
-    return `${fmtQtyIt(tot)} ${esc(u)} diventano merce libera${esito === 'deroga' ? ', con la riserva scritta nel collaudo' : ''}.`;
+    return `${fmtQtyIt(tot)} ${esc(u)} diventano merce libera${esito === 'deroga' ? ', con la riserva scritta nel collaudo e una non conformità da chiudere' : ''}.`;
   }
   const dove = x.source === 'odl'
     ? 'escono verso il terzista come uscita a conto lavoro, e l\'ordine di lavoro torna ad aspettarli'
     : 'tolgono il ricevuto dalla riga d\'ordine: la giacenza cala, la riga torna ad avere un residuo e il fabbisogno li aspetta di nuovo';
-  return `${fmtQtyIt(ok)} ${esc(u)} diventano liberi; ${fmtQtyIt(ko)} ${esc(u)} ${dove}.`;
+  return `${fmtQtyIt(ok)} ${esc(u)} diventano liberi; ${fmtQtyIt(ko)} ${esc(u)} ${dove}. Si apre una non conformità verso il fornitore.`;
 }
 function qcEsitoChange() {
   const x = qcCurrentId ? qcGet(qcCurrentId) : null; if (!x) return;

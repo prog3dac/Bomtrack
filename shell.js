@@ -279,9 +279,15 @@ const NAV = [
   // Il magazzino non conosce la divisione fra acquisti e progetto: commerciali,
   // materie prime e parti stanno sullo stesso scaffale.
   { id: 'stock', icon: 'package', label: 'Magazzino', views: [
-    { id: 'stock', label: 'Magazzino' },
-    // Modulo Qualità (0.140.0): la merce che aspetta un esito.
-    { id: 'collaudi', label: 'Collaudi', modulo: 'qualita' }] },
+    { id: 'stock', label: 'Magazzino' }] },
+  // Modulo Qualità (0.140.0): un gruppo suo, che c'è solo col modulo acceso.
+  // Nell'ordine del lavoro: la merce che aspetta un esito, i problemi aperti,
+  // le regole del controllo, il bilancio dei fornitori.
+  { id: 'quality', icon: 'shield', label: 'Qualità', views: [
+    { id: 'collaudi', label: 'Collaudi', modulo: 'qualita' },
+    { id: 'nc', label: 'Non conformità', modulo: 'qualita' },
+    { id: 'pianiqc', label: 'Piani di controllo', modulo: 'qualita' },
+    { id: 'fornitoriqc', label: 'Valutazione fornitori', modulo: 'qualita' }] },
   { id: 'manage', icon: 'settings', label: 'Gestione', views: [
     { id: 'manage', label: 'Gestione' }] },
 ];
@@ -468,6 +474,9 @@ function setView(v) {
   else if (v === 'buy' || v === 'design') renderCatalog(v);
   else if (v === 'stock') renderStock();
   else if (v === 'collaudi') renderCollaudi();
+  else if (v === 'nc') renderNc();
+  else if (v === 'pianiqc') renderPianiQc();
+  else if (v === 'fornitoriqc') renderFornitoriQc();
   else if (v === 'cycles') renderCycles();
   else if (v === 'varianti') renderVarianti();
   else if (v === 'reparto') renderReparto();

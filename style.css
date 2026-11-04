@@ -1614,3 +1614,24 @@ select.combo-nascosto{display:none!important}
 .qc-line-tag.qc-open{color:var(--accent);background:var(--accent-soft)}
 .qc-line-tag.qc-ok{color:var(--green);background:var(--green-soft)}
 .qc-line-tag.qc-ko{color:var(--red);background:var(--red-soft)}
+/* Le tabelle del modulo: caratteristiche, misure, azioni, valutazione. Campi
+   in cella senza bordo pesante, come le righe dei documenti. */
+.qc-table{width:100%;border-collapse:collapse;font-size:13px}
+.qc-table th{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.qc-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.qc-table th.num,.qc-table td.num{text-align:right}
+.qc-table input,.qc-table select{width:100%;min-width:70px;min-height:32px}
+.qc-table input.num{text-align:right;font-family:var(--mono)}
+.qc-table .qc-row-cmds{white-space:nowrap;text-align:right}
+.qc-table tr.qc-row-ko td{background:var(--red-soft)}
+.qc-table input.qc-ko-val{color:var(--red);font-weight:700}
+.qc-toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:4px 0 14px}
+.qc-stats{margin-bottom:14px}
+.vf-table td{white-space:nowrap}
+/* Il testo per i lettori di schermo (.sr-only) è assoluto: senza un antenato
+   posizionato scapperebbe dallo scorrimento della tabella e allargherebbe la
+   pagina al telefono. */
+.qc-card .table-wrap,.vf-table{position:relative}
+.qc-toolbar .wl-filter-dates input{min-height:36px;padding:7px 8px;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit}
+.qc-toolbar .wl-filter-dates input:focus{border-color:var(--accent);outline:none}
+.qc-val a,.qc-hint a{color:var(--accent)}

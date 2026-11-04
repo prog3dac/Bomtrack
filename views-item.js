@@ -471,7 +471,7 @@ const STORICO_COLL = {
   attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione', settings: 'Impostazioni',
   revisions: 'Revisione', movements: 'Movimento di magazzino', receipts: 'Ricevimento', prodDecls: 'Dichiarazione di produzione',
   timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina',
-  inspections: 'Collaudo',
+  inspections: 'Collaudo', qualityPlans: 'Piano di controllo', nonconformities: 'Non conformità',
 };
 const STORICO_CAMPI = {
   code: 'Codice', name: 'Nome', description: 'Descrizione', type: 'Tipo', uom: 'U.M.',

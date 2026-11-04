@@ -143,6 +143,15 @@ function homeSegnali() {
       return voce(x.number, `${it ? it.code + ' — ' + it.name : '(articolo eliminato)'} · ${fmtQtyIt(x.qty)} ${x.uom || ''} da ${supplierName(x.supplierId) || 'fornitore'}`.trim(),
         `qcApriDaAltrove('${x.id}')`);
     }), 'collaudo da fare', 'collaudi da fare', 'collaudi', 'media');
+    // Non conformità oltre la data, o con un'azione oltre la sua: qualcuno
+    // aveva promesso qualcosa entro un giorno che è passato.
+    if (typeof ncScadute === 'function') {
+      agg(ncScadute().map(x => {
+        const it = x.itemId ? getItem(x.itemId) : null;
+        return voce(x.number, `${it ? it.code + ' — ' + it.name : (x.description || '')}${x.supplierId ? ' · ' + supplierName(x.supplierId) : ''}${x.dueDate ? ' — entro ' + fmtDateIt(x.dueDate) : ''}`,
+          `ncApriDaAltrove('${x.id}')`);
+      }), 'non conformità scaduta', 'non conformità scadute', 'nc', 'alta');
+    }
   }
 
   // Articoli che si comprano e non hanno un prezzo: in un ordine varrebbero zero
