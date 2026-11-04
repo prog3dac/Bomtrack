@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.140.0**
+**Versione dell'app documentata: 0.141.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1724,7 +1724,7 @@ riga sbagliata.
 
 Il pulsante **Presso terzi (N)** apre il prospetto di cosa sta fuori, **raggruppato per
 fornitore**, con *Uscito* / *Rientrato* / **Ancora fuori** e il riferimento all'ordine.
-Ha il suo export Excel e PDF.
+Ha il suo export Excel e PDF, in fondo alla scheda (il pulsante c'è dalla 0.141.0).
 
 In fondo c'è il blocco **«in casa, fra due fasi»**: i pezzi tornati da un terzista e non ancora
 ripartiti per il successivo. È **un luogo a sé** — esistono, non sono a scaffale, e non sono da
@@ -3369,7 +3369,8 @@ I nomi si **propongono nel campo Cliente della commessa**.
 Oltre al referente, nella scheda di modifica di un fornitore o di un cliente si aggiungono
 **quanti contatti servono** con **+ Aggiungi un contatto**: nome, ruolo (Acquisti, Amministrazione,
 Tecnico… o uno scritto da sé), email e telefono. Il cestino toglie una riga, e una riga lasciata
-vuota non si salva. Nell'elenco compare quanti sono («+2 contatti»). Nell'export delle impostazioni
+vuota non si salva. Nell'elenco compare quanti sono («+2 contatti»); passandoci sopra col mouse
+si leggono nome, ruolo, email e telefono di ciascuno (dalla 0.141.0). Nell'export delle impostazioni
 c'è il foglio **Contatti**, una riga per contatto con l'anagrafica a cui appartiene: reimportandolo,
 i contatti di un fornitore o cliente che compare nel foglio si sostituiscono con quelli del file,
 gli altri restano com'erano.
@@ -4190,6 +4191,19 @@ subito un numero nuovo riservato dal server, e lo dice. Se l'archivio conteneva 
 quando si è rieseguito `schema.sql`, l'esecuzione lo segnala: si correggono (il controllo delle
 serie in *Gestione → Backup* li elenca) e si riesegue il file.
 
+**Un codice, un articolo; nessuna distinta dentro sé stessa** (dalla 0.141.0). Le stesse due regole
+che l'app fa valere su un PC le fa valere anche il server, fra due colleghi che lavorano insieme:
+due articoli non hanno lo stesso codice (maiuscole e spazi ai lati non contano), e una distinta non
+può contenere, nemmeno attraverso un sottogruppo, l'articolo di cui è la distinta. Se una modifica
+le viola, lo stato della nuvola dice quale articolo e come uscirne. Se l'archivio aveva già dei
+codici doppi quando si è rieseguito `schema.sql`, l'esecuzione lo segnala con un avviso e il
+controllo dei codici non si accende: si correggono (*Gestione → Backup → codici duplicati*) e si
+riesegue il file.
+
+**Lo schema indietro si vede subito** (dalla 0.141.0). Se il progetto Supabase ha uno schema più
+vecchio di quello che l'app si aspetta, all'accesso compare un avviso che chiede di rieseguire
+`supabase/schema.sql`, prima che la sincronizzazione si fermi su una colonna che il server non ha.
+
 Alcuni casi particolari:
 
 - **Le impostazioni** (*Gestione → Aree e moduli*, *Costi e margini*, unità di misura, condizioni d'offerta…) le
@@ -4650,11 +4664,11 @@ fasi, `kind: 'op'`, con `workCenterId`, `supplierId`, `costMode`, `hours`, `oper
 | `columns.js` · `inspector.js` | Scelta colonne · pannello laterale |
 | `views-bom.js` · `views-rev.js` | Distinte e revisioni |
 | `views-stock.js` | Magazzino, movimenti, conto lavoro |
-| `views-catalog.js` | Anagrafiche, listino, scheda articolo, cicli |
+| `views-listino.js` · `views-catalog.js` · `views-cicli.js` | Listino fornitori · anagrafiche e scheda articolo · cicli di lavorazione |
 | `views-report.js` · `views-item.js` · `views-home.js` · `views-dash.js` | Costificazione · scheda di sola lettura · Riepilogo · Cruscotto |
-| `views-mrp.js` | Fabbisogno e Carico centri |
+| `views-mrp.js` · `views-mrp-documenti.js` | Fabbisogno e Carico centri · i documenti che nascono dal piano |
 | `views-avanzamento.js` | Avanzamento: il Gantt del piano con lo stato dei documenti |
-| `views-jobs.js` · `views-docs.js` | Commesse · RFQ, ODA, ODL |
+| `views-jobs.js` · `views-docs.js` · `views-oda.js` | Commesse · parte comune dei documenti e RFQ · ODA e ODL |
 | `views-prod.js` | Ordini di produzione: fasi congelate, avanzamento, movimenti |
 | `views-manage.js` | Gestione |
 | `produzione.js` | Avanzamento di produzione |

@@ -87,6 +87,18 @@ describe('validateSnapshot', () => {
     assert.match(msg, /aggiorna/i, 'le migrazioni sanno salire, non scendere');
   });
 
+  // 0.141.0: gli id finiscono negli onclick senza passare da esc().
+  it('un id con apici o tag dentro si ferma, e si dice dove', () => {
+    const a = app();
+    const msg = String(v(a, { items: [{ id: "x');alert(1);('", code: 'A', name: 'A' }] }));
+    assert.match(msg, /caratteri non ammessi/);
+    assert.match(msg, /items\[0\]\.id/);
+    assert.match(String(v(a, { items: [], orders: [{ id: 'o1', lines: [{ id: 'l1', itemId: '<img src=x>' }] }] })), /orders\[0\]\.lines\[0\]\.itemId/);
+    assert.match(String(v(a, { items: [], plans: [{ id: 'p1', lineIds: ['ok', 'no"pe'] }] })), /plans\[0\]\.lineIds/);
+    assert.equal(v(a, { items: [{ id: 'fm1', code: 'A', name: 'Nome con \'apice\' e <tag>' }, { id: '0b4c6c1e-6d2a-4e43-9e0c-2a1d6f0c9b11' }] }), null,
+      'gli id di sempre passano, e il testo libero non si guarda');
+  });
+
   it('Store.importSnapshot rifiuta quello che validateSnapshot rifiuta', () => {
     const a = app(conDati());
     assert.throws(() => a.eval('Store.importSnapshot(JSON.stringify({ suppliers: [] }))'), /troncato/);

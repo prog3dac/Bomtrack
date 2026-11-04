@@ -227,8 +227,23 @@ alter table public.items add column if not exists drawing_ref text;
 -- Un elenco che si legge sempre insieme alla sua anagrafica: jsonb.
 alter table public.suppliers add column if not exists contacts jsonb;
 alter table public.customers add column if not exists contacts jsonb;
--- A6: `unique (code)` va aggiunto dopo la bonifica dei duplicati storici
--- (Gestione › Backup › codici duplicati). Prima, rifiuterebbe dati veri.
+-- A6: il codice è unico anche nel database (dalla 0.141.0), senza badare a
+-- maiuscole e spazi ai lati, come l'app (codeIndex) e impegna_codici. Gli
+-- impegni dei codici evitano già i doppioni fra due PC, ma per un'ora soltanto
+-- e solo a chi li chiede: l'indice è la garanzia. Su un archivio che ha ancora
+-- dei doppioni storici non si crea — rifiuterebbe dati veri e fermerebbe tutto
+-- il file — e lo si dice: si bonificano da Gestione › Backup › codici
+-- duplicati, poi si riesegue.
+do $$
+begin
+  if exists (select 1 from public.items where btrim(coalesce(code, '')) <> ''
+              group by lower(btrim(code)) having count(*) > 1) then
+    raise warning 'items_codice_unico non creato: ci sono codici articolo doppi. Bonificali (Gestione › Backup › codici duplicati) e riesegui questo file';
+  else
+    create unique index if not exists items_codice_unico on public.items (lower(btrim(code)))
+      where btrim(coalesce(code, '')) <> '';
+  end if;
+end $$;
 
 -- Le tre tabelle «replace»: l'insieme è la definizione dell'articolo, le righe
 -- non hanno identità propria e la chiave è costruita (testo). Si riscrivono
@@ -764,7 +779,7 @@ on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = e
 -- quella del server e decide che cosa un altro client non ha ancora visto.
 -- Sono due domande diverse: un client con l'orologio indietro scrive un
 -- updated_at vecchio, ma la sua riga va comunque mandata a chi fa pull dopo.
-create or replace function public.sync_stamp() returns trigger language plpgsql as $$
+create or replace function public.sync_stamp() returns trigger language plpgsql set search_path = public as $$
 declare
   quando timestamptz;
   nuovo jsonb;
@@ -954,6 +969,13 @@ begin
     righe := payload->'upsert'->reg.tab;
     if jsonb_typeof(righe) <> 'array' then
       raise exception 'push_changes: % non è un elenco', reg.tab;
+    end if;
+    -- Gli id finiscono negli `onclick` dell'app senza passare da esc() (dalla
+    -- 0.141.0): un id con un apice o un `<` dentro, scritto dall'API da un
+    -- collega, diventava codice eseguito nel browser degli altri. L'app li crea
+    -- UUID o sigle brevi; gli altri si rifiutano qui, come fa il backup.
+    if exists (select 1 from jsonb_array_elements(righe) e where (e->>'id') !~ '^[^''"<>`\\[:space:]&]{1,200}$') then
+      raise exception 'push_changes: %: un id contiene caratteri non ammessi', reg.tab;
     end if;
 
     select string_agg(distinct k, ', ') into sconosciuti
@@ -1334,7 +1356,7 @@ $$;
 -- auth.uid() è nullo. Anche l'**email** è della gestione utenti: il link per
 -- reimpostare la password parte dall'utente di Supabase Auth, ma un'email del
 -- profilo cambiata a mano farebbe credere all'app di parlare con un altro.
-create or replace function public.profiles_guardia() returns trigger language plpgsql as $$
+create or replace function public.profiles_guardia() returns trigger language plpgsql set search_path = public as $$
 begin
   if current_user in ('authenticated', 'anon') and not public.puo_scrivere_tabella('profiles')
      and (new.role is distinct from old.role or new.active is distinct from old.active or new.id <> old.id
@@ -1356,7 +1378,7 @@ create trigger profiles_guardia before update on public.profiles for each row ex
 -- E non si elimina (dalla 0.105.4), da nessuna parte: né dall'API né
 -- eliminando il suo utente nel pannello di Supabase, che porta via il profilo
 -- con sé. Senza amministratori l'archivio non ha più chi gestisce gli utenti.
-create or replace function public.profiles_ultimo_admin() returns trigger language plpgsql as $$
+create or replace function public.profiles_ultimo_admin() returns trigger language plpgsql set search_path = public as $$
 begin
   if old.role = 'admin' and old.active is not false
      and not exists (select 1 from public.profiles p
@@ -1382,7 +1404,7 @@ create trigger profiles_ultimo_admin before delete on public.profiles for each r
 --  - un'eliminazione si ferma con un errore: saltarla lascerebbe la lapide, e
 --    gli altri PC cancellerebbero una riga che il server ha ancora.
 -- Dal SQL Editor (auth.uid() nullo, current_user postgres) non vale.
-create or replace function public.officina_guardia() returns trigger language plpgsql as $$
+create or replace function public.officina_guardia() returns trigger language plpgsql set search_path = public as $$
 declare
   -- created_by: con ON CONFLICT la riga proposta passa prima dal trigger
   -- d'inserimento, che la attribuisce a chi invia; sync_stamp, dopo questo,
@@ -1428,6 +1450,102 @@ begin
   end loop;
 end $$;
 
+-- ─── Un indice per ogni chiave esterna (dalla 0.141.0) ──────
+-- Postgres indicizza la chiave primaria, non le chiavi esterne. Senza indice,
+-- cancellare un articolo o un documento scorre per intero ogni tabella che lo
+-- cita, e così le letture «le righe di questo ordine». Con poche centinaia di
+-- righe non si vede; con decine di migliaia di movimenti sì. Il ciclo li crea
+-- tutti, anche per le tabelle aggiunte in futuro, e solo dove non ci sono già
+-- (un indice che comincia con quelle colonne basta).
+do $$
+declare fk record; nome text;
+begin
+  for fk in
+    select c.conrelid::regclass as tab, c.conrelid as relid, c.conkey as cols,
+           (select string_agg(quote_ident(a.attname), ', ' order by k.ord)
+              from unnest(c.conkey) with ordinality k(attnum, ord)
+              join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum) as elenco,
+           (select string_agg(a.attname, '_' order by k.ord)
+              from unnest(c.conkey) with ordinality k(attnum, ord)
+              join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum) as suffisso,
+           (select relname from pg_class where oid = c.conrelid) as relname
+      from pg_constraint c join pg_namespace n on n.oid = c.connamespace
+     where c.contype = 'f' and n.nspname = 'public'
+  loop
+    continue when exists (select 1 from pg_index i
+                           where i.indrelid = fk.relid
+                             and (i.indkey::int2[])[0:array_length(fk.cols, 1) - 1] = fk.cols);
+    nome := left(fk.relname || '_' || fk.suffisso, 59) || '_fkx';
+    execute format('create index if not exists %I on %s (%s)', nome, fk.tab, fk.elenco);
+  end loop;
+end $$;
+
+-- ─── A8: niente anelli in distinta, anche fra due PC (dalla 0.141.0) ──
+-- createsCycle() li impedisce dentro un client, ma due colleghi possono
+-- chiuderne uno insieme senza che nessuno dei due lo veda: A mette B in C
+-- mentre B mette C in B. Il costo e l'esplosione ricorrono per tutti, ed è il
+-- vincolo la cui violazione rende l'app inutilizzabile all'intero team.
+--
+-- Un trigger di vincolo **differito**: le righe di distinta si riscrivono in
+-- blocco per padre (cancellate e reinserite nello stesso invio), quindi il
+-- controllo si fa alla fine della transazione, su quello che resta. Il
+-- lucchetto mette in fila i controlli di due invii contemporanei: il secondo
+-- guarda dopo che il primo è entrato, e lo vede. Figlio è ogni riga di distinta
+-- e ogni riga di ciclo che non è una fase (kind <> 'op'), come parentIndex()
+-- e il motore di costo nell'app.
+create or replace function public.distinta_senza_anelli() returns trigger
+language plpgsql set search_path = public as $$
+declare padre uuid; figlio uuid; tipo text; anello boolean;
+begin
+  if tg_table_name = 'item_cycle_rows' then
+    select r.item_id, r.child_item_id, r.kind into padre, figlio, tipo from public.item_cycle_rows r where r.id = new.id;
+    if tipo = 'op' then return null; end if;
+  else
+    select r.item_id, r.child_item_id into padre, figlio from public.item_components r where r.id = new.id;
+  end if;
+  -- La riga è già sparita (riscritta dallo stesso invio), o non ha un figlio.
+  if padre is null or figlio is null then return null; end if;
+  perform pg_advisory_xact_lock(hashtext('bomtrack-distinta'));
+  -- `union` e non `union all`: un nodo già visto non si riesplora, e la
+  -- discesa finisce anche se un anello ci fosse già.
+  with recursive giu(id) as (
+    select figlio
+    union
+    select c.child_item_id
+      from (select item_id, child_item_id from public.item_components
+            union all
+            select item_id, child_item_id from public.item_cycle_rows where kind is distinct from 'op') c
+      join giu on c.item_id = giu.id
+     where c.child_item_id is not null
+  )
+  select exists (select 1 from giu where id = padre) into anello;
+  if anello then
+    raise exception 'distinta_senza_anelli: «%» finirebbe dentro sé stesso attraverso «%»',
+      coalesce((select code from public.items where id = padre), padre::text),
+      coalesce((select code from public.items where id = figlio), figlio::text)
+      using errcode = '23514';
+  end if;
+  return null;
+end $$;
+do $$
+declare t text;
+begin
+  foreach t in array array['item_components', 'item_cycle_rows'] loop
+    execute format('drop trigger if exists distinta_senza_anelli on public.%I', t);
+    execute format('drop trigger if exists distinta_senza_anelli_mod on public.%I', t);
+    execute format('create constraint trigger distinta_senza_anelli after insert on public.%I
+                    deferrable initially deferred for each row execute function public.distinta_senza_anelli()', t);
+    -- Una modifica conta solo se cambia padre, figlio o tipo: l'invio riscrive
+    -- tutte le colonne, e senza questo filtro ogni quantità ritoccata
+    -- rifarebbe la discesa.
+    execute format('create constraint trigger distinta_senza_anelli_mod after update on public.%I
+                    deferrable initially deferred for each row
+                    when (old.item_id is distinct from new.item_id or old.child_item_id is distinct from new.child_item_id%s)
+                    execute function public.distinta_senza_anelli()', t,
+                   case when t = 'item_cycle_rows' then ' or old.kind is distinct from new.kind' else '' end);
+  end loop;
+end $$;
+
 -- RLS attiva ovunque: in Supabase una tabella senza RLS è leggibile da chiunque
 -- abbia la chiave pubblica. Le funzioni sono `security invoker`: push_changes()
 -- e pull_changes() rispettano queste policy senza bisogno di saperle.
@@ -1439,19 +1557,34 @@ begin
     execute format('drop policy if exists provvisoria_autenticati on public.%I', t);
     execute format('drop policy if exists lettura on public.%I', t);
     execute format('drop policy if exists scrittura on public.%I', t);
+    execute format('drop policy if exists inserimento on public.%I', t);
+    execute format('drop policy if exists modifica on public.%I', t);
+    execute format('drop policy if exists eliminazione on public.%I', t);
     -- `(select …)`: Postgres calcola la funzione una volta per interrogazione
     -- invece che una per riga. Su un archivio grande la differenza è fra un
     -- download che sta nei limiti di tempo di Supabase e uno che non ci sta.
     execute format('create policy lettura on public.%I for select to authenticated using ((select public.ruolo_attivo()) is not null)', t);
-    execute format('create policy scrittura on public.%I for all to authenticated using ((select public.puo_scrivere_tabella(%L))) with check ((select public.puo_scrivere_tabella(%L)))', t, t, t);
+    -- La scrittura in tre policy e non una `for all` (dalla 0.141.0): una
+    -- `for all` vale anche per la lettura, e Postgres valutava due policy per
+    -- ogni riga letta. Chi scrive una tabella la legge già con `lettura`.
+    execute format('create policy inserimento on public.%I for insert to authenticated with check ((select public.puo_scrivere_tabella(%L)))', t, t);
+    execute format('create policy modifica on public.%I for update to authenticated using ((select public.puo_scrivere_tabella(%L))) with check ((select public.puo_scrivere_tabella(%L)))', t, t, t);
+    execute format('create policy eliminazione on public.%I for delete to authenticated using ((select public.puo_scrivere_tabella(%L)))', t, t);
   end loop;
   -- Le lapidi, riga per riga (dalla 0.105.3): ne scrive una solo chi può
   -- scrivere la tabella a cui si riferisce. Con la regola generale l'officina
   -- poteva, dall'API, far sparire un articolo dagli archivi di tutti.
   drop policy if exists scrittura on public.sync_tombstones;
-  create policy scrittura on public.sync_tombstones for all to authenticated
+  drop policy if exists inserimento on public.sync_tombstones;
+  drop policy if exists modifica on public.sync_tombstones;
+  drop policy if exists eliminazione on public.sync_tombstones;
+  create policy inserimento on public.sync_tombstones for insert to authenticated
+    with check (public.puo_scrivere_tabella(tab) and deleted_at <= clock_timestamp() + interval '5 minutes');
+  create policy modifica on public.sync_tombstones for update to authenticated
     using (public.puo_scrivere_tabella(tab))
     with check (public.puo_scrivere_tabella(tab) and deleted_at <= clock_timestamp() + interval '5 minutes');
+  create policy eliminazione on public.sync_tombstones for delete to authenticated
+    using (public.puo_scrivere_tabella(tab));
   -- Il cestino, riga per riga (dalla 0.105.4): una voce la scrive solo chi può
   -- scrivere la tabella del record che contiene. Con la regola generale
   -- chiunque poteva, dall'API, mettere nel cestino un articolo inventato, e
@@ -1478,7 +1611,7 @@ begin
   -- Il proprio profilo, in aggiunta: vedi profiles_guardia.
   drop policy if exists se_stesso on public.profiles;
   create policy se_stesso on public.profiles for update to authenticated
-    using (id = auth.uid() and (select public.ruolo_attivo()) is not null) with check (id = auth.uid());
+    using (id = (select auth.uid()) and (select public.ruolo_attivo()) is not null) with check (id = (select auth.uid()));
   -- I registri si leggono, non si scrivono.
   foreach t in array array['sync_tables', 'role_areas', 'table_areas'] loop
     execute format('alter table public.%I enable row level security', t);
@@ -1541,6 +1674,10 @@ select public.profilo_crea(a.id, a.email, a.raw_user_meta_data->>'name')
 -- l'archivio è ancora vuoto, cioè se tocca a questo PC caricarlo.
 -- `security definer` perché un profilo sospeso non legge niente per policy;
 -- restituisce solo la propria riga e un sì/no, nient'altro.
+-- `schema_versione` (dalla 0.141.0): l'app la confronta con
+-- CLOUD_SCHEMA_VERSIONE (cloud.js) e, se il progetto è indietro, dice di
+-- rieseguire questo file prima che un invio fallisca. Si alza insieme a quella
+-- costante quando questo file cambia in un modo da cui l'app dipende.
 create or replace function public.archivio_stato() returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
@@ -1549,7 +1686,8 @@ language sql stable security definer set search_path = public as $$
     'vuoto', not (exists (select 1 from public.items) or exists (select 1 from public.suppliers)
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
-    'ora', public.pull_istante())
+    'ora', public.pull_istante(),
+    'schema_versione', 1)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 
@@ -1624,6 +1762,13 @@ create or replace function public.riserva_numeri(prefisso text, quanti int defau
 returns int[] language plpgsql security definer set search_path = public as $$
 declare usati int[]; alto int; presi int[] := '{}'; n int;
 begin
+  -- Solo chi scrive almeno una tabella numerata (dalla 0.141.0). Prima la
+  -- chiamava chiunque avesse l'indirizzo e la chiave pubblica, anche senza
+  -- accesso: ogni chiamata bruciava fino a 500 numeri e la serie saltava.
+  if not exists (select 1 from public.sync_tables s
+                  where public.colonna_numero(s.tab) is not null and public.puo_scrivere_tabella(s.tab)) then
+    raise exception 'il ruolo non scrive documenti numerati' using errcode = '42501';
+  end if;
   if quanti is null or quanti < 1 or quanti > 500 then raise exception 'quantità non valida: %', quanti; end if;
   -- Prima il lucchetto, poi i numeri usati (dalla 0.105.6). Letti prima, un
   -- documento arrivato mentre si aspettava il lucchetto non stava né fra gli
@@ -1663,6 +1808,11 @@ create or replace function public.libera_numeri(prefisso text, numeri int[])
 returns int language plpgsql security definer set search_path = public as $$
 declare usati int[]; n int;
 begin
+  -- Come riserva_numeri (dalla 0.141.0).
+  if not exists (select 1 from public.sync_tables s
+                  where public.colonna_numero(s.tab) is not null and public.puo_scrivere_tabella(s.tab)) then
+    raise exception 'il ruolo non scrive documenti numerati' using errcode = '42501';
+  end if;
   perform pg_advisory_xact_lock(hashtext('bomtrack-numeri:' || prefisso));   -- prima, come in riserva_numeri
   usati := array(select public.numeri_serie_usati(prefisso));
   with tolti as (
@@ -1849,3 +1999,28 @@ begin
 end $$;
 revoke execute on function public.pulizia_archivio() from public, anon;
 grant execute on function public.pulizia_archivio() to authenticated;
+
+-- ─── Chi esegue le funzioni (dalla 0.141.0) ─────────────────
+-- Postgres dà `execute` a PUBLIC su ogni funzione nuova, e Supabase anche ad
+-- `anon` in modo esplicito: senza questo blocco l'API lasciava chiamare
+-- riserva_numeri e le altre a chi aveva solo l'indirizzo e la chiave pubblica,
+-- che viaggiano nel link e nel QR di collegamento. Nessuna funzione di Bomtrack
+-- serve prima dell'accesso. Si toglie a tutti e si ridà ai soli autenticati;
+-- le due interne restano chiuse anche a loro. In fondo al file, così vale
+-- anche per le funzioni aggiunte sopra in futuro. test/schema-sql.test.js
+-- fallisce se `anon` può eseguirne una.
+do $$
+declare f record;
+begin
+  for f in select p.oid::regprocedure as firma, p.proname
+             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.prokind = 'f' loop
+    execute format('revoke execute on function %s from public, anon', f.firma);
+    if f.proname in ('profilo_crea', 'numeri_serie_usati') then
+      execute format('revoke execute on function %s from authenticated', f.firma);
+    else
+      execute format('grant execute on function %s to authenticated', f.firma);
+    end if;
+  end loop;
+end $$;
+alter default privileges in schema public revoke execute on functions from anon;

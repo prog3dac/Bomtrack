@@ -268,7 +268,7 @@ describe('Ogni variabile di colore ha un valore, non se stessa', () => {
 // colore. Le vie legittime sono due — una classe che il foglio di stile
 // conosce, oppure il contenitore `.modal-field`, che i suoi campi li veste tutti.
 describe('I campi data sono tutti vestiti', () => {
-  const FILES = ['views-catalog.js', 'views-docs.js', 'views-jobs.js', 'views-mrp.js',
+  const FILES = ['views-listino.js', 'views-catalog.js', 'views-cicli.js', 'views-docs.js', 'views-oda.js', 'views-jobs.js', 'views-mrp.js', 'views-mrp-documenti.js',
     'views-stock.js', 'views-bom.js', 'views-item.js', 'worklist.js', 'index.html', 'alternativi.js', 'varianti.js'];
   // Le classi che il foglio di stile disegna davvero, ricavate da style.css e
   // non elencate a mano: se una sparisce dal CSS, il campo che la usa risulta
@@ -335,7 +335,7 @@ describe('I campi data sono tutti vestiti', () => {
 // ricavano da style.css, non si elencano a mano: se domani ne nasce un'altra
 // con la stessa forma, la trova questo controllo invece dello schermo.
 describe('Nessun riquadro inline sborda sulle righe vicine', () => {
-  const VISTE = ['views-catalog.js', 'views-docs.js', 'views-jobs.js', 'views-mrp.js',
+  const VISTE = ['views-listino.js', 'views-catalog.js', 'views-cicli.js', 'views-docs.js', 'views-oda.js', 'views-jobs.js', 'views-mrp.js', 'views-mrp-documenti.js',
     'views-stock.js', 'views-bom.js', 'views-item.js', 'views-home.js', 'worklist.js', 'inspector.js', 'alternativi.js', 'varianti.js'];
 
   // I corpi di tutte le regole che nominano quella classe. Serve perché
@@ -396,7 +396,7 @@ describe('Nessun riquadro inline sborda sulle righe vicine', () => {
   it('i comandi di conto lavoro stanno su una riga propria, non dentro una nota', () => {
     // .line-note e' un blocco di testo, e ci finivano dentro due riquadri. La
     // riga delle azioni ha una classe sua, che le dispone in flex.
-    const s = fs.readFileSync(path.join(__dirname, '..', 'views-docs.js'), 'utf8');
+    const s = ['views-docs.js', 'views-oda.js'].map(f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
     const tutte = (s.match(/line-cl-actions/g) || []).length;
     assert.ok(tutte >= 2, 'le righe di comandi (ordine di lavoro e ordine d\'acquisto legacy)');
     assert.equal((s.match(/<div class="line-cl-actions">/g) || []).length, tutte,

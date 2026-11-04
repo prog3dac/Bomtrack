@@ -91,6 +91,43 @@ describe('Nomi globali', () => {
     assert.deepEqual(collisioni, [],
       'due dichiarazioni dello stesso nome nello stesso scope: vince quella caricata dopo, e non lo dice nessuno');
   });
+
+  // Il codice dimenticato (dalla 0.141.0). Una funzione che nessuno chiama è
+  // un pezzo rimasto a metà — il campo aggiunto e mai mostrato, l'export senza
+  // pulsante — o un avanzo di un lavoro rifatto altrove, che il prossimo che
+  // legge crede vivo. Conta chi la nomina nell'app, nella pagina e nei test:
+  // una funzione usata solo dai test è un'API provata, e resta. Le funzioni dei
+  // documenti si chiamano anche per prefisso (`${pfx}SetField`): per quelle
+  // basta che il resto del nome compaia dopo un `}`.
+  // La lunghezza (dalla 0.141.0). Senza moduli i file non si dividono da soli,
+  // e views-mrp.js era arrivato a 3.483 righe prima di essere diviso in due.
+  // Il limite non misura la qualità: dice quando è ora di dividere, per
+  // argomento, prima che un file diventi quello che nessuno legge per intero.
+  it('nessuno script supera le 3.000 righe', () => {
+    const lunghi = scriptDiIndex().map(f => [f, fs.readFileSync(path.join(ROOT, f), 'utf8').split('\n').length])
+      .filter(([, n]) => n > 3000).map(([f, n]) => `${f}: ${n}`);
+    assert.deepEqual(lunghi, [], 'dividilo per argomento in un file nuovo, caricato subito dopo (index.html, test/harness.js, sw.js)');
+  });
+
+  it('ogni funzione la chiama qualcuno', () => {
+    const testi = scriptDiIndex().map(f => fs.readFileSync(path.join(ROOT, f), 'utf8'))
+      .concat([fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')])
+      .concat(fs.readdirSync(__dirname).filter(f => f.endsWith('.js')).map(f => fs.readFileSync(path.join(__dirname, f), 'utf8')));
+    const tutto = testi.join('\n');
+    const conta = re => (tutto.match(re) || []).length;
+    const orfane = [];
+    scriptDiIndex().forEach(file => {
+      const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      for (const m of src.matchAll(/^(?:async\s+)?function\s+([A-Za-z0-9_$]+)/gm)) {
+        const nome = m[1];
+        if (conta(new RegExp('\\b' + nome.replace(/\$/g, '\\$') + '\\b', 'g')) > 1) continue;
+        const pfx = /^(?:rfq|ord|odl|doc)([A-Z][A-Za-z0-9_$]*)$/.exec(nome);
+        if (pfx && conta(new RegExp('\\}' + pfx[1] + '\\b', 'g'))) continue;
+        orfane.push(`${nome} (${file})`);
+      }
+    });
+    assert.deepEqual(orfane, [], 'funzioni che nessuno chiama: collegale a ciò che dovevano fare, o toglile');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════

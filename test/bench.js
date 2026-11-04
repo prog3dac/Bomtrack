@@ -111,3 +111,54 @@ console.log('\nRisalita "Dove è usato" su ogni articolo del catalogo\n');
 console.log('  ' + 'scansione (come prima)'.padEnd(24) + conScansione.toFixed(1).padStart(7) + ' ms');
 console.log('  ' + 'indice inverso'.padEnd(24) + conIndice.toFixed(1).padStart(7) + ' ms');
 console.log('\n  guadagno: ' + (conScansione / conIndice).toFixed(0) + 'x');
+
+// ─── Su grandi numeri (dalla 0.141.0) ───
+// Le misure sopra stanno su 700 articoli. Qui un archivio da officina di
+// qualche anno: 5.000 articoli, 15.000 movimenti, un piano su 20 macchine.
+// Si misurano le tre cose che si pagano a ogni gesto: il salvataggio (che
+// riscrive tutto l'archivio e confronta lo storico), il costo di tutto il
+// catalogo e il fabbisogno di un piano.
+function generaGrande() {
+  const N_FOGLIE = 3000, N_LIV = 5, N_PER = 400;
+  const items = [];
+  for (let i = 0; i < N_FOGLIE; i++) {
+    items.push(i % 2
+      ? { id: 'F' + i, code: 'F' + i, name: 'Foglia ' + i, type: 'materiale', uom: 'kg', unitCost: 1 + (i % 17) }
+      : { id: 'F' + i, code: 'F' + i, name: 'Foglia ' + i, type: 'acquistato', uom: 'pz', purchasePrice: 2 + (i % 23) });
+  }
+  let sotto = items.map(i => i.id);
+  for (let lv = 0; lv < N_LIV; lv++) {
+    const livello = [];
+    for (let k = 0; k < N_PER; k++) {
+      const id = 'A' + lv + '_' + k;
+      const components = [];
+      for (let c = 0; c < 6; c++) components.push({ itemId: sotto[(k * 6 + c * 11) % sotto.length], qty: 1 + (c % 3), scrapPct: c % 2 ? 5 : 0 });
+      items.push({ id, code: id, name: 'Assieme ' + id, type: lv === N_LIV - 1 ? 'macchina' : 'sottogruppo', uom: 'pz', components, operations: [] });
+      livello.push(id);
+    }
+    sotto = livello;
+  }
+  const movements = [];
+  for (let i = 0; i < 15000; i++) movements.push({ id: 'M' + i, itemId: 'F' + (i % N_FOGLIE), qty: 1 + (i % 9), type: 'carico', date: '2026-0' + (1 + i % 9) + '-15', note: '' });
+  const plan = { id: 'P1', number: 'FAB-2026-001', title: 'Piano grande', date: '2026-10-01', dueDate: '2026-12-15', active: true, notes: '',
+    lines: sotto.slice(0, 20).map((itemId, j) => ({ id: 'PL' + j, itemId, qty: 1 + (j % 4), dueDate: '2026-12-15' })) };
+  return { schemaVersion: 2, suppliers: [], rfqs: [], orders: [], users: [], families: [], workCenters: [], items, movements, plans: [plan],
+    settings: { overheadPct: 12, marginPct: 20, currency: '€', partSourcingDefault: 'make', uoms: [], uomDefault: 'pz', concepts: [], mpFamiliesSeeded: true, partFamiliesSeeded: true } };
+}
+const grande = loadApp({ silent: true });
+grande.setDb(generaGrande());
+grande.eval('Store.commit()');
+const tempo = (js, volte) => {
+  const t0 = process.hrtime.bigint();
+  for (let r = 0; r < volte; r++) grande.eval(js);
+  return Number(process.hrtime.bigint() - t0) / 1e6 / volte;
+};
+const nArt = grande.eval('db.items.length'), nMov = grande.eval('db.movements.length');
+const mb = grande.eval('JSON.stringify(db).length') / 1e6;
+const salva = tempo("db.items[0].name = 'x' + Math.random(); Store.commit()", 3);
+const costi = tempo('invalidateCaches(); db.items.forEach(i => costOf(i.id))', 2);
+const fabbisogno = tempo("invalidateCaches(); mrpBuyRows(db.plans[0], true)", 2);
+console.log(`\nSu grandi numeri: ${nArt.toLocaleString('it-IT')} articoli, ${nMov.toLocaleString('it-IT')} movimenti, archivio ${mb.toFixed(1)} MB\n`);
+console.log('  ' + 'un salvataggio'.padEnd(24) + salva.toFixed(1).padStart(7) + ' ms');
+console.log('  ' + 'costo di tutto'.padEnd(24) + costi.toFixed(1).padStart(7) + ' ms');
+console.log('  ' + 'fabbisogno del piano'.padEnd(24) + fabbisogno.toFixed(1).padStart(7) + ' ms');

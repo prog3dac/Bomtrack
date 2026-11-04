@@ -156,17 +156,11 @@ const QC_DESTINI = {
 function qcTutti() { return (db.inspections || []).filter(x => x && x.active !== false); }
 function qcGet(id) { return qcTutti().find(x => x.id === id) || null; }
 function qcAperti() { return qcTutti().filter(x => x.status === 'aperto'); }
-function qcDiArticolo(itemId) { return qcTutti().filter(x => x.itemId === itemId); }
 
-// Quanto di questo articolo è fermo in collaudo, **nell'unità di gestione**.
-// La riga di un ordine può essere nell'unità del fornitore (120 kg che a
-// magazzino sono 15 m): senza questa conversione la trattenuta sarebbe
-// sbagliata di un fattore, e il libero con lei.
-function qcInCollaudoDi(itemId) {
-  const it = typeof getItem === 'function' ? getItem(itemId) : null;
-  return qcAperti().filter(x => x.itemId === itemId)
-    .reduce((s, x) => s + qcQtaGestione(x, it), 0);
-}
+// La quantità di un collaudo **nell'unità di gestione**. La riga di un ordine
+// può essere nell'unità del fornitore (120 kg che a magazzino sono 15 m):
+// senza questa conversione la trattenuta sarebbe sbagliata di un fattore, e
+// il libero con lei.
 function qcQtaGestione(insp, it) {
   const q = Number(insp && insp.qty) || 0;
   const art = it || (typeof getItem === 'function' ? getItem(insp && insp.itemId) : null);

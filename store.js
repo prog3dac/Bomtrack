@@ -1490,6 +1490,27 @@ function migrateV2() {
 // impostazioni sono un oggetto, la versione dello schema è una che sappiamo
 // leggere. Il resto lo normalizza migrateDB(), che è fatto per dati vecchi ma
 // non per dati assurdi.
+// Gli identificativi finiscono dentro gli attributi `onclick` delle viste
+// (`onclick="apri('${id}')"`), e lì non passano da esc(). L'app li crea da sé
+// (UUID, o sigle brevi negli archivi più vecchi), ma un backup è un file che
+// si può aprire e modificare: un id con un apice o un `<` dentro diventava
+// codice eseguito al primo clic (dalla 0.141.0). Si guardano `id`, le chiavi
+// che finiscono in `Id` e gli elenchi in `Ids`, a ogni profondità.
+const ID_SICURO_RE = /^[^'"<>`\\\s&]{1,200}$/;
+function idNonSicuro(x, dove) {
+  if (Array.isArray(x)) {
+    for (let i = 0; i < x.length; i++) { const r = idNonSicuro(x[i], (dove || '') + '[' + i + ']'); if (r) return r; }
+    return '';
+  }
+  if (!x || typeof x !== 'object') return '';
+  for (const k of Object.keys(x)) {
+    const val = x[k], qui = dove ? dove + '.' + k : k;
+    if ((k === 'id' || /Id$/.test(k)) && typeof val === 'string' && val !== '' && !ID_SICURO_RE.test(val)) return qui;
+    if (/Ids$/.test(k) && Array.isArray(val) && val.some(v => typeof v === 'string' && v !== '' && !ID_SICURO_RE.test(v))) return qui;
+    if (val && typeof val === 'object') { const r = idNonSicuro(val, qui); if (r) return r; }
+  }
+  return '';
+}
 function validateSnapshot(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return 'il file non contiene un database Bomtrack';
   // Gli articoli sono l'unica collezione obbligatoria: un backup senza `items`
@@ -1502,6 +1523,8 @@ function validateSnapshot(data) {
   if (data.settings != null && (typeof data.settings !== 'object' || Array.isArray(data.settings))) {
     return 'le impostazioni sono danneggiate';
   }
+  const strano = idNonSicuro(data);
+  if (strano) return `un identificativo contiene caratteri non ammessi (${strano}): il file è danneggiato o è stato modificato a mano`;
   const v = data.schemaVersion;
   if (v != null && (typeof v !== 'number' || !isFinite(v) || v < 1)) return 'versione dello schema non leggibile';
   // Un file più recente dell'app va fermato: le migrazioni sanno salire, non

@@ -2,6 +2,14 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
+<!-- Content-Security-Policy (dalla 0.141.0). Gli script vengono solo da qui
+     (`'self'`, e `file:` per l'apertura con un doppio clic); niente plugin, niente
+     <base> e niente moduli che spediscono altrove. `'unsafe-inline'` resta perché
+     le viste usano gli attributi onclick: contro un testo che porta codice dentro
+     la difesa è esc() e il controllo degli id (store.js, idNonSicuro).
+     connect-src è `https:` e non solo supabase.co: un archivio condiviso può
+     stare su un Supabase installato in casa. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' file: data: https://fonts.gstatic.com; img-src 'self' file: data: blob:; media-src 'self' file: blob:; connect-src 'self' file: https: http://localhost:* http://127.0.0.1:*; worker-src 'self' file: blob:; frame-src 'self' file: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bomtrack — Distinte Base & Costificazione</title>
 <link rel="stylesheet" href="style.css">
@@ -519,7 +527,9 @@
 <script src="views-bom.js"></script>
 <script src="views-rev.js"></script>
 <script src="views-stock.js"></script>
+<script src="views-listino.js"></script>
 <script src="views-catalog.js"></script>
+<script src="views-cicli.js"></script>
 <script src="views-report.js"></script>
 <script src="views-jobs.js"></script>
 <script src="views-home.js"></script>
@@ -528,6 +538,7 @@
      Va prima di views-mrp.js, che ne disegna le colonne. -->
 <script src="produzione.js"></script>
 <script src="views-mrp.js"></script>
+<script src="views-mrp-documenti.js"></script>
 <!-- Modulo Alternativi: equivalenti, sostitutivi e le decisioni di piano.
      Dopo views-mrp.js, di cui usa l'esplosione e le righe d'acquisto. -->
 <script src="alternativi.js"></script>
@@ -549,6 +560,7 @@
 <script src="documenti.js"></script>
 <script src="views-item.js"></script>
 <script src="views-docs.js"></script>
+<script src="views-oda.js"></script>
 <script src="views-prod.js"></script>
 <script src="views-avanzamento.js"></script>
 <script src="views-manage.js"></script>
