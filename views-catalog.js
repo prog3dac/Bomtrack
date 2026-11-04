@@ -1433,6 +1433,7 @@ function itemModalBody(it, scope) {
       <div class="modal-grid" id="fld-barcode">
         ${itemTechTxt(it, 'it-barcode', 'barcode', 'Codice a barre / EAN', 'es. 8012345678901', false)}
       </div>
+      ${typeof qcItemCampiHtml === 'function' ? qcItemCampiHtml(it) : ''}
     </div>`;
   const tec = `<div class="modal-field" id="fld-sourcing"><label>Approvvigionamento</label>
       <select id="it-sourcing">${partSourcingOptions(it ? partSourcingScritto(it) : defaultPartSourcing())}</select></div>
@@ -2433,6 +2434,7 @@ function readItemForm(it) {
     // Vuota: il campo sparisce, come la modalità lotto senza lotto.
     const ub = ubicazioneNorm(val('it-loc'));
     if (ub) it.location = ub; else delete it.location;
+    if (typeof qcItemLeggiCampi === 'function') qcItemLeggiCampi(it);
   }
   // Doppia unità di misura. Le due voci vanno insieme: un'unità senza fattore
   // non converte niente, un fattore senza unità non si applica a niente.

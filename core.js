@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.139.0';
+const APP_VERSION = '0.140.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -709,6 +709,12 @@ const MODULI = {
     descr: 'Le fasi interne degli ordini di produzione in fila sui centri, per data di consegna, senza superare le ore che ogni centro lavora e fuori dai fermi. Ogni ordine ha la sua data fattibile accanto a quella richiesta; il Carico centri mostra la coda. Propone, non cambia le date.',
     area: 'produzione',
   },
+  // Dalla 0.140.0: il collaudo della merce in entrata (qualita.js).
+  qualita: {
+    nome: 'Qualità',
+    descr: 'Il controllo della merce che arriva. Gli articoli (o le famiglie) che lo chiedono aprono un collaudo a ogni ricevimento e a ogni rientro dal terzista: fino all\'esito quella quantità è a scaffale ma non è libera, e il Magazzino la mostra nella colonna «In collaudo». Respinta, torna al fornitore e la riga d\'ordine torna ad avere un residuo.',
+    area: 'magazzino',
+  },
   // Dalla 0.126.0: le macchine dei centri, con tariffa e manutenzione proprie (macchine.js).
   macchine: {
     nome: 'Macchine utensili',
@@ -742,7 +748,7 @@ const AREE = {
     nome: 'Magazzino',
     descr: 'Giacenze, movimenti, rettifiche, inventario, scorte minime ed etichette QR di magazzino. Spento, le giacenze non si vedono ma i ricevimenti restano sugli ordini: riaccendendo, il magazzino è già al suo posto.',
     // Il cruscotto è quasi tutto magazzino: valore, fermi, sotto scorta.
-    viste: ['stock', 'dash'],
+    viste: ['stock', 'dash', 'collaudi'],
   },
   pianificazione: {
     nome: 'Pianificazione',
@@ -806,10 +812,10 @@ function roleGuardRuolo(area) {
 // Area di scrittura corrispondente a ciascuna vista (per il banner di sola lettura)
 // `load` (Carico centri) è null come `report`: è un prospetto derivato, in sola
 // lettura, da cui non si scrive niente.
-const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', manage: 'manage' };
+const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', collaudi: 'docs', manage: 'manage' };
 // Le viste in cui l'officina lavora pur senza l'area della vista: lì non va in
 // sola lettura, e le guardie dei singoli gesti fanno il resto.
-const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione']);
+const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione', 'collaudi']);
 
 // Le due viste di anagrafica: ciò che si compra e ciò che si progetta.
 // Ogni vista ha i suoi filtri (prefisso degli id nella pagina) e la creazione
@@ -1106,8 +1112,12 @@ const SERIE_DOCUMENTI = {
   RFQ: () => db.rfqs || [], ODA: () => db.orders || [], ODL: () => db.workOrders || [],
   ODP: () => db.prodOrders || [], FAB: () => db.plans || [], COM: () => db.jobs || [],
   MT: () => (db.revisions || []).map(r => ({ id: r.id, number: r.ecoNumber })),   // le modifiche tecniche
+  // I collaudi (modulo Qualità). Il numero non lo riserva il server: un
+  // collaudo non esce dall'azienda, e il Controllo dati scopre il doppione
+  // come per le altre serie.
+  COL: () => db.inspections || [],
 };
-const SERIE_COLLEZIONE = { RFQ: 'rfqs', ODA: 'orders', ODL: 'workOrders', ODP: 'prodOrders', FAB: 'plans', COM: 'jobs', MT: 'revisions' };
+const SERIE_COLLEZIONE = { RFQ: 'rfqs', ODA: 'orders', ODL: 'workOrders', ODP: 'prodOrders', FAB: 'plans', COM: 'jobs', MT: 'revisions', COL: 'inspections' };
 function seriePrefisso(sigla) { return `${sigla}-${new Date().getFullYear()}-`; }
 function serieMassimo(prefisso, lista) {
   return (lista || []).reduce((m, d) => {

@@ -130,7 +130,7 @@ create table if not exists public.machines (
 
 create table if not exists public.families (
   id uuid primary key,
-  name text, kind text, sigla text, child_sets text,
+  name text, kind text, sigla text, child_sets text, qc text, qc_cert text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -138,7 +138,7 @@ create table if not exists public.families (
 create table if not exists public.sub_families (
   id uuid primary key,
   family_id uuid not null references public.families(id) on delete cascade deferrable initially deferred,
-  name text, sigla text,
+  name text, sigla text, qc text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -180,6 +180,7 @@ create table if not exists public.items (
   manufacturer text, manufacturer_code text, material text, finish text, treatment text,
   gross_weight_kg numeric, barcode text, drawing_ref text,
   child_sets text,
+  qc text, qc_cert text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -628,6 +629,31 @@ alter table public.production_time_logs add column if not exists machine_id uuid
 alter table public.maintenance_plans add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 alter table public.maintenance_events add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 
+-- 0.140.0, modulo Qualità: il collaudo della merce in entrata. Nasce dal
+-- ricevimento di un ordine fornitore o dal rientro dall'ultima fase di un
+-- ordine di lavoro, e finché è aperto quella quantità non è merce libera.
+-- Collezione radice: vive più a lungo della riga che l'ha fatto nascere, e
+-- `order_id` può puntare a un ordine o a un ordine di lavoro (lo dice
+-- `source`), quindi niente chiave esterna — come per i movimenti.
+create table if not exists public.inspections (
+  id uuid primary key,
+  number text, source text, order_id uuid, line_id uuid,
+  item_id uuid references public.items(id) deferrable initially deferred,
+  supplier_id uuid references public.suppliers(id) deferrable initially deferred,
+  qty numeric, uom text, date date,
+  ddt text, supplier_lot text, cert text,
+  status text, esito text, qty_ok numeric, qty_ko numeric, destino text, note text,
+  closed_at timestamptz, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- 0.140.0: il controllo in entrata su articoli e famiglie, per i database già creati.
+alter table public.items add column if not exists qc text;
+alter table public.items add column if not exists qc_cert text;
+alter table public.families add column if not exists qc text;
+alter table public.families add column if not exists qc_cert text;
+alter table public.sub_families add column if not exists qc text;
+
 create table if not exists public.trash (
   id uuid primary key,
   coll text, deleted_at timestamptz, deleted_by uuid, record jsonb,
@@ -681,6 +707,7 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('maintenance_plans', null, null, 'root'),
   ('maintenance_events', null, null, 'root'),
   ('machines', null, null, 'root'),
+  ('inspections', null, null, 'root'),
   ('trash', null, null, 'root')
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
 
@@ -1205,6 +1232,10 @@ select t, a from (values
   ('maintenance_plans', 'manage'),
   -- Le macchine sono anagrafica dei centri, come i centri.
   ('machines', 'manage'),
+  -- Modulo Qualità: il collaudo lo registra chi sta in magazzino davanti alla
+  -- merce (`shop`) o chi scrive i documenti (`docs`). Un esito respinto
+  -- riscrive il ricevuto di un ordine, cioè tabelle che entrambi già toccano.
+  ('inspections', 'shop'), ('inspections', 'docs'),
   -- Il cestino e le lapidi li scrive chiunque elimini qualcosa, in qualunque area.
   ('trash', 'catalog'), ('trash', 'bom'), ('trash', 'docs'), ('trash', 'manage'), ('trash', 'agenda'), ('trash', 'shop'),
   ('sync_tombstones', 'catalog'), ('sync_tombstones', 'bom'), ('sync_tombstones', 'docs'),
@@ -1237,7 +1268,7 @@ language sql immutable set search_path = public as $$
     ('workOrders', 'work_orders'), ('plans', 'production_plans'), ('prodOrders', 'production_orders'),
     ('prodDecls', 'production_declarations'), ('jobs', 'jobs'), ('reminders', 'reminders'),
     ('timeLogs', 'production_time_logs'), ('maintPlans', 'maintenance_plans'), ('maintEvents', 'maintenance_events'),
-    ('machines', 'machines'),
+    ('machines', 'machines'), ('inspections', 'inspections'),
     ('trash', 'trash'), ('users', 'profiles')
   ) v(k, t) where k = c
 $$;
@@ -1518,6 +1549,7 @@ begin
   tab := case split_part(prefisso, '-', 1)
     when 'RFQ' then 'rfqs' when 'ODA' then 'orders' when 'ODL' then 'work_orders'
     when 'ODP' then 'production_orders' when 'FAB' then 'production_plans' when 'COM' then 'jobs'
+    when 'COL' then 'inspections'
     when 'MT' then 'item_revisions' end;
   if tab = 'item_revisions' then col := 'eco_number'; end if;   -- le modifiche tecniche MT-…
   if tab is null or prefisso !~ '^[A-Z]{2,3}-[0-9]{4}-$' then

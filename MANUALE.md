@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.139.0**
+**Versione dell'app documentata: 0.140.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -88,7 +88,9 @@ in un'officina meccanica:
 - i **cicli di lavorazione** delle parti, con le fasi interne e quelle affidate fuori;
 - il **fabbisogno materiali** che nasce dalle commesse dei clienti;
 - il ciclo acquisti completo: **richieste di offerta**, **ordini a fornitore**,
-  **ordini di lavoro** al terzista, ricevimenti e **conto lavoro**.
+  **ordini di lavoro** al terzista, ricevimenti e **conto lavoro**;
+- il **collaudo della merce in entrata**, per chi lo accende: quello che arriva non si usa finché
+  qualcuno non l'ha guardato (→ [cap. 17](#17-magazzino)).
 
 È pensata per chi progetta, chi compra e chi manda in produzione, e tiene queste tre viste sullo
 stesso archivio: la parte che il progettista disegna è la stessa che l'ufficio acquisti ordina ed
@@ -1743,6 +1745,80 @@ movimenti. Quando si scrive *ricevuto 50* su una riga d'ordine, quei 50 entrano 
 > ⚠️ **Cancellare un ordine già ricevuto toglie la sua merce dal magazzino.** È coerente, ma chi
 > cancella un ordine vecchio va avvisato.
 
+### Il collaudo della merce in entrata (modulo, dalla 0.140.0)
+
+**A cosa serve.** A non montare materiale che nessuno ha guardato. Con il modulo **Qualità**
+acceso (*Gestione → Aree e moduli*), un articolo può chiedere il **controllo in entrata**: da quel
+momento, ogni volta che ne arriva — il ricevimento di un ordine fornitore, o i pezzi che rientrano
+dall'ultima fase di un ordine di lavoro — nasce da solo un **collaudo**, e quella quantità resta
+**in collaudo** finché qualcuno non registra l'esito.
+
+**Dove si accende il controllo.** Nella scheda articolo, sottoscheda *Magazzino*, il campo
+**Si collauda all'arrivo**: *sì*, *no*, oppure *come la famiglia*, che è il valore di serie. La
+regola vera è quasi sempre di categoria — tutti i cuscinetti sì, tutta la bulloneria no — e si
+scrive una volta sola sulla **macrofamiglia** (*Gestione → Famiglie*, casella *Controllo in
+entrata*). Una **sottofamiglia** può scostarsene, e un articolo vince su tutti. Accanto c'è il
+**certificato richiesto** (un testo: `3.1 EN 10204`, `Dichiarazione di conformità`), che compare
+sulla scheda del collaudo per ricordare che va chiesto.
+
+**Cosa cambia a magazzino.** La merce in collaudo **resta nell'esistente**: è a scaffale, ed è
+stata pagata. Quello che cambia è il **libero**, che è già la colonna che dice di quanto si può
+davvero disporre: da lì il collaudo si sottrae, esattamente come l'impegnato. Nel Magazzino
+compare la colonna **In collaudo** (nascosta di serie: si accende da *Colonne*), c'è il filtro di
+stato *In collaudo*, e l'etichetta QR dell'articolo lo dice con il pulsante **Collauda** —
+perché è davanti al bancale, col telefono in mano, che il controllo si fa davvero.
+
+> **Il fabbisogno continua a contarla.** È merce arrivata: ricomprarla perché aspetta un esito
+> sarebbe peggio del male che si vuole curare.
+
+**La scheda del collaudo.** *Magazzino → Collaudi*, l'elenco a destra e la scheda al centro come
+negli ordini. In alto l'arrivo (articolo, fornitore, documento d'origine, quantità e data) con due
+campi da compilare mentre la merce è lì: il **DDT del fornitore** e il **lotto o colata**. Sotto,
+l'esito.
+
+**I tre esiti.**
+
+| Esito | Cosa succede |
+|---|---|
+| **Accettato** | La quantità diventa merce libera, e basta |
+| **Accettato in deroga** | Come sopra, ma resta scritto che è passata con riserva |
+| **Respinto** (tutto o in parte) | La merce torna indietro — vedi qui sotto |
+
+**Il respinto torna indietro per la strada da cui è venuto**, e non inventa movimenti nuovi:
+
+- **da un ordine fornitore**, il **ricevuto della riga scende**. È la stessa correzione che si
+  farebbe a mano scrivendo un numero più basso nella colonna *Ricevuto*: la giacenza cala, la riga
+  torna ad avere un residuo, l'ordine torna *Parziale*, la merce torna *in arrivo* e il fabbisogno
+  la aspetta di nuovo;
+- **da un ordine di lavoro**, i pezzi **escono verso il terzista** con un'uscita a conto lavoro, e
+  l'ordine torna ad aspettarli. Da lì in poi il prospetto *Presso terzi* li racconta come prima;
+- **tenuta e rottamata** è la terza scelta: la merce non torna a nessuno ed esce come consumo. Il
+  ricevuto resta — il fornitore ha consegnato — ma a scaffale non c'è più niente.
+
+Prima di premere, la scheda dice a parole che cosa succederà: «*30 pz diventano liberi; 10 pz
+tolgono il ricevuto dalla riga d'ordine…*». **Un esito non si corregge**: la merce si è già mossa,
+e quello che è tornato indietro si rivede sul documento d'origine.
+
+**Chi lo registra.** *Officina e magazzino* (è chi sta davanti alla merce), *Ufficio acquisti* e
+l'amministratore. I collaudi da fare compaiono nel **Riepilogo**.
+
+**Da sapere.**
+
+- Un ricevuto corretto **in giù** non apre un collaudo: non è arrivato niente di nuovo.
+- Due arrivi sulla stessa riga aprono **due collaudi**: sono due lotti, e si guardano separatamente.
+- La quantità del collaudo è nell'**unità della riga d'ordine** (il fornitore consegna chili), la
+  trattenuta sul libero è in quella **di gestione** (il magazzino conta metri).
+- Eliminando l'ordine, i suoi collaudi aperti **si chiudono**: quella merce non c'è più, e tenere
+  trattenuto un libero che non esiste non servirebbe a nessuno.
+- Spegnendo il modulo l'app torna esattamente quella di prima: i collaudi scritti **restano**, e
+  nessuna trattenuta vale più. Riaccendendolo tornano a valere.
+- Con l'archivio condiviso va rilanciato `supabase/schema.sql`: aggiunge la tabella `inspections` e
+  le colonne del controllo su articoli e famiglie, senza toccare il resto.
+
+Quello che questa versione **non** fa ancora: i piani di controllo con le caratteristiche da
+misurare e il campionamento, le non conformità con le azioni correttive e la valutazione dei
+fornitori. Sono i passi successivi del modulo.
+
 ### Le etichette QR
 
 Ogni articolo può avere un'etichetta con un **codice QR** da attaccare allo scaffale o al
@@ -3277,6 +3353,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Officina: terminale di reparto e manutenzione (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Capacità finita (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
+| Qualità: collaudo della merce in entrata (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
@@ -4422,6 +4499,7 @@ timestamp). Le migrazioni sono **idempotenti**: un backup vecchio si auto-migra 
 | `prodDecls` | Le dichiarazioni di avanzamento: eventi, non stato | — |
 | `plans` | I piani di fabbisogno | `lines` |
 | `jobs` | Le commesse | — |
+| `inspections` | **I collaudi** della merce in entrata (modulo Qualità): da quale arrivo vengono, la quantità trattenuta e l'esito | — |
 | `users` | Gli utenti (con `passwordHash` e `passwordSalt`) | — |
 | `trash` | Il cestino | — |
 
@@ -4465,6 +4543,7 @@ fasi, `kind: 'op'`, con `workCenterId`, `supplierId`, `costMode`, `hours`, `oper
 | `views-prod.js` | Ordini di produzione: fasi congelate, avanzamento, movimenti |
 | `views-manage.js` | Gestione |
 | `produzione.js` | Avanzamento di produzione |
+| `qualita.js` | Modulo Qualità: collaudo della merce in entrata, la trattenuta sul libero, gli esiti |
 | `allegati.js` · `archivio.js` | Allegati e documenti degli articoli · la cartella d'archivio (scelta, permesso, lettura, copia, verifica) |
 | `documenti.js` | Le copie dei documenti emessi nella cartella d'archivio: quando si archiviano, le revisioni, la sezione in scheda e la verifica |
 | `export-lists.js` · `import-catalog.js` · `import-export.js` | Export elenchi · import articoli · import distinte, backup, avvio |

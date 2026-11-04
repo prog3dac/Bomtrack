@@ -354,8 +354,11 @@ function qrSchedaHtml(tipo, rec) {
         ${kpi('Esistente', fmtUom(s.onHand, u), safetyStockOf(it) > 0 && s.onHand < safetyStockOf(it) ? 'orange' : '')}
         ${kpi('In arrivo', fmtUom(s.incoming, u), 'accent')}
         ${kpi('Impegnato', fmtUom(imp, u), imp > 0 ? 'orange' : '')}
-        ${kpi('Libero', fmtUom(s.onHand + s.incoming - imp, u), s.onHand + s.incoming - imp < 0 ? 'red' : '')}
+        ${(Number(s.inQC) || 0) > 0.000001 ? kpi('In collaudo', fmtUom(s.inQC, u), 'purple') : ''}
+        ${kpi('Libero', fmtUom(s.onHand + s.incoming - imp - (Number(s.inQC) || 0), u), s.onHand + s.incoming - imp - (Number(s.inQC) || 0) < 0 ? 'red' : '')}
       </div>`;
+      // Davanti al bancale, con il telefono in mano: è lì che il collaudo si fa.
+      if ((Number(s.inQC) || 0) > 0.000001) bottoni.unshift(qrBtn('Collauda', 'search', `closeModal();setView('collaudi')`, true));
       if (canWriteShop('catalog')) bottoni.unshift(qrBtn('Rettifica giacenza', 'scale', `stockAdjustModal('${it.id}')`, true));
       bottoni.push(qrBtn(`Movimenti (${s.nMov})`, 'clock', `stockMovementsModal('${it.id}')`));
     } else if (hasStock(it)) {

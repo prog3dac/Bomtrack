@@ -60,6 +60,9 @@ const COLUMNS = {
     { key: 'uom', label: 'U.M.' },
     { key: 'location', label: 'Ubicazione' },
     { key: 'onhand', label: 'Esistente' },
+    // Modulo Qualità: nascosta finché non serve, come le altre colonne che non
+    // tutti usano. Accesa, dice quanta merce aspetta un esito.
+    { key: 'inqc', label: 'In collaudo', defaultHidden: true },
     { key: 'incoming', label: 'In arrivo' },
     { key: 'committed', label: 'Impegnato' },
     { key: 'free', label: 'Libero' },

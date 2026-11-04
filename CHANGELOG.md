@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.140.0 — 2026-11-04
+
+**Modulo Qualità: il collaudo della merce in entrata.** Spento di serie, si accende in *Gestione → Aree e moduli* (area Magazzino). Un articolo — o la sua famiglia — può chiedere il **controllo in entrata**: da quel momento ogni ricevimento di un ordine fornitore, e ogni rientro dall'ultima fase di un ordine di lavoro, apre da solo un **collaudo**.
+
+**La merce in collaudo è a scaffale ma non è libera.** Resta nell'esistente — è stata pagata e sullo scaffale c'è — e si sottrae dal **libero**, come l'impegnato. Nel Magazzino arrivano la colonna *In collaudo* (nascosta di serie), il filtro di stato *In collaudo* e, sull'etichetta QR dell'articolo, il pulsante **Collauda**. Il fabbisogno continua a contarla: è merce arrivata, e ricomprarla sarebbe peggio del male che si cura.
+
+**Tre esiti, in *Magazzino → Collaudi*.** *Accettato* libera la quantità; *accettato in deroga* la libera lasciando scritto che è passata con riserva; *respinto* (tutto o in parte) rimanda la merce indietro per la strada da cui è venuta — su un ordine fornitore **scende il ricevuto** (la riga torna ad avere un residuo, l'ordine torna *Parziale*, il fabbisogno la aspetta di nuovo), su un ordine di lavoro i pezzi **escono verso il terzista**, e la terza scelta è tenerla e rottamarla, che la fa uscire come consumo. Prima di registrare, la scheda dice a parole che cosa succederà. Un esito non si corregge. Lo registrano *Officina e magazzino*, *Ufficio acquisti* e l'amministratore; i collaudi da fare compaiono nel Riepilogo.
+
+Spegnendo il modulo l'app torna quella di prima: i collaudi restano scritti e nessuna trattenuta vale più.
+
+`supabase/schema.sql`: nuova tabella `inspections`, colonne `qc`/`qc_cert` su `items` e `families` e `qc` su `sub_families`. Va eseguito prima di usare il modulo con l'archivio condiviso.
+
 ### 0.139.0 — 2026-11-04
 
 **La scheda articolo è divisa in sottoschede.** Creando o modificando un articolo, i campi stanno ora in quattro sottoschede per argomento, scelte da una barra verticale a sinistra (al telefono, una fila di pulsanti in alto):

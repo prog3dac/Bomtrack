@@ -133,8 +133,11 @@ function printSubtitle() {
 function printHeadFill() {
   const el = document.getElementById('print-head'); if (!el) return;
   const g = groupOfView(activeView);
-  // "Tecnico › Visualizza DB": sul foglio stampato deve leggersi da dove viene
-  const sezione = g ? g.label + (g.views.length > 1 ? ' › ' + viewLabel(activeView) : '') : '';
+  // "Tecnico › Visualizza DB": sul foglio stampato deve leggersi da dove viene.
+  // Le voci sono quelle **accese** (navVoci), le stesse della seconda riga:
+  // con un modulo spento il gruppo torna a una voce sola, e ripeterne il nome
+  // («Magazzino › Magazzino») non direbbe niente a nessuno.
+  const sezione = g ? g.label + (navVoci(g).length > 1 ? ' › ' + viewLabel(activeView) : '') : '';
   const co = (db.settings && db.settings.company && db.settings.company.name) || 'Bomtrack';
   const sub = printSubtitle();
   el.innerHTML = `<div class="print-title">${esc(co)} — ${esc(sezione)}</div>
@@ -276,7 +279,9 @@ const NAV = [
   // Il magazzino non conosce la divisione fra acquisti e progetto: commerciali,
   // materie prime e parti stanno sullo stesso scaffale.
   { id: 'stock', icon: 'package', label: 'Magazzino', views: [
-    { id: 'stock', label: 'Magazzino' }] },
+    { id: 'stock', label: 'Magazzino' },
+    // Modulo Qualità (0.140.0): la merce che aspetta un esito.
+    { id: 'collaudi', label: 'Collaudi', modulo: 'qualita' }] },
   { id: 'manage', icon: 'settings', label: 'Gestione', views: [
     { id: 'manage', label: 'Gestione' }] },
 ];
@@ -462,6 +467,7 @@ function setView(v) {
   if (v === 'bom') renderBom();
   else if (v === 'buy' || v === 'design') renderCatalog(v);
   else if (v === 'stock') renderStock();
+  else if (v === 'collaudi') renderCollaudi();
   else if (v === 'cycles') renderCycles();
   else if (v === 'varianti') renderVarianti();
   else if (v === 'reparto') renderReparto();

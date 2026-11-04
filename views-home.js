@@ -133,6 +133,18 @@ function homeSegnali() {
     `itemInfoModal('${it.id}')`)),
   'articolo sotto la scorta minima', 'articoli sotto la scorta minima', 'stock', 'media');
 
+  // Merce arrivata che aspetta un esito (modulo Qualità). Non è un problema:
+  // è lavoro da fare, ed è la ragione per cui quella merce non si può ancora
+  // usare. Finché resta lì, il montaggio che la aspetta è fermo.
+  if (typeof qcAperti === 'function' && typeof qcAttivo === 'function' && qcAttivo()) {
+    const daFare = qcAperti();
+    agg(daFare.map(x => {
+      const it = getItem(x.itemId);
+      return voce(x.number, `${it ? it.code + ' — ' + it.name : '(articolo eliminato)'} · ${fmtQtyIt(x.qty)} ${x.uom || ''} da ${supplierName(x.supplierId) || 'fornitore'}`.trim(),
+        `qcApriDaAltrove('${x.id}')`);
+    }), 'collaudo da fare', 'collaudi da fare', 'collaudi', 'media');
+  }
+
   // Articoli che si comprano e non hanno un prezzo: in un ordine varrebbero zero
   const senzaPrezzo = (db.items || []).filter(it => !it.obsolete && hasPriceList(it) && costField(it) && !(Number(it[costField(it)]) > 0));
   agg(senzaPrezzo.map(it => voce(it.code, `${it.name} — ${typeLabel(it.type)}`, `itemInfoModal('${it.id}')`)),

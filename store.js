@@ -392,6 +392,10 @@ const SCHEMA = {
   // `received` resta sulla riga come **lettura**, ricavata da qui
   // (riallineaRicevuti), e non si invia: vedi `derived`.
   receipts: { table: 'order_receipts' },
+  // Modulo Qualità (0.140.0): i collaudi della merce in entrata. Collezione
+  // radice e non figlia dell'ordine: un collaudo nasce anche dal rientro di un
+  // ordine di lavoro, e vive più a lungo della riga che lo ha fatto nascere.
+  inspections: { table: 'inspections' },
   // Allegati: **solo i dati**. I byte dei file stanno in IndexedDB (allegati.js)
   // e non passano né da qui né dal backup JSON — un disegno pesa più di tutto il
   // database, e localStorage non li reggerebbe. Il record dice che il file
@@ -550,6 +554,9 @@ const REFS = {
   // `orderId` e `lineId` restano fuori: REFS non ha una destinazione 'order',
   // e gli ordini non sono mai stati rimappati. Va scritto, non lasciato muto.
   movements: { fields: { itemId: 'item', supplierId: 'supplier', fromSupplierId: 'supplier' } },
+  // `orderId` e `lineId` restano fuori come nei movimenti: REFS non ha una
+  // destinazione 'order'.
+  inspections: { fields: { itemId: 'item', supplierId: 'supplier' } },
   // `docId` resta fuori, come `orderId` sulle righe di movimento e per la stessa
   // ragione: REFS è la mappa degli id **legacy** da riscrivere nella migrazione
   // v2, e non ha (né avrebbe senso che avesse) una destinazione
@@ -883,6 +890,7 @@ function migrateDB() {
   if (!db.maintPlans) db.maintPlans = []; // piani di manutenzione
   if (!db.maintEvents) db.maintEvents = []; // interventi di manutenzione
   if (!db.machines) db.machines = [];       // macchine utensili dei centri
+  if (!db.inspections) db.inspections = []; // collaudi della merce in entrata
   // Cestino: le eliminazioni recenti, recuperabili. Si svuota da solo passata
   // la finestra di ripristino, altrimenti crescerebbe finché lo spazio del
   // browser non finisce — e a quel punto il rimedio sarebbe peggio del male.

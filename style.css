@@ -1599,3 +1599,18 @@ select.combo-nascosto{display:none!important}
 .cl-qr-testo .cl-nota{margin:0 0 4px}
 @media (max-width:520px){.cl-qr{flex-direction:column;align-items:center;text-align:center}.cl-qr-testo{align-items:center}}
 .login-note a{color:var(--accent)}
+
+/* ─── Modulo Qualità (0.140.0) ─── */
+/* La scheda di collaudo riusa i riquadri della Gestione: stessa carta, stesso
+   titolino in maiuscoletto delle sezioni di Gestione, perché è la stessa cosa
+   — un blocco di campi con un nome sopra. */
+.qc-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:14px}
+.qc-card h3{margin:0 0 12px;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+.qc-val{font-size:14px;padding:6px 0}
+.qc-hint{text-align:left;padding:8px 0 0;line-height:1.5}
+/* L'etichetta sulla riga di un ordine: dice in una riga se quella merce è
+   ancora ferma. Tre colori, gli stessi degli stati dei documenti. */
+.qc-line-tag{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.qc-line-tag.qc-open{color:var(--accent);background:var(--accent-soft)}
+.qc-line-tag.qc-ok{color:var(--green);background:var(--green-soft)}
+.qc-line-tag.qc-ko{color:var(--red);background:var(--red-soft)}
