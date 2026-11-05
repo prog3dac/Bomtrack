@@ -152,6 +152,26 @@ function homeSegnali() {
           `ncApriDaAltrove('${x.id}')`);
       }), 'non conformità scaduta', 'non conformità scadute', 'nc', 'alta');
     }
+    // Le NC aperte che non sono ancora scadute (dalla 0.142.0): quelle scadute
+    // stanno già sopra, e due volte la stessa NC confonderebbe.
+    if (typeof ncAperte === 'function' && typeof ncScaduta === 'function') {
+      const g = oggiISO();
+      agg(ncAperte().filter(x => !ncScaduta(x, g)).map(x => {
+        const it = x.itemId ? getItem(x.itemId) : null;
+        return voce(x.number, `${it ? it.code + ' — ' + it.name : (x.description || '')}${x.dueDate ? ' — entro ' + fmtDateIt(x.dueDate) : ''}`,
+          `ncApriDaAltrove('${x.id}')`);
+      }), 'non conformità aperta', 'non conformità aperte', 'nc', 'info');
+      // Le azioni da fare entro una settimana, con chi le deve fare: quelle
+      // già oltre la data fanno scadere la loro NC, e si vedono lì.
+      const fra7 = ncScadenzaDa(g, 7);
+      const azioni = [];
+      ncAperte().forEach(x => (x.actions || []).forEach(a => {
+        if (!a.done && a.due && a.due >= g && a.due <= fra7) azioni.push({ x, a });
+      }));
+      azioni.sort((p, q) => String(p.a.due).localeCompare(String(q.a.due)));
+      agg(azioni.map(({ x, a }) => voce(x.number, `${a.who || 'chi?'} — ${a.text || '(azione senza testo)'} — entro ${fmtDateIt(a.due)}`,
+        `ncApriDaAltrove('${x.id}')`)), 'azione di NC da fare entro 7 giorni', 'azioni di NC da fare entro 7 giorni', 'nc', 'media');
+    }
     // Articoli da collaudare che nessun piano copre (dalla 0.142.0): il
     // collaudo nascerebbe senza dire che cosa misurare. Solo se un piano
     // esiste già: chi i piani non li usa non deve sentirselo dire ogni giorno.

@@ -183,6 +183,29 @@ describe('I codici del piano', () => {
   });
 });
 
+describe('Il Riepilogo e le non conformità', () => {
+  it('le NC aperte e le azioni della settimana, senza ripetere le scadute', () => {
+    const a = app();
+    const g = a.eval('oggiISO()');
+    const fra = n => a.eval(`ncScadenzaDa("${g}", ${n})`);
+    const nc = (id, number, due, actions) => ({ id, number, status: 'aperta', source: 'interna', itemId: 'c1', dueDate: due, actions: actions || [], active: true });
+    a.eval(`db.nonconformities = ${JSON.stringify([
+      nc('n1', 'NC-2026-001', fra(20), [{ id: 'a1', text: 'Rivedere il disegno', who: 'Marco', due: fra(3), done: false },
+        { id: 'a2', text: 'Fatta', who: 'Luca', due: fra(2), done: true }, { id: 'a3', text: 'Più avanti', who: 'Sara', due: fra(12), done: false }]),
+      nc('n2', 'NC-2026-002', fra(-1)),
+      Object.assign(nc('n3', 'NC-2026-003', fra(5)), { status: 'chiusa' }),
+    ])}`);
+    const s = J(a, 'homeSegnali()');
+    const per = t => s.find(x => x.testo.startsWith(t));
+    assert.deepEqual(per('non conformità aperta').voci.map(v => v.testo), ['NC-2026-001']);
+    assert.deepEqual(per('non conformità scaduta').voci.map(v => v.testo), ['NC-2026-002']);
+    const az = per('azione di NC');
+    assert.equal(az.voci.length, 1);
+    assert.match(az.voci[0].titolo, /^Marco — Rivedere il disegno — entro /);
+    assert.equal(az.gravita, 'media');
+  });
+});
+
 describe('L\'esito delle misure', () => {
   const misura = c => Object.assign({ id: 'k1', kind: 'misura', nominal: '', tolMin: '', tolMax: '', value: '' }, c);
   it('senza limiti una misura non passa da sola: l\'esito si sceglie', () => {

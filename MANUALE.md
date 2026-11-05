@@ -1937,7 +1937,7 @@ giorni, si cambia in Gestione); le **azioni**, ognuna con chi e entro quando, da
 **Chiuderla** chiede decisione e causa: una NC chiusa senza le due cose non insegna niente a chi la
 rilegge. Le azioni non ancora fatte non bloccano, ma l'app lo chiede prima. Chiusa, non si cambia:
 si riapre. **Scaduta** è una NC aperta oltre la sua data, o con un'azione aperta oltre la sua: il
-**Riepilogo** le elenca come avviso di gravità alta.
+**Riepilogo** le elenca come avviso di gravità alta. Le altre NC aperte stanno nel Riepilogo come informazione, e le **azioni da fare entro 7 giorni** come avviso, ognuna con chi la deve fare: un clic apre la NC.
 
 **Il rapporto PDF**, in italiano e inglese, porta origine, riferimenti, causa, decisione,
 descrizione e azioni: è quello che si manda al fornitore. Le note interne restano dentro. Si
