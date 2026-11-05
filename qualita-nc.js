@@ -413,7 +413,8 @@ function ncSchedaHtml(x, scrive) {
     </div>
     <div class="qc-card">
       <h3>Note interne</h3>
-      <textarea rows="2" ${dis} ${set('note')} placeholder="Non escono sul rapporto">${esc(x.note || '')}</textarea>
+      <div class="modal-field"><label class="sr-only">Note interne</label>
+        <textarea rows="3" ${dis} ${set('note')} placeholder="Non escono sul rapporto">${esc(x.note || '')}</textarea></div>
     </div>
     ${x.status === 'chiusa' ? `<p class="empty-text qc-hint">Chiusa il ${esc(fmtDateIt((x.closedAt || '').slice(0, 10)))}. Per cambiarla va riaperta.</p>` : ''}
     ${typeof docEmessiHtml === 'function' ? docEmessiHtml('nonconformity', x) : ''}

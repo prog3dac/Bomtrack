@@ -9,7 +9,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - **Caratteristiche su due righe**, con la **classe ISO 286** (`h7`, `G8`, `js6`…): dal nominale e dalla classe escono scostamenti e limiti. Fori D…P e alberi d…p, IT5–IT11, fino a 500 mm; fuori da lì l'app lo dice e si scrivono gli scostamenti. Un valore che non è un numero non si salva più in silenzio.
 - **Esito a mano nel collaudo**: OK / Fuori per le misure senza limiti, e per correggere il calcolo su quelle con limiti (segnato *a mano*, e *manuale* nel rapporto).
 - **Messaggio se il controllo fallisce**, scritto nel piano e mostrato in rosso nel collaudo quando una caratteristica è fuori.
-- Il campo **Istruzioni** del piano ha la grafica degli altri campi.
+- Il campo **Istruzioni** del piano e le **Note interne** della non conformità hanno la grafica e la larghezza degli altri campi.
 - **QR** nel rapporto di collaudo, nel rapporto NC e nella nuova **scheda PDF del piano**; il **cartellino** di collaudo da attaccare al bancale, a richiesta o proposto a ogni ricevimento (*Gestione → Qualità*).
 - Il **Riepilogo** avvisa degli articoli da collaudare senza piano.
 
