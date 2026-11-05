@@ -169,7 +169,7 @@ function homeSegnali() {
         if (!a.done && a.due && a.due >= g && a.due <= fra7) azioni.push({ x, a });
       }));
       azioni.sort((p, q) => String(p.a.due).localeCompare(String(q.a.due)));
-      agg(azioni.map(({ x, a }) => voce(x.number, `${a.who || 'chi?'} — ${a.text || '(azione senza testo)'} — entro ${fmtDateIt(a.due)}`,
+      agg(azioni.map(({ x, a }) => voce(`${x.number} · ${a.who || 'chi?'} · ${fmtDateIt(a.due)}`, `${a.who || 'chi?'} — ${a.text || '(azione senza testo)'} — entro ${fmtDateIt(a.due)}`,
         `ncApriDaAltrove('${x.id}')`)), 'azione di NC da fare entro 7 giorni', 'azioni di NC da fare entro 7 giorni', 'nc', 'media');
     }
     // Articoli da collaudare che nessun piano copre (dalla 0.142.0): il
