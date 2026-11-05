@@ -10,7 +10,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - **Esito a mano nel collaudo**: OK / Fuori per le misure senza limiti, e per correggere il calcolo su quelle con limiti (segnato *a mano*, e *manuale* nel rapporto).
 - **Messaggio se il controllo fallisce**, scritto nel piano e mostrato in rosso nel collaudo quando una caratteristica è fuori.
 - Il campo **Istruzioni** del piano e le **Note interne** della non conformità hanno la grafica e la larghezza degli altri campi.
-- **QR** nel rapporto di collaudo, nel rapporto NC e nella nuova **scheda PDF del piano**; il **cartellino** di collaudo da attaccare al bancale, a richiesta o proposto a ogni ricevimento (*Gestione → Qualità*).
+- **QR** nel rapporto di collaudo, nel rapporto NC e nella nuova **scheda PDF del piano**; il **cartellino A4** da attaccare al bancale, con lo stato grande in italiano e inglese: giallo *da collaudare*, verde *accettato* (o *in deroga*), rosso *non conforme*, due fogli se il lotto è diviso. A richiesta, o proposto a ogni ricevimento (*Gestione → Qualità*).
 - Il **Riepilogo** avvisa degli articoli da collaudare senza piano, elenca le **NC aperte** e le **azioni delle NC da fare entro 7 giorni**, con chi le deve fare. Le stesse date, con quella di chiusura di ogni NC, sono anche nel **calendario**, con il filtro *Non conformità*.
 - **Correzione: nei campi di ricerca di Collaudi, Non conformità, Piani di controllo e Ordini di produzione** dopo la prima lettera non si poteva più scrivere: la vista si ridisegnava e il campo perdeva il fuoco. Ora lo riprende, con il cursore dov'era.
 

@@ -195,7 +195,6 @@ function qrEtichettaTesti(tipo, rec) {
     const n = (rec.items || []).length;
     return { codice: rec.code || '', righe: ['Ubicazione', n === 1 ? '1 articolo' : n + ' articoli'] };
   }
-  if (tipo === 'col') return qcCartellinoTesti(rec);
   if (tipo === 'odp') return { codice: rec.number || '', righe: [`${rec.code || ''} ${rec.name || ''}`.trim(), `${fmtQtyIt(rec.qty)} ${rec.uom || ''}`.trim()] };
   return { codice: rec.number || '', righe: [rec.title || '', rec.supplierId ? (supplierName(rec.supplierId) || '') : ''] };
 }
@@ -249,7 +248,7 @@ function qrEtichettePdf(voci, opz) {
 // Riceve gli id degli articoli; per un documento la stessa cosa con un id solo.
 function qrEtichetteModal(ids, tipo) {
   const t = tipo || 'art';
-  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec, col: qcGet }[t];
+  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec }[t];
   const recs = (ids || []).map(id => prendi(id)).filter(r => r && qrCodiceDi(t, r));
   if (!recs.length) {
     showToast(t === 'ubi' ? 'Nessuna ubicazione da etichettare: scrivila nella scheda degli articoli' : 'Nessun articolo da etichettare con questi filtri', 'error');
@@ -267,7 +266,7 @@ function qrEtichetteModal(ids, tipo) {
     </div>`;
   }).join('');
   const oltre = recs.length > 200 ? `<p class="empty-text" style="text-align:left;padding:4px 0">…e altri ${recs.length - 200}, una copia ciascuno.</p>` : '';
-  const nomi = { art: ['articolo', 'articoli'], ubi: ['ubicazione', 'ubicazioni'], col: ['cartellino', 'cartellini'] }[t] || ['documento', 'documenti'];
+  const nomi = { art: ['articolo', 'articoli'], ubi: ['ubicazione', 'ubicazioni'] }[t] || ['documento', 'documenti'];
   openModal(`<h3>${ico('qr', 'tinted pill', '')} Etichette QR — ${recs.length === 1 ? '1 ' + nomi[0] : recs.length + ' ' + nomi[1]}</h3>
     ${avviso}
     <div class="modal-grid">
@@ -278,7 +277,7 @@ function qrEtichetteModal(ids, tipo) {
         <input class="num" type="number" id="qr-salta" min="0" max="39" step="1" value="0"></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto">${elenco}</div>${oltre}
-    <p class="empty-text" style="text-align:left;padding:8px 0">Ogni QR apre la scheda rapida ${t === 'art' ? 'dell\'articolo: giacenza, rettifica, movimenti' : t === 'ubi' ? 'dell\'ubicazione: gli articoli che ci stanno, e il conteggio d\'inventario' : t === 'col' ? 'del collaudo, con il pulsante Collauda' : 'del documento'}. Nel PDF i codici sono vettoriali: si stampano nitidi a qualunque misura, con la stampa al <strong>100%</strong> (non «adatta alla pagina»).</p>
+    <p class="empty-text" style="text-align:left;padding:8px 0">Ogni QR apre la scheda rapida ${t === 'art' ? 'dell\'articolo: giacenza, rettifica, movimenti' : t === 'ubi' ? 'dell\'ubicazione: gli articoli che ci stanno, e il conteggio d\'inventario' : 'del documento'}. Nel PDF i codici sono vettoriali: si stampano nitidi a qualunque misura, con la stampa al <strong>100%</strong> (non «adatta alla pagina»).</p>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="qrEtichetteStampa()">${ico('printer', 'tinted', '')} Crea il PDF</button>
@@ -286,7 +285,7 @@ function qrEtichetteModal(ids, tipo) {
 }
 function qrEtichetteStampa() {
   const sel = window.__qrEtichette; if (!sel) return;
-  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec, col: qcGet }[sel.tipo];
+  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec }[sel.tipo];
   const voci = sel.ids.map((id, i) => {
     const el = document.getElementById('qr-copie-' + i);
     return { tipo: sel.tipo, rec: prendi(id), copie: el && el.value !== '' ? el.value : 1 };

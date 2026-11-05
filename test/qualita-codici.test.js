@@ -268,11 +268,14 @@ describe('I QR della qualità', () => {
     assert.match(a.eval('qrSchedaHtml("nc", ncGet("n1"))'), /Chiedere 8D/);
     assert.match(a.eval('qrSchedaHtml("pc", qcPianoGet("p1"))'), /Nessun collaudo aperto/);
   });
-  it('il cartellino dice lo stato e porta il QR del collaudo', () => {
+  it('il cartellino A4: un foglio per stato, due se il lotto è diviso', () => {
     const a = app(base({ collaudi: [col('x2', 'aperto', '2026-03-01')] }));
-    const t = J(a, 'qrEtichettaTesti("col", qcGet("x2"))');
-    assert.equal(t.codice, 'IN COLLAUDO · COL-2026-001');
-    assert.match(a.eval('qrSchedaHtml("col", qcGet("x2"))'), /Collauda/);
+    assert.deepEqual(J(a, 'qcCartelliniTipi(qcGet("x2"))'), ['collaudo']);
+    a.eval('Object.assign(qcGet("x2"), { status: "chiuso", esito: "respinto", qtyOk: 70, qtyKo: 30, destino: "scarto" })');
+    assert.deepEqual(J(a, 'qcCartelliniTipi(qcGet("x2"))'), ['accettato', 'nonconforme']);
+    a.eval('Object.assign(qcGet("x2"), { esito: "deroga", qtyOk: 100, qtyKo: 0 })');
+    assert.deepEqual(J(a, 'qcCartelliniTipi(qcGet("x2"))'), ['deroga']);
+    assert.match(a.eval('qrSchedaHtml("col", qcGet("x2"))'), /COL-2026-001/);
     assert.equal(a.eval('qrCodiceDi("col", qcGet("x2"))'), 'COL-2026-001');
   });
 });

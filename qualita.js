@@ -465,7 +465,7 @@ function qcSchedaHtml(x) {
         ${qcBadge(x)}
       </div>
       <div class="bom-toolbar-right">
-        <button class="btn-outline" onclick="qcCartellino('${x.id}')" title="L'etichetta di stato con il QR, da attaccare alla merce">${ico('qr', 'tinted', '')} Cartellino</button>
+        <button class="btn-outline" onclick="qcCartellino('${x.id}')" title="Il foglio A4 da attaccare alla merce: da collaudare, accettato o non conforme, con il QR">${ico('qr', 'tinted', '')} Cartellino</button>
         <button class="btn-outline" onclick="qcRapportoPdf('${x.id}')" title="Il rapporto di collaudo in PDF, in italiano e inglese">${ico('file', 'tinted', '')} Rapporto PDF</button>
       </div>
     </div>

@@ -2014,16 +2014,25 @@ sull'ODP.
 | Documento | Dove sta il QR | Cosa apre |
 |---|---|---|
 | **Rapporto di collaudo** | in alto a destra nel PDF | la scheda rapida del collaudo: articolo, quantità, stato, esito, e *Apri il collaudo* |
-| **Cartellino di collaudo** | sull'etichetta | come sopra |
+| **Cartellino** | a destra, grande | il collaudo; sul cartellino rosso la non conformità |
 | **Rapporto NC** | in alto a destra nel PDF | la scheda rapida della non conformità: stato, gravità, scadenza, azioni aperte |
 | **Scheda del piano** | in alto a destra nel PDF | il piano di controllo |
 
-Il **cartellino** è l'etichetta da attaccare al bancale finché il lotto è in collaudo: codice,
-descrizione, quantità, numero del collaudo e il suo QR. Si stampa con **Cartellino** in testa alla
-scheda del collaudo, negli stessi formati delle etichette degli articoli. In *Gestione → Qualità →
-Collaudi* si può chiedere all'app di **proporlo a ogni ricevimento** che apre un collaudo: compare un
-avviso con il pulsante per stamparlo. Inquadrato, il QR di un collaudo apre quello ancora aperto con
-quel numero, o il più recente.
+Il **cartellino** è un foglio A4 da attaccare al bancale, con lo stato scritto grande in italiano e
+in inglese e un colore che si riconosce da lontano:
+
+| Cartellino | Quando | Che cosa porta |
+|---|---|---|
+| **Giallo** · *Materiale da collaudare / Material to be inspected* | collaudo aperto | arrivo, fornitore, ordine, DDT, lotto, piano, pezzi da guardare, certificato; in fondo le caselle dell'esito, data e firma |
+| **Verde** · *Materiale collaudato e accettato / Inspected and accepted* | accettato | la quantità accettata, quando e da chi è stato collaudato, il piano; data e firma di chi libera la merce. In deroga diventa *Accettato in deroga* e porta la NC |
+| **Rosso** · *Materiale non conforme / Non-conforming material* | respinto | la quantità respinta, la NC, la destinazione e la causa; le caselle reso / rottamato / rilavorato, data e firma. Il QR apre la NC |
+
+Si stampa con **Cartellino** in testa alla scheda del collaudo, ed esce quello dello stato di adesso:
+un lotto **in parte accettato e in parte respinto** dà due fogli, uno per mucchio. La quantità è
+nell'unità del collaudo (quella della riga d'ordine). In *Gestione → Qualità → Collaudi* si può
+chiedere all'app di **proporlo a ogni ricevimento** che apre un collaudo: compare un avviso con il
+pulsante per stamparlo. Inquadrato, il QR di un collaudo apre quello ancora aperto con quel numero,
+o il più recente.
 
 I pulsanti aprono le **stesse finestre** dell'app, con le stesse regole: chi ha un ruolo in sola
 lettura vede i numeri ma non i comandi.

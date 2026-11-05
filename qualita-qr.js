@@ -10,10 +10,10 @@
 //   pc   il piano di controllo, per id: un piano non ha numero
 //
 // ── Il cartellino ──
-// L'etichetta di stato che si attacca alla merce in attesa: «IN COLLAUDO»,
-// numero, articolo, quantità, fornitore. Si stampa con i formati delle
-// etichette QR (qrEtichetteModal), dalla scheda del collaudo, o — se lo si
-// accende in Gestione → Qualità — si propone subito dopo il ricevimento.
+// Il foglio A4 che si attacca alla merce: da collaudare (giallo), accettato
+// (verde) o non conforme (rosso), con il QR. Si stampa dalla scheda del
+// collaudo, o — se lo si accende in Gestione → Qualità — si propone subito
+// dopo il ricevimento.
 //
 // ── Un limite ──
 // Il numero COL non lo riserva il server come quello NC: due PC che ricevono
@@ -34,18 +34,134 @@ function ncPerNumero(numero) {
   if (!k) return null;
   return ncTutte().find(x => String(x.number || '').trim().toLowerCase() === k) || ncTutte().find(x => x.id === numero) || null;
 }
-// Le righe del cartellino, come qrEtichettaTesti le vuole: il codice in
-// grassetto (qui lo stato e il numero), poi le righe piccole.
-function qcCartellinoTesti(x) {
-  const it = getItem(x.itemId);
-  const stato = x.status === 'aperto' ? 'IN COLLAUDO' : x.esito === 'respinto' ? 'RESPINTO' : x.esito === 'deroga' ? 'IN DEROGA' : 'ACCETTATO';
-  return {
-    codice: `${stato} · ${x.number || ''}`,
-    righe: [it ? `${it.code} ${it.name || ''}` : '', `${fmtQtyIt(x.qty)} ${x.uom || ''} · ${supplierName(x.supplierId) || ''}`.trim(),
-      [x.ddt ? 'DDT ' + x.ddt.replace(/^DDT\s*/i, '') : '', fmtDateIt(x.date)].filter(Boolean).join(' · ')],
-  };
+// ─── Il cartellino A4 ───
+// Un foglio da attaccare al bancale, con lo stato scritto grande, in italiano e
+// in inglese, e un colore che si riconosce da lontano: giallo da collaudare,
+// verde accettato, rosso non conforme. Un collaudo chiuso in parte accettato e
+// in parte respinto dà due fogli, uno per ciascun mucchio.
+const QC_CARTELLINI = {
+  collaudo: { colore: [222, 140, 0], titolo: 'MATERIALE DA COLLAUDARE', title: 'MATERIAL TO BE INSPECTED',
+    riga: 'Non usare fino all\'esito del collaudo  ·  Do not use until released' },
+  accettato: { colore: [30, 135, 60], titolo: 'MATERIALE COLLAUDATO E ACCETTATO', title: 'INSPECTED AND ACCEPTED',
+    riga: 'Libero per l\'uso  ·  Released for use' },
+  deroga: { colore: [30, 135, 60], titolo: 'MATERIALE ACCETTATO IN DEROGA', title: 'ACCEPTED UNDER CONCESSION',
+    riga: 'Usabile con le riserve della non conformità  ·  Use as stated in the non-conformity' },
+  nonconforme: { colore: [200, 30, 30], titolo: 'MATERIALE NON CONFORME', title: 'NON-CONFORMING MATERIAL',
+    riga: 'Non usare  ·  Tenere separato  ·  Do not use  ·  Keep segregated' },
+};
+const QC_DESTINI_EN = { sostituzione: 'return for replacement', accredito: 'return for credit', scarto: 'scrap' };
+// I fogli che servono per un collaudo, nel suo stato di adesso.
+function qcCartelliniTipi(x) {
+  if (!x) return [];
+  if (x.status === 'aperto') return ['collaudo'];
+  const t = [];
+  if ((Number(x.qtyOk) || 0) > 0.000001) t.push(x.esito === 'deroga' ? 'deroga' : 'accettato');
+  if ((Number(x.qtyKo) || 0) > 0.000001) t.push('nonconforme');
+  return t;
 }
-function qcCartellino(id) { qrEtichetteModal([id], 'col'); }
+function qcCartellinoPagina(doc, x, tipo) {
+  const c = QC_CARTELLINI[tipo];
+  const it = getItem(x.itemId);
+  const p = x.planId && typeof qcPianoGet === 'function' ? qcPianoGet(x.planId) : null;
+  const nc = typeof ncDiCollaudo === 'function' ? ncDiCollaudo(x.id) : null;
+  const W = 210, M = 12;
+  doc.setDrawColor(...c.colore); doc.setLineWidth(3); doc.rect(6, 6, W - 12, 285);
+  doc.setFillColor(...c.colore); doc.rect(6, 6, W - 12, 46, 'F');
+  doc.setTextColor(255); doc.setFont('helvetica', 'bold');
+  // Il titolo più lungo si stringe fino a stare nella fascia.
+  let fs = 34;
+  doc.setFontSize(fs);
+  while (fs > 20 && doc.getTextWidth(c.titolo) > W - 2 * M - 4) { fs -= 1; doc.setFontSize(fs); }
+  doc.text(c.titolo, W / 2, 26, { align: 'center' });
+  doc.setFontSize(22); doc.text(c.title, W / 2, 40, { align: 'center' });
+  doc.setFontSize(11.5); doc.setFont('helvetica', 'normal');
+  doc.text(c.riga, W / 2, 48, { align: 'center' });
+  // Codice, descrizione e la quantità di questo mucchio.
+  const qta = tipo === 'collaudo' ? x.qty : tipo === 'nonconforme' ? x.qtyKo : x.qtyOk;
+  doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.setFontSize(30);
+  doc.text(String(it ? it.code : '(articolo eliminato)'), M, 72);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(15);
+  doc.splitTextToSize(String(it ? it.name || '' : ''), 115).slice(0, 3).forEach((r, i) => doc.text(r, M, 82 + i * 7));
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(24);
+  doc.text(`${fmtQtyIt(qta)} ${x.uom || ''}`.trim(), M, 112);
+  if (tipo !== 'collaudo' && (Number(x.qty) || 0) > (Number(qta) || 0) + 0.000001) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+    doc.text(`su ${fmtQtyIt(x.qty)} ${x.uom || ''} arrivati / of ${fmtQtyIt(x.qty)} received`, M, 119);
+  }
+  // Il QR: sul non conforme apre la NC, se c'è; altrimenti il collaudo.
+  const lato = 64;
+  const [qt, qn] = tipo === 'nonconforme' && nc && nc.number ? ['nc', nc.number] : ['col', x.number];
+  if (qn) qrPdfDraw(doc, qrLink(qt, qn), W - M - lato, 58, lato);
+  doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+  doc.text(String(qn || ''), W - M - lato / 2, 58 + lato + 7, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+  doc.text(tipo === 'collaudo' ? 'Inquadra per collaudare · Scan to inspect' : 'Inquadra per i dettagli · Scan for details', W - M - lato / 2, 58 + lato + 12, { align: 'center' });
+  // I dati.
+  const ordine = typeof qcOrdineNumero === 'function' ? qcOrdineNumero(x) : '';
+  const forn = [x.source === 'odl' ? 'Terzista / Subcontractor' : 'Fornitore / Supplier', supplierName(x.supplierId) || '—'];
+  const arrivo = [['Ordine / Order', ordine || '—'], ['DDT / Delivery note', x.ddt || '—'], ['Lotto fornitore / Supplier lot', x.supplierLot || '—']];
+  const chi = x.updatedBy && typeof actorName === 'function' ? actorName(x.updatedBy) : '';
+  const quando = fmtDateIt(String(x.closedAt || '').slice(0, 10));
+  const righe = tipo === 'collaudo' ? [
+    ['Collaudo / Inspection', x.number || ''], ['Arrivato il / Received', fmtDateIt(x.date)], forn, ...arrivo,
+    ['Piano di controllo / Inspection plan', p ? p.name : '—'],
+    ['Pezzi da guardare / Sample size', x.sampleSize ? `${fmtQtyIt(x.sampleSize)}${x.skipLot ? ' (lotto saltato / skipped)' : ''}` : '—'],
+    ['Certificato / Certificate', x.cert === 'atteso' ? 'richiesto, non ancora arrivato / required, not received' : x.cert === 'ok' ? 'arrivato / received' : '—'],
+  ] : tipo === 'nonconforme' ? [
+    ['Collaudo / Inspection', x.number || ''], ['Non conformità / NCR', nc ? nc.number || '' : '—'],
+    ['Respinto il / Rejected on', quando || '—'], forn, ...arrivo,
+    ['Destinazione / Disposition', x.destino ? `${QC_DESTINI[x.destino] || x.destino} / ${QC_DESTINI_EN[x.destino] || ''}` : '—'],
+    ['Causa / Cause', nc && nc.cause ? nc.cause : '—'],
+  ] : [
+    ['Collaudo / Inspection', x.number || ''], ['Collaudato il / Inspected on', quando || '—'],
+    ['Collaudato da / Inspected by', chi || '—'], forn, ...arrivo,
+    ['Piano di controllo / Inspection plan', p ? p.name : '—'],
+    ...(tipo === 'deroga' ? [['Non conformità / NCR', nc ? nc.number || '' : '—']] : []),
+  ];
+  if (tipo !== 'collaudo' && x.note) righe.push(['Nota / Note', x.note]);
+  doc.autoTable({ startY: 146, margin: { left: M, right: M }, theme: 'grid',
+    styles: { fontSize: 11, cellPadding: 2.6, lineColor: 200, textColor: 20 },
+    columnStyles: { 0: { cellWidth: 74, textColor: 100 }, 1: { fontStyle: 'bold' } }, body: righe });
+  // In fondo: quello che resta da scrivere a mano.
+  let y = doc.lastAutoTable.finalY + 12;
+  doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+  doc.setDrawColor(60); doc.setLineWidth(0.4);
+  if (tipo === 'collaudo') {
+    doc.text('ESITO / RESULT', M, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    ['Accettato / Accepted', 'In deroga / Concession', 'Respinto / Rejected'].forEach((t, i) => {
+      const xx = M + i * 64; doc.rect(xx, y + 5, 6, 6); doc.text(t, xx + 9, y + 10);
+    });
+    y += 26;
+  } else if (tipo === 'nonconforme') {
+    doc.text('DESTINAZIONE ESEGUITA / DISPOSITION DONE', M, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    ['Reso al fornitore / Returned', 'Rottamato / Scrapped', 'Rilavorato / Reworked'].forEach((t, i) => {
+      const xx = M + i * 64; doc.rect(xx, y + 5, 6, 6); doc.text(t, xx + 9, y + 10);
+    });
+    y += 26;
+  } else {
+    doc.text('MERCE LIBERATA / RELEASED', M, y);
+    y += 16;
+  }
+  doc.line(M, y, M + 80, y); doc.line(W - M - 80, y, W - M, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100);
+  doc.text('Data / Date', M, y + 5); doc.text('Firma / Signature', W - M - 80, y + 5);
+  doc.setFontSize(8); doc.text(`Bomtrack · stampato il ${fmtDateIt(nowISO())}`, W / 2, 287, { align: 'center' });
+}
+// Un PDF con i fogli di uno o più collaudi (più righe ricevute insieme).
+function qcCartelliniPdf(ids) {
+  const fogli = [];
+  (ids || []).forEach(id => { const x = qcGet(id); qcCartelliniTipi(x).forEach(t => fogli.push([x, t])); });
+  if (!fogli.length) { showToast('Niente da stampare per questo collaudo', 'error'); return null; }
+  const jsPDF = requirePdf(); if (!jsPDF) return null;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  fogli.forEach(([x, t], i) => { if (i) doc.addPage(); qcCartellinoPagina(doc, x, t); });
+  const primo = fogli[0][0];
+  doc.save(`bomtrack_cartellino_${String(fogli.length > 1 && ids.length > 1 ? 'collaudi' : primo.number || 'collaudo').replace(/[^\w-]+/g, '_')}.pdf`);
+  return doc;
+}
+function qcCartellino(id) { return qcCartelliniPdf([id]); }
 
 // ─── Proporre il cartellino al ricevimento ───
 // I collaudi aperti nello stesso gesto (un ricevimento di più righe) si
@@ -61,7 +177,7 @@ function qcCartellinoAvviso() {
   const ids = qcCartelliniNuovi; qcCartelliniNuovi = [];
   if (!ids.length) return;
   showToast(ids.length === 1 ? 'Merce in collaudo: stampa il cartellino da attaccare al bancale' : `${ids.length} lotti in collaudo: stampa i cartellini`,
-    'success', { label: ids.length === 1 ? 'Cartellino' : 'Cartellini', fn: () => qrEtichetteModal(ids, 'col') });
+    'success', { label: ids.length === 1 ? 'Cartellino' : 'Cartellini', fn: () => qcCartelliniPdf(ids) });
 }
 
 // ─── Le schede rapide ───
