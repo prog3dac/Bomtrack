@@ -558,6 +558,22 @@ function homeEventi() {
       dettaglio: pm.title || '', gravita: s.scadenza < oggi ? 'alta' : calGravitaData(s.scadenza, oggi), azione: `setView('manutenzione')` });
   });
 
+  // Modulo Qualità (dalla 0.142.0): la data entro cui chiudere ogni NC aperta,
+  // e quella di ogni sua azione non ancora fatta, con chi la deve fare.
+  if (moduloAttivo('qualita') && typeof ncAperte === 'function') ncAperte().forEach(x => {
+    const it = x.itemId ? getItem(x.itemId) : null;
+    const cosa = it ? (it.code || it.name) : (x.description || '');
+    if (x.dueDate) out.push({ tipo: 'nc', data: x.dueDate, icona: 'warning', testo: `Chiudere ${x.number || 'la NC'}`,
+      dettaglio: [cosa, x.supplierId && supplierName(x.supplierId)].filter(Boolean).join(' — '),
+      gravita: x.dueDate < oggi ? 'alta' : calGravitaData(x.dueDate, oggi), azione: `ncApriDaAltrove('${x.id}')` });
+    (x.actions || []).forEach(a => {
+      if (a.done || !a.due) return;
+      out.push({ tipo: 'ncazione', data: a.due, icona: 'check', testo: `${x.number || 'NC'}: ${a.text || 'azione'}`,
+        dettaglio: [a.who, cosa].filter(Boolean).join(' — '),
+        gravita: a.due < oggi ? 'alta' : calGravitaData(a.due, oggi), azione: `ncApriDaAltrove('${x.id}')` });
+    });
+  });
+
   out.forEach(e => { delete e.numero; delete e.n; });
   return out.filter(calEventoAttivo).sort((a, b) => a.data.localeCompare(b.data) || CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }
@@ -577,6 +593,7 @@ const CAL_FILTRI = [
   { id: 'fasi', label: 'Avvio fasi ODP', tipi: ['fase'], vista: 'odp' },
   { id: 'produzione', label: 'Fine produzione', tipi: ['produzione'], vista: 'odp' },
   { id: 'manutenzione', label: 'Manutenzione', tipi: ['manutenzione'], vista: 'manutenzione', modulo: 'officina' },
+  { id: 'qualita', label: 'Non conformità', tipi: ['nc', 'ncazione'], vista: 'nc', modulo: 'qualita' },
   { id: 'promemoria', label: 'Promemoria', tipi: ['promemoria'] },
 ];
 const CAL_FILTRI_KEY = 'bomtrack_cal_nascosti';

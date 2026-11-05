@@ -204,6 +204,20 @@ describe('Il Riepilogo e le non conformità', () => {
     assert.match(az.voci[0].titolo, /^Marco — Rivedere il disegno — entro /);
     assert.equal(az.gravita, 'media');
   });
+  it('il calendario porta la data di chiusura delle NC aperte e quella delle azioni da fare', () => {
+    const a = app();
+    const g = a.eval('oggiISO()');
+    const fra = n => a.eval(`ncScadenzaDa("${g}", ${n})`);
+    a.eval(`db.nonconformities = ${JSON.stringify([
+      { id: 'n1', number: 'NC-2026-001', status: 'aperta', source: 'interna', itemId: 'c1', dueDate: fra(20), active: true,
+        actions: [{ id: 'a1', text: 'Rivedere il disegno', who: 'Marco', due: fra(3), done: false }, { id: 'a2', text: 'Fatta', who: 'Luca', due: fra(2), done: true }] },
+      { id: 'n2', number: 'NC-2026-002', status: 'chiusa', source: 'interna', dueDate: fra(5), actions: [], active: true },
+    ])}`);
+    const ev = J(a, 'homeEventi().filter(e => e.tipo === "nc" || e.tipo === "ncazione")');
+    assert.deepEqual(ev.map(e => [e.tipo, e.data, e.testo]),
+      [['ncazione', fra(3), 'NC-2026-001: Rivedere il disegno'], ['nc', fra(20), 'Chiudere NC-2026-001']]);
+    assert.match(ev[0].dettaglio, /^Marco/);
+  });
 });
 
 describe('L\'esito delle misure', () => {
