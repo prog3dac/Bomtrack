@@ -1641,6 +1641,7 @@ select.combo-nascosto{display:none!important}
 .qc-fail-msg{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-weight:600;line-height:1.45}
 /* Le caratteristiche del piano (dalla 0.142.0): una scheda per riga, su due
    righe di campi, invece di una tabella da otto colonne. */
+.qc-card h3 .pq-codici-toggle{font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;min-height:32px}
 .qc-car-list{display:flex;flex-direction:column;gap:10px}
 .qc-car{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg)}
 .qc-car .modal-field label{font-size:11px}

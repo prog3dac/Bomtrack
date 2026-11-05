@@ -1835,7 +1835,8 @@ Tutto il modulo sta nel gruppo **Qualità** della barra, che c'è solo con il mo
 scritto che cosa ha misurato. *Qualità → Piani di controllo*, **Nuovo piano**.
 
 **I codici del piano.** Un piano vale per un **elenco di codici**. Il riquadro *Codici del piano*
-li mostra, e **Scegli i codici…** apre la finestra con tutti gli articoli a magazzino. In alto ci sono
+nasce chiuso, con il numero dei codici e i primi tre; la freccia accanto al titolo lo apre con
+l'elenco intero e lo richiude, come le *Opzioni* dei modelli a varianti. **Scegli i codici…** apre la finestra con tutti gli articoli a magazzino. In alto ci sono
 i filtri: testo, tipo, famiglia e sottofamiglia, fornitore abituale e *Solo i selezionati*. A sinistra
 di ogni riga c'è una spunta. *Spunta i visibili* e *Togli i visibili* lavorano su quello che i filtri
 mostrano: per mettere nel piano tutti i cuscinetti si filtra la famiglia e si spunta. Le spunte valgono

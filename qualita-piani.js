@@ -547,19 +547,28 @@ function renderPianiQc() {
   a11yFields(el);
 }
 
-// I codici del piano nella scheda: i primi, con il comando per sceglierli.
-const PQ_CODICI_MOSTRATI = 40;
+// I codici del piano nella scheda, in un riquadro che si apre e si chiude.
+// Nasce chiuso, con il conteggio: un piano può avere centinaia di codici, e
+// la scheda non deve diventare un elenco. Aperto mostra l'elenco intero; la
+// scelta vale finché non si cambia piano.
+let pqCodiciAperti = null;
+function pqCodiciApriChiudi(id) { pqCodiciAperti = pqCodiciAperti === id ? null : id; renderPianiQc(); }
+
 function pqCodiciHtml(p, scrive) {
   const l = qcPianoCodici(p).map(getItem).filter(Boolean).sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
   const contesi = qcPianoContesi(p);
+  const aperto = pqCodiciAperti === p.id;
   const famiglia = it => { const f = it.familyId ? getFamily(it.familyId) : null; return f ? f.name : '—'; };
+  const titolo = l.length
+    ? `<button type="button" class="var-toggle pq-codici-toggle" aria-expanded="${aperto}" onclick="pqCodiciApriChiudi('${p.id}')">${ico(aperto ? 'chevronDown' : 'chevronRight', 'tinted', '')} Codici del piano <span class="qc-conta">${l.length}</span></button>`
+    : 'Codici del piano <span class="qc-conta">0</span>';
   return `<div class="qc-card">
-    <h3>Codici del piano <span class="qc-conta">${l.length}</span></h3>
-    ${l.length ? `<div class="table-wrap"><table class="qc-table">
+    <h3>${titolo}</h3>
+    ${!l.length ? `<p class="empty-text qc-hint">${ico('warning', 'tinted', '')} Nessun codice: finché non ne scegli il piano non si applica a niente.</p>`
+    : aperto ? `<div class="table-wrap"><table class="qc-table">
       <thead><tr><th scope="col">Codice</th><th scope="col">Descrizione</th><th scope="col">Famiglia</th></tr></thead>
-      <tbody>${l.slice(0, PQ_CODICI_MOSTRATI).map(it => `<tr><td class="mono">${esc(it.code || '')}</td><td>${esc(it.name || '')}</td><td>${esc(famiglia(it))}</td></tr>`).join('')}</tbody></table></div>
-      ${l.length > PQ_CODICI_MOSTRATI ? `<p class="empty-text qc-hint">…e altri ${l.length - PQ_CODICI_MOSTRATI}. L'elenco completo è nella finestra di scelta.</p>` : ''}`
-    : `<p class="empty-text qc-hint">${ico('warning', 'tinted', '')} Nessun codice: finché non ne scegli il piano non si applica a niente.</p>`}
+      <tbody>${l.map(it => `<tr><td class="mono">${esc(it.code || '')}</td><td>${esc(it.name || '')}</td><td>${esc(famiglia(it))}</td></tr>`).join('')}</tbody></table></div>`
+    : `<p class="empty-text qc-hint">${esc(l.slice(0, 3).map(it => it.code || '').join(', '))}${l.length > 3 ? ` e altri ${l.length - 3}` : ''}.</p>`}
     ${contesi.length ? `<p class="empty-text qc-hint qc-avviso">${ico('warning', 'tinted', '')} ${contesi.length} codic${contesi.length === 1 ? 'e è' : 'i sono'} anche in un altro piano (${esc(contesi.slice(0, 3).map(x => x.piano.name).join(', '))}) e lì vale quello: toglil${contesi.length === 1 ? 'o' : 'i'} da uno dei due.</p>` : ''}
     ${scrive ? `<div class="modal-actions" style="justify-content:flex-start">
       <button class="btn-outline" onclick="qcCodiciModal('${p.id}')">${ico('list', 'tinted', '')} Scegli i codici…</button></div>` : ''}

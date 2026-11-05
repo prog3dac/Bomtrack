@@ -127,6 +127,18 @@ describe('Le caratteristiche del piano', () => {
 });
 
 describe('I codici del piano', () => {
+  it('il riquadro dei codici nasce chiuso, e si apre e si chiude', () => {
+    const a = app();
+    const h = () => a.eval('pqCodiciHtml(qcPianoGet("p1"), true)');
+    assert.match(h(), /aria-expanded="false"/);
+    assert.doesNotMatch(h(), /<table/);
+    assert.ok(h().includes(a.eval('getItem("c1").code')));
+    a.eval('pqCodiciApriChiudi("p1")');
+    assert.match(h(), /aria-expanded="true"/);
+    assert.match(h(), /<table/);
+    a.eval('pqCodiciApriChiudi("p1")');
+    assert.doesNotMatch(h(), /<table/);
+  });
   it('un codice sta in un piano solo: chi lo ha già lo tiene', () => {
     const a = app(base({ piani: [piano(), piano({ id: 'p2', name: 'Altro', itemIds: [] })] }));
     const r = J(a, 'qcPianoCodiciSet("p2", ["c1", "c2"])');
