@@ -289,7 +289,7 @@ function ncOrigineNumero(x) {
 let ncCurrentId = null;
 let ncFiltro = { q: '', stato: 'aperta' };
 function ncRidisegna() { if (typeof activeView !== 'undefined' && activeView === 'nc') renderNc(); }
-function ncSearchInput() { ncFiltro.q = val('nc-search'); renderNc(); }
+function ncSearchInput() { ncFiltro.q = val('nc-search'); ridisegnaCercando('nc-search', renderNc); }
 function ncStatoChange() { ncFiltro.stato = val('nc-stato'); renderNc(); }
 function ncApri(id) { ncCurrentId = id; renderNc(); }
 function ncApriDaAltrove(id) { ncCurrentId = id; setView('nc'); }

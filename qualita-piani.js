@@ -504,7 +504,7 @@ function qcPianoDuplica(id) {
 let pqCurrentId = null;
 let pqFiltro = { q: '' };
 function pqRidisegna() { if (typeof activeView !== 'undefined' && activeView === 'pianiqc') renderPianiQc(); }
-function pqSearchInput() { pqFiltro.q = val('pq-search'); renderPianiQc(); }
+function pqSearchInput() { pqFiltro.q = val('pq-search'); ridisegnaCercando('pq-search', renderPianiQc); }
 function pqApri(id) { pqCurrentId = id; renderPianiQc(); }
 function pqChiudi() { pqCurrentId = null; renderPianiQc(); }
 function pqNuovo() { const p = qcPianoNuovo(); if (p) { pqCurrentId = p.id; renderPianiQc(); } }

@@ -840,7 +840,7 @@ function odpFilterChange() {
   odpFilters.from = val('odp-f-from'); odpFilters.to = val('odp-f-to');
   renderOdp();
 }
-function odpFilterInput() { debounced('odpf', odpFilterChange); }
+function odpFilterInput() { debounced('odpf', () => ridisegnaCercando('odp-f-q', odpFilterChange)); }
 function odpFilterReset() { odpFilters.q = ''; odpFilters.status = ''; odpFilters.from = ''; odpFilters.to = ''; renderOdp(); }
 
 function renderOdp() {

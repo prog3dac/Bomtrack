@@ -402,7 +402,7 @@ function qcFiltrati() {
       .some(v => String(v || '').toLowerCase().includes(q));
   }).sort((a, b) => String(b.number || '').localeCompare(String(a.number || '')));
 }
-function qcSearchInput() { qcFiltro.q = val('qc-search'); renderCollaudi(); }
+function qcSearchInput() { qcFiltro.q = val('qc-search'); ridisegnaCercando('qc-search', renderCollaudi); }
 function qcStatoChange() { qcFiltro.stato = val('qc-stato'); renderCollaudi(); }
 function qcApri(id) { qcCurrentId = id; renderCollaudi(); }
 // Da un'altra vista (il Riepilogo, il QR): prima si arriva, poi si sceglie.

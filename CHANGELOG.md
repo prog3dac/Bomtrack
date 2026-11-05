@@ -12,6 +12,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Il campo **Istruzioni** del piano e le **Note interne** della non conformità hanno la grafica e la larghezza degli altri campi.
 - **QR** nel rapporto di collaudo, nel rapporto NC e nella nuova **scheda PDF del piano**; il **cartellino** di collaudo da attaccare al bancale, a richiesta o proposto a ogni ricevimento (*Gestione → Qualità*).
 - Il **Riepilogo** avvisa degli articoli da collaudare senza piano.
+- **Correzione: nei campi di ricerca di Collaudi, Non conformità, Piani di controllo e Ordini di produzione** dopo la prima lettera non si poteva più scrivere: la vista si ridisegnava e il campo perdeva il fuoco. Ora lo riprende, con il cursore dov'era.
 
 `supabase/schema.sql`: va **rieseguito** nel SQL Editor. Aggiunge a `quality_plans` le colonne `item_ids` e `fail_message`; `schema_versione` passa a 2, e l'app avvisa chi ha lo schema indietro.
 
