@@ -688,9 +688,16 @@ create table if not exists public.quality_plans (
   supplier_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
   cert text, sampling text, sample_qty numeric, sample_pct numeric, aql numeric,
   skip_after int, skip_every int, characteristics jsonb, notes text, active boolean,
+  item_ids jsonb, fail_message text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.142.0: un piano vale per l'elenco dei codici scelti (item_ids, un elenco
+-- di id che si legge sempre intero: jsonb), e porta il messaggio da mostrare
+-- quando il controllo fallisce. item_id e family_id restano per i piani nati
+-- prima, finché l'app non li converte.
+alter table public.quality_plans add column if not exists item_ids jsonb;
+alter table public.quality_plans add column if not exists fail_message text;
 
 -- 0.140.0, modulo Qualità: le non conformità, con le azioni (jsonb). Il
 -- numero NC-… lo riserva il server come per gli ordini: il rapporto va al
@@ -1687,7 +1694,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 1)
+    'schema_versione', 2)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

@@ -429,6 +429,9 @@ function ncRapportoPdf(id, modo) {
   const jsPDF = requirePdf(); if (!jsPDF) return null;
   const it = x.itemId ? getItem(x.itemId) : null;
   const doc = new jsPDF();
+  // Il QR apre la scheda rapida della NC (qualita-qr.js): le azioni si
+  // spuntano da lì, con il rapporto in mano.
+  if (x.number) qrPdfDraw(doc, qrLink('nc', x.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
   const startY = docPdfTesta(doc, { titolo: 'Non conformità / Nonconformity report', rec: Object.assign({}, x, { title: it ? `${it.code} — ${it.name}` : '' }),
     chi: 'EMESSA DA / ISSUED BY', controparte: 'FORNITORE / SUPPLIER', vuota: '—', xControparte: 110 });
   const ins = x.inspectionId ? qcGet(x.inspectionId) : null;
@@ -466,7 +469,10 @@ function ncRapportoPdf(id, modo) {
 function renderQcSettings() {
   const s = db.settings || {};
   const v = typeof qcValutazionePesi === 'function' ? qcValutazionePesi() : null;
-  return `<h3 class="settings-group-title">${ico('warning', 'tinted', '')} Non conformità</h3>
+  return `<h3 class="settings-group-title">${ico('qr', 'tinted', '')} Collaudi</h3>
+    <label class="flag-check"><input type="checkbox" id="set-qc-cartellino" ${s.qcCartellino ? 'checked' : ''}> Proponi il cartellino da stampare quando si riceve merce da collaudare</label>
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Il cartellino è l'etichetta «IN COLLAUDO» con il QR, da attaccare al bancale. Si stampa sempre anche dalla scheda del collaudo.</p>
+    <h3 class="settings-group-title">${ico('warning', 'tinted', '')} Non conformità</h3>
     <div class="modal-field"><label>Causali (una per riga)</label>
       <textarea id="set-qc-causali" rows="8">${esc(ncCausali().join('\n'))}</textarea></div>
     <div class="modal-grid">
@@ -488,6 +494,8 @@ function readQcSettings() {
   const causali = String(document.getElementById('set-qc-causali').value || '').split('\n').map(x => x.trim()).filter(Boolean);
   const viste = new Set();
   db.settings.qcCauses = causali.filter(c => { const k = c.toLowerCase(); if (viste.has(k)) return false; viste.add(k); return true; });
+  const cart = document.getElementById('set-qc-cartellino');
+  if (cart) db.settings.qcCartellino = !!cart.checked;
   db.settings.qcNcDays = Math.min(365, Math.max(1, parseInt(val('set-qc-ncdays'), 10) || NC_GIORNI_SERIE));
   if (document.getElementById('set-qc-wq')) {
     const wq = numVal('set-qc-wq', 0, 100), wp = numVal('set-qc-wp', 0, 100);

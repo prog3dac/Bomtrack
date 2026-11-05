@@ -2,6 +2,19 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.142.0 — 2026-11-05
+
+**Modulo Qualità: i codici del piano, le tolleranze ISO e i QR dei documenti.**
+- **Un piano vale per un elenco di codici.** La scelta «articolo o famiglia» (e il fornitore) è tolta: *Scegli i codici…* apre una finestra con tutti gli articoli a magazzino, i filtri (testo, tipo, famiglia, sottofamiglia, fornitore, solo i selezionati) e una spunta a sinistra. **Un codice sta in un piano solo**: chi è già in un altro piano si vede con la spunta spenta e il nome del piano. I piani vecchi diventano elenchi alla prima apertura di chi li scrive; il fornitore non conta più.
+- **Caratteristiche su due righe**, con la **classe ISO 286** (`h7`, `G8`, `js6`…): dal nominale e dalla classe escono scostamenti e limiti. Fori D…P e alberi d…p, IT5–IT11, fino a 500 mm; fuori da lì l'app lo dice e si scrivono gli scostamenti. Un valore che non è un numero non si salva più in silenzio.
+- **Esito a mano nel collaudo**: OK / Fuori per le misure senza limiti, e per correggere il calcolo su quelle con limiti (segnato *a mano*, e *manuale* nel rapporto).
+- **Messaggio se il controllo fallisce**, scritto nel piano e mostrato in rosso nel collaudo quando una caratteristica è fuori.
+- Il campo **Istruzioni** del piano ha la grafica degli altri campi.
+- **QR** nel rapporto di collaudo, nel rapporto NC e nella nuova **scheda PDF del piano**; il **cartellino** di collaudo da attaccare al bancale, a richiesta o proposto a ogni ricevimento (*Gestione → Qualità*).
+- Il **Riepilogo** avvisa degli articoli da collaudare senza piano.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Aggiunge a `quality_plans` le colonne `item_ids` e `fail_message`; `schema_versione` passa a 2, e l'app avvisa chi ha lo schema indietro.
+
 ### 0.141.0 — 2026-11-04
 
 **Il database condiviso si difende da solo.** Le correzioni dell'analisi del codice del 4 novembre.

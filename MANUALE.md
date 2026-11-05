@@ -1834,12 +1834,28 @@ Tutto il modulo sta nel gruppo **Qualità** della barra, che c'è solo con il mo
 **A cosa servono.** A dire a chi collauda **che cosa misurare** e **su quanti pezzi**, e a lasciare
 scritto che cosa ha misurato. *Qualità → Piani di controllo*, **Nuovo piano**.
 
-**A che cosa si applica.** Un piano vale per **un articolo** o per **una famiglia**, e può
-restringersi a **un fornitore**. Se più piani vanno bene, vince il più specifico: articolo e
-fornitore, poi articolo, poi famiglia e fornitore, poi famiglia. **Un piano attivo basta a far
-collaudare** l'articolo, anche senza toccare il campo *Si collauda all'arrivo*; un articolo segnato
-espressamente **No** resta fuori lo stesso. Il piano può chiedere il suo certificato, che vince su
-quello dell'articolo.
+**I codici del piano.** Un piano vale per un **elenco di codici**. Il riquadro *Codici del piano*
+li mostra, e **Scegli i codici…** apre la finestra con tutti gli articoli a magazzino. In alto ci sono
+i filtri: testo, tipo, famiglia e sottofamiglia, fornitore abituale e *Solo i selezionati*. A sinistra
+di ogni riga c'è una spunta. *Spunta i visibili* e *Togli i visibili* lavorano su quello che i filtri
+mostrano: per mettere nel piano tutti i cuscinetti si filtra la famiglia e si spunta. Le spunte valgono
+solo con **Conferma**.
+
+**Un codice sta in un piano solo.** Un articolo che è già in un altro piano si vede lo stesso, ma la
+sua spunta è spenta e la riga dice *nel piano …*: per spostarlo si toglie prima di là. Così chi
+collauda non si chiede mai quale piano vale. Con due PC che salvano insieme lo stesso codice in due
+piani diversi (succede solo con l'archivio condiviso), vale il piano creato per primo, e la scheda
+dell'altro lo segnala.
+
+**Un piano attivo basta a far collaudare** l'articolo, anche senza toccare il campo *Si collauda
+all'arrivo*; un articolo segnato espressamente **No** resta fuori lo stesso. Il piano può chiedere il
+suo certificato, che vince su quello dell'articolo. Il **Riepilogo** avvisa quando ci sono articoli
+da collaudare che non hanno un piano.
+
+> **Dalla 0.142.0** il piano non si sceglie più per articolo, per famiglia o per fornitore. I piani
+> vecchi diventano elenchi alla prima apertura di *Piani di controllo* da parte di chi li scrive: un
+> piano di famiglia prende i codici a magazzino della famiglia, tranne quelli che hanno già un piano
+> loro. Il fornitore non conta più: un piano che valeva per un solo fornitore vale per tutti.
 
 **Il campionamento.** Quattro regole:
 
@@ -1868,11 +1884,33 @@ storia, e la scheda del collaudo dice quale livello si è applicato e perché.
 > nella maggior parte dei gestionali: ridotto vuol dire saltare lotti, rinforzato guardare tutto. È
 > più severo della norma nel rinforzato e più semplice nel ridotto.
 
-**Le caratteristiche.** Una **misura** ha nominale, tolleranza in meno e in più (con il segno: `-0,05`
-e `+0,05`), unità e strumento; un **controllo sì/no** dice solo *passa* o *non passa*. Nel collaudo
-ogni caratteristica ha la sua casella: una misura fuori tolleranza si colora di rosso, e la scheda
-dice che cosa suggeriscono le misure (e i pezzi non conformi contati nel campione). **Suggerisce, non
-decide**: un pezzo fuori quota si può accettare in deroga, ed è giusto che lo dica chi collauda.
+**Le caratteristiche.** Ognuna sta su due righe: sopra nome, tipo e strumento; sotto, per una
+misura, i numeri. Un **controllo sì/no** dice solo *passa* o *non passa*. Una **misura** si scrive in
+uno di due modi:
+
+- con la **classe ISO**, come sul disegno: nominale `20` e classe `h7`. Le tolleranze e i limiti
+  (*19,979 – 20*) li calcola l'app dalle tabelle ISO 286. Le minuscole sono alberi, le maiuscole fori.
+  Valgono le lettere d e f g h js k m n p (fori D … P), i gradi da IT5 a IT11 e i nominali fino a
+  500 mm. Una classe fuori da queste non si calcola e l'app lo dice: si scrivono gli scostamenti a mano;
+- con i **due scostamenti**, con il segno: `-0,05` e `+0,05`. I limiti si calcolano lo stesso.
+
+Senza nominale, o senza tolleranze, i limiti non ci sono e la scheda lo dice: **esito a mano**. Un
+valore che non è un numero non si salva, e il campo diventa rosso.
+
+**Nel collaudo** ogni caratteristica ha la sua casella. Per una misura con limiti, il valore fuori si
+colora di rosso e l'esito si calcola da solo. Accanto c'è la scelta **Esito**: *OK* o *Fuori*. Per una
+misura senza limiti (un colore, una rugosità a confronto) è chi collauda a sceglierlo. Su una misura con
+limiti la scelta corregge il calcolo, per esempio quando lo strumento ha un'incertezza che il calcolo
+non conosce: la riga lo segna *a mano*, e il rapporto PDF *(manuale / manual)*. La scheda dice che cosa
+suggeriscono le misure (e i pezzi non conformi contati nel campione). **Suggerisce, non decide**: un
+pezzo fuori quota si può accettare in deroga, ed è giusto che lo dica chi collauda.
+
+**Per chi collauda.** Due testi: le **istruzioni**, che la scheda del collaudo mostra sempre, e il
+**messaggio se il controllo fallisce**, che compare in rosso solo quando una caratteristica è fuori o
+non passa. Per esempio: «Fermare il lotto, metterlo nell'area rossa e avvisare l'ufficio acquisti».
+
+**La scheda del piano** (**Scheda PDF**) è il foglio da tenere al banco di collaudo: codici,
+campionamento, caratteristiche con i limiti, istruzioni e messaggio, e il QR che riapre il piano.
 
 **Il piano si copia nel collaudo.** Caratteristiche, campione e numeri di accettazione restano
 quelli del giorno dell'arrivo: cambiare il piano domani non riscrive i collaudi di ieri, ed
@@ -1969,6 +2007,22 @@ svuota quella che non arriva, e la conferma registra e **salva subito**. Il nume
 **quanto arriva adesso** — quello sulla bolla in mano — non il totale ricevuto. Le righe di un ODL
 che vengono da un ordine di produzione restano fuori, come in *Ricevi tutto*: si dichiarano
 sull'ODP.
+
+**I documenti della Qualità** (dalla 0.142.0) hanno anche loro il QR:
+
+| Documento | Dove sta il QR | Cosa apre |
+|---|---|---|
+| **Rapporto di collaudo** | in alto a destra nel PDF | la scheda rapida del collaudo: articolo, quantità, stato, esito, e *Apri il collaudo* |
+| **Cartellino di collaudo** | sull'etichetta | come sopra |
+| **Rapporto NC** | in alto a destra nel PDF | la scheda rapida della non conformità: stato, gravità, scadenza, azioni aperte |
+| **Scheda del piano** | in alto a destra nel PDF | il piano di controllo |
+
+Il **cartellino** è l'etichetta da attaccare al bancale finché il lotto è in collaudo: codice,
+descrizione, quantità, numero del collaudo e il suo QR. Si stampa con **Cartellino** in testa alla
+scheda del collaudo, negli stessi formati delle etichette degli articoli. In *Gestione → Qualità →
+Collaudi* si può chiedere all'app di **proporlo a ogni ricevimento** che apre un collaudo: compare un
+avviso con il pulsante per stamparlo. Inquadrato, il QR di un collaudo apre quello ancora aperto con
+quel numero, o il più recente.
 
 I pulsanti aprono le **stesse finestre** dell'app, con le stesse regole: chi ha un ruolo in sola
 lettura vede i numeri ma non i comandi.

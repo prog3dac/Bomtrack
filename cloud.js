@@ -58,7 +58,7 @@ const CLOUD_LIMITE_MS = 90000;   // una richiesta senza risposta dopo questo val
 const CLOUD_MARGINE_MS = 15000;
 // La versione dello schema che questa app si aspetta da archivio_stato()
 // (dalla 0.141.0): si alza insieme a `schema_versione` in supabase/schema.sql.
-const CLOUD_SCHEMA_VERSIONE = 1;
+const CLOUD_SCHEMA_VERSIONE = 2;
 const CLOUD_PULIZIA_MS = 6 * 3600 * 1000;   // ogni quanto un PC ricorda al server di pulire
 
 function cloudLeggi(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }

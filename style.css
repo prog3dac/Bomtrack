@@ -1635,3 +1635,42 @@ select.combo-nascosto{display:none!important}
 .qc-toolbar .wl-filter-dates input{min-height:36px;padding:7px 8px;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit}
 .qc-toolbar .wl-filter-dates input:focus{border-color:var(--accent);outline:none}
 .qc-val a,.qc-hint a{color:var(--accent)}
+.qc-campo-largo{grid-column:1/-1}
+.qc-conta{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;text-transform:none;letter-spacing:0}
+.qc-avviso{color:var(--red)}
+.qc-fail-msg{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-weight:600;line-height:1.45}
+/* Le caratteristiche del piano (dalla 0.142.0): una scheda per riga, su due
+   righe di campi, invece di una tabella da otto colonne. */
+.qc-car-list{display:flex;flex-direction:column;gap:10px}
+.qc-car{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg)}
+.qc-car .modal-field label{font-size:11px}
+.qc-car .modal-field input,.qc-car .modal-field select{padding:8px 10px}
+.qc-car input.num{text-align:right;font-family:var(--mono)}
+.qc-car input[readonly]{color:var(--text-dim);background:var(--card)}
+.qc-car-riga1{display:grid;grid-template-columns:24px minmax(0,2fr) minmax(0,1fr) minmax(0,1.4fr) auto;gap:8px 10px;align-items:end}
+.qc-car-riga2{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1.4fr);gap:8px 10px;align-items:end;margin-top:8px;padding-left:34px}
+.qc-car-num{font-family:var(--mono);font-size:12px;color:var(--text-dim);padding-bottom:10px;text-align:center}
+.qc-car .qc-row-cmds{display:flex;gap:4px;padding-bottom:2px}
+.qc-car .qc-row-cmds .mini-btn{min-width:36px;min-height:36px}
+.qc-car .qc-hint{padding-left:34px}
+.qc-limiti{font-family:var(--mono);font-size:13px;padding:8px 0}
+.qc-campo-ko{border-color:var(--red)!important;color:var(--red)!important}
+@media(max-width:720px){
+  .qc-car-riga1{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .qc-car-riga1 .qc-car-num{grid-column:1/-1;text-align:left;padding:0}
+  .qc-car-riga1 .modal-field:first-of-type{grid-column:1/-1}
+  .qc-car-riga1 .qc-row-cmds{grid-column:1/-1}
+  .qc-car-riga2{grid-template-columns:repeat(2,minmax(0,1fr));padding-left:0}
+  .qc-car .qc-hint{padding-left:0}
+}
+.qc-esito-cella{white-space:nowrap}
+.qc-table select.qc-verdetto{min-width:120px;width:auto}
+.qc-table select.qc-ko-val{color:var(--red);font-weight:700}
+/* La finestra di scelta dei codici */
+.qcs-comandi{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.qcs-list{max-height:min(52vh,460px)}
+.qcs-row .mono{font-family:var(--mono);white-space:nowrap}
+.qcs-nome{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.qcs-fam{font-size:11.5px;color:var(--text-dim);white-space:nowrap}
+.qcs-row.qcs-preso{opacity:.6;cursor:not-allowed}
+.qcs-row input{min-width:18px;min-height:18px}

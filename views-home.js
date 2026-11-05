@@ -152,6 +152,13 @@ function homeSegnali() {
           `ncApriDaAltrove('${x.id}')`);
       }), 'non conformità scaduta', 'non conformità scadute', 'nc', 'alta');
     }
+    // Articoli da collaudare che nessun piano copre (dalla 0.142.0): il
+    // collaudo nascerebbe senza dire che cosa misurare. Solo se un piano
+    // esiste già: chi i piani non li usa non deve sentirselo dire ogni giorno.
+    if (typeof qcSenzaPiano === 'function' && (db.qualityPlans || []).length) {
+      agg(qcSenzaPiano().map(it => voce(it.code, `${it.name} — si collauda all'arrivo, ma non sta in nessun piano di controllo`,
+        `setView('pianiqc')`)), 'articolo da collaudare senza piano', 'articoli da collaudare senza piano', 'pianiqc', 'info');
+    }
   }
 
   // Articoli che si comprano e non hanno un prezzo: in un ordine varrebbero zero

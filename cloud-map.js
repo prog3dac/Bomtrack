@@ -250,7 +250,7 @@ const CLOUD_TYPES = (() => {
   ['qtyOk', 'qtyKo', 'sampleQty', 'samplePct', 'aql', 'sampleSize', 'defects'].forEach(k => { t[k] = 'numeric'; });
   ['acceptNo', 'rejectNo', 'skipAfter', 'skipEvery'].forEach(k => { t[k] = 'int'; });
   t.skipLot = 'bool';
-  ['characteristics', 'checks', 'actions'].forEach(k => { t[k] = 'jsonb'; });
+  ['characteristics', 'checks', 'actions', 'itemIds'].forEach(k => { t[k] = 'jsonb'; });
   t.year = 'int';
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'plannedStart', 'plannedEnd', 'downFrom', 'downTo'].forEach(k => { t[k] = 'date'; });
   ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt', 'startedAt', 'endedAt', 'closedAt'].forEach(k => { t[k] = 'timestamptz'; });

@@ -30,6 +30,11 @@ const QR_TIPI = {
   odl: 'Ordine di lavoro',
   ubi: 'Ubicazione',   // dalla 0.101.0: il QR sullo scaffale
   fase: 'Fase di produzione',   // dalla 0.132.0: la scheda di reparto, «ODP-2026-014/20»
+  // Dalla 0.142.0, modulo Qualità (qualita-qr.js): collaudo e non conformità
+  // per numero, piano di controllo per id.
+  col: 'Collaudo',
+  nc: 'Non conformità',
+  pc: 'Piano di controllo',
 };
 
 // ─── L'indirizzo ───
@@ -87,6 +92,10 @@ function qrResolve(tipo, codice) {
     odp: () => perNumero(db.prodOrders),
     oda: () => perNumero(db.orders),
     odl: () => perNumero(db.workOrders),
+    col: () => (typeof qcPerNumero === 'function' ? qcPerNumero(c) : null),
+    nc: () => (typeof ncPerNumero === 'function' ? ncPerNumero(c) : null),
+    // Solo quando il QR lo dice: un id non si digita a mano.
+    pc: () => (tipo === 'pc' && typeof qcPianoGet === 'function' ? qcPianoGet(c) : null),
     // Ultima: un codice nudo che è sia un articolo sia un'ubicazione è l'articolo.
     ubi: () => ubicazioneRec(c),
     // Numero dell'ODP e fase, divisi dall'ultima barra. rec = { odp, fase }.
@@ -186,6 +195,7 @@ function qrEtichettaTesti(tipo, rec) {
     const n = (rec.items || []).length;
     return { codice: rec.code || '', righe: ['Ubicazione', n === 1 ? '1 articolo' : n + ' articoli'] };
   }
+  if (tipo === 'col') return qcCartellinoTesti(rec);
   if (tipo === 'odp') return { codice: rec.number || '', righe: [`${rec.code || ''} ${rec.name || ''}`.trim(), `${fmtQtyIt(rec.qty)} ${rec.uom || ''}`.trim()] };
   return { codice: rec.number || '', righe: [rec.title || '', rec.supplierId ? (supplierName(rec.supplierId) || '') : ''] };
 }
@@ -239,7 +249,7 @@ function qrEtichettePdf(voci, opz) {
 // Riceve gli id degli articoli; per un documento la stessa cosa con un id solo.
 function qrEtichetteModal(ids, tipo) {
   const t = tipo || 'art';
-  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec }[t];
+  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec, col: qcGet }[t];
   const recs = (ids || []).map(id => prendi(id)).filter(r => r && qrCodiceDi(t, r));
   if (!recs.length) {
     showToast(t === 'ubi' ? 'Nessuna ubicazione da etichettare: scrivila nella scheda degli articoli' : 'Nessun articolo da etichettare con questi filtri', 'error');
@@ -257,7 +267,7 @@ function qrEtichetteModal(ids, tipo) {
     </div>`;
   }).join('');
   const oltre = recs.length > 200 ? `<p class="empty-text" style="text-align:left;padding:4px 0">…e altri ${recs.length - 200}, una copia ciascuno.</p>` : '';
-  const nomi = { art: ['articolo', 'articoli'], ubi: ['ubicazione', 'ubicazioni'] }[t] || ['documento', 'documenti'];
+  const nomi = { art: ['articolo', 'articoli'], ubi: ['ubicazione', 'ubicazioni'], col: ['cartellino', 'cartellini'] }[t] || ['documento', 'documenti'];
   openModal(`<h3>${ico('qr', 'tinted pill', '')} Etichette QR — ${recs.length === 1 ? '1 ' + nomi[0] : recs.length + ' ' + nomi[1]}</h3>
     ${avviso}
     <div class="modal-grid">
@@ -268,7 +278,7 @@ function qrEtichetteModal(ids, tipo) {
         <input class="num" type="number" id="qr-salta" min="0" max="39" step="1" value="0"></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto">${elenco}</div>${oltre}
-    <p class="empty-text" style="text-align:left;padding:8px 0">Ogni QR apre la scheda rapida ${t === 'art' ? 'dell\'articolo: giacenza, rettifica, movimenti' : t === 'ubi' ? 'dell\'ubicazione: gli articoli che ci stanno, e il conteggio d\'inventario' : 'del documento'}. Nel PDF i codici sono vettoriali: si stampano nitidi a qualunque misura, con la stampa al <strong>100%</strong> (non «adatta alla pagina»).</p>
+    <p class="empty-text" style="text-align:left;padding:8px 0">Ogni QR apre la scheda rapida ${t === 'art' ? 'dell\'articolo: giacenza, rettifica, movimenti' : t === 'ubi' ? 'dell\'ubicazione: gli articoli che ci stanno, e il conteggio d\'inventario' : t === 'col' ? 'del collaudo, con il pulsante Collauda' : 'del documento'}. Nel PDF i codici sono vettoriali: si stampano nitidi a qualunque misura, con la stampa al <strong>100%</strong> (non «adatta alla pagina»).</p>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="qrEtichetteStampa()">${ico('printer', 'tinted', '')} Crea il PDF</button>
@@ -276,7 +286,7 @@ function qrEtichetteModal(ids, tipo) {
 }
 function qrEtichetteStampa() {
   const sel = window.__qrEtichette; if (!sel) return;
-  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec }[sel.tipo];
+  const prendi = { art: getItem, odp: getOdp, oda: getOrder, odl: getOdl, ubi: ubicazioneRec, col: qcGet }[sel.tipo];
   const voci = sel.ids.map((id, i) => {
     const el = document.getElementById('qr-copie-' + i);
     return { tipo: sel.tipo, rec: prendi(id), copie: el && el.value !== '' ? el.value : 1 };
@@ -318,7 +328,7 @@ function qrApri(letto) {
   }
   // Un'ubicazione, un ODP o un ODL di un'area spenta: la scheda porterebbe a
   // finestre che non ci sono.
-  const vista = { ubi: 'stock', odp: 'odp', odl: 'odl', fase: 'odp' }[r.tipo];
+  const vista = { ubi: 'stock', odp: 'odp', odl: 'odl', fase: 'odp', col: 'collaudi', nc: 'nc', pc: 'pianiqc' }[r.tipo];
   if (vista && !vistaAttiva(vista)) { showToast(`${AREE[areaDiVista(vista)].nome}: area spenta in Gestione → Aree e moduli`, 'error'); return false; }
   // Senza il modulo Officina la scheda di reparto non c'è: si apre l'ordine.
   if (r.tipo === 'fase' && !moduloAttivo('officina')) { qrSchedaModal('odp', r.rec.odp); return true; }
@@ -335,6 +345,7 @@ function qrBtn(testo, icona, azione, primario) {
   return `<button class="${primario ? 'add-btn-sm' : 'btn-outline'}" onclick="closeModal(); ${azione}">${ico(icona, primario ? '' : 'tinted', '')} ${esc(testo)}</button>`;
 }
 function qrSchedaHtml(tipo, rec) {
+  if (tipo === 'col' || tipo === 'nc' || tipo === 'pc') return qcQrSchedaHtml(tipo, rec);
   // La scheda della fase è quella del reparto, con i suoi pulsanti; si
   // ridisegna da sola a ogni gesto (repartoAggiornaScheda, officina.js).
   if (tipo === 'fase') {
