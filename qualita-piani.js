@@ -88,30 +88,77 @@ function isoPianoNormale(lotto, aql) {
 }
 
 // ─── I piani ───
+// Dalla 0.142.0 un piano vale per **l'elenco dei codici** che gli si
+// assegnano (`itemIds`), e un codice sta in un piano solo: è la regola che
+// legge chi collauda («per questo codice si guarda questo»), e due piani sullo
+// stesso codice vorrebbero dire due risposte. I piani nati prima valevano per
+// un articolo (`itemId`) o per una famiglia (`familyId`), con un eventuale
+// fornitore: finché non vengono convertiti (qcPianiConverti) si leggono così,
+// e il fornitore non restringe più niente.
 function qcPiani() { return (db.qualityPlans || []).filter(p => p && p.active !== false); }
 function qcPianoGet(id) { return (db.qualityPlans || []).find(p => p.id === id) || null; }
-// Il piano che vale per questo articolo da questo fornitore, o null.
-function qcPianoPer(it, supplierId) {
-  if (!it) return null;
-  let meglio = null, punti = -1;
+function qcPianoCodici(p) {
+  if (!p) return [];
+  if (Array.isArray(p.itemIds)) return p.itemIds;
+  if (p.itemId) return [p.itemId];
+  if (p.familyId) return (db.items || []).filter(it => it.familyId === p.familyId && !it.obsolete && hasStock(it)).map(it => it.id);
+  return [];
+}
+// Con due piani sullo stesso codice — piani vecchi, o due PC che lo hanno
+// assegnato nello stesso momento prima di sincronizzarsi — vince l'elenco
+// esplicito, poi il piano d'articolo, poi quello di famiglia; a parità il più
+// vecchio. Così la risposta è la stessa su ogni PC.
+function qcPianoPeso(p) { return Array.isArray(p.itemIds) ? 3 : p.itemId ? 2 : 1; }
+function qcPianoDelCodice(itemId, tranne) {
+  let meglio = null;
   qcPiani().forEach(p => {
-    if (p.supplierId && p.supplierId !== supplierId) return;
-    let s;
-    if (p.itemId) { if (p.itemId !== it.id) return; s = 4; }
-    else if (p.familyId) { if (!it.familyId || p.familyId !== it.familyId) return; s = 2; }
-    else return;
-    if (p.supplierId) s += 1;
-    if (s > punti) { meglio = p; punti = s; }
+    if (p.id === tranne || !qcPianoCodici(p).includes(itemId)) return;
+    const pp = qcPianoPeso(p), pm = meglio ? qcPianoPeso(meglio) : -1;
+    if (pp > pm || (pp === pm && String(p.createdAt || p.id) < String(meglio.createdAt || meglio.id))) meglio = p;
   });
   return meglio;
 }
+// Il piano che vale per questo articolo, o null. Il fornitore resta nella
+// firma: lo usa lo stato del salto lotti, non la scelta del piano.
+function qcPianoPer(it) { return it ? qcPianoDelCodice(it.id) : null; }
 function qcPianoAmbito(p) {
   if (!p) return '';
-  const it = p.itemId ? getItem(p.itemId) : null;
-  const f = p.familyId && typeof getFamily === 'function' ? getFamily(p.familyId) : null;
-  const chi = p.itemId ? (it ? `${it.code} — ${it.name}` : '(articolo eliminato)')
-    : p.familyId ? `Famiglia ${f ? f.name : '(eliminata)'}` : 'Nessun articolo né famiglia';
-  return chi + (p.supplierId ? ` · solo ${supplierName(p.supplierId) || 'fornitore eliminato'}` : '');
+  const l = qcPianoCodici(p);
+  if (!l.length) return 'Nessun codice';
+  const primo = getItem(l[0]);
+  return l.length === 1 ? (primo ? `${primo.code} — ${primo.name}` : '1 codice') : `${l.length} codici`;
+}
+// Gli articoli che si collaudano (per scelta loro o della famiglia) ma non
+// stanno in nessun piano: il collaudo nasce, ma senza dire che cosa misurare.
+// Prima della 0.142 un piano di famiglia copriva anche i codici nuovi; con
+// l'elenco no, e il Riepilogo lo ricorda.
+function qcSenzaPiano() {
+  if (typeof qcAttivo !== 'function' || !qcAttivo()) return [];
+  return (db.items || []).filter(it => !it.obsolete && hasStock(it) && it.qc !== 'no'
+    && (it.qc === 'si' || qcFamigliaRichiede(it)) && !qcPianoPer(it))
+    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+}
+// I codici che stanno anche in un altro piano: dopo una sincronizzazione può
+// capitare, e la scheda lo dice invece di lasciarlo scoprire a chi collauda.
+function qcPianoContesi(p) {
+  return qcPianoCodici(p).map(id => ({ itemId: id, piano: qcPianoDelCodice(id) })).filter(x => x.piano && x.piano.id !== p.id);
+}
+// Converte i piani d'articolo e di famiglia nell'elenco dei codici di oggi.
+// Prima gli articoli, poi le famiglie: un codice già preso resta a chi ce l'ha.
+// Restituisce quanti piani ha convertito e quanti codici ha lasciato fuori.
+function qcPianiConverti() {
+  if (!canWrite('docs')) return null;
+  const vecchi = qcPiani().filter(p => !Array.isArray(p.itemIds))
+    .sort((a, b) => qcPianoPeso(b) - qcPianoPeso(a) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id)));
+  if (!vecchi.length) return null;
+  const presi = new Set();
+  qcPiani().filter(p => Array.isArray(p.itemIds)).forEach(p => p.itemIds.forEach(id => presi.add(id)));
+  let fuori = 0;
+  vecchi.forEach(p => {
+    const l = qcPianoCodici(p).filter(id => { if (presi.has(id)) { fuori++; return false; } presi.add(id); return true; });
+    Store.update('qualityPlans', p.id, { itemIds: l, itemId: null, familyId: null, supplierId: null });
+  });
+  return { piani: vecchi.length, fuori };
 }
 
 // ─── Lo stato del fornitore su quel piano ───
@@ -205,7 +252,7 @@ function qcApplicaPiano(rec, it) {
   rec.sampleRule = c.regola + (st.stato === 'rinforzato' && st.motivo ? ' · ' + st.motivo : '');
   rec.checks = (p.characteristics || []).map(x => ({
     id: x.id, name: x.name || '', kind: x.kind === 'ok' ? 'ok' : 'misura',
-    nominal: x.nominal, tolMin: x.tolMin, tolMax: x.tolMax, uom: x.uom || '', tool: x.tool || '', value: '',
+    nominal: x.nominal, tolMin: x.tolMin, tolMax: x.tolMax, isoClass: x.isoClass || '', uom: x.uom || '', tool: x.tool || '', value: '',
   }));
   return rec;
 }
@@ -224,24 +271,48 @@ function qcLimiti(c) {
   const lo = nom + (Number(c.tolMin) || 0), hi = nom + (Number(c.tolMax) || 0);
   return { min: Math.min(lo, hi), max: Math.max(lo, hi) };
 }
+// L'esito calcolato dalla misura: '' se manca il valore o mancano i limiti.
+// Fino alla 0.141 una misura senza nominale passava sempre: non c'era niente
+// con cui confrontarla, e l'app diceva «OK» per lei.
+function qcCheckCalcolato(c) {
+  if (!c || c.kind === 'ok') return '';
+  if (c.value === '' || c.value == null) return '';
+  const v = Number(String(c.value).replace(',', '.'));
+  const lim = qcLimiti(c);
+  if (!isFinite(v) || !lim) return '';
+  return v >= lim.min - 1e-9 && v <= lim.max + 1e-9 ? 'ok' : 'ko';
+}
+// L'esito di una riga. Su una misura, la scelta a mano (`verdict`) vince sul
+// calcolo: è l'unica risposta quando la tolleranza è solo indicativa, e la
+// correzione di chi collauda quando lo strumento dice una cosa e il pezzo
+// un'altra (resta scritto che è forzata: qcCheckForzato).
 function qcCheckEsito(c) {
   if (!c) return '';
   if (c.kind === 'ok') return c.value === 'ok' || c.value === 'ko' ? c.value : '';
-  if (c.value === '' || c.value == null) return '';
-  const v = Number(String(c.value).replace(',', '.'));
-  if (!isFinite(v)) return '';
-  const lim = qcLimiti(c);
-  if (!lim) return 'ok';
-  return v >= lim.min - 1e-9 && v <= lim.max + 1e-9 ? 'ok' : 'ko';
+  if (c.verdict === 'ok' || c.verdict === 'ko') return c.verdict;
+  return qcCheckCalcolato(c);
+}
+function qcCheckForzato(c) {
+  if (!c || c.kind === 'ok' || !(c.verdict === 'ok' || c.verdict === 'ko')) return false;
+  const calc = qcCheckCalcolato(c);
+  return calc !== '' && calc !== c.verdict;
 }
 function qcTolleranzaTesto(c) {
   if (!c || c.kind === 'ok') return 'sì / no';
   const lim = qcLimiti(c);
-  if (!lim) return '—';
   const f = v => fmtQtyIt(v);
+  if (!lim) return c.nominal === '' || c.nominal == null ? 'esito a mano' : `${f(c.nominal)}${c.uom ? ' ' + c.uom : ''} (indicativa)`;
   const tmi = Number(c.tolMin) || 0, tma = Number(c.tolMax) || 0;
-  const tol = tmi === -tma ? `± ${f(tma)}` : `${tmi >= 0 ? '+' : '−'}${f(Math.abs(tmi))} / ${tma >= 0 ? '+' : '−'}${f(Math.abs(tma))}`;
-  return `${f(c.nominal)} ${tol}${c.uom ? ' ' + c.uom : ''}`;
+  const tol = c.isoClass ? c.isoClass
+    : tmi === -tma ? `± ${f(tma)}` : `${tmi >= 0 ? '+' : '−'}${f(Math.abs(tmi))} / ${tma >= 0 ? '+' : '−'}${f(Math.abs(tma))}`;
+  return `${f(c.nominal)} ${tol} (${f(lim.min)} – ${f(lim.max)})${c.uom ? ' ' + c.uom : ''}`;
+}
+// Il collaudo dice di respingere: una riga fuori, o i pezzi non conformi
+// arrivati al numero di rifiuto. È quando compare il messaggio del piano.
+function qcCollaudoFuori(insp) {
+  if (!insp || insp.skipLot) return false;
+  if ((insp.checks || []).some(c => qcCheckEsito(c) === 'ko')) return true;
+  return insp.rejectNo != null && (Number(insp.defects) || 0) >= (Number(insp.rejectNo) || 1);
 }
 // L'esito che le misure suggeriscono. Non decide: chi collauda può accettare
 // in deroga un pezzo fuori tolleranza, ed è giusto che sia lui a dirlo.
@@ -261,6 +332,15 @@ function qcSetCheck(id, checkId, valore) {
   Store.update('inspections', id, { checks });
   return true;
 }
+// La scelta a mano dell'esito di una misura: 'ok', 'ko' o '' (torna al calcolo).
+function qcSetVerdetto(id, checkId, valore) {
+  if (!qcGuard()) return false;
+  const insp = qcGet(id); if (!insp || insp.status !== 'aperto') return false;
+  const v = valore === 'ok' || valore === 'ko' ? valore : '';
+  const checks = (insp.checks || []).map(c => c.id === checkId && c.kind !== 'ok' ? Object.assign({}, c, { verdict: v }) : c);
+  Store.update('inspections', id, { checks });
+  return true;
+}
 function qcSetDifetti(id, valore) {
   if (!qcGuard()) return false;
   const insp = qcGet(id); if (!insp || insp.status !== 'aperto') return false;
@@ -275,18 +355,21 @@ function qcPianoGuard() { return roleGuard('docs'); }
 function qcPianoNuovo(dati) {
   if (!qcPianoGuard()) return null;
   const d = dati || {};
+  // Un codice che ha già un piano non entra in uno nuovo (la regola di
+  // qcPianoCodiciSet vale anche qui).
+  const codici = Array.isArray(d.itemIds) ? d.itemIds.filter((id, i, l) => l.indexOf(id) === i && !qcPianoDelCodice(id)) : [];
   const p = Store.insert('qualityPlans', {
     name: String(d.name || 'Nuovo piano di controllo'),
-    itemId: d.itemId || null, familyId: d.itemId ? null : (d.familyId || null), supplierId: d.supplierId || null,
+    itemIds: codici,
     cert: String(d.cert || ''), sampling: QC_CAMPIONI[d.sampling] ? d.sampling : 'tutto',
     sampleQty: Number(d.sampleQty) || 5, samplePct: Number(d.samplePct) || 10, aql: Number(d.aql) || 1,
     skipAfter: parseInt(d.skipAfter, 10) || 0, skipEvery: parseInt(d.skipEvery, 10) || 0,
     characteristics: Array.isArray(d.characteristics) ? d.characteristics.map(c => Object.assign({ id: gid() }, c)) : [],
-    notes: String(d.notes || ''), active: true,
+    notes: String(d.notes || ''), failMessage: String(d.failMessage || ''), active: true,
   });
   return p;
 }
-const QC_PIANO_CAMPI = ['name', 'itemId', 'familyId', 'supplierId', 'cert', 'sampling', 'sampleQty', 'samplePct', 'aql', 'skipAfter', 'skipEvery', 'notes'];
+const QC_PIANO_CAMPI = ['name', 'cert', 'sampling', 'sampleQty', 'samplePct', 'aql', 'skipAfter', 'skipEvery', 'notes', 'failMessage'];
 function qcPianoSet(id, campo, valore) {
   if (!qcPianoGuard()) return false;
   const p = qcPianoGet(id); if (!p || !QC_PIANO_CAMPI.includes(campo)) return false;
@@ -294,45 +377,85 @@ function qcPianoSet(id, campo, valore) {
   const patch = {};
   if (['sampleQty', 'samplePct', 'aql'].includes(campo)) v = Math.max(0, Number(v.replace(',', '.')) || 0);
   else if (['skipAfter', 'skipEvery'].includes(campo)) v = Math.max(0, parseInt(v, 10) || 0);
-  else if (['itemId', 'familyId', 'supplierId'].includes(campo)) v = v || null;
   else if (campo === 'sampling' && !QC_CAMPIONI[v]) v = 'tutto';
   else if (campo === 'name' && !v) v = 'Piano di controllo';
   patch[campo] = v;
-  // Articolo e famiglia si escludono: un piano vale per l'uno o per l'altra.
-  if (campo === 'itemId' && v) patch.familyId = null;
-  if (campo === 'familyId' && v) patch.itemId = null;
   Store.update('qualityPlans', id, patch);
   return true;
 }
-// L'ambito si cambia con un gesto solo: «per famiglia» svuota l'articolo.
-function qcPianoAmbitoSet(id, ambito) {
-  if (!qcPianoGuard()) return false;
-  const p = qcPianoGet(id); if (!p) return false;
-  Store.update('qualityPlans', id, ambito === 'famiglia' ? { itemId: null } : { familyId: null });
-  pqRidisegna();
-  return true;
+// I codici del piano, tutti insieme (la finestra di scelta li conferma così).
+// Un codice che nel frattempo è entrato in un altro piano resta fuori, e lo si
+// dice: la finestra lo mostrava libero, ma la regola vale al salvataggio.
+// Restituisce { codici, scartati: [{ itemId, piano }] } o null.
+function qcPianoCodiciSet(id, ids) {
+  if (!qcPianoGuard()) return null;
+  const p = qcPianoGet(id); if (!p) return null;
+  const scartati = [];
+  const codici = (ids || []).filter((x, i, l) => x && l.indexOf(x) === i && getItem(x)).filter(x => {
+    const altro = qcPianoDelCodice(x, id);
+    if (altro) { scartati.push({ itemId: x, piano: altro }); return false; }
+    return true;
+  });
+  Store.update('qualityPlans', id, { itemIds: codici, itemId: null, familyId: null, supplierId: null });
+  return { codici, scartati };
 }
-const QC_CAR_CAMPI = ['name', 'kind', 'nominal', 'tolMin', 'tolMax', 'uom', 'tool'];
+const QC_CAR_CAMPI = ['name', 'kind', 'nominal', 'tolMin', 'tolMax', 'isoClass', 'uom', 'tool'];
 function qcCarAggiungi(id, kind) {
   if (!qcPianoGuard()) return null;
   const p = qcPianoGet(id); if (!p) return null;
-  const c = { id: gid(), name: '', kind: kind === 'ok' ? 'ok' : 'misura', nominal: '', tolMin: '', tolMax: '', uom: kind === 'ok' ? '' : 'mm', tool: '' };
+  const c = { id: gid(), name: '', kind: kind === 'ok' ? 'ok' : 'misura', nominal: '', tolMin: '', tolMax: '', isoClass: '', uom: kind === 'ok' ? '' : 'mm', tool: '' };
   Store.update('qualityPlans', id, { characteristics: (p.characteristics || []).concat([c]) });
   pqRidisegna();
   return c;
 }
+// Un numero scritto come lo scrive un disegno: «20», «Ø20», «20 mm», «+0,05»,
+// «−0,02». '' se vuoto, null se non si legge.
+function qcLeggiNumero(testo) {
+  const t = String(testo == null ? '' : testo).trim().replace(/^[ØøΦφ⌀]\s*/, '').replace(/\s*mm$/i, '')
+    .replace('−', '-').replace('–', '-').replace(',', '.').replace(/^\+/, '');
+  if (t === '') return '';
+  const n = Number(t);
+  return isFinite(n) ? n : null;
+}
+// Scrive un campo di una caratteristica. Restituisce false se il valore non si
+// legge: il vecchio resta, e la vista colora il campo invece di buttare via in
+// silenzio quello che si è scritto (fino alla 0.141 «±0,05» diventava vuoto).
+// Con la classe ISO gli scostamenti li decide la tabella: si ricalcolano a ogni
+// cambio di nominale o di classe.
 function qcCarSet(id, carId, campo, valore) {
   if (!qcPianoGuard()) return false;
   const p = qcPianoGet(id); if (!p || !QC_CAR_CAMPI.includes(campo)) return false;
+  const c0 = (p.characteristics || []).find(c => c.id === carId); if (!c0) return false;
   let v = valore == null ? '' : String(valore).trim();
   if (['nominal', 'tolMin', 'tolMax'].includes(campo)) {
-    const n = Number(v.replace(',', '.').replace('−', '-'));
-    v = v === '' || !isFinite(n) ? '' : n;
+    v = qcLeggiNumero(v);
+    if (v === null) return false;
+  }
+  if (campo === 'isoClass' && v) {
+    const iso = iso286Leggi(v);
+    if (!iso) return false;
+    v = iso.classe;
   }
   if (campo === 'kind') v = v === 'ok' ? 'ok' : 'misura';
-  Store.update('qualityPlans', id, { characteristics: (p.characteristics || []).map(c => c.id === carId ? Object.assign({}, c, { [campo]: v }) : c) });
-  if (campo === 'kind') pqRidisegna();
+  const c = Object.assign({}, c0, { [campo]: v });
+  if (c.isoClass && (campo === 'isoClass' || campo === 'nominal')) {
+    const t = iso286Tolleranze(c.nominal, c.isoClass);
+    if (!t && c.nominal !== '') return false;
+    Object.assign(c, t || { tolMin: '', tolMax: '' });
+  }
+  Store.update('qualityPlans', id, { characteristics: (p.characteristics || []).map(x => x.id === carId ? c : x) });
+  if (['kind', 'isoClass', 'nominal', 'tolMin', 'tolMax'].includes(campo)) pqRidisegna();
   return true;
+}
+// Dalla vista: se il valore non si legge, il campo diventa rosso e lo si dice.
+function qcCarSetDaCampo(el, id, carId, campo) {
+  const ok = qcCarSet(id, carId, campo, el.value);
+  if (!ok && el.isConnected) {
+    el.classList.add('qc-campo-ko');
+    showToast(campo === 'isoClass' ? 'Classe non in tabella: si usano le lettere D–P / d–p e i gradi da 5 a 11, fino a 500 mm'
+      : campo === 'nominal' ? 'Nominale non valido, o fuori dalle tabelle ISO (oltre 500 mm)' : 'Numero non valido', 'error');
+  }
+  return ok;
 }
 function qcCarElimina(id, carId) {
   if (!qcPianoGuard()) return false;
@@ -367,6 +490,8 @@ function qcPianoDuplica(id) {
   const copia = JSON.parse(JSON.stringify(p));
   ['id', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'].forEach(k => delete copia[k]);
   copia.name = p.name + ' (copia)';
+  // Senza codici: con gli stessi violerebbe subito la regola «un codice, un piano».
+  copia.itemIds = [];
   copia.characteristics = (copia.characteristics || []).map(c => Object.assign(c, { id: gid() }));
   const n = qcPianoNuovo(copia);
   if (n) { pqCurrentId = n.id; renderPianiQc(); }
@@ -379,48 +504,80 @@ function qcPianoDuplica(id) {
 let pqCurrentId = null;
 let pqFiltro = { q: '' };
 function pqRidisegna() { if (typeof activeView !== 'undefined' && activeView === 'pianiqc') renderPianiQc(); }
-function pqSearchInput() { pqFiltro.q = val('pq-search'); renderPianiQc(); }
+function pqSearchInput() { pqFiltro.q = val('pq-search'); ridisegnaCercando('pq-search', renderPianiQc); }
 function pqApri(id) { pqCurrentId = id; renderPianiQc(); }
 function pqChiudi() { pqCurrentId = null; renderPianiQc(); }
 function pqNuovo() { const p = qcPianoNuovo(); if (p) { pqCurrentId = p.id; renderPianiQc(); } }
 
 function renderPianiQc() {
   const el = document.getElementById('view-pianiqc'); if (!el) return;
+  // I piani d'articolo e di famiglia diventano elenchi di codici la prima
+  // volta che li apre chi li può scrivere; chi li legge soltanto li vede già
+  // così (qcPianoCodici).
+  const conv = qcPianiConverti();
+  if (conv) showToast(`${conv.piani} pian${conv.piani === 1 ? 'o convertito' : 'i convertiti'} in elenchi di codici${conv.fuori ? `: ${conv.fuori} codic${conv.fuori === 1 ? 'e era' : 'i erano'} in due piani e ${conv.fuori === 1 ? 'è rimasto' : 'sono rimasti'} in quello d'articolo` : ''}`);
   const q = (pqFiltro.q || '').toLowerCase();
   const tutti = qcPiani();
-  const righe = tutti.filter(p => !q || [p.name, qcPianoAmbito(p), p.cert].some(v => String(v || '').toLowerCase().includes(q)))
+  const cercaCodici = p => qcPianoCodici(p).map(id => { const it = getItem(id); return it ? it.code + ' ' + it.name : ''; }).join(' ');
+  const righe = tutti.filter(p => !q || [p.name, p.cert, cercaCodici(p)].some(v => String(v || '').toLowerCase().includes(q)))
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'));
   const corrente = pqCurrentId ? qcPianoGet(pqCurrentId) : null;
   const scrive = canWrite('docs');
   el.innerHTML = worklistHtml({
     titolo: 'Piani di controllo', icona: 'ruler', listaId: 'pq-list',
     comandi: scrive ? `<button class="add-btn-sm" onclick="pqNuovo()">${ico('plus', 'tinted', '')} Nuovo piano</button>` : '',
-    filtri: `<input type="text" class="search" id="pq-search" placeholder="Cerca piano, articolo, famiglia…" value="${esc(pqFiltro.q)}" oninput="pqSearchInput()">`,
-    righe: righe.length ? righe.map(p => worklistRow({
-      numero: p.itemId ? 'Articolo' : 'Famiglia', sel: corrente && corrente.id === p.id,
-      badge: `<span class="doc-badge st-bozza">${(p.characteristics || []).length} caratt.</span>`,
-      titolo: p.name, meta: `${esc(qcPianoAmbito(p))} · ${esc(QC_CAMPIONI[p.sampling] || QC_CAMPIONI.tutto)}`,
-      azione: `pqApri('${p.id}')`, etichetta: `Apri il piano ${p.name}`,
-    })).join('') : '<p class="empty-text">Nessun piano di controllo.</p>',
+    filtri: `<input type="text" class="search" id="pq-search" placeholder="Cerca piano o codice…" value="${esc(pqFiltro.q)}" oninput="pqSearchInput()">`,
+    righe: righe.length ? righe.map(p => {
+      const n = qcPianoCodici(p).length;
+      return worklistRow({
+        numero: `${n} codic${n === 1 ? 'e' : 'i'}`, sel: corrente && corrente.id === p.id,
+        badge: `<span class="doc-badge st-bozza">${(p.characteristics || []).length} caratt.</span>`,
+        titolo: p.name, meta: `${esc(qcPianoAmbito(p))} · ${esc(QC_CAMPIONI[p.sampling] || QC_CAMPIONI.tutto)}`,
+        azione: `pqApri('${p.id}')`, etichetta: `Apri il piano ${p.name}`,
+      });
+    }).join('') : '<p class="empty-text">Nessun piano di controllo.</p>',
     nota: worklistCount(righe.length, tutti.length, 'piano', 'piani'),
     doc: corrente ? pqSchedaHtml(corrente, scrive) : '',
     vuoto: {
       titolo: 'Piani di controllo',
-      testo: 'Un piano dice <strong>che cosa misurare</strong> e <strong>su quanti pezzi</strong> quando arriva un articolo, o un\'intera famiglia, eventualmente da un solo fornitore. Il collaudo che nasce ne prende una copia: le caratteristiche da compilare, il campione e i numeri di accettazione. Un piano attivo basta a far collaudare l\'articolo.',
+      testo: 'Un piano dice <strong>che cosa misurare</strong> e <strong>su quanti pezzi</strong> quando arrivano i codici che gli assegni. Un codice sta in un piano solo. Il collaudo che nasce ne prende una copia: le caratteristiche da compilare, il campione e i numeri di accettazione. Un piano basta a far collaudare i suoi codici.',
       comandi: scrive ? `<button class="add-btn-sm" onclick="pqNuovo()">${ico('plus', 'tinted', '')} Nuovo piano</button>` : '',
     },
   });
   a11yFields(el);
 }
 
+// I codici del piano nella scheda, in un riquadro che si apre e si chiude.
+// Nasce chiuso, con il conteggio: un piano può avere centinaia di codici, e
+// la scheda non deve diventare un elenco. Aperto mostra l'elenco intero; la
+// scelta vale finché non si cambia piano.
+let pqCodiciAperti = null;
+function pqCodiciApriChiudi(id) { pqCodiciAperti = pqCodiciAperti === id ? null : id; renderPianiQc(); }
+
+function pqCodiciHtml(p, scrive) {
+  const l = qcPianoCodici(p).map(getItem).filter(Boolean).sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+  const contesi = qcPianoContesi(p);
+  const aperto = pqCodiciAperti === p.id;
+  const famiglia = it => { const f = it.familyId ? getFamily(it.familyId) : null; return f ? f.name : '—'; };
+  const titolo = l.length
+    ? `<button type="button" class="var-toggle pq-codici-toggle" aria-expanded="${aperto}" onclick="pqCodiciApriChiudi('${p.id}')">${ico(aperto ? 'chevronDown' : 'chevronRight', 'tinted', '')} Codici del piano <span class="qc-conta">${l.length}</span></button>`
+    : 'Codici del piano <span class="qc-conta">0</span>';
+  return `<div class="qc-card">
+    <h3>${titolo}</h3>
+    ${!l.length ? `<p class="empty-text qc-hint">${ico('warning', 'tinted', '')} Nessun codice: finché non ne scegli il piano non si applica a niente.</p>`
+    : aperto ? `<div class="table-wrap"><table class="qc-table">
+      <thead><tr><th scope="col">Codice</th><th scope="col">Descrizione</th><th scope="col">Famiglia</th></tr></thead>
+      <tbody>${l.map(it => `<tr><td class="mono">${esc(it.code || '')}</td><td>${esc(it.name || '')}</td><td>${esc(famiglia(it))}</td></tr>`).join('')}</tbody></table></div>`
+    : `<p class="empty-text qc-hint">${esc(l.slice(0, 3).map(it => it.code || '').join(', '))}${l.length > 3 ? ` e altri ${l.length - 3}` : ''}.</p>`}
+    ${contesi.length ? `<p class="empty-text qc-hint qc-avviso">${ico('warning', 'tinted', '')} ${contesi.length} codic${contesi.length === 1 ? 'e è' : 'i sono'} anche in un altro piano (${esc(contesi.slice(0, 3).map(x => x.piano.name).join(', '))}) e lì vale quello: toglil${contesi.length === 1 ? 'o' : 'i'} da uno dei due.</p>` : ''}
+    ${scrive ? `<div class="modal-actions" style="justify-content:flex-start">
+      <button class="btn-outline" onclick="qcCodiciModal('${p.id}')">${ico('list', 'tinted', '')} Scegli i codici…</button></div>` : ''}
+  </div>`;
+}
+
 function pqSchedaHtml(p, scrive) {
   const dis = scrive ? '' : 'disabled';
   const set = campo => `onchange="qcPianoSet('${p.id}','${campo}',this.value);pqRidisegna()"`;
-  const ambito = p.familyId && !p.itemId ? 'famiglia' : 'articolo';
-  const articoli = (db.items || []).filter(it => !it.obsolete && hasStock(it))
-    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
-  const famiglie = (db.families || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'));
-  const fornitori = (db.suppliers || []).filter(s => s.active !== false).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'));
   const m = QC_CAMPIONI[p.sampling] ? p.sampling : 'tutto';
   const esempio = qcCampionamento(p, 500, 'normale');
   const usato = qcTutti().filter(x => x.planId === p.id).length;
@@ -430,33 +587,20 @@ function pqSchedaHtml(p, scrive) {
         ${worklistCloseBtn('pqChiudi()', 'il piano')}
         <h2 class="section-title">${esc(p.name)}</h2>
       </div>
-      ${scrive ? `<div class="bom-toolbar-right">
-        <button class="btn-outline" onclick="qcPianoDuplica('${p.id}')">${ico('copy', 'tinted', '')} Duplica</button>
-        <button class="btn-outline danger" onclick="qcPianoElimina('${p.id}')">${ico('trash', 'tinted', '')} Elimina</button>
-      </div>` : ''}
+      <div class="bom-toolbar-right">
+        <button class="btn-outline" onclick="qcPianoPdf('${p.id}')">${ico('file', 'tinted', '')} Scheda PDF</button>
+        ${scrive ? `<button class="btn-outline" onclick="qcPianoDuplica('${p.id}')">${ico('copy', 'tinted', '')} Duplica</button>
+        <button class="btn-outline danger" onclick="qcPianoElimina('${p.id}')">${ico('trash', 'tinted', '')} Elimina</button>` : ''}
+      </div>
     </div>
     <div class="qc-card">
-      <h3>A cosa si applica</h3>
+      <h3>Il piano</h3>
       <div class="modal-grid">
         <div class="modal-field"><label>Nome del piano</label><input value="${esc(p.name)}" ${dis} ${set('name')}></div>
-        <div class="modal-field"><label>Vale per</label>
-          <select ${dis} onchange="qcPianoAmbitoSet('${p.id}', this.value)">
-            <option value="articolo" ${ambito === 'articolo' ? 'selected' : ''}>Un articolo</option>
-            <option value="famiglia" ${ambito === 'famiglia' ? 'selected' : ''}>Una famiglia</option>
-          </select></div>
-        ${ambito === 'articolo' ? `<div class="modal-field"><label>Articolo</label>
-          <select class="sel-cerca" ${dis} ${set('itemId')}><option value="">— scegli —</option>
-            ${articoli.map(it => `<option value="${it.id}" ${p.itemId === it.id ? 'selected' : ''}>${esc(it.code + ' — ' + it.name)}</option>`).join('')}</select></div>`
-    : `<div class="modal-field"><label>Famiglia</label>
-          <select class="sel-cerca" ${dis} ${set('familyId')}><option value="">— scegli —</option>
-            ${famiglie.map(f => `<option value="${f.id}" ${p.familyId === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>`}
-        <div class="modal-field"><label>Solo per il fornitore</label>
-          <select class="sel-cerca" ${dis} ${set('supplierId')}><option value="">Tutti i fornitori</option>
-            ${fornitori.map(s => `<option value="${s.id}" ${p.supplierId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
         <div class="modal-field"><label>Certificato richiesto</label><input value="${esc(p.cert || '')}" maxlength="60" placeholder="es. 3.1 EN 10204" ${dis} ${set('cert')}></div>
       </div>
-      ${!p.itemId && !p.familyId ? `<p class="empty-text qc-hint">${ico('warning', 'tinted', '')} Finché non scegli un articolo o una famiglia il piano non si applica a niente.</p>` : ''}
     </div>
+    ${pqCodiciHtml(p, scrive)}
     <div class="qc-card">
       <h3>Campionamento</h3>
       <div class="modal-grid">
@@ -481,37 +625,141 @@ function pqSchedaHtml(p, scrive) {
       </div>` : ''}
     </div>
     <div class="qc-card">
-      <h3>Istruzioni per chi collauda</h3>
-      <textarea rows="3" ${dis} onchange="qcPianoSet('${p.id}','notes',this.value)" placeholder="es. Misurare a 20 °C dopo 2 ore di stabilizzazione">${esc(p.notes || '')}</textarea>
+      <h3>Per chi collauda</h3>
+      <div class="modal-grid">
+        <div class="modal-field qc-campo-largo"><label>Istruzioni</label>
+          <textarea rows="3" ${dis} onchange="qcPianoSet('${p.id}','notes',this.value)" placeholder="es. Misurare a 20 °C dopo 2 ore di stabilizzazione">${esc(p.notes || '')}</textarea></div>
+        <div class="modal-field qc-campo-largo"><label>Messaggio se il controllo fallisce</label>
+          <textarea rows="2" ${dis} onchange="qcPianoSet('${p.id}','failMessage',this.value)" placeholder="es. Separare il lotto, etichettare RESPINTO e avvisare l'ufficio acquisti">${esc(p.failMessage || '')}</textarea></div>
+      </div>
+      <p class="empty-text qc-hint">Il messaggio compare in rosso nel collaudo appena una riga risulta fuori o i pezzi non conformi arrivano al numero di rifiuto.</p>
     </div>
     <p class="empty-text qc-hint">${usato ? `${usato} collaud${usato === 1 ? 'o è nato' : 'i sono nati'} da questo piano. Le modifiche valgono dai prossimi arrivi: chi è già nato tiene la sua copia.` : 'Nessun collaudo è ancora nato da questo piano.'}</p>
     ${stampLine(p)}
   </div>`;
 }
+// Una caratteristica su due righe: in alto che cosa e con che cosa, sotto la
+// quota. La tolleranza si scrive come classe ISO 286 (gli scostamenti li dà la
+// tabella e restano bloccati) oppure come due scostamenti; in entrambi i casi
+// si vedono subito il minimo e il massimo che vedrà chi collauda.
 function pqCaratteristicheHtml(p, scrive) {
   const l = p.characteristics || [];
   if (!l.length) return '<p class="empty-text qc-hint">Nessuna caratteristica: il collaudo chiederà solo l\'esito.</p>';
   const dis = scrive ? '' : 'disabled';
-  const inp = (c, campo, attr) => `<input ${attr || ''} value="${esc(c[campo] == null ? '' : String(c[campo]).replace('.', ','))}" ${dis}
-      onchange="qcCarSet('${p.id}','${c.id}','${campo}',this.value)" aria-label="${esc(campo)}">`;
-  return `<div class="table-wrap"><table class="qc-table">
-    <thead><tr><th scope="col">Caratteristica</th><th scope="col">Tipo</th><th scope="col" class="num">Nominale</th>
-      <th scope="col" class="num">Toll. −</th><th scope="col" class="num">Toll. +</th><th scope="col">U.M.</th><th scope="col">Strumento</th>${scrive ? '<th scope="col"><span class="sr-only">Comandi</span></th>' : ''}</tr></thead>
-    <tbody>${l.map((c, i) => `<tr>
-      <td>${inp(c, 'name', 'placeholder="es. Diametro esterno"')}</td>
-      <td><select ${dis} onchange="qcCarSet('${p.id}','${c.id}','kind',this.value)" aria-label="Tipo">
-        <option value="misura" ${c.kind !== 'ok' ? 'selected' : ''}>Misura</option><option value="ok" ${c.kind === 'ok' ? 'selected' : ''}>Sì / no</option></select></td>
-      ${c.kind === 'ok' ? '<td colspan="4" class="empty-text">passa / non passa</td>' : `
-      <td class="num">${inp(c, 'nominal', 'inputmode="decimal" class="num"')}</td>
-      <td class="num">${inp(c, 'tolMin', 'inputmode="decimal" class="num" placeholder="-0,05"')}</td>
-      <td class="num">${inp(c, 'tolMax', 'inputmode="decimal" class="num" placeholder="+0,05"')}</td>
-      <td>${inp(c, 'uom', 'maxlength="8"')}</td>`}
-      <td>${inp(c, 'tool', 'placeholder="es. Calibro"')}</td>
-      ${scrive ? `<td class="qc-row-cmds">
-        <button class="mini-btn" onclick="qcCarSposta('${p.id}','${c.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Sposta su">↑</button>
-        <button class="mini-btn" onclick="qcCarSposta('${p.id}','${c.id}',1)" ${i === l.length - 1 ? 'disabled' : ''} title="Sposta giù">↓</button>
-        <button class="mini-btn danger" onclick="qcCarElimina('${p.id}','${c.id}')" title="Elimina la caratteristica">${ico('trash', 'tinted', 'Elimina')}</button></td>` : ''}
-    </tr>`).join('')}</tbody></table></div>`;
+  const num = v => v === '' || v == null ? '' : String(v).replace('.', ',');
+  const campo = (c, k, etichetta, attr, valore) => `<div class="modal-field"><label>${etichetta}</label>
+      <input ${attr || ''} value="${esc(valore != null ? valore : num(c[k]))}" ${dis}
+        onchange="qcCarSetDaCampo(this,'${p.id}','${c.id}','${k}')"></div>`;
+  return `<div class="qc-car-list">${l.map((c, i) => {
+    const lim = qcLimiti(c);
+    const segno = v => v === '' || v == null ? '' : (Number(v) > 0 ? '+' : '') + num(v);
+    return `<div class="qc-car">
+      <div class="qc-car-riga1">
+        <span class="qc-car-num">${i + 1}</span>
+        ${campo(c, 'name', 'Caratteristica', 'placeholder="es. Diametro esterno"', c.name || '')}
+        <div class="modal-field"><label>Tipo</label>
+          <select ${dis} onchange="qcCarSet('${p.id}','${c.id}','kind',this.value)">
+            <option value="misura" ${c.kind !== 'ok' ? 'selected' : ''}>Misura</option><option value="ok" ${c.kind === 'ok' ? 'selected' : ''}>Sì / no</option></select></div>
+        ${campo(c, 'tool', 'Strumento', 'placeholder="es. Calibro, tampone 20 H7"', c.tool || '')}
+        ${scrive ? `<div class="qc-row-cmds">
+          <button class="mini-btn" onclick="qcCarSposta('${p.id}','${c.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Sposta su" aria-label="Sposta su">↑</button>
+          <button class="mini-btn" onclick="qcCarSposta('${p.id}','${c.id}',1)" ${i === l.length - 1 ? 'disabled' : ''} title="Sposta giù" aria-label="Sposta giù">↓</button>
+          <button class="mini-btn danger" onclick="qcCarElimina('${p.id}','${c.id}')" title="Elimina la caratteristica">${ico('trash', 'tinted', 'Elimina')}</button></div>` : ''}
+      </div>
+      ${c.kind === 'ok' ? '<p class="empty-text qc-hint">Si risponde passa / non passa.</p>' : `<div class="qc-car-riga2">
+        ${campo(c, 'nominal', 'Nominale', 'inputmode="decimal" class="num" placeholder="es. 20"')}
+        ${campo(c, 'isoClass', 'Classe ISO', 'maxlength="5" placeholder="es. h7"', c.isoClass || '')}
+        ${campo(c, 'tolMin', 'Toll. −', `inputmode="decimal" class="num" placeholder="-0,05" ${c.isoClass ? 'readonly title="Lo dà la classe ISO"' : ''}`, segno(c.tolMin))}
+        ${campo(c, 'tolMax', 'Toll. +', `inputmode="decimal" class="num" placeholder="+0,05" ${c.isoClass ? 'readonly title="Lo dà la classe ISO"' : ''}`, segno(c.tolMax))}
+        ${campo(c, 'uom', 'U.M.', 'maxlength="8"', c.uom || '')}
+        <div class="modal-field"><label>Min – max</label><div class="qc-val qc-limiti">${lim ? `${esc(fmtQtyIt(lim.min))} – ${esc(fmtQtyIt(lim.max))}` : '<span class="empty-text">esito a mano</span>'}</div></div>
+      </div>`}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ─── La finestra di scelta dei codici ───
+// Tutti gli articoli a magazzino, con i filtri del catalogo e una spunta a
+// sinistra. Chi è già in un altro piano si vede, ma la spunta è spenta e dice
+// dove sta: si toglie di là, prima. Le spunte valgono solo con «Conferma».
+function qcCodiciModal(id) {
+  if (!qcPianoGuard()) return;
+  const p = qcPianoGet(id); if (!p) return;
+  const miei = new Set(qcPianoCodici(p));
+  const articoli = (db.items || []).filter(it => !it.obsolete && hasStock(it))
+    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+  const righe = articoli.map(it => {
+    const altro = miei.has(it.id) ? null : qcPianoDelCodice(it.id, id);
+    const f = it.familyId ? getFamily(it.familyId) : null;
+    return `<label class="rfq-pick-row qcs-row${altro ? ' qcs-preso' : ''}" data-type="${esc(it.type || '')}" data-fam="${esc(it.familyId || '')}" data-sub="${esc(it.subFamilyId || '')}" data-sup="${esc(it.supplierId || '')}" data-cerca="${esc(((it.code || '') + ' ' + (it.name || '')).toLowerCase())}">
+      <input type="checkbox" value="${it.id}" ${miei.has(it.id) ? 'checked' : ''} ${altro ? 'disabled' : ''} onchange="qcCodiciConta()">
+      <span class="mono">${esc(it.code || '')}</span> <span class="qcs-nome">${esc(it.name || '')}</span>
+      <span class="qcs-fam">${esc(f ? f.name : '')}</span>
+      ${altro ? `<span class="rfq-pick-type" title="Si toglie dal piano «${esc(altro.name)}» prima">nel piano ${esc(altro.name)}</span>` : ''}</label>`;
+  }).join('');
+  openModal(`<h3>${ico('list', 'tinted pill', '')} Codici del piano «${esc(p.name)}»</h3>
+    <div class="rfq-pick-filters">
+      <input class="search" id="qcs-search" placeholder="Codice o descrizione…" oninput="debounced('qcs', qcCodiciFiltra)">
+      <select id="qcs-type" onchange="qcCodiciFiltra()" aria-label="Tipo"><option value="">Tutti i tipi</option>${ALL_TYPES.map(t => `<option value="${t}">${typeLabel(t)}</option>`).join('')}</select>
+      <select id="qcs-fam" onchange="qcCodiciFamiglia()" aria-label="Macrofamiglia"><option value="">Tutte le famiglie</option>${(db.families || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it')).map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select>
+      <select id="qcs-sub" onchange="qcCodiciFiltra()" aria-label="Sottofamiglia"><option value="">Tutte le sottofamiglie</option></select>
+      <select id="qcs-sup" class="sel-cerca" onchange="qcCodiciFiltra()" aria-label="Fornitore"><option value="">Tutti i fornitori</option>${(db.suppliers || []).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
+      <label class="flag-check"><input type="checkbox" id="qcs-solo" onchange="qcCodiciFiltra()"> Solo i selezionati</label>
+    </div>
+    <div class="qcs-comandi">
+      <button class="btn-outline" onclick="qcCodiciSpunta(true)">Spunta i visibili</button>
+      <button class="btn-outline" onclick="qcCodiciSpunta(false)">Togli i visibili</button>
+      <span class="qc-conta" id="qcs-conta"></span>
+    </div>
+    <div class="rfq-pick-list qcs-list" id="qcs-list">${righe || '<div class="empty-text">Nessun articolo a magazzino.</div>'}</div>
+    <div class="empty-text" id="qcs-empty" style="display:none">Nessun articolo con questi filtri.</div>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="qcCodiciConferma('${p.id}')">Conferma</button></div>`, true);
+  qcCodiciConta();
+}
+function qcCodiciFamiglia() {
+  const f = getFamily(val('qcs-fam'));
+  const sel = document.getElementById('qcs-sub');
+  if (sel) sel.innerHTML = '<option value="">Tutte le sottofamiglie</option>' + ((f && f.subs) || []).map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  qcCodiciFiltra();
+}
+function qcCodiciFiltra() {
+  const q = (val('qcs-search') || '').toLowerCase();
+  const ty = val('qcs-type'), fam = val('qcs-fam'), sub = val('qcs-sub'), sup = val('qcs-sup');
+  const solo = !!(document.getElementById('qcs-solo') || {}).checked;
+  let visti = 0;
+  document.querySelectorAll('#qcs-list .qcs-row').forEach(el => {
+    const cb = el.querySelector('input');
+    const ok = (el.dataset.cerca || '').includes(q) && (!ty || el.dataset.type === ty) && (!fam || el.dataset.fam === fam)
+      && (!sub || el.dataset.sub === sub) && (!sup || el.dataset.sup === sup) && (!solo || (cb && cb.checked));
+    el.style.display = ok ? '' : 'none';
+    if (ok) visti++;
+  });
+  const vuoto = document.getElementById('qcs-empty');
+  if (vuoto) vuoto.style.display = visti ? 'none' : '';
+}
+// Spunta o toglie le righe visibili che si possono scegliere.
+function qcCodiciSpunta(si) {
+  document.querySelectorAll('#qcs-list .qcs-row').forEach(el => {
+    const cb = el.querySelector('input');
+    if (cb && !cb.disabled && el.style.display !== 'none') cb.checked = si;
+  });
+  qcCodiciConta();
+}
+function qcCodiciConta() {
+  const n = document.querySelectorAll('#qcs-list input:checked').length;
+  const el = document.getElementById('qcs-conta');
+  if (el) el.textContent = `${n} selezionat${n === 1 ? 'o' : 'i'}`;
+}
+function qcCodiciConferma(id) {
+  const ids = Array.from(document.querySelectorAll('#qcs-list input:checked')).map(c => c.value);
+  const r = qcPianoCodiciSet(id, ids);
+  if (!r) return;
+  closeModal();
+  renderPianiQc();
+  if (r.scartati.length) {
+    showToast(`${r.codici.length} codici nel piano; ${r.scartati.length} lasciat${r.scartati.length === 1 ? 'o' : 'i'} fuori perché nel frattempo ${r.scartati.length === 1 ? 'è entrato' : 'sono entrati'} in un altro piano`, 'error');
+  } else savedToast(`${r.codici.length} codic${r.codici.length === 1 ? 'e' : 'i'} nel piano`);
 }
 
 // ─── Il rapporto di collaudo ───
@@ -523,6 +771,9 @@ function qcRapportoPdf(id, modo) {
   const jsPDF = requirePdf(); if (!jsPDF) return null;
   const it = getItem(x.itemId);
   const doc = new jsPDF();
+  // Il QR apre la scheda rapida del collaudo (qualita-qr.js): con il rapporto
+  // in mano, davanti alla merce, si collauda da lì.
+  if (x.number) qrPdfDraw(doc, qrLink('col', x.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
   const startY = docPdfTesta(doc, { titolo: 'Rapporto di collaudo / Inspection report', rec: Object.assign({}, x, { title: it ? `${it.code} — ${it.name}` : '' }),
     chi: 'CLIENTE / CUSTOMER', controparte: 'FORNITORE / SUPPLIER', vuota: '—', xControparte: 110 });
   const u = x.uom || (it ? itemUom(it) : '');
@@ -542,7 +793,7 @@ function qcRapportoPdf(id, modo) {
       head: [['#', 'Caratteristica\nCharacteristic', 'Specifica\nSpecification', 'Strumento\nGauge', 'Rilevato\nMeasured', 'Esito\nResult']],
       body: checks.map((c, i) => [i + 1, c.name || '', qcTolleranzaTesto(c), c.tool || '',
         c.kind === 'ok' ? (c.value === 'ok' ? 'sì / yes' : c.value === 'ko' ? 'no' : '') : String(c.value || '').replace('.', ','),
-        { ok: 'OK', ko: 'NON OK / NOT OK' }[qcCheckEsito(c)] || '—']) });
+        ({ ok: 'OK', ko: 'NON OK / NOT OK' }[qcCheckEsito(c)] || '—') + (c.kind !== 'ok' && c.verdict && (qcCheckForzato(c) || !qcLimiti(c)) ? ' (manuale / manual)' : '')]) });
   }
   const esiti = { accettato: 'Accettato / Accepted', deroga: 'Accettato in deroga / Accepted under concession', respinto: 'Respinto / Rejected' };
   doc.autoTable({ startY: doc.lastAutoTable.finalY + 6, theme: 'plain', styles: { fontSize: 10, cellPadding: 1.4 }, columnStyles: { 0: { textColor: 110, cellWidth: 60 } },

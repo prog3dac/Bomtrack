@@ -89,10 +89,13 @@ describe('Il piano entra nel collaudo', () => {
     assert.equal(J(a, 'qcGet(' + JSON.stringify(c.id) + ').checks').length, 2, 'cambiare il piano non riscrive i collaudi nati');
   });
 
-  it('vince il piano più specifico: articolo e fornitore prima della famiglia', () => {
+  // Dalla 0.142.0 il fornitore non restringe più un piano (un codice sta in
+  // un piano solo): fra due piani vecchi sullo stesso codice vince quello
+  // d'articolo, per qualunque fornitore.
+  it('fra due piani vecchi vince quello d\'articolo, e il fornitore non conta più', () => {
     const a = app(base({ piani: [piano(), piano({ id: 'p2', name: 'Solo SKF', familyId: null, itemId: 'c1', supplierId: 's1', sampling: 'fisso', sampleQty: 7 })] }));
     assert.equal(a.eval('qcPianoPer(getItem("c1"), "s1").id'), 'p2');
-    assert.equal(a.eval('qcPianoPer(getItem("c1"), "s2").id'), 'p1', 'per un altro fornitore vale la famiglia');
+    assert.equal(a.eval('qcPianoPer(getItem("c1"), "s2").id'), 'p2');
     assert.equal(arriva(a, 100).sampleSize, 7);
   });
 

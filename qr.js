@@ -30,6 +30,11 @@ const QR_TIPI = {
   odl: 'Ordine di lavoro',
   ubi: 'Ubicazione',   // dalla 0.101.0: il QR sullo scaffale
   fase: 'Fase di produzione',   // dalla 0.132.0: la scheda di reparto, «ODP-2026-014/20»
+  // Dalla 0.142.0, modulo Qualità (qualita-qr.js): collaudo e non conformità
+  // per numero, piano di controllo per id.
+  col: 'Collaudo',
+  nc: 'Non conformità',
+  pc: 'Piano di controllo',
 };
 
 // ─── L'indirizzo ───
@@ -87,6 +92,10 @@ function qrResolve(tipo, codice) {
     odp: () => perNumero(db.prodOrders),
     oda: () => perNumero(db.orders),
     odl: () => perNumero(db.workOrders),
+    col: () => (typeof qcPerNumero === 'function' ? qcPerNumero(c) : null),
+    nc: () => (typeof ncPerNumero === 'function' ? ncPerNumero(c) : null),
+    // Solo quando il QR lo dice: un id non si digita a mano.
+    pc: () => (tipo === 'pc' && typeof qcPianoGet === 'function' ? qcPianoGet(c) : null),
     // Ultima: un codice nudo che è sia un articolo sia un'ubicazione è l'articolo.
     ubi: () => ubicazioneRec(c),
     // Numero dell'ODP e fase, divisi dall'ultima barra. rec = { odp, fase }.
@@ -318,7 +327,7 @@ function qrApri(letto) {
   }
   // Un'ubicazione, un ODP o un ODL di un'area spenta: la scheda porterebbe a
   // finestre che non ci sono.
-  const vista = { ubi: 'stock', odp: 'odp', odl: 'odl', fase: 'odp' }[r.tipo];
+  const vista = { ubi: 'stock', odp: 'odp', odl: 'odl', fase: 'odp', col: 'collaudi', nc: 'nc', pc: 'pianiqc' }[r.tipo];
   if (vista && !vistaAttiva(vista)) { showToast(`${AREE[areaDiVista(vista)].nome}: area spenta in Gestione → Aree e moduli`, 'error'); return false; }
   // Senza il modulo Officina la scheda di reparto non c'è: si apre l'ordine.
   if (r.tipo === 'fase' && !moduloAttivo('officina')) { qrSchedaModal('odp', r.rec.odp); return true; }
@@ -335,6 +344,7 @@ function qrBtn(testo, icona, azione, primario) {
   return `<button class="${primario ? 'add-btn-sm' : 'btn-outline'}" onclick="closeModal(); ${azione}">${ico(icona, primario ? '' : 'tinted', '')} ${esc(testo)}</button>`;
 }
 function qrSchedaHtml(tipo, rec) {
+  if (tipo === 'col' || tipo === 'nc' || tipo === 'pc') return qcQrSchedaHtml(tipo, rec);
   // La scheda della fase è quella del reparto, con i suoi pulsanti; si
   // ridisegna da sola a ogni gesto (repartoAggiornaScheda, officina.js).
   if (tipo === 'fase') {

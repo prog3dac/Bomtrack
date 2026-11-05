@@ -63,9 +63,8 @@ function qcFamigliaRichiede(it) {
   if (sub && (sub.qc === 'si' || sub.qc === 'no')) return sub.qc === 'si';
   return f.qc === 'si';
 }
-// Con un fornitore, conta anche un piano di controllo (qualita-piani.js): un
-// piano attivo per l'articolo o la sua famiglia vale come «sì». Un «No»
-// scritto sull'articolo resta un no anche lì.
+// Conta anche un piano di controllo (qualita-piani.js): un codice in un piano
+// vale come «sì». Un «No» scritto sull'articolo resta un no anche lì.
 function qcRichiesto(it, supplierId) {
   if (!qcAttivo() || !it || !hasStock(it)) return false;
   if (it.qc === 'si') return true;
@@ -204,7 +203,11 @@ function qcCrea(dati) {
   };
   // Il piano di controllo, se c'è: caratteristiche, campione, salto lotti.
   if (typeof qcApplicaPiano === 'function') qcApplicaPiano(rec, it);
-  return Store.insert('inspections', rec);
+  const nuovo = Store.insert('inspections', rec);
+  // Il cartellino da attaccare al bancale, se in Gestione → Qualità si è
+  // chiesto di proporlo al ricevimento (qualita-qr.js).
+  if (nuovo && typeof qcProponiCartellino === 'function') qcProponiCartellino(nuovo);
+  return nuovo;
 }
 // Dopo un ricevimento su una riga d'ordine fornitore. `delta` è quanto è
 // entrato adesso: un ricevuto corretto in giù (una registrazione sbagliata)
@@ -399,7 +402,7 @@ function qcFiltrati() {
       .some(v => String(v || '').toLowerCase().includes(q));
   }).sort((a, b) => String(b.number || '').localeCompare(String(a.number || '')));
 }
-function qcSearchInput() { qcFiltro.q = val('qc-search'); renderCollaudi(); }
+function qcSearchInput() { qcFiltro.q = val('qc-search'); ridisegnaCercando('qc-search', renderCollaudi); }
 function qcStatoChange() { qcFiltro.stato = val('qc-stato'); renderCollaudi(); }
 function qcApri(id) { qcCurrentId = id; renderCollaudi(); }
 // Da un'altra vista (il Riepilogo, il QR): prima si arriva, poi si sceglie.
@@ -462,6 +465,7 @@ function qcSchedaHtml(x) {
         ${qcBadge(x)}
       </div>
       <div class="bom-toolbar-right">
+        <button class="btn-outline" onclick="qcCartellino('${x.id}')" title="Il foglio A4 da attaccare alla merce: da collaudare, accettato o non conforme, con il QR">${ico('qr', 'tinted', '')} Cartellino</button>
         <button class="btn-outline" onclick="qcRapportoPdf('${x.id}')" title="Il rapporto di collaudo in PDF, in italiano e inglese">${ico('file', 'tinted', '')} Rapporto PDF</button>
       </div>
     </div>
@@ -496,17 +500,28 @@ function qcControlloHtml(x, u, scrivibile) {
   const checks = x.checks || [];
   const righe = checks.map((c, i) => {
     const e = qcCheckEsito(c);
+    const nome = esc(c.name || 'caratteristica ' + (i + 1));
     const cella = c.kind === 'ok'
-      ? `<select ${dis} onchange="qcSetCheck('${x.id}','${c.id}',this.value);renderCollaudi()" aria-label="Esito ${esc(c.name || 'caratteristica ' + (i + 1))}">
+      ? `<select ${dis} onchange="qcSetCheck('${x.id}','${c.id}',this.value);renderCollaudi()" aria-label="Esito ${nome}">
           <option value="" ${!c.value ? 'selected' : ''}>—</option><option value="ok" ${c.value === 'ok' ? 'selected' : ''}>Passa</option><option value="ko" ${c.value === 'ko' ? 'selected' : ''}>Non passa</option></select>`
       : `<input class="num ${e === 'ko' ? 'qc-ko-val' : ''}" inputmode="decimal" value="${esc(String(c.value || '').replace('.', ','))}" ${dis}
-          onchange="qcSetCheck('${x.id}','${c.id}',this.value.replace(',', '.'));renderCollaudi()" aria-label="Misura ${esc(c.name || 'caratteristica ' + (i + 1))}">`;
+          onchange="qcSetCheck('${x.id}','${c.id}',this.value.replace(',', '.'));renderCollaudi()" aria-label="Misura ${nome}">`;
+    // Su una misura l'esito si può scegliere: senza limiti è l'unico modo di
+    // averne uno, con i limiti corregge il calcolo e resta segnato «a mano».
+    const calc = qcCheckCalcolato(c);
+    const esito = c.kind === 'ok'
+      ? (e === 'ok' ? '<span class="doc-badge st-evaso">OK</span>' : e === 'ko' ? '<span class="doc-badge st-annullato">Fuori</span>' : '')
+      : `<select class="qc-verdetto ${e === 'ko' ? 'qc-ko-val' : ''}" ${dis} onchange="qcSetVerdetto('${x.id}','${c.id}',this.value);renderCollaudi()" aria-label="Esito ${nome}">
+          <option value="" ${!c.verdict ? 'selected' : ''}>${calc === 'ok' ? 'OK (calcolato)' : calc === 'ko' ? 'Fuori (calcolato)' : qcLimiti(c) ? '— (manca il valore)' : '— scegli'}</option>
+          <option value="ok" ${c.verdict === 'ok' ? 'selected' : ''}>OK</option><option value="ko" ${c.verdict === 'ko' ? 'selected' : ''}>Fuori</option></select>
+          ${qcCheckForzato(c) ? '<span class="doc-badge st-bozza" title="Diverso da quello che dicono i limiti">a mano</span>' : ''}`;
     return `<tr class="${e === 'ko' ? 'qc-row-ko' : ''}">
       <td>${esc(c.name || '—')}</td><td>${esc(qcTolleranzaTesto(c))}</td><td>${esc(c.tool || '—')}</td>
       <td class="num">${cella}</td>
-      <td>${e === 'ok' ? '<span class="doc-badge st-evaso">OK</span>' : e === 'ko' ? '<span class="doc-badge st-annullato">Fuori</span>' : ''}</td></tr>`;
+      <td class="qc-esito-cella">${esito}</td></tr>`;
   }).join('');
   const sugg = x.status === 'aperto' ? qcEsitoSuggerito(x) : '';
+  const fuori = p && p.failMessage && qcCollaudoFuori(x);
   return `<div class="qc-card">
     <h3>Il controllo${p ? ` · ${esc(p.name)}` : ''}</h3>
     <div class="modal-grid">
@@ -517,6 +532,7 @@ function qcControlloHtml(x, u, scrivibile) {
         <input type="number" min="0" step="1" value="${Number(x.defects) || 0}" ${dis} onchange="qcSetDifetti('${x.id}', this.value);renderCollaudi()"></div>`}
     </div>
     ${p && p.notes ? `<p class="empty-text qc-hint">${ico('book', 'tinted', '')} ${esc(p.notes)}</p>` : ''}
+    ${fuori ? `<p class="qc-fail-msg" role="alert">${ico('warning', 'tinted', '')} ${esc(p.failMessage)}</p>` : ''}
     ${checks.length ? `<div class="table-wrap"><table class="qc-table">
       <thead><tr><th scope="col">Caratteristica</th><th scope="col">Specifica</th><th scope="col">Strumento</th><th scope="col" class="num">Rilevato</th><th scope="col">Esito</th></tr></thead>
       <tbody>${righe}</tbody></table></div>` : ''}

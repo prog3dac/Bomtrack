@@ -1052,6 +1052,16 @@ nel manuale, cap. 31.)*
 
 *(D10 — un ruolo per l'officina — chiusa nella 0.96.0, §54.)*
 
+**D11 — un codice in un piano di controllo solo, fra due PC** *(0.142.0)*. La
+regola «un codice, un piano» si fa rispettare al salvataggio
+(`qcPianoCodiciSet`, `qualita-piani.js`), ma due PC che mettono insieme lo
+stesso codice in due piani diversi passano entrambi: la sincronizzazione fonde
+riga per riga e `item_ids` è un elenco dentro il piano. Non si perde niente,
+perché vale un piano solo, sempre lo stesso (`qcPianoPeso`, poi il più vecchio),
+e la scheda dell'altro piano lo segnala (`qcPianoContesi`). Per chiuderla
+servirebbe una tabella `quality_plan_items` con l'articolo come chiave unica,
+oppure un trigger su `quality_plans` che rifiuta un codice già preso.
+
 ---
 
 ## Note in positivo

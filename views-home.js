@@ -152,6 +152,33 @@ function homeSegnali() {
           `ncApriDaAltrove('${x.id}')`);
       }), 'non conformità scaduta', 'non conformità scadute', 'nc', 'alta');
     }
+    // Le NC aperte che non sono ancora scadute (dalla 0.142.0): quelle scadute
+    // stanno già sopra, e due volte la stessa NC confonderebbe.
+    if (typeof ncAperte === 'function' && typeof ncScaduta === 'function') {
+      const g = oggiISO();
+      agg(ncAperte().filter(x => !ncScaduta(x, g)).map(x => {
+        const it = x.itemId ? getItem(x.itemId) : null;
+        return voce(x.number, `${it ? it.code + ' — ' + it.name : (x.description || '')}${x.dueDate ? ' — entro ' + fmtDateIt(x.dueDate) : ''}`,
+          `ncApriDaAltrove('${x.id}')`);
+      }), 'non conformità aperta', 'non conformità aperte', 'nc', 'info');
+      // Le azioni da fare entro una settimana, con chi le deve fare: quelle
+      // già oltre la data fanno scadere la loro NC, e si vedono lì.
+      const fra7 = ncScadenzaDa(g, 7);
+      const azioni = [];
+      ncAperte().forEach(x => (x.actions || []).forEach(a => {
+        if (!a.done && a.due && a.due >= g && a.due <= fra7) azioni.push({ x, a });
+      }));
+      azioni.sort((p, q) => String(p.a.due).localeCompare(String(q.a.due)));
+      agg(azioni.map(({ x, a }) => voce(`${x.number} · ${a.who || 'chi?'} · ${fmtDateIt(a.due)}`, `${a.who || 'chi?'} — ${a.text || '(azione senza testo)'} — entro ${fmtDateIt(a.due)}`,
+        `ncApriDaAltrove('${x.id}')`)), 'azione di NC da fare entro 7 giorni', 'azioni di NC da fare entro 7 giorni', 'nc', 'media');
+    }
+    // Articoli da collaudare che nessun piano copre (dalla 0.142.0): il
+    // collaudo nascerebbe senza dire che cosa misurare. Solo se un piano
+    // esiste già: chi i piani non li usa non deve sentirselo dire ogni giorno.
+    if (typeof qcSenzaPiano === 'function' && (db.qualityPlans || []).length) {
+      agg(qcSenzaPiano().map(it => voce(it.code, `${it.name} — si collauda all'arrivo, ma non sta in nessun piano di controllo`,
+        `setView('pianiqc')`)), 'articolo da collaudare senza piano', 'articoli da collaudare senza piano', 'pianiqc', 'info');
+    }
   }
 
   // Articoli che si comprano e non hanno un prezzo: in un ordine varrebbero zero
@@ -531,6 +558,22 @@ function homeEventi() {
       dettaglio: pm.title || '', gravita: s.scadenza < oggi ? 'alta' : calGravitaData(s.scadenza, oggi), azione: `setView('manutenzione')` });
   });
 
+  // Modulo Qualità (dalla 0.142.0): la data entro cui chiudere ogni NC aperta,
+  // e quella di ogni sua azione non ancora fatta, con chi la deve fare.
+  if (moduloAttivo('qualita') && typeof ncAperte === 'function') ncAperte().forEach(x => {
+    const it = x.itemId ? getItem(x.itemId) : null;
+    const cosa = it ? (it.code || it.name) : (x.description || '');
+    if (x.dueDate) out.push({ tipo: 'nc', data: x.dueDate, icona: 'warning', testo: `Chiudere ${x.number || 'la NC'}`,
+      dettaglio: [cosa, x.supplierId && supplierName(x.supplierId)].filter(Boolean).join(' — '),
+      gravita: x.dueDate < oggi ? 'alta' : calGravitaData(x.dueDate, oggi), azione: `ncApriDaAltrove('${x.id}')` });
+    (x.actions || []).forEach(a => {
+      if (a.done || !a.due) return;
+      out.push({ tipo: 'ncazione', data: a.due, icona: 'check', testo: `${x.number || 'NC'}: ${a.text || 'azione'}`,
+        dettaglio: [a.who, cosa].filter(Boolean).join(' — '),
+        gravita: a.due < oggi ? 'alta' : calGravitaData(a.due, oggi), azione: `ncApriDaAltrove('${x.id}')` });
+    });
+  });
+
   out.forEach(e => { delete e.numero; delete e.n; });
   return out.filter(calEventoAttivo).sort((a, b) => a.data.localeCompare(b.data) || CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }
@@ -550,6 +593,7 @@ const CAL_FILTRI = [
   { id: 'fasi', label: 'Avvio fasi ODP', tipi: ['fase'], vista: 'odp' },
   { id: 'produzione', label: 'Fine produzione', tipi: ['produzione'], vista: 'odp' },
   { id: 'manutenzione', label: 'Manutenzione', tipi: ['manutenzione'], vista: 'manutenzione', modulo: 'officina' },
+  { id: 'qualita', label: 'Non conformità', tipi: ['nc', 'ncazione'], vista: 'nc', modulo: 'qualita' },
   { id: 'promemoria', label: 'Promemoria', tipi: ['promemoria'] },
 ];
 const CAL_FILTRI_KEY = 'bomtrack_cal_nascosti';

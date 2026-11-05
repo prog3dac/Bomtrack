@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.141.0';
+const APP_VERSION = '0.142.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -2275,6 +2275,21 @@ function setVal(id, v) { const e = document.getElementById(id); if (e) e.value =
 // campi diversi non si annullano a vicenda.
 const SEARCH_DELAY = 160;   // ms: sotto la soglia in cui si percepisce un ritardo
 const _debounceTimers = {};
+// Per le viste che si ridisegnano per intero, campo di ricerca compreso: senza
+// rimettergli il fuoco e il cursore, dopo la prima lettera non si scriveva più
+// (ODP e modulo Qualità). Le altre viste ridisegnano solo l'elenco, con
+// renderInto().
+function ridisegnaCercando(id, ridisegna) {
+  const prima = document.getElementById(id);
+  const attivo = prima && document.activeElement === prima;
+  const pos = attivo ? prima.selectionStart : null;
+  ridisegna();
+  if (!attivo) return;
+  const el = document.getElementById(id);
+  if (!el || !el.focus) return;
+  el.focus();
+  if (pos != null && el.setSelectionRange) { try { el.setSelectionRange(pos, pos); } catch (e) { /* campo senza selezione */ } }
+}
 function debounced(key, fn, ms) {
   clearTimeout(_debounceTimers[key]);
   _debounceTimers[key] = setTimeout(fn, ms == null ? SEARCH_DELAY : ms);
