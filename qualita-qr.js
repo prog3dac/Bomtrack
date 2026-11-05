@@ -114,7 +114,8 @@ function qcCartellinoPagina(doc, x, tipo) {
     ['Causa / Cause', nc && nc.cause ? nc.cause : '—'],
   ] : [
     ['Collaudo / Inspection', x.number || ''], ['Collaudato il / Inspected on', quando || '—'],
-    ['Collaudato da / Inspected by', chi || '—'], forn, ...arrivo,
+    x.skipLot ? ['Collaudato da / Inspected by', 'lotto saltato, accettato senza collaudo / skip lot, not inspected']
+      : ['Collaudato da / Inspected by', chi || '—'], forn, ...arrivo,
     ['Piano di controllo / Inspection plan', p ? p.name : '—'],
     ...(tipo === 'deroga' ? [['Non conformità / NCR', nc ? nc.number || '' : '—']] : []),
   ];
