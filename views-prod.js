@@ -1007,6 +1007,7 @@ function renderOdpEdit(id) {
         ${worklistCloseBtn('odpBackToList()', "l'ordine di produzione")}
         <h2 class="section-title" style="font-family:var(--mono)">${esc(o.number)}</h2>
         ${statusBadge(ODP_STATUS, o.status)}
+        ${storiaBtn('odp', id)}
         ${ODP_APERTI.includes(o.status) || o.status === 'completato'
     ? `<button class="btn-outline" onclick="odpChiudi('${id}')" title="Chiude l'ordine: non si dichiara più niente">${ico('lock', 'tinted', '')} Chiudi</button>` : ''}
       </div>

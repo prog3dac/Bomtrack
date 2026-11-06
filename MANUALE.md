@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.145.0**
+**Versione dell'app documentata: 0.146.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -252,7 +252,7 @@ ricorda l'ultima voce usata**: tornando su *Acquisti* si riapre dove si era rima
 
 | Gruppo | Voci |
 |---|---|
-| 🏠 **Riepilogo** | Riepilogo · Cruscotto |
+| 🏠 **Riepilogo** | Riepilogo · Cruscotto · Storia documenti |
 | 🌳 **Tecnico** | Articoli di progetto · Articoli d'acquisto · Gestione DB · Visualizza DB · Cicli di lavorazione |
 | 📋 **Pianificazione** | Commesse · Fabbisogno · Carico centri · Avanzamento |
 | 🛒 **Acquisti** | Richieste offerta · Ordini fornitore · Listino fornitori |
@@ -720,6 +720,37 @@ insieme in una pagina sola. È in sola lettura, per tutti i ruoli.
 **Da sapere.** I ricevimenti d'ordine non hanno una data propria — il ricevuto è un numero sulla
 riga — quindi per gli *articoli fermi* un ricevimento conta con la **data dell'ordine**. Tutto il
 cruscotto si esporta in Excel o PDF, un foglio per sezione.
+
+### La storia di un documento
+
+**Come ci si arriva.** 🏠 *Riepilogo → Storia documenti*, oppure dal pulsante **Storia** in testa a
+ogni documento: commessa, piano di fabbisogno, richiesta d'offerta, ordine fornitore, ordine di
+produzione, ordine di lavoro, collaudo e non conformità (dalla 0.146.0).
+
+Si sceglie un documento — dal pulsante, o scrivendo nel campo di ricerca il numero, l'oggetto, il
+fornitore o il cliente — e il **grafo** mostra da cosa è nato e che cosa ha generato. Si legge da
+sinistra a destra: la commessa, il piano, la richiesta, l'ordine, il collaudo del ricevimento, la
+non conformità. Il colore del bordo dice l'area (commerciale, pianificazione, acquisti,
+produzione, qualità).
+
+- **In blu** la linea del documento scelto: da dove viene e cosa ne è nato. Gli altri documenti
+  della stessa famiglia (per esempio gli altri ordini dello stesso piano) restano sbiaditi.
+- **Tratteggiate** le modifiche tecniche che riguardano un documento della famiglia: sono i
+  documenti che erano aperti al rilascio della revisione.
+- **Un clic su un documento lo mette al centro**: il grafo si ridisegna attorno a lui.
+- **Tutta la famiglia / Solo la linea** sceglie quanto mostrare. Una famiglia di più di 80
+  documenti si mostra solo per la linea, e la pagina lo dice.
+- Sotto il grafo, il documento al centro: i dati, da cosa è nato e perché, che cosa ha generato, e
+  per ordini e ordini di lavoro i ricevimenti e i rientri. **Apri il documento** lo apre nella sua
+  vista.
+
+Sul telefono lo stesso albero diventa un elenco dall'alto in basso, rientrato a ogni generazione.
+
+**Da sapere.** Ogni documento ha un padre solo, il più vicino: un ordine nato da una richiesta è
+figlio della richiesta, anche se porta il piano e la commessa. Se il padre è stato eliminato si
+passa al successivo (una richiesta cancellata lascia l'ordine sotto il piano). Gli ordini di
+produzione di un sottoassieme e del suo assieme non sono legati fra loro, ma solo al piano: nel
+grafo stanno uno accanto all'altro.
 
 ---
 

@@ -610,6 +610,7 @@ function docToolbarHtml(o) {
         ${worklistCloseBtn(o.chiudi, o.cosa)}
         <h2 class="section-title" style="font-family:var(--mono)">${esc(o.rec.number)}</h2>
         ${statusBadge(o.stati, o.rec.status)}
+        ${o.storia || ''}
         <button class="add-btn-sm rfq-save-btn ${o.dirty ? 'dirty' : ''}" id="${o.saveId}" onclick="${o.salva}">${ico('save', 'tinted', '')} Salva</button>
       </div>
       <div class="bom-toolbar-right">
@@ -1392,7 +1393,7 @@ function renderRfqEdit(id) {
   const mode = rfqMode(r);
   const lockBanner = docLockBanner(mode, 'Richiesta ' + (RFQ_STATUS[r.status] || r.status).toLowerCase(), 'rfq', id);
   return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'rfqBackToList()', cosa: 'la richiesta', rec: r, stati: RFQ_STATUS, dirty: rfqDirty,
+    ${docToolbarHtml({ chiudi: 'rfqBackToList()', cosa: 'la richiesta', rec: r, storia: storiaBtn('rfq', r.id), stati: RFQ_STATUS, dirty: rfqDirty,
       saveId: 'rfq-save-btn', salva: `rfqSave('${id}')`, menu: [
         { label: 'Crea ordine da questa richiesta', icon: 'receipt', onclick: `orderFromRfq('${id}')` },
         { label: 'Elimina la richiesta', icon: 'trash', onclick: `delRfq('${id}')`, danger: true },

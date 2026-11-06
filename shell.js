@@ -237,7 +237,9 @@ const NAV = [
     { id: 'home', label: 'Riepilogo' },
     // Il Riepilogo dice cosa fare adesso, il cruscotto come stanno le cose:
     // due domande, la stessa porta d'ingresso.
-    { id: 'dash', label: 'Cruscotto' }] },
+    { id: 'dash', label: 'Cruscotto' },
+    // Da cosa è nato un documento e che cosa ha generato (0.146.0).
+    { id: 'storia', label: 'Storia documenti' }] },
   // Quello che l'ufficio tecnico definisce: gli articoli, come si compongono e
   // come si lavorano. Acquisti e Progetto restano due elenchi — lo stesso
   // archivio diviso per competenza — ma sotto un nome che non si confonde col
@@ -492,6 +494,7 @@ function setView(v) {
   else if (v === 'odp') renderOdp();
   else if (v === 'load') renderLoad();
   else if (v === 'avz') renderAvanzamento();
+  else if (v === 'storia') renderStoria();
   else if (v === 'pricelist') renderPriceListView();
   else if (v === 'manage') renderManage();
   showReadOnlyBanner(panel, area);

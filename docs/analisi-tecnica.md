@@ -1075,6 +1075,16 @@ materiale, ma l'app non sa da quale ricevimento viene il materiale che l'ODP
 ha prelevato: nasce *Interna* e il fornitore si sceglie a mano. Per chiuderla
 servirebbe la tracciabilità dei lotti fino al prelievo.
 
+**D13 — legami fra documenti che lo schema non tiene** *(0.146.0)*. La Storia
+documenti (`genealogia.js`) legge i legami che ci sono, e tre mancano: l'ODP di
+un sottoassieme non dice di quale ODP d'assieme è parte (tutti e due puntano
+solo al piano: nel grafo sono fratelli); la riga d'ordine di conto lavoro
+(`order_lines.phase_key`) non dice da quale ODP viene; e il collaudo nato
+*dopo la rilavorazione* (`qcRilavoratiAlCollaudo`) cita la NC solo nella nota,
+quindi nel grafo è figlio dell'ordine e non della NC. Per chiuderli servono
+una colonna `parent_odp_id` su `production_orders`, `odp_id` su `order_lines`
+e `nc_id` su `inspections`, con `schema_versione` alzata.
+
 ---
 
 ## Note in positivo

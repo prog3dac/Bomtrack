@@ -401,6 +401,7 @@ function ncSchedaHtml(x, scrive) {
         ${worklistCloseBtn('ncChiudiScheda()', 'la non conformità')}
         <h2 class="section-title" style="font-family:var(--mono)">${esc(x.number)}</h2>
         ${ncBadge(x)}
+        ${storiaBtn('nc', x.id)}
       </div>
       <div class="bom-toolbar-right">
         <button class="btn-outline" onclick="ncRapportoPdf('${x.id}')" title="Il rapporto di non conformità in PDF, in italiano e inglese">${ico('file', 'tinted', '')} Rapporto PDF</button>

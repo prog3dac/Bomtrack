@@ -1675,3 +1675,48 @@ select.combo-nascosto{display:none!important}
 .qcs-fam{font-size:11.5px;color:var(--text-dim);white-space:nowrap}
 .qcs-row.qcs-preso{opacity:.6;cursor:not-allowed}
 .qcs-row input{min-width:18px;min-height:18px}
+
+/* ─── Storia documenti (genealogia.js, dalla 0.146.0) ─── */
+.storia-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+.storia-barra{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
+.storia-cerca{flex:1;min-width:240px;position:relative}
+.storia-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-size:14px;outline:none}
+.storia-input:focus{border-color:var(--accent)}
+.storia-cerca .picker-results:not(:empty){margin-top:6px;max-height:320px;overflow:auto}
+.storia-seg{display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.storia-seg button{background:none;border:0;padding:9px 12px;font-size:13px;color:var(--text-dim);cursor:pointer}
+.storia-seg button.on{background:var(--accent-soft-hi);color:var(--accent);font-weight:600}
+.storia-seg button:disabled{cursor:default;opacity:.5}
+.storia-guida{font-size:12.5px;color:var(--text-dim);margin:2px 0 12px}
+.storia-avviso{font-size:12.5px;color:var(--orange);margin:0 0 8px}
+.storia-tela{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:10px;padding:18px;
+  background:radial-gradient(circle,var(--hairline) 1px,transparent 1px) 0 0/18px 18px}
+.storia-piano{position:relative}
+.storia-archi{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.storia-arco{fill:none;stroke:var(--border);stroke-width:1.6}
+.storia-arco.accesa{stroke:var(--accent);stroke-width:2.2}
+.storia-arco.tratto{stroke-dasharray:5 4}
+.storia-punta{fill:var(--border)}.storia-punta.accesa{fill:var(--accent)}
+.storia-nodo{position:absolute;display:flex;flex-direction:column;gap:1px;text-align:left;background:var(--card);color:var(--text);
+  border:1px solid var(--border);border-left:4px solid var(--c,var(--accent));border-radius:9px;padding:7px 9px;font:inherit;font-size:12px;line-height:1.3;cursor:pointer;overflow:hidden}
+.storia-nodo:hover{background:var(--card-hover)}
+.storia-nodo:focus-visible,.storia-riga:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.storia-nodo.is-focus,.storia-riga.is-focus{border-color:var(--accent);border-left-color:var(--c,var(--accent));box-shadow:0 0 0 3px var(--accent-line)}
+.storia-nodo.is-fuori>*,.storia-riga.is-fuori>*{opacity:.45}
+.storia-tipo{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--c,var(--accent))}
+.storia-num{font-family:var(--mono);font-weight:700;font-size:11.5px}
+.storia-tit{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.storia-sotto{color:var(--text-dim);font-size:11.5px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.storia-badge .doc-badge{font-size:9.5px;padding:1px 6px}
+.storia-elenco{display:flex;flex-direction:column;gap:6px}
+.storia-riga{display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--card);color:var(--text);border:1px solid var(--border);
+  border-left:4px solid var(--c,var(--accent));border-radius:10px;padding:8px 10px;font:inherit;font-size:12.5px;cursor:pointer}
+.storia-riga-testa{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.storia-riga .doc-badge{font-size:9.5px;padding:1px 6px}
+.storia-dett{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.storia-h3{font-size:13px;margin:0 0 6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.storia-dato{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--hairline);font-size:12.5px}
+.storia-dato>span:first-child{color:var(--text-dim)}
+.storia-dato>span:last-child{text-align:right}
+.storia-mono{font-family:var(--mono)}
+@media print{.storia-cerca,.storia-seg{display:none}.storia-tela{max-height:none;overflow:visible}}
