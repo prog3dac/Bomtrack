@@ -47,8 +47,11 @@ const NC_DECISIONI = {
 const NC_STATI = { aperta: 'Aperta', chiusa: 'Chiusa' };
 // Le causali di serie: le più comuni in un'officina meccanica. Si cambiano in
 // Gestione → Qualità.
+// Le quattro dopo «Errore di lavorazione» (dalla 0.144.0) sono per gli scarti
+// dell'officina, che ora chiedono la causale.
 const NC_CAUSALI_SERIE = ['Fuori tolleranza dimensionale', 'Difetto superficiale o estetico', 'Materiale non conforme',
-  'Certificato mancante o errato', 'Quantità o codice errato', 'Danno da imballo o trasporto', 'Errore di lavorazione', 'Altro'];
+  'Certificato mancante o errato', 'Quantità o codice errato', 'Danno da imballo o trasporto', 'Errore di lavorazione',
+  'Errore di attrezzaggio', 'Usura o rottura utensile', 'Errore di programma', 'Errore dell\'operatore', 'Altro'];
 // I giorni entro cui una NC va chiusa, se nessuno dice altro.
 const NC_GIORNI_SERIE = 30;
 
@@ -100,6 +103,10 @@ function ncCrea(dati) {
       date: oggi, cause: String(d.cause || ''), gravita: NC_GRAVITA[d.gravita] ? d.gravita : 'maggiore',
       description: String(d.description || '').trim(), decision: NC_DECISIONI[d.decision] !== undefined ? (d.decision || '') : '',
       actions: Array.isArray(d.actions) ? d.actions : [], cost: 0, dueDate: ncScadenzaDa(oggi), status: 'aperta', closedAt: null, note: '', active: true,
+      // Dalla produzione (dalla 0.144.0): l'ODP, la fase responsabile e le
+      // dichiarazioni di scarto che la NC raccoglie.
+      productionOrderId: d.productionOrderId || null, respPhase: String(d.respPhase || ''),
+      scrapDecls: Array.isArray(d.scrapDecls) ? d.scrapDecls : [],
     });
   };
   return typeof conNumeri === 'function' ? conNumeri({ NC: 1 }, fare) : fare();
@@ -127,6 +134,21 @@ function ncDaCollaudo(insp) {
     : [];
   const causa = fuori.length ? 'Fuori tolleranza dimensionale'
     : (qcCertificatoRichiesto(insp) && insp.cert !== 'ok' ? 'Certificato mancante o errato' : '');
+  // Dall'ODP la NC è della fase che ha generato il difetto: di produzione se è
+  // interna, verso il terzista se è sua.
+  if (insp.source === 'odp') {
+    const o = typeof getOdp === 'function' ? getOdp(insp.orderId) : null;
+    const resp = insp.respPhase || QC_RESP_ND;
+    const forn = qcRespFornitore(o, resp);
+    return ncCrea({
+      source: forn ? 'fornitore' : (resp === QC_RESP_MATERIALE ? 'interna' : 'produzione'), inspectionId: insp.id, orderId: insp.orderId,
+      productionOrderId: insp.orderId, respPhase: resp,
+      itemId: insp.itemId, supplierId: forn, qty: respinto ? insp.qtyKo : insp.qty, uom: insp.uom,
+      description: [testo, o ? o.number : '', qcRespTesto(o, resp)].filter(Boolean).join(' · '),
+      cause: ncCausali().includes(causa) ? causa : '',
+      decision: !respinto ? 'deroga' : insp.destino === 'scarto' ? 'rottamazione' : 'rilavorazione',
+    });
+  }
   return ncCrea({
     source: 'fornitore', inspectionId: insp.id, orderId: insp.orderId,
     itemId: insp.itemId, supplierId: insp.supplierId, qty: respinto ? insp.qtyKo : insp.qty, uom: insp.uom,
@@ -287,7 +309,9 @@ function ncBadge(x) {
 function ncOrigineNumero(x) {
   if (!x) return '';
   if (x.inspectionId) { const c = qcGet(x.inspectionId); if (c) return c.number; }
+  if (x.productionOrderId && typeof getOdp === 'function') { const o = getOdp(x.productionOrderId); if (o) return o.number; }
   if (x.source === 'produzione' && x.orderId && typeof getOdp === 'function') { const o = getOdp(x.orderId); if (o) return o.number; }
+  if (x.orderId && Array.isArray(x.scrapDecls) && x.scrapDecls.length && typeof getOdl === 'function') { const o = getOdl(x.orderId); if (o) return o.number; }
   return '';
 }
 
@@ -380,6 +404,8 @@ function ncSchedaHtml(x, scrive) {
       </div>
       <div class="bom-toolbar-right">
         <button class="btn-outline" onclick="ncRapportoPdf('${x.id}')" title="Il rapporto di non conformità in PDF, in italiano e inglese">${ico('file', 'tinted', '')} Rapporto PDF</button>
+        ${scrive && aperta && x.decision === 'rottamazione' && typeof ncRottamaChiudi === 'function'
+    ? `<button class="btn-outline" onclick="ncRottamaChiudi('${x.id}')" title="La merce è già rottamata e non c'è altro da fare: chiude la NC">${ico('trash', 'tinted', '')} Rottamato, chiudi</button>` : ''}
         ${scrive ? (aperta
     ? `<button class="add-btn-sm" onclick="ncChiudi('${x.id}')">${ico('check', 'tinted', '')} Chiudi la NC</button>`
     : `<button class="btn-outline" onclick="ncRiapri('${x.id}')">${ico('refresh', 'tinted', '')} Riapri</button>`) : ''}
@@ -397,6 +423,7 @@ function ncSchedaHtml(x, scrive) {
       </div>
       <div class="modal-field"><label>Che cosa è successo</label><textarea rows="3" ${dis} ${set('description')}>${esc(x.description || '')}</textarea></div>
     </div>
+    ${typeof ncProduzioneHtml === 'function' ? ncProduzioneHtml(x, scrive) : ''}
     <div class="qc-card">
       <h3>Analisi e decisione</h3>
       <div class="modal-grid">

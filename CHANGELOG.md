@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.144.0 — 2026-11-06
+
+**Qualità in produzione: il collaudo a fine ciclo degli ODP e le NC degli scarti.**
+- **Il collaudo nasce alla dichiarazione dell'ultima fase** di un ODP, se l'articolo è da collaudare, anche quando l'ultima fase è di un terzista (prima quel rientro non apriva niente). Fino all'esito i pezzi sono fermi: nell'esistente ma non nel libero. Stesso piano, scheda, cartellino e rapporto degli acquisti.
+- **Il respinto si rilavora o si rottama.** *Da rilavorare* lascia i pezzi a magazzino ma fermi, finché dalla NC **Rilavorati: di nuovo al collaudo** non li rimette in un collaudo nuovo, o non si rottamano.
+- **La fase che ha generato il difetto** si sceglie nel collaudo (una fase dell'ODP, il materiale o *non individuata*) e decide la NC: di produzione per una fase interna, verso il terzista per una sua, che conta nella sua valutazione. Si corregge dalla NC finché è aperta.
+- **Gli scarti chiedono la causale** su ODP e ODL, e aprono la NC da soli: *minore*, da rottamare, una per documento, fase e causale finché è aperta. Annullare la dichiarazione toglie lo scarto dalla NC.
+- **Rottamato, chiudi** sulla NC chiude in un colpo il caso più comune.
+- Nuove causali di serie: *Errore di attrezzaggio*, *Usura o rottura utensile*, *Errore di programma*, *Errore dell'operatore*.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Aggiunge a `inspections` le colonne `decl_id`, `resp_phase` e `qty_held`, e a `nonconformities` `production_order_id`, `resp_phase` e `scrap_decls`; `schema_versione` passa a 3.
+
 ### 0.143.0 — 2026-11-06
 
 **Collaudo: il reso a credito chiude la riga d'ordine.**

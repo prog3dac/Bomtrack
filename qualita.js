@@ -151,7 +151,16 @@ const QC_DESTINI = {
   sostituzione: 'Reso al fornitore, da sostituire',
   accredito: 'Reso al fornitore, a credito',
   scarto: 'Tenuto e rottamato',
+  // Dalla 0.144.0, per i pezzi fatti in casa (qualita-produzione.js).
+  rilavorazione: 'Da rilavorare, restano fermi',
 };
+// Le destinazioni che hanno senso per ogni origine: un ODP non ha un
+// fornitore a cui rendere, un terzista non accredita la nostra merce.
+function qcDestiniDi(source) {
+  if (source === 'odp') return ['rilavorazione', 'scarto'];
+  if (source === 'odl') return ['sostituzione', 'scarto'];
+  return ['sostituzione', 'accredito', 'scarto'];
+}
 function qcTutti() { return (db.inspections || []).filter(x => x && x.active !== false); }
 function qcGet(id) { return qcTutti().find(x => x.id === id) || null; }
 function qcAperti() { return qcTutti().filter(x => x.status === 'aperto'); }
@@ -174,6 +183,10 @@ function qcIndice() {
     if (!x.itemId) return;
     idx.set(x.itemId, (idx.get(x.itemId) || 0) + qcQtaGestione(x));
   });
+  // I pezzi respinti da rilavorare restano fermi anche a collaudo chiuso.
+  qcTutti().filter(x => x.status !== 'aperto' && x.itemId && Number(x.qtyHeld) > 0.000001).forEach(x => {
+    idx.set(x.itemId, (idx.get(x.itemId) || 0) + qcQtaGestione({ qty: x.qtyHeld, uom: x.uom, itemId: x.itemId }));
+  });
   return idx;
 }
 
@@ -192,15 +205,18 @@ function qcCrea(dati) {
   if (!(qty > 0.000001)) return null;
   const rec = {
     id: gid(), number: numeroProgressivo('COL'),
-    source: d.source === 'odl' ? 'odl' : 'oda',
+    source: d.source === 'odl' || d.source === 'odp' ? d.source : 'oda',
     orderId: d.orderId || null, lineId: d.lineId || null,
     itemId: it.id, qty, uom: d.uom || itemUom(it),
     supplierId: d.supplierId || null,
     date: typeof oggiISO === 'function' ? oggiISO() : nowISO().slice(0, 10),
     ddt: '', supplierLot: '', cert: qcCertificato(it) ? 'atteso' : '',
-    status: 'aperto', esito: '', qtyOk: 0, qtyKo: 0, destino: 'sostituzione',
+    status: 'aperto', esito: '', qtyOk: 0, qtyKo: 0, destino: qcDestiniDi(d.source)[0],
     note: '', closedAt: null, active: true,
   };
+  // Dall'ODP: la dichiarazione che l'ha aperto e, fino a prova contraria,
+  // l'ultima fase come responsabile di un difetto.
+  if (rec.source === 'odp') { rec.declId = d.declId || null; rec.respPhase = d.lineId || ''; rec.qtyHeld = 0; rec.cert = ''; }
   // Il piano di controllo, se c'è: caratteristiche, campione, salto lotti.
   if (typeof qcApplicaPiano === 'function') qcApplicaPiano(rec, it);
   const nuovo = Store.insert('inspections', rec);
@@ -257,11 +273,14 @@ function qcRegistraEsito(id, dati) {
   if (esito === 'accettato' && qcCertificatoRichiesto(insp) && insp.cert !== 'ok') {
     showToast('Manca il certificato: si può accettare solo in deroga', 'error'); return false;
   }
-  const destino = QC_DESTINI[d.destino] ? d.destino : 'sostituzione';
-  // Il terzista lavora roba nostra: non c'è niente da accreditare, i pezzi
-  // tornano da lui per essere rifatti.
-  if (ko > 0.000001 && destino === 'accredito' && insp.source === 'odl') {
-    showToast('Da un ordine di lavoro il reso è solo da rifare o da rottamare', 'error'); return false;
+  const ammessi = qcDestiniDi(insp.source);
+  const destino = d.destino ? d.destino : ammessi[0];
+  // Il terzista lavora roba nostra: non c'è niente da accreditare. E un ODP
+  // non ha un fornitore a cui rendere: si rilavora o si rottama.
+  if (ko > 0.000001 && !ammessi.includes(destino)) {
+    showToast(insp.source === 'odp' ? 'I pezzi fatti in casa si rilavorano o si rottamano'
+      : insp.source === 'odl' ? 'Da un ordine di lavoro il reso è solo da rifare o da rottamare' : 'Destinazione non valida', 'error');
+    return false;
   }
   const note = String(d.note || '').trim();
   // Prima la merce, poi la chiusura: se il reso non si può registrare il
@@ -269,6 +288,18 @@ function qcRegistraEsito(id, dati) {
   if (ko > 0.000001 && !qcRespingi(insp, ko, destino, note)) return false;
   const patch = { status: 'chiuso', esito, qtyOk: ok, qtyKo: arrotondaQta(ko),
     destino: ko > 0.000001 ? destino : '', closedAt: nowISO() };
+  // Dall'ODP (dalla 0.144.0): la fase che ha generato il difetto decide chi ne
+  // risponde. Il terzista di quella fase entra nella valutazione, una fase
+  // interna no. I pezzi da rilavorare restano fermi.
+  if (insp.source === 'odp') {
+    const o = typeof getOdp === 'function' ? getOdp(insp.orderId) : null;
+    if (esito !== 'accettato') {
+      const resp = d.respPhase || insp.respPhase || QC_RESP_ND;
+      patch.respPhase = resp;
+      patch.supplierId = qcRespFornitore(o, resp);
+    }
+    patch.qtyHeld = ko > 0.000001 && destino === 'rilavorazione' ? arrotondaQta(ko) : 0;
+  }
   if (note) patch.note = note;
   Store.update('inspections', insp.id, patch);
   invalidateStock();
@@ -310,6 +341,8 @@ function qcRespingi(insp, ko, destino, note) {
       { orderId: insp.orderId || null, lineId: insp.lineId || null });
     return true;
   }
+  // Da rilavorare: la merce resta dov'è, ferma (qtyHeld, nel patch di chi chiama).
+  if (insp.source === 'odp') return true;
   if (insp.source === 'odl') {
     const o = typeof getOdl === 'function' ? getOdl(insp.orderId) : null;
     if (!o) { showToast('Ordine di lavoro non trovato: il collaudo resta aperto', 'error'); return false; }
@@ -372,7 +405,8 @@ function qcOrdineNumero(insp) {
   if (!insp || !insp.orderId) return '';
   const o = insp.source === 'odl'
     ? (typeof getOdl === 'function' ? getOdl(insp.orderId) : null)
-    : (typeof getOrder === 'function' ? getOrder(insp.orderId) : null);
+    : insp.source === 'odp' ? (typeof getOdp === 'function' ? getOdp(insp.orderId) : null)
+      : (typeof getOrder === 'function' ? getOrder(insp.orderId) : null);
   return o ? (o.number || '') : '';
 }
 function qcBadge(insp) {
@@ -484,7 +518,14 @@ function qcSchedaHtml(x) {
         <button class="btn-outline" onclick="qcRapportoPdf('${x.id}')" title="Il rapporto di collaudo in PDF, in italiano e inglese">${ico('file', 'tinted', '')} Rapporto PDF</button>
       </div>
     </div>
-    <div class="qc-card">
+    ${x.source === 'odp' ? `<div class="qc-card">
+      <h3>Da dove vengono</h3>
+      <div class="modal-grid">
+        ${dato('Articolo', it ? `<span style="font-family:var(--mono)">${codeLink(it.id, it.code)}</span> ${esc(it.name)}` : '—')}
+        ${dato('Ordine di produzione', esc(qcOrdineNumero(x) || '—'))}
+        ${dato('Ultima fase', esc(qcFaseTesto(qcFaseOdp(typeof getOdp === 'function' ? getOdp(x.orderId) : null, x.lineId)) || '—'))}
+        ${dato('Quantità versata', `<strong>${fmtQtyIt(x.qty)} ${esc(u)}</strong> · ${esc(fmtDateIt(x.date))}`)}
+      </div>` : `<div class="qc-card">
       <h3>L'arrivo</h3>
       <div class="modal-grid">
         ${dato('Articolo', it ? `<span style="font-family:var(--mono)">${codeLink(it.id, it.code)}</span> ${esc(it.name)}` : '—')}
@@ -494,7 +535,7 @@ function qcSchedaHtml(x) {
         ${campo('DDT del fornitore', 'ddt', 'es. DDT 88412 del 03/11')}
         ${campo('Lotto o colata del fornitore', 'supplierLot', 'es. L24-0871')}
         ${certCampo}
-      </div>
+      </div>`}
       ${cert ? `<p class="empty-text qc-hint">Il certificato si allega all'articolo (scheda articolo → Allegati) e resta lì: qui si registra che è arrivato. Senza, il lotto si può accettare solo in deroga.</p>` : ''}
     </div>
     ${qcControlloHtml(x, u, scrivibile)}
@@ -573,12 +614,14 @@ function qcEsitoHtml(x, u, scrivibile) {
         <input type="number" id="qc-ko" min="0" max="${Number(x.qty) || 0}" step="any" value="${Number(x.qty) || 0}" ${scrivibile ? '' : 'disabled'} oninput="qcEsitoChange()"></div>
       <div class="modal-field" id="qc-destino-field" style="${pre === 'respinto' ? '' : 'display:none'}"><label>Che fine fanno</label>
         <select id="qc-destino" onchange="qcEsitoChange()" ${scrivibile ? '' : 'disabled'}>
-          ${Object.keys(QC_DESTINI).filter(k => !(k === 'accredito' && x.source === 'odl')).map(k => `<option value="${k}">${esc(QC_DESTINI[k])}</option>`).join('')}
+          ${qcDestiniDi(x.source).map(k => `<option value="${k}">${esc(QC_DESTINI[k])}</option>`).join('')}
         </select></div>
+      ${x.source === 'odp' ? `<div class="modal-field" id="qc-resp-field" style="${pre === 'accettato' ? 'display:none' : ''}"><label>Fase che ha generato il difetto</label>
+        <select id="qc-resp" ${scrivibile ? '' : 'disabled'}>${qcRespOpzioni(typeof getOdp === 'function' ? getOdp(x.orderId) : null, x.respPhase || x.lineId || '')}</select></div>` : ''}
     </div>
     <div class="modal-field"><label>Nota</label>
       <textarea id="qc-note" rows="2" ${scrivibile ? '' : 'disabled'}>${esc(x.note || '')}</textarea></div>
-    <p class="empty-text qc-hint" id="qc-conseguenza">${qcConseguenzaTesto(x, pre, pre === 'respinto' ? Number(x.qty) || 0 : 0, 'sostituzione')}</p>
+    <p class="empty-text qc-hint" id="qc-conseguenza">${qcConseguenzaTesto(x, pre, pre === 'respinto' ? Number(x.qty) || 0 : 0, qcDestiniDi(x.source)[0])}</p>
     ${scrivibile ? `<div class="modal-actions" style="justify-content:flex-start">
       <button class="add-btn-sm" onclick="qcRegistraDallaScheda('${x.id}')">${ico('check', 'tinted', '')} Registra l'esito</button>
     </div>` : ''}
@@ -592,7 +635,9 @@ function qcEsitoChiusoHtml(x, u) {
       <div class="modal-field"><label>Accettati</label><div class="qc-val">${fmtQtyIt(x.qtyOk)} ${esc(u)}</div></div>
       <div class="modal-field"><label>Respinti</label><div class="qc-val">${fmtQtyIt(x.qtyKo)} ${esc(u)}</div></div>
       ${x.destino ? `<div class="modal-field"><label>Destinazione</label><div class="qc-val">${esc(QC_DESTINI[x.destino] || '—')}</div></div>` : ''}
+      ${x.source === 'odp' && x.respPhase ? `<div class="modal-field"><label>Fase che ha generato il difetto</label><div class="qc-val">${esc(qcRespTesto(typeof getOdp === 'function' ? getOdp(x.orderId) : null, x.respPhase) || '—')}</div></div>` : ''}
     </div>
+    ${Number(x.qtyHeld) > 0.000001 ? `<p class="empty-text qc-hint"><strong>${fmtQtyIt(x.qtyHeld)} ${esc(u)}</strong> da rilavorare, fermi: tornano al collaudo o si rottamano dalla non conformità.</p>` : ''}
     ${x.note ? `<p class="empty-text qc-hint">${esc(x.note)}</p>` : ''}
     <p class="empty-text qc-hint">Chiuso il ${esc(fmtDateIt((x.closedAt || '').slice(0, 10)))}. Un esito non si corregge: la merce si è già mossa. Quello che è tornato indietro si rivede sul documento d'origine.</p>
   </div>`;
@@ -605,6 +650,12 @@ function qcConseguenzaTesto(x, esito, ko, destino) {
   const ok = Math.max(0, tot - (Number(ko) || 0));
   if (esito !== 'respinto') {
     return `${fmtQtyIt(tot)} ${esc(u)} diventano merce libera${esito === 'deroga' ? ', con la riserva scritta nel collaudo e una non conformità da chiudere' : ''}.`;
+  }
+  if (x.source === 'odp') {
+    const fine = destino === 'scarto'
+      ? 'escono come scarto'
+      : 'restano a magazzino ma fermi, finché dalla non conformità non tornano al collaudo, rilavorati, o non si rottamano';
+    return `${fmtQtyIt(ok)} ${esc(u)} diventano liberi; ${fmtQtyIt(ko)} ${esc(u)} ${fine}. Si apre una non conformità sulla fase che ha generato il difetto.`;
   }
   const dove = destino === 'scarto'
     ? 'restano qui ed escono come consumo: il ricevuto della riga non cambia'
@@ -622,6 +673,8 @@ function qcEsitoChange() {
   const f1 = document.getElementById('qc-ko-field'), f2 = document.getElementById('qc-destino-field');
   if (f1) f1.style.display = respinto ? '' : 'none';
   if (f2) f2.style.display = respinto ? '' : 'none';
+  const f3 = document.getElementById('qc-resp-field');
+  if (f3) f3.style.display = esito === 'accettato' ? 'none' : '';
   const ko = respinto ? Math.min(Number(x.qty) || 0, Math.max(0, parseFloat(val('qc-ko')) || 0)) : 0;
   const p = document.getElementById('qc-conseguenza');
   if (p) p.innerHTML = qcConseguenzaTesto(x, esito, ko, val('qc-destino'));
@@ -633,6 +686,7 @@ function qcRegistraDallaScheda(id) {
     esito,
     qtyKo: esito === 'respinto' ? parseFloat(val('qc-ko')) || 0 : 0,
     destino: val('qc-destino'),
+    respPhase: document.getElementById('qc-resp') ? val('qc-resp') : '',
     note: val('qc-note'),
   });
   if (ok) renderCollaudi();

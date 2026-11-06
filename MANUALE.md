@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.143.0**
+**Versione dell'app documentata: 0.144.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1925,6 +1925,34 @@ quelli del giorno dell'arrivo: cambiare il piano domani non riscrive i collaudi 
 eliminarlo non li tocca. I piani li scrive chi scrive i documenti (*Ufficio acquisti* e
 l'amministratore); l'officina li usa.
 
+### Il collaudo dei pezzi fatti in casa (modulo Qualità, dalla 0.144.0)
+
+**Quando nasce.** Alla dichiarazione dell'**ultima fase** di un ordine di produzione, per i pezzi
+buoni dichiarati, se l'articolo è da collaudare (articolo, famiglia o piano di controllo, come per
+gli acquisti). Vale anche quando l'ultima fase è di un terzista: i pezzi si dichiarano sull'ODP e
+il collaudo nasce lì. Ogni dichiarazione fa il suo collaudo. Gli assiemi non lo aprono, perché non
+hanno giacenza.
+
+**Fino all'esito i pezzi sono fermi**: nell'esistente ma non nel libero, come la merce di un
+fornitore. Il piano di controllo, la scheda, il cartellino e il rapporto PDF sono gli stessi. La
+scheda dice da quale ODP e da quale fase vengono, e non chiede DDT e certificato.
+
+**Il respinto non torna a nessun fornitore**, quindi le strade sono due:
+
+| Che fine fanno | Cosa succede |
+|---|---|
+| **Da rilavorare, restano fermi** | La merce resta a magazzino, ma non è libera. Dalla non conformità, a rilavorazione fatta, **Rilavorati: di nuovo al collaudo** apre un collaudo nuovo per quei pezzi; oppure si rottamano |
+| **Tenuto e rottamato** | Escono come scarto |
+
+**La fase che ha generato il difetto.** Con un respinto o una deroga la scheda chiede quale fase
+ha prodotto il problema: una delle fasi dell'ODP, *il materiale* o *non individuata*. La proposta è
+l'ultima fase. La scelta decide di chi è la non conformità: di **produzione** per una fase
+interna, **verso il terzista** per una fase sua (e il lotto conta nella sua valutazione), **interna**
+per il materiale. Si corregge anche dopo, dalla NC, finché è aperta.
+
+**Annullare la dichiarazione** dell'ultima fase toglie il collaudo se è ancora aperto. Se ha già
+un esito non si annulla: la merce si è già mossa.
+
 ### Le non conformità (modulo Qualità)
 
 **A cosa servono.** A dare a ogni problema un numero, un responsabile e una data di chiusura.
@@ -1954,8 +1982,21 @@ archivia in `Documenti Bomtrack/NC/<anno>/`.
 rapporto esce dall'azienda, e due NC con lo stesso numero non si devono poter dare. Si elimina solo
 l'ultima della serie; le altre si chiudono.
 
-**Chi le lavora.** Le apre anche l'officina, registrando un collaudo respinto; causa, decisione,
-azioni e chiusura le scrivono *Ufficio acquisti* e l'amministratore.
+**Dagli scarti** (dalla 0.144.0). Chi dichiara degli scarti su una fase di ODP o sul rientro di un
+ODL sceglie la **causale**: senza, la dichiarazione non si registra. La NC nasce da sola, *minore*,
+con decisione *rottamazione*, la fase già indicata come responsabile e il documento d'origine. Se
+la fase è di un terzista la NC va verso di lui. **Una NC per documento, fase e causale finché è
+aperta**: un secondo scarto con la stessa causale sulla stessa fase si somma a quella invece di
+aprirne un'altra. Annullare la dichiarazione toglie il suo scarto dalla NC, e la NC stessa se non
+resta niente e nessuno ci ha ancora lavorato. Alle causali di serie si aggiungono *Errore di
+attrezzaggio*, *Usura o rottura utensile*, *Errore di programma* ed *Errore dell'operatore*.
+
+**Rottamato, chiudi.** Su una NC con decisione *rottamazione* il pulsante la chiude in un colpo, con
+la causa *Errore di lavorazione* se mancava. Se la NC ha dei pezzi ancora fermi da rilavorare, li
+rottama.
+
+**Chi le lavora.** Le apre anche l'officina, registrando un collaudo respinto o dichiarando degli
+scarti; causa, decisione, azioni e chiusura le scrivono *Ufficio acquisti* e l'amministratore.
 
 ### La valutazione dei fornitori (modulo Qualità)
 
@@ -2884,6 +2925,10 @@ copre i pezzi **entrati**.
 
 > **Solo i pezzi buoni proseguono.** 100 lanciati, 95 buoni e 5 scarti alla fase 10 significa che
 > alla 20 ne entrano **95**, e che a magazzino entrerà la **resa vera**, non la quantità lanciata.
+
+Col modulo Qualità acceso gli scarti chiedono la **causale** e aprono una non conformità, e i pezzi
+dell'ultima fase passano dal collaudo prima di diventare liberi (dalla 0.144.0, → *Il collaudo dei
+pezzi fatti in casa*).
 
 Una dichiarazione sbagliata si **annulla** dallo storico, e con lei se ne vanno i movimenti di
 magazzino che aveva generato — solo i suoi.

@@ -27,7 +27,7 @@
 // La versione la tiene allineata `test/pwa.test.js` a quella di core.js:
 // dimenticarla vorrebbe dire spedire una versione nuova che i browser già
 // visitati continuano a servire dalla cache vecchia, per sempre.
-const VERSIONE = '0.143.0';
+const VERSIONE = '0.144.0';
 const CACHE = 'bomtrack-v' + VERSIONE;
 
 // Tutto ciò che serve a disegnare la prima schermata. L'elenco ricalca
@@ -85,6 +85,7 @@ const FILE = [
   './qualita-nc.js',
   './qualita-fornitori.js',
   './qualita-qr.js',
+  './qualita-produzione.js',
   './allegati.js',
   './archivio.js',
   './documenti.js',

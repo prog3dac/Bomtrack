@@ -247,10 +247,10 @@ const CLOUD_TYPES = (() => {
   ['pos', 'runFrom', 'runTo', 'seq', 'opIndex', 'passata', 'page', 'incrDigitsN', 'incrDigitsS', 'gCodeLen'].forEach(k => { t[k] = 'int'; });
   ['everyDays', 'everyHours', 'machineRate', 'hoursStart'].forEach(k => { t[k] = 'numeric'; });
   // Modulo Qualità: le quantità del collaudo.
-  ['qtyOk', 'qtyKo', 'sampleQty', 'samplePct', 'aql', 'sampleSize', 'defects'].forEach(k => { t[k] = 'numeric'; });
+  ['qtyOk', 'qtyKo', 'qtyHeld', 'sampleQty', 'samplePct', 'aql', 'sampleSize', 'defects'].forEach(k => { t[k] = 'numeric'; });
   ['acceptNo', 'rejectNo', 'skipAfter', 'skipEvery'].forEach(k => { t[k] = 'int'; });
   t.skipLot = 'bool';
-  ['characteristics', 'checks', 'actions', 'itemIds'].forEach(k => { t[k] = 'jsonb'; });
+  ['characteristics', 'checks', 'actions', 'itemIds', 'scrapDecls'].forEach(k => { t[k] = 'jsonb'; });
   t.year = 'int';
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'plannedStart', 'plannedEnd', 'downFrom', 'downTo'].forEach(k => { t[k] = 'date'; });
   ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt', 'startedAt', 'endedAt', 'closedAt'].forEach(k => { t[k] = 'timestamptz'; });

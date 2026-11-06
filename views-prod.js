@@ -553,13 +553,19 @@ function opDichiara(id, faseId, dati) {
   const qty = Math.max(0, Number(d.qty) || 0);
   const scrap = Math.max(0, Number(d.scrap) || 0);
   if (!(qty > 0) && !(scrap > 0)) { showToast('Niente da dichiarare: pezzi e scarti sono a zero', 'error'); return false; }
-  const decl = opDecl(o, fase, 'avanzamento', { qty, scrap, note: String(d.note || '').trim() });
+  // Col modulo Qualità uno scarto dice perché, e apre la sua NC (dalla 0.144.0).
+  const motivo = scrap > 0 ? String(d.motivo || '').trim() : '';
+  if (typeof qcScartoMotivoOk === 'function' && !qcScartoMotivoOk(scrap, motivo)) return false;
+  const decl = opDecl(o, fase, 'avanzamento', { qty, scrap, note: String(d.note || '').trim(), motivo });
   if (opEUltima(o, fase) && qty > 0) {
     const extra = { orderId: o.id, lineId: fase.id, declId: decl.id };
     const kind = opKindEntrata(o);
     if (kind === 'clIn') extra.supplierId = fase.supplierId;
     addMovement(o.itemId, kind, qty, String(d.note || '').trim() || `Versamento da ${o.number}`, extra);
+    // E il collaudo a fine ciclo, se l'articolo è da collaudare.
+    if (typeof qcDopoVersamento === 'function') qcDopoVersamento(o, fase, qty, decl);
   }
+  if (scrap > 0 && typeof ncDaScarto === 'function') ncDaScarto({ odp: o, fase }, o.itemId, scrap, motivo, decl.id);
   // Il rientro dichiarato qui è lo stesso fatto che l'ordine di lavoro chiama
   // «rientrati»: scriverlo in due posti a mano significherebbe tenerli
   // d'accordo a mano. Il padrone è questo, l'ODL lo rispecchia.
@@ -619,6 +625,7 @@ function opDichiarazioneAnnullabile(o, d) {
   if (d.kind === 'avvio' && opDecls(o.id, fase.id).some(x => x.kind === 'avanzamento' || x.kind === 'chiusura')) {
     return { ok: false, motivo: `la fase ${fase.seq} ha già delle dichiarazioni: annulla prima quelle` };
   }
+  if (typeof qcDichiarazioneAnnullabile === 'function') return qcDichiarazioneAnnullabile(d.id);
   return { ok: true };
 }
 function opAnnullaDichiarazione(declId) {
@@ -629,6 +636,7 @@ function opAnnullaDichiarazione(declId) {
   const ok = opDichiarazioneAnnullabile(o, d);
   if (o && !ok.ok) { showToast(`Non si può annullare: ${ok.motivo}`, 'error'); return false; }
   (db.movements || []).filter(m => m.declId === declId).forEach(m => Store.remove('movements', m.id));
+  if (typeof qcAnnullaDichiarazione === 'function') qcAnnullaDichiarazione(declId);
   Store.remove('prodDecls', declId);
   if (o) { const fase = (o.phases || []).find(f => f.id === d.phaseId); if (fase) opSyncOdlReceived(o, fase); odpAutoStatus(o); touch(o); }
   saveDB();
@@ -1411,6 +1419,7 @@ function opDichiaraModal(id, faseId) {
         <input class="num" type="number" id="op-d-qty" min="0" step="any" value="${esc(String(+residua.toFixed(4)))}"></div>
       <div class="modal-field"><label>Scarti</label>
         <input class="num" type="number" id="op-d-scrap" min="0" step="any" value="0"></div>
+      ${typeof qcScartoCampoHtml === 'function' ? qcScartoCampoHtml('op-d-motivo') : ''}
     </div>
     <p class="empty-text" style="text-align:left;padding:8px 0">${ultima
     ? (odpDiAssieme(o) ? `È l'<strong>ultima fase</strong>: i buoni sono gli assiemi <strong>${esc(o.code || '')}</strong> montati, e contano come fatti nel piano. Un assieme non ha giacenza: il magazzino non si muove.`
@@ -1423,7 +1432,7 @@ function opDichiaraModal(id, faseId) {
     </div>`, false, 'form');
 }
 function opDichiaraSave(id, faseId) {
-  if (!opDichiara(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note') })) return;
+  if (!opDichiara(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note'), motivo: val('op-d-motivo') })) return;
   closeModal(); opRidisegna(); showToast('Avanzamento registrato');
 }
 // ─── La tratta dal terzista, dichiarata in un colpo (dalla 0.116.0) ───
@@ -1444,11 +1453,12 @@ function opDichiaraTratta(id, faseId, dati) {
   const qty = Math.max(0, Number(d.qty) || 0);
   const scrap = Math.max(0, Number(d.scrap) || 0);
   if (!(qty > 0) && !(scrap > 0)) { showToast('Niente da dichiarare: pezzi e scarti sono a zero', 'error'); return false; }
+  if (typeof qcScartoMotivoOk === 'function' && !qcScartoMotivoOk(scrap, d.motivo)) return false;
   for (const g of fasi.slice(1)) if (!opAvviata(o, g) && !opAvvia(id, g.id)) return false;
   const ultima = fasi[fasi.length - 1];
   for (const g of fasi) {
     const fine = g.id === ultima.id;
-    if (!opDichiara(id, g.id, { qty: fine ? qty : qty + scrap, scrap: fine ? scrap : 0, note: d.note })) return false;
+    if (!opDichiara(id, g.id, { qty: fine ? qty : qty + scrap, scrap: fine ? scrap : 0, note: d.note, motivo: fine ? d.motivo : '' })) return false;
   }
   return true;
 }
@@ -1476,6 +1486,7 @@ function opDichiaraTrattaModal(id, faseId) {
         <input class="num" type="number" id="op-d-qty" min="0" step="any" value="${esc(String(+c.resta.toFixed(4)))}"></div>
       <div class="modal-field"><label>Scarti</label>
         <input class="num" type="number" id="op-d-scrap" min="0" step="any" value="0"></div>
+      ${typeof qcScartoCampoHtml === 'function' ? qcScartoCampoHtml('op-d-motivo') : ''}
     </div>
     <p class="empty-text" style="text-align:left;padding:8px 0">I pezzi tornati sono passati da tutte le fasi della tratta: si dichiarano su ciascuna, e gli scarti sull'ultima. ${ultimaDelCiclo
     ? (odpDiAssieme(o) ? `È la <strong>fine del montaggio</strong>: i buoni sono gli assiemi <strong>${esc(o.code || '')}</strong> montati.`
@@ -1488,7 +1499,7 @@ function opDichiaraTrattaModal(id, faseId) {
     </div>`, false, 'form');
 }
 function opDichiaraTrattaSave(id, faseId) {
-  if (!opDichiaraTratta(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note') })) { opRidisegna(); return; }
+  if (!opDichiaraTratta(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note'), motivo: val('op-d-motivo') })) { opRidisegna(); return; }
   closeModal(); opRidisegna(); showToast('Rientro registrato');
 }
 // La forzatura chiede il motivo, e il testo del blocco è **lo stesso** che il
