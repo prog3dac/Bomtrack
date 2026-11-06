@@ -258,6 +258,11 @@ function qcRegistraEsito(id, dati) {
     showToast('Manca il certificato: si può accettare solo in deroga', 'error'); return false;
   }
   const destino = QC_DESTINI[d.destino] ? d.destino : 'sostituzione';
+  // Il terzista lavora roba nostra: non c'è niente da accreditare, i pezzi
+  // tornano da lui per essere rifatti.
+  if (ko > 0.000001 && destino === 'accredito' && insp.source === 'odl') {
+    showToast('Da un ordine di lavoro il reso è solo da rifare o da rottamare', 'error'); return false;
+  }
   const note = String(d.note || '').trim();
   // Prima la merce, poi la chiusura: se il reso non si può registrare il
   // collaudo resta aperto e la trattenuta con lui.
@@ -324,7 +329,17 @@ function qcRespingi(insp, ko, destino, note) {
   if (!o) { showToast('Ordine non trovato: il collaudo resta aperto', 'error'); return false; }
   const l = (o.lines || []).find(x => x.id === insp.lineId);
   if (!l) { showToast('Riga d\'ordine non trovata: il collaudo resta aperto', 'error'); return false; }
+  // A credito (dalla 0.143.0) il fornitore non li rimanda: scende anche
+  // l'ordinato, così la riga non resta aperta ad aspettarli e il fabbisogno,
+  // che non li vede più in arrivo, torna scoperto e si riordina. È una
+  // modifica alla riga, quindi la fa chi scrive gli ordini: l'officina sul
+  // server cambia solo lo stato (→ MANUALE, archivio condiviso).
+  const accredito = destino === 'accredito';
+  if (accredito && !canWrite('docs')) {
+    showToast('Il reso a credito riduce l\'ordine: lo registra l\'Ufficio acquisti', 'error'); return false;
+  }
   registraRicevuto('orders', o, l, Math.max(0, arrotondaQta((Number(l.received) || 0) - ko)));
+  if (accredito) l.qty = Math.max(0, arrotondaQta((Number(l.qty) || 0) - ko));
   if (typeof ordAutoStatus === 'function') ordAutoStatus(o);
   touch(o); saveDB();
   return true;
@@ -557,13 +572,13 @@ function qcEsitoHtml(x, u, scrivibile) {
       <div class="modal-field" id="qc-ko-field" style="${pre === 'respinto' ? '' : 'display:none'}"><label>Pezzi respinti (${esc(u)})</label>
         <input type="number" id="qc-ko" min="0" max="${Number(x.qty) || 0}" step="any" value="${Number(x.qty) || 0}" ${scrivibile ? '' : 'disabled'} oninput="qcEsitoChange()"></div>
       <div class="modal-field" id="qc-destino-field" style="${pre === 'respinto' ? '' : 'display:none'}"><label>Che fine fanno</label>
-        <select id="qc-destino" ${scrivibile ? '' : 'disabled'}>
-          ${Object.keys(QC_DESTINI).map(k => `<option value="${k}">${esc(QC_DESTINI[k])}</option>`).join('')}
+        <select id="qc-destino" onchange="qcEsitoChange()" ${scrivibile ? '' : 'disabled'}>
+          ${Object.keys(QC_DESTINI).filter(k => !(k === 'accredito' && x.source === 'odl')).map(k => `<option value="${k}">${esc(QC_DESTINI[k])}</option>`).join('')}
         </select></div>
     </div>
     <div class="modal-field"><label>Nota</label>
       <textarea id="qc-note" rows="2" ${scrivibile ? '' : 'disabled'}>${esc(x.note || '')}</textarea></div>
-    <p class="empty-text qc-hint" id="qc-conseguenza">${qcConseguenzaTesto(x, pre, pre === 'respinto' ? Number(x.qty) || 0 : 0)}</p>
+    <p class="empty-text qc-hint" id="qc-conseguenza">${qcConseguenzaTesto(x, pre, pre === 'respinto' ? Number(x.qty) || 0 : 0, 'sostituzione')}</p>
     ${scrivibile ? `<div class="modal-actions" style="justify-content:flex-start">
       <button class="add-btn-sm" onclick="qcRegistraDallaScheda('${x.id}')">${ico('check', 'tinted', '')} Registra l'esito</button>
     </div>` : ''}
@@ -584,16 +599,20 @@ function qcEsitoChiusoHtml(x, u) {
 }
 // Cosa succederà, detto prima di premere. È la riga che evita la domanda «e
 // adesso cosa è cambiato a magazzino?».
-function qcConseguenzaTesto(x, esito, ko) {
+function qcConseguenzaTesto(x, esito, ko, destino) {
   const u = x.uom || '';
   const tot = Number(x.qty) || 0;
   const ok = Math.max(0, tot - (Number(ko) || 0));
   if (esito !== 'respinto') {
     return `${fmtQtyIt(tot)} ${esc(u)} diventano merce libera${esito === 'deroga' ? ', con la riserva scritta nel collaudo e una non conformità da chiudere' : ''}.`;
   }
-  const dove = x.source === 'odl'
-    ? 'escono verso il terzista come uscita a conto lavoro, e l\'ordine di lavoro torna ad aspettarli'
-    : 'tolgono il ricevuto dalla riga d\'ordine: la giacenza cala, la riga torna ad avere un residuo e il fabbisogno li aspetta di nuovo';
+  const dove = destino === 'scarto'
+    ? 'restano qui ed escono come consumo: il ricevuto della riga non cambia'
+    : x.source === 'odl'
+      ? 'escono verso il terzista come uscita a conto lavoro, e l\'ordine di lavoro torna ad aspettarli'
+      : destino === 'accredito'
+        ? 'tolgono il ricevuto e l\'ordinato dalla riga d\'ordine: il fornitore non li rimanda, la riga si chiude su quello che resta e il fabbisogno torna scoperto. La non conformità aspetta la nota di credito'
+        : 'tolgono il ricevuto dalla riga d\'ordine: la giacenza cala, la riga torna ad avere un residuo e il fabbisogno li aspetta di nuovo';
   return `${fmtQtyIt(ok)} ${esc(u)} diventano liberi; ${fmtQtyIt(ko)} ${esc(u)} ${dove}. Si apre una non conformità verso il fornitore.`;
 }
 function qcEsitoChange() {
@@ -605,7 +624,7 @@ function qcEsitoChange() {
   if (f2) f2.style.display = respinto ? '' : 'none';
   const ko = respinto ? Math.min(Number(x.qty) || 0, Math.max(0, parseFloat(val('qc-ko')) || 0)) : 0;
   const p = document.getElementById('qc-conseguenza');
-  if (p) p.innerHTML = qcConseguenzaTesto(x, esito, ko);
+  if (p) p.innerHTML = qcConseguenzaTesto(x, esito, ko, val('qc-destino'));
 }
 function qcRegistraDallaScheda(id) {
   const x = qcGet(id); if (!x) return false;
