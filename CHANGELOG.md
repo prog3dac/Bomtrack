@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.145.0 — 2026-11-06
+
+**Storia documenti: da cosa è nato un documento e che cosa ha generato.**
+- Nuova pagina **Riepilogo → Storia documenti**. Si sceglie un documento qualsiasi (commessa, piano, richiesta d'offerta, ordine fornitore, ODP, ODL, collaudo, non conformità, modifica tecnica) e un **grafo** da sinistra a destra mostra la sua famiglia: in blu la linea del documento, sbiadito il resto, tratteggiate le modifiche tecniche che la riguardano.
+- **Un clic su un documento del grafo lo mette al centro.** *Tutta la famiglia / Solo la linea* sceglie quanto mostrare; oltre 80 documenti si vede solo la linea.
+- Sotto il grafo il documento al centro: dati, da cosa è nato e perché, che cosa ha generato, ricevimenti e rientri, e **Apri il documento**.
+- Pulsante **Storia** in testa a commesse, piani, richieste, ordini, ODP, ODL, collaudi e non conformità.
+- Sul telefono il grafo diventa un elenco rientrato.
+
+Nessun cambio allo schema: i legami ci sono già.
+
 ### 0.144.0 — 2026-11-06
 
 **Qualità in produzione: il collaudo a fine ciclo degli ODP e le NC degli scarti.**

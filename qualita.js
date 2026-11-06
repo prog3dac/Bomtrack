@@ -512,6 +512,7 @@ function qcSchedaHtml(x) {
         <button class="btn-outline" onclick="qcChiudiScheda()" title="Chiudi il collaudo: l'elenco resta a destra">${ico('close', 'tinted', '')} Chiudi</button>
         <h2 class="section-title" style="font-family:var(--mono)">${esc(x.number)}</h2>
         ${qcBadge(x)}
+        ${storiaBtn('insp', x.id)}
       </div>
       <div class="bom-toolbar-right">
         <button class="btn-outline" onclick="qcCartellino('${x.id}')" title="Il foglio A4 da attaccare alla merce: da collaudare, accettato o non conforme, con il QR">${ico('qr', 'tinted', '')} Cartellino</button>

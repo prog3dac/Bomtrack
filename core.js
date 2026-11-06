@@ -813,7 +813,7 @@ function roleGuardRuolo(area) {
 // Area di scrittura corrispondente a ciascuna vista (per il banner di sola lettura)
 // `load` (Carico centri) è null come `report`: è un prospetto derivato, in sola
 // lettura, da cui non si scrive niente.
-const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', collaudi: 'docs', nc: 'docs', pianiqc: 'docs', fornitoriqc: null, manage: 'manage' };
+const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, storia: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', collaudi: 'docs', nc: 'docs', pianiqc: 'docs', fornitoriqc: null, manage: 'manage' };
 // Le viste in cui l'officina lavora pur senza l'area della vista: lì non va in
 // sola lettura, e le guardie dei singoli gesti fanno il resto.
 const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione', 'collaudi']);

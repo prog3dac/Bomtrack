@@ -391,6 +391,7 @@ function renderJobEdit(id) {
       <div class="bom-toolbar-left">
         ${worklistCloseBtn('jobBackToList()', 'la commessa')}
         <h2 class="section-title" style="margin:0">${ico('clipboard', 'tinted pill', 'Commessa')} ${esc(j.number)}</h2>
+        ${storiaBtn('job', id)}
       </div>
       <div class="bom-toolbar-right">
         ${menuAltro([{ label: 'Elimina la commessa', icon: 'trash', onclick: `delJob('${id}')`, danger: true }])}

@@ -705,6 +705,7 @@ function renderPlanEdit(id) {
       <div class="bom-toolbar-left">
         ${worklistCloseBtn('planBackToList()', 'il piano')}
         <h2 class="section-title" style="margin:0">${ico('list', 'tinted pill', 'Piano di fabbisogno')} ${esc(p.number)}</h2>
+        ${storiaBtn('plan', id)}
         <button class="btn-outline" onclick="planToggleActive('${id}')" title="${p.active === false
           ? 'Chiuso: non impegna materiale. Riaprendolo tornerà a riservarsi quello che gli serve.'
           : 'Aperto: impegna a magazzino il materiale che gli serve, e gli altri piani non se lo contano. Chiudendolo quella quota torna libera.'}">${p.active === false ? ico('unlock', 'tinted', '') + ' Chiuso — riapri' : ico('lock', 'tinted', '') + ' Aperto — chiudi'}</button>

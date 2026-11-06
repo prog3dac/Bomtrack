@@ -94,6 +94,7 @@ const FILE = [
   './views-oda.js',
   './views-prod.js',
   './views-avanzamento.js',
+  './genealogia.js',
   './views-manage.js',
   './export-lists.js',
   './import-catalog.js',

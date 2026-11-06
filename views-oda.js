@@ -300,7 +300,7 @@ function renderOrderEdit(id) {
   const mode = ordMode(o);
   const lockBanner = docLockBanner(mode, 'Ordine ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'order', id);
   return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'orderBackToList()', cosa: "l'ordine", rec: o, stati: ORDER_STATUS, dirty: orderDirty,
+    ${docToolbarHtml({ chiudi: 'orderBackToList()', cosa: "l'ordine", rec: o, storia: storiaBtn('order', o.id), stati: ORDER_STATUS, dirty: orderDirty,
       saveId: 'order-save-btn', salva: `ordSave('${id}')`, menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }] })}
     ${docStepperHtml('order', o)}${docLinksHtml('order', o)}
     ${docCoWarnHtml()}${lockBanner}${stampLine(o)}
@@ -1042,7 +1042,7 @@ function renderOdlEdit(id) {
   const ritardo = orderWorstDelay(o);
   const lockBanner = docLockBanner(odlMode(o), 'Ordine di lavoro ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'odl', id);
   return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro", rec: o, stati: ORDER_STATUS, dirty: odlDirty,
+    ${docToolbarHtml({ chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro", rec: o, storia: storiaBtn('odl', o.id), stati: ORDER_STATUS, dirty: odlDirty,
       saveId: 'odl-save-btn', salva: `odlSave('${id}')`, menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }] })}
     ${docStepperHtml('odl', o)}${docLinksHtml('odl', o)}
     ${docCoWarnHtml()}${odlOdpRef(o)}${lockBanner}${stampLine(o)}
