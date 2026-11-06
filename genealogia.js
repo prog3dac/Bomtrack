@@ -87,7 +87,8 @@ function storiaPadre(k, d) {
   if (k === 'plan') return commessa();
   if (k === 'rfq') return piano() || commessa();
   if (k === 'order') return prova('rfq', d.rfqId, 'dall\'offerta') || piano() || commessa();
-  if (k === 'odp') return piano() || commessa();
+  // L'ODP di ripresa (0.145.0) nasce dalla NC che l'ha lanciato.
+  if (k === 'odp') return prova('nc', d.ncId, 'ripresa della NC') || piano() || commessa();
   if (k === 'odl') {
     const riga = (d.lines || []).find(l => l && l.odpId && storiaGet('odp', l.odpId));
     return prova('odp', d.odpId, 'fase esterna dell\'ODP') || (riga ? { k: 'odp', id: riga.odpId, perche: 'fase esterna dell\'ODP' } : null)

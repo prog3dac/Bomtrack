@@ -68,6 +68,11 @@ describe('Il padre di ogni documento', () => {
     assert.equal(padre(a, 'odp', 'odp1'), 'plan:p1');
     assert.equal(padre(a, 'job', 'j1'), null);
   });
+  it('l\'ODP di ripresa è figlio della NC che l\'ha lanciato', () => {
+    const a = app();
+    a.eval(`db.prodOrders.push({ id: 'odp2', number: 'ODP-2026-121', itemId: 'asm', qty: 2, planId: 'p1', reworkOfId: 'odp1', ncId: 'n2', status: 'bozza', date: '2026-10-30', phases: [], materials: [] })`);
+    assert.equal(padre(a, 'odp', 'odp2'), 'nc:n2');
+  });
   it('un documento che non c\'è più si salta: si passa al successivo', () => {
     assert.equal(padre(app(), 'order', 'o2'), 'plan:p1');
   });

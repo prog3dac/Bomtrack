@@ -10,6 +10,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Sotto il grafo il documento al centro: dati, da cosa è nato e perché, che cosa ha generato, ricevimenti e rientri, e **Apri il documento**.
 - Pulsante **Storia** in testa a commesse, piani, richieste, ordini, ODP, ODL, collaudi e non conformità.
 - Sul telefono il grafo diventa un elenco rientrato.
+- L'ODP di ripresa lanciato da una NC (0.145.0) sta sotto la sua NC: il giro ordine → collaudo → NC → ripresa si legge di fila.
 
 Nessun cambio allo schema: i legami ci sono già.
 
