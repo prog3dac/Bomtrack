@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.144.0**
+**Versione dell'app documentata: 0.146.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -725,7 +725,7 @@ cruscotto si esporta in Excel o PDF, un foglio per sezione.
 
 **Come ci si arriva.** 🏠 *Riepilogo → Storia documenti*, oppure dal pulsante **Storia** in testa a
 ogni documento: commessa, piano di fabbisogno, richiesta d'offerta, ordine fornitore, ordine di
-produzione, ordine di lavoro, collaudo e non conformità (dalla 0.145.0).
+produzione, ordine di lavoro, collaudo e non conformità (dalla 0.146.0).
 
 Si sceglie un documento — dal pulsante, o scrivendo nel campo di ricerca il numero, l'oggetto, il
 fornitore o il cliente — e il **grafo** mostra da cosa è nato e che cosa ha generato. Si legge da
@@ -1983,6 +1983,28 @@ per il materiale. Si corregge anche dopo, dalla NC, finché è aperta.
 
 **Annullare la dichiarazione** dell'ultima fase toglie il collaudo se è ancora aperto. Se ha già
 un esito non si annulla: la merce si è già mossa.
+
+**L'ODP di ripresa** (dalla 0.145.0). Dalla non conformità di un ODP, *Ufficio acquisti* o
+l'amministratore premono **Lancia l'ODP di ripresa**: un ordine di produzione separato, collegato
+all'originale e alla NC, che nasce già lanciato.
+
+- **La fase di ripristino** si scrive per quel caso: che cosa si fa, e dove. In casa con il centro
+  di lavoro e le ore per pezzo; dal terzista con i giorni e il prezzo, che è zero se il
+  rifacimento è **a suo carico** o quello scritto se è **addebitato**. Una fase esterna genera il
+  suo ordine di lavoro come ogni altra.
+- **Le fasi dopo.** Sotto ci sono le fasi dell'ODP originale che vengono dopo quella
+  responsabile. Per uno scarto sono spuntate, perché il pezzo non le ha ancora fatte; per un
+  respinto al collaudo no, perché il pezzo ha già fatto tutto il ciclo, e si spuntano solo quelle
+  da rifare.
+- **Il materiale** sono i pezzi da riprendere. Quelli fermi da rilavorare escono all'avvio della
+  prima fase, e da lì non sono più fermi; gli scarti non sono mai entrati a magazzino, e l'ordine
+  parte senza prelievo. Il versamento finale apre un collaudo nuovo.
+- **Piano e commessa** sono quelli dell'originale: il fabbisogno conta la ripresa come
+  rifornimento, e non propone un altro ordine per gli stessi pezzi.
+- **Il costo.** La NC mostra la ripresa con il suo costo finora: le fasi interne per i pezzi
+  lavorati, più l'attrezzaggio, e i rientri dell'ordine di lavoro al suo prezzo. **Porta nel costo
+  della NC** lo scrive come costo della non qualità. Il materiale non conta, perché sono gli
+  stessi pezzi.
 
 ### Le non conformità (modulo Qualità)
 

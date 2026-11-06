@@ -1,4 +1,4 @@
-// Storia documenti (0.145.0): da cosa è nato un documento e che cosa ha generato.
+// Storia documenti (0.146.0): da cosa è nato un documento e che cosa ha generato.
 //
 // Le domande:
 //  - ogni documento ha un padre solo, il più vicino che esiste ancora;

@@ -184,8 +184,10 @@ function qcIndice() {
     idx.set(x.itemId, (idx.get(x.itemId) || 0) + qcQtaGestione(x));
   });
   // I pezzi respinti da rilavorare restano fermi anche a collaudo chiuso.
+  // Meno quelli che un ODP di ripresa ha già prelevato (qcFermi).
   qcTutti().filter(x => x.status !== 'aperto' && x.itemId && Number(x.qtyHeld) > 0.000001).forEach(x => {
-    idx.set(x.itemId, (idx.get(x.itemId) || 0) + qcQtaGestione({ qty: x.qtyHeld, uom: x.uom, itemId: x.itemId }));
+    const fermi = typeof qcFermi === 'function' ? qcFermi(x) : Number(x.qtyHeld) || 0;
+    if (fermi > 0.000001) idx.set(x.itemId, (idx.get(x.itemId) || 0) + qcQtaGestione({ qty: fermi, uom: x.uom, itemId: x.itemId }));
   });
   return idx;
 }
@@ -638,7 +640,7 @@ function qcEsitoChiusoHtml(x, u) {
       ${x.destino ? `<div class="modal-field"><label>Destinazione</label><div class="qc-val">${esc(QC_DESTINI[x.destino] || '—')}</div></div>` : ''}
       ${x.source === 'odp' && x.respPhase ? `<div class="modal-field"><label>Fase che ha generato il difetto</label><div class="qc-val">${esc(qcRespTesto(typeof getOdp === 'function' ? getOdp(x.orderId) : null, x.respPhase) || '—')}</div></div>` : ''}
     </div>
-    ${Number(x.qtyHeld) > 0.000001 ? `<p class="empty-text qc-hint"><strong>${fmtQtyIt(x.qtyHeld)} ${esc(u)}</strong> da rilavorare, fermi: tornano al collaudo o si rottamano dalla non conformità.</p>` : ''}
+    ${typeof qcFermi === 'function' && qcFermi(x) > 0.000001 ? `<p class="empty-text qc-hint"><strong>${fmtQtyIt(qcFermi(x))} ${esc(u)}</strong> da rilavorare, fermi: tornano al collaudo o si rottamano dalla non conformità.</p>` : ''}
     ${x.note ? `<p class="empty-text qc-hint">${esc(x.note)}</p>` : ''}
     <p class="empty-text qc-hint">Chiuso il ${esc(fmtDateIt((x.closedAt || '').slice(0, 10)))}. Un esito non si corregge: la merce si è già mossa. Quello che è tornato indietro si rivede sul documento d'origine.</p>
   </div>`;

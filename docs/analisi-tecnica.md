@@ -942,6 +942,13 @@ Sette merge servivano solo a rinumerare, e la PR #52 è rimasta in conflitto.
 `tools/versione.js` assegna il numero all'ultimo passo, con i suoi test;
 `CLAUDE.md` lo dice a chi lavora sul codice.
 
+### 68. La ripresa dei pezzi respinti si faceva fuori dall'app *(0.145.0)*
+Aperta nella 0.144.0 come D12. Ora la NC lancia l'**ODP di ripresa**
+(`ncRipresaCrea`, `qualita-produzione.js`): fase dedicata al ripristino, le
+fasi mancanti dell'originale, i pezzi fermi come materiale, piano e commessa
+ereditati (il fabbisogno lo conta come rifornimento, e non propone un ODP in
+più per gli stessi pezzi), il suo costo come costo della NC.
+
 ## Aperto
 
 > **Lettura per la situazione attuale (0.107.0).** L'archivio condiviso su
@@ -1062,18 +1069,13 @@ e la scheda dell'altro piano lo segnala (`qcPianoContesi`). Per chiuderla
 servirebbe una tabella `quality_plan_items` con l'articolo come chiave unica,
 oppure un trigger su `quality_plans` che rifiuta un codice già preso.
 
-**D12 — la ripresa dei pezzi respinti si fa ancora fuori dall'app** *(0.144.0)*.
-Un respinto di ODP *da rilavorare* resta fermo (`qtyHeld` sul collaudo) finché
-dalla NC non torna al collaudo o non si rottama, ma la rilavorazione stessa
-non ha un documento: niente ore, niente conto lavoro, e il costo della NC si
-scrive a mano. È il passo 2 del piano: l'ODP di ripresa con la fase dedicata al
-ripristino, lanciato dalla NC, con il suo consuntivo come costo della non
-qualità. Due limiti noti nel frattempo: una NC da scarto per *Materiale non
-conforme* nasce interna, perché l'app non sa da quale ricevimento viene il
-materiale prelevato; e i pezzi fermi da rilavorare tolgono il libero, quindi
-l'MRP può proporre un ODP nuovo per gli stessi pezzi.
+**D12 — una NC da scarto per materiale non conforme nasce interna** *(0.144.0)*.
+Con la causale *Materiale non conforme* la NC dovrebbe andare al fornitore del
+materiale, ma l'app non sa da quale ricevimento viene il materiale che l'ODP
+ha prelevato: nasce *Interna* e il fornitore si sceglie a mano. Per chiuderla
+servirebbe la tracciabilità dei lotti fino al prelievo.
 
-**D13 — legami fra documenti che lo schema non tiene** *(0.145.0)*. La Storia
+**D13 — legami fra documenti che lo schema non tiene** *(0.146.0)*. La Storia
 documenti (`genealogia.js`) legge i legami che ci sono, e tre mancano: l'ODP di
 un sottoassieme non dice di quale ODP d'assieme è parte (tutti e due puntano
 solo al piano: nel grafo sono fratelli); la riga d'ordine di conto lavoro

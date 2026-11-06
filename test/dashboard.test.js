@@ -114,7 +114,7 @@ describe('La vista', () => {
 
   it('sta nel gruppo Riepilogo', () => {
     const a = app();
-    // Con la Storia documenti (0.145.0), che chiede «da dove viene», non «come va».
+    // Con la Storia documenti (0.146.0), che chiede «da dove viene», non «come va».
     assert.deepEqual(JSON.parse(a.eval('JSON.stringify(NAV[0].views.map(v => v.id))')), ['home', 'dash', 'storia']);
   });
 });

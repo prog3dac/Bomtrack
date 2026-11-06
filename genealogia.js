@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 //  BOMTRACK — genealogia.js
 // ═══════════════════════════════════════════════════════════
-// La storia di un documento (dalla 0.145.0): Riepilogo → Storia documenti.
+// La storia di un documento (dalla 0.146.0): Riepilogo → Storia documenti.
 // Si sceglie un documento qualsiasi — commessa, piano, richiesta, ordine,
 // ordine di lavoro, ordine di produzione, collaudo, non conformità, modifica
 // tecnica — e il grafo mostra da cosa è nato e che cosa ha generato. Un clic

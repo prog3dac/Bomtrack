@@ -238,7 +238,7 @@ const NAV = [
     // Il Riepilogo dice cosa fare adesso, il cruscotto come stanno le cose:
     // due domande, la stessa porta d'ingresso.
     { id: 'dash', label: 'Cruscotto' },
-    // Da cosa è nato un documento e che cosa ha generato (0.145.0).
+    // Da cosa è nato un documento e che cosa ha generato (0.146.0).
     { id: 'storia', label: 'Storia documenti' }] },
   // Quello che l'ufficio tecnico definisce: gli articoli, come si compongono e
   // come si lavorano. Acquisti e Progetto restano due elenchi — lo stesso

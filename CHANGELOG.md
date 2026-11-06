@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.145.0 — 2026-11-06
+### 0.146.0 — 2026-11-06
 
 **Storia documenti: da cosa è nato un documento e che cosa ha generato.**
 - Nuova pagina **Riepilogo → Storia documenti**. Si sceglie un documento qualsiasi (commessa, piano, richiesta d'offerta, ordine fornitore, ODP, ODL, collaudo, non conformità, modifica tecnica) e un **grafo** da sinistra a destra mostra la sua famiglia: in blu la linea del documento, sbiadito il resto, tratteggiate le modifiche tecniche che la riguardano.
@@ -12,6 +12,17 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Sul telefono il grafo diventa un elenco rientrato.
 
 Nessun cambio allo schema: i legami ci sono già.
+
+### 0.145.0 — 2026-11-06
+
+**Qualità in produzione: l'ODP di ripresa.**
+- Dalla non conformità di un ODP, **Lancia l'ODP di ripresa** crea un ordine di produzione separato, già lanciato, collegato all'originale e alla NC. Ha una **fase dedicata al ripristino** (che cosa si fa, il centro di lavoro con le ore per pezzo, oppure il terzista con i giorni), più le fasi dell'originale da rifare: per uno scarto a metà ciclo sono proposte quelle che mancano.
+- **Il materiale sono i pezzi da riprendere.** Quelli fermi da rilavorare escono all'avvio della prima fase e da lì non sono più fermi; gli scarti, che a magazzino non sono mai entrati, partono senza prelievo. Il versamento finale apre un collaudo nuovo.
+- **Dal terzista** il ripristino è *a suo carico* (prezzo zero) o addebitato al prezzo scritto, e genera il suo ODL come ogni fase esterna.
+- **Eredita piano e commessa** dell'originale: il fabbisogno la conta come rifornimento e non propone un altro ODP per gli stessi pezzi.
+- La NC mostra la ripresa con il suo **costo finora** (fasi interne lavorate, attrezzaggio, rientri dell'ODL), e **Porta nel costo della NC** lo scrive come costo della non qualità.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Aggiunge a `production_orders` le colonne `rework_of_id`, `nc_id` e `rework_inspection_id`; `schema_versione` passa a 4.
 
 ### 0.144.0 — 2026-11-06
 

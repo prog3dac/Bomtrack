@@ -1676,7 +1676,7 @@ select.combo-nascosto{display:none!important}
 .qcs-row.qcs-preso{opacity:.6;cursor:not-allowed}
 .qcs-row input{min-width:18px;min-height:18px}
 
-/* ─── Storia documenti (genealogia.js, dalla 0.145.0) ─── */
+/* ─── Storia documenti (genealogia.js, dalla 0.146.0) ─── */
 .storia-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
 .storia-barra{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
 .storia-cerca{flex:1;min-width:240px;position:relative}
