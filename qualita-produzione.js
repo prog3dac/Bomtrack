@@ -88,10 +88,10 @@ function qcAnnullaDichiarazione(declId) {
 // diventano liberi e basta.
 function qcRilavoratiAlCollaudo(inspId) {
   if (!qcGuard()) return null;
-  const x = qcGet(inspId); if (!x || !(Number(x.qtyHeld) > 0.000001)) return null;
+  const x = qcGet(inspId); if (!x || !(qcFermi(x) > 0.000001)) return null;
   const nc = typeof ncDiCollaudo === 'function' ? ncDiCollaudo(x.id) : null;
-  const held = Number(x.qtyHeld) || 0;
-  Store.update('inspections', x.id, { qtyHeld: 0 });
+  const held = qcFermi(x);
+  Store.update('inspections', x.id, { qtyHeld: arrotondaQta((Number(x.qtyHeld) || 0) - held) });
   const nuovo = qcCrea({ source: x.source, orderId: x.orderId, lineId: x.lineId, itemId: x.itemId, qty: held,
     uom: x.uom, supplierId: null, declId: null });
   if (nuovo && nuovo.id) Store.update('inspections', nuovo.id, { note: `Dopo la rilavorazione${nc ? ' (' + nc.number + ')' : ''}` });
@@ -101,13 +101,14 @@ function qcRilavoratiAlCollaudo(inspId) {
 }
 // Da rilavorare a rottamati: escono come consumo, come il «tenuto e rottamato».
 function qcRottamaTrattenuti(inspId, testo) {
-  const x = qcGet(inspId); if (!x || !(Number(x.qtyHeld) > 0.000001)) return false;
+  const x = qcGet(inspId); if (!x || !(qcFermi(x) > 0.000001)) return false;
+  const held = qcFermi(x);
   const it = getItem(x.itemId);
   if (it && hasStock(it)) {
-    addMovement(x.itemId, 'scarico', -qcQtaGestione({ qty: x.qtyHeld, uom: x.uom, itemId: x.itemId }, it),
+    addMovement(x.itemId, 'scarico', -qcQtaGestione({ qty: held, uom: x.uom, itemId: x.itemId }, it),
       testo || `Rottamato dopo il collaudo ${x.number}`, { orderId: x.orderId || null, lineId: x.lineId || null });
   }
-  Store.update('inspections', x.id, { qtyHeld: 0 });
+  Store.update('inspections', x.id, { qtyHeld: arrotondaQta((Number(x.qtyHeld) || 0) - held) });
   invalidateStock();
   return true;
 }
@@ -185,7 +186,7 @@ function ncRottamaChiudi(id) {
   if (!ncGuard()) return false;
   const x = ncGet(id); if (!x || x.status === 'chiusa') return false;
   const c = x.inspectionId ? qcGet(x.inspectionId) : null;
-  if (c && Number(c.qtyHeld) > 0.000001) qcRottamaTrattenuti(c.id, `Rottamato con ${x.number}`);
+  if (c && qcFermi(c) > 0.000001) qcRottamaTrattenuti(c.id, `Rottamato con ${x.number}`);
   const patch = { decision: 'rottamazione' };
   if (!x.cause) patch.cause = ncCausali().includes('Errore di lavorazione') ? 'Errore di lavorazione' : (ncCausali()[0] || '');
   Store.update('nonconformities', id, patch);
@@ -196,7 +197,7 @@ function ncRottamaChiudi(id) {
 function ncProduzioneHtml(x, scrive) {
   const o = x.productionOrderId && typeof getOdp === 'function' ? getOdp(x.productionOrderId) : null;
   const c = x.inspectionId ? qcGet(x.inspectionId) : null;
-  const held = c ? Number(c.qtyHeld) || 0 : 0;
+  const held = c ? qcFermi(c) : 0;
   if (!o && !(held > 0)) return '';
   const aperta = x.status !== 'chiusa';
   const dis = scrive && aperta ? '' : 'disabled';
@@ -212,5 +213,224 @@ function ncProduzioneHtml(x, scrive) {
         ${fase}
       </div>
       ${fermi}
+      ${ncRipresaHtml(x, scrive)}
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  L'ODP DI RIPRESA (dalla 0.145.0)
+// ═══════════════════════════════════════════════════════════
+// La rilavorazione ha il suo documento: un ODP separato, lanciato dalla NC,
+// collegato all'originale (`reworkOfId`) e alla NC (`ncId`). Ha una **fase
+// dedicata al ripristino**, scritta per quel caso, più le fasi dell'originale
+// che i pezzi non hanno ancora fatto (uno scarto a metà ciclo), se servono.
+//
+// Il materiale sono i pezzi da riprendere. Se erano fermi a magazzino (un
+// respinto al collaudo) escono come prelievo all'avvio della prima fase, e da
+// lì non sono più fermi: `qcFermi` li conta togliendo quello che le riprese
+// del collaudo hanno prelevato (`reworkInspectionId`). Se erano scarti di
+// fase, a magazzino non sono mai entrati e l'ODP parte senza prelievo.
+//
+// Eredita piano e commessa dell'originale: per il fabbisogno è un ODP del piano
+// che promette i pezzi che mancano, quindi non se ne propone un altro.
+
+// I pezzi davvero ancora fermi di un collaudo: quelli da rilavorare meno quelli
+// che un ODP di ripresa ha già prelevato.
+function qcFermi(x) {
+  const held = Number(x && x.qtyHeld) || 0;
+  if (!(held > 0.000001)) return 0;
+  const riprese = new Set((db.prodOrders || []).filter(o => o.reworkInspectionId === x.id && o.status !== 'annullato').map(o => o.id));
+  if (!riprese.size) return held;
+  const presi = (db.movements || []).filter(m => riprese.has(m.orderId) && m.itemId === x.itemId && m.kind === 'scarico')
+    .reduce((s, m) => s - (Number(m.qty) || 0), 0);
+  return Math.max(0, arrotondaQta(held - presi));
+}
+function ncRipresa(nc) {
+  return nc ? (db.prodOrders || []).find(o => o.ncId === nc.id && o.status !== 'annullato') || null : null;
+}
+// Le fasi dell'originale dopo quella responsabile: quelle che un pezzo
+// scartato lì non ha ancora fatto. Con il materiale o «non individuata» come
+// responsabile, tutte.
+function ncRipresaFasiDopo(nc, orig) {
+  const fasi = (orig && orig.phases) || [];
+  const k = fasi.findIndex(f => f.id === nc.respPhase);
+  return k >= 0 ? fasi.slice(k + 1) : fasi.slice();
+}
+// Le fasi congelate della ripresa, con tratte e numeri rifatti sul nuovo
+// ordine: è un ODP come gli altri, e la successione la legge da qui.
+function ncRipresaFasi(ripristino, dopo, ncId) {
+  const campi = ['workCenterId', 'wcName', 'machineId', 'machineName', 'machineRate', 'supplierId', 'supplierName',
+    'costMode', 'hours', 'operators', 'days', 'setupHours', 'queueDays', 'transitDays', 'rate', 'cost', 'note'];
+  const base = { workCenterId: null, wcName: '', machineId: null, machineName: '', machineRate: 0, supplierId: null, supplierName: '',
+    costMode: 'fisso', hours: 0, operators: 1, days: 0, setupHours: 0, queueDays: 0, transitDays: 0, rate: 0, cost: 0, note: '' };
+  const fasi = [ripristino].concat(dopo).map((f, k) => {
+    const out = Object.assign({}, base);
+    campi.forEach(c => { if (f[c] !== undefined) out[c] = f[c]; });
+    return Object.assign(out, { id: newId(), seq: cyclePhaseNumber(k), opIndex: k, phaseKey: `ripresa|${ncId}|${k}` });
+  });
+  const tratte = [];
+  fasi.forEach((f, k) => {
+    const sup = f.supplierId || '';
+    const u = tratte[tratte.length - 1];
+    if (u && u.sup === sup && u.to === k - 1) u.to = k; else tratte.push({ from: k, to: k, sup });
+  });
+  const viste = new Map();
+  tratte.forEach(t => {
+    const passata = t.sup ? (viste.get(t.sup) || 0) : 0;
+    if (t.sup) viste.set(t.sup, passata + 1);
+    for (let k = t.from; k <= t.to; k++) Object.assign(fasi[k], { runFrom: t.from, runTo: t.to, passata });
+  });
+  return fasi;
+}
+// `dati` = { qty, descr, workCenterId, supplierId, aCarico, prezzo, ore,
+// giorni, fasiDopo: [id delle fasi dell'originale], dueDate }.
+function ncRipresaCrea(ncId, dati) {
+  if (!roleGuard('docs')) return null;
+  const nc = ncGet(ncId); if (!nc || nc.status === 'chiusa') return null;
+  const orig = nc.productionOrderId ? getOdp(nc.productionOrderId) : null;
+  if (!orig) { showToast('La ripresa si lancia da una NC di un ordine di produzione', 'error'); return null; }
+  const gia = ncRipresa(nc);
+  if (gia) { showToast(`Questa NC ha già la sua ripresa: ${gia.number}`, 'error'); return null; }
+  const part = getItem(orig.itemId); if (!part) return null;
+  const c = nc.inspectionId ? qcGet(nc.inspectionId) : null;
+  const fermi = c ? qcFermi(c) : 0;
+  const d = dati || {};
+  const max = fermi > 0 ? fermi : Number(nc.qty) || 0;
+  const qty = arrotondaQta(Math.max(0, Number(d.qty) || 0));
+  if (!(qty > 0)) { showToast('Quanti pezzi si riprendono?', 'error'); return null; }
+  if (qty > max + 0.000001) { showToast(`Si riprendono al massimo ${fmtQtyIt(max)} pezzi`, 'error'); return null; }
+  const descr = String(d.descr || '').trim();
+  if (!descr) { showToast('Scrivi che cosa fa la fase di ripristino', 'error'); return null; }
+  const sup = d.supplierId ? getSupplier(d.supplierId) : null;
+  const wc = d.workCenterId ? getWorkCenter(d.workCenterId) : null;
+  if (!sup && !wc) { showToast('Scegli il centro di lavoro o il terzista del ripristino', 'error'); return null; }
+  // Dal terzista il prezzo lo decide la NC, volta per volta: a suo carico è
+  // zero, altrimenti quello concordato per pezzo.
+  const ripristino = sup
+    ? { workCenterId: wc ? wc.id : null, wcName: wc ? wc.name : 'Ripristino', supplierId: sup.id, supplierName: sup.name || '',
+      costMode: 'fisso', cost: d.aCarico ? 0 : Math.max(0, Number(d.prezzo) || 0), days: Math.max(0, Number(d.giorni) || 0), note: descr }
+    : { workCenterId: wc.id, wcName: wc.name || '', costMode: 'orario', hours: Math.max(0, Number(d.ore) || 0),
+      rate: Number(wc.hourlyRate) || 0, note: descr };
+  const scelte = new Set(d.fasiDopo || []);
+  const dopo = ncRipresaFasiDopo(nc, orig).filter(f => scelte.has(f.id));
+  const materiali = fermi > 0 ? [{ id: newId(), itemId: part.id, code: part.code || '', name: part.name || '', uom: itemUom(part),
+    perPezzo: 1, qty, opIndex: 0 }] : [];
+  const o = odpPianifica(stampNew({
+    id: gid(), number: nextOdpNumber(), itemId: part.id, code: part.code || '', name: part.name || '', uom: itemUom(part),
+    qty, date: oggiISO(), dueDate: d.dueDate || orig.dueDate || '', status: 'bozza',
+    title: `Ripresa ${nc.number || ''} di ${orig.number || ''}`.trim(), notes: '', notesInternal: descr,
+    planId: orig.planId || null, jobId: orig.jobId || null,
+    phases: ncRipresaFasi(ripristino, dopo, nc.id), materials: materiali, active: true,
+    reworkOfId: orig.id, ncId: nc.id, reworkInspectionId: fermi > 0 ? c.id : null,
+  }));
+  db.prodOrders.push(o);
+  opLancia(o.id);
+  if (nc.decision !== 'rilavorazione') Store.update('nonconformities', nc.id, { decision: 'rilavorazione' });
+  invalidateStock(); saveDB();
+  return o;
+}
+// Il costo della ripresa finora: le fasi interne per i pezzi lavorati (più
+// l'attrezzaggio di quelle partite), quelle esterne per i rientri dell'ODL al
+// suo prezzo. Il materiale no: sono gli stessi pezzi, già contati.
+function qcCostoRipresa(o) {
+  if (!o) return 0;
+  let tot = 0;
+  const righe = new Set();
+  (o.phases || []).forEach(f => {
+    if (f.supplierId) {
+      const x = opOdlDi(f);
+      if (x && !righe.has(x.line.id)) { righe.add(x.line.id); tot += (Number(x.line.received) || 0) * (Number(x.line.price) || 0); }
+      return;
+    }
+    const pezzo = typeof consFaseCostoPezzo === 'function' ? consFaseCostoPezzo(f)
+      : (f.costMode === 'orario' ? (Number(f.hours) || 0) * (Number(f.rate) || 0) : Number(f.cost) || 0);
+    const att = opAvviata(o, f) && typeof costoAttrezzaggio === 'function' ? costoAttrezzaggio(f) : 0;
+    tot += opProcessati(o, f) * pezzo + att;
+  });
+  return Math.round(tot * 100) / 100;
+}
+function ncCostoDaRipresa(ncId) {
+  if (!ncGuard()) return false;
+  const nc = ncGet(ncId); const o = ncRipresa(nc);
+  if (!nc || !o || nc.status === 'chiusa') return false;
+  Store.update('nonconformities', ncId, { cost: qcCostoRipresa(o) });
+  return true;
+}
+// Sulla scheda della NC: la ripresa, o il comando per lanciarla.
+function ncRipresaHtml(x, scrive) {
+  if (!x.productionOrderId || typeof getOdp !== 'function' || !getOdp(x.productionOrderId)) return '';
+  const aperta = x.status !== 'chiusa';
+  const o = ncRipresa(x);
+  if (o) {
+    return `<p class="empty-text qc-hint">${ico('refresh', 'tinted', '')} Ripresa: <a href="#" onclick="openOdpFromOdl('${o.id}');return false">${esc(o.number || '')}</a>
+      · ${esc(ODP_STATUS[o.status] || o.status || '')} · ${fmtQtyIt(o.qty)} ${esc(o.uom || '')} · costo finora <strong>${esc(fmtN(qcCostoRipresa(o)))}</strong></p>
+      ${scrive && aperta ? `<div class="modal-actions" style="justify-content:flex-start">
+        <button class="btn-outline" onclick="ncCostoDaRipresa('${x.id}');ncRidisegna()" title="Scrive nel costo della NC quello che la ripresa è costata finora">Porta nel costo della NC</button></div>` : ''}`;
+  }
+  if (!scrive || !aperta) return '';
+  return `<div class="modal-actions" style="justify-content:flex-start">
+      <button class="btn-outline" onclick="ncRipresaModal('${x.id}')" title="Un ordine di produzione separato, con la fase di ripristino">${ico('factory', 'tinted', '')} Lancia l'ODP di ripresa</button></div>`;
+}
+function ncRipresaModal(ncId) {
+  const nc = ncGet(ncId); if (!nc || !roleGuard('docs')) return;
+  const orig = nc.productionOrderId ? getOdp(nc.productionOrderId) : null; if (!orig) return;
+  const c = nc.inspectionId ? qcGet(nc.inspectionId) : null;
+  const fermi = c ? qcFermi(c) : 0;
+  const qty = fermi > 0 ? fermi : Number(nc.qty) || 0;
+  const resp = qcFaseOdp(orig, nc.respPhase);
+  const dopo = ncRipresaFasiDopo(nc, orig);
+  window.__ripFasi = dopo.map(f => f.id);
+  const centri = (db.workCenters || []).filter(w => w.active !== false);
+  const forn = (db.suppliers || []).filter(s => s.active !== false);
+  const wcSel = resp && !resp.supplierId ? resp.workCenterId : '';
+  const supSel = resp && resp.supplierId ? resp.supplierId : '';
+  openModal(`<h3>${ico('factory', 'tinted pill', '')} ODP di ripresa</h3>
+    <p>${esc(nc.number || '')} · ${esc(orig.number || '')} · <strong>${esc((orig.code || '') + ' ' + (orig.name || ''))}</strong></p>
+    <div class="modal-grid">
+      <div class="modal-field"><label for="rip-qty">Pezzi da riprendere</label>
+        <input class="num" type="number" id="rip-qty" min="0" max="${qty}" step="any" value="${qty}"></div>
+      <div class="modal-field"><label for="rip-due">Serve per</label><input type="date" id="rip-due" value="${esc((orig.dueDate || '').slice(0, 10))}"></div>
+    </div>
+    <h4>La fase di ripristino</h4>
+    <div class="modal-field"><label for="rip-descr">Che cosa si fa</label>
+      <input id="rip-descr" autocomplete="off" placeholder="es. ripresa della quota di foratura"></div>
+    <div class="modal-grid">
+      <div class="modal-field"><label for="rip-wc">Centro di lavoro</label>
+        <select id="rip-wc"><option value="">—</option>${centri.map(w => `<option value="${esc(w.id)}" ${w.id === wcSel ? 'selected' : ''}>${esc(w.name || '')}</option>`).join('')}</select></div>
+      <div class="modal-field"><label for="rip-sup">Terzista (se fuori)</label>
+        <select id="rip-sup"><option value="">— in casa —</option>${forn.map(s => `<option value="${esc(s.id)}" ${s.id === supSel ? 'selected' : ''}>${esc(s.name || '')}</option>`).join('')}</select></div>
+      <div class="modal-field"><label for="rip-ore">Ore per pezzo (in casa)</label><input class="num" type="number" id="rip-ore" min="0" step="any" value="0"></div>
+      <div class="modal-field"><label for="rip-giorni">Giorni (dal terzista)</label><input class="num" type="number" id="rip-giorni" min="0" step="1" value="5"></div>
+      <div class="modal-field"><label><input type="checkbox" id="rip-carico" checked> A carico del terzista</label></div>
+      <div class="modal-field"><label for="rip-prezzo">Prezzo per pezzo, se addebitato (${esc(cur())})</label><input class="num" type="number" id="rip-prezzo" min="0" step="any" value="0"></div>
+    </div>
+    ${dopo.length ? `<h4>Dopo il ripristino</h4>
+    <p class="empty-text" style="text-align:left;padding:0 0 6px">${fermi > 0 ? 'I pezzi hanno già fatto tutto il ciclo: spunta solo le fasi da rifare.' : 'Gli scarti si sono fermati alla fase responsabile: queste sono le fasi che non hanno ancora fatto.'}</p>
+    ${dopo.map((f, i) => `<label class="rfq-pick-row"><input type="checkbox" id="rip-f-${i}" ${fermi > 0 ? '' : 'checked'}> ${esc(qcFaseTesto(f))}</label>`).join('')}` : ''}
+    <p class="empty-text" style="text-align:left;padding:8px 0">${fermi > 0
+    ? `Il materiale sono i <strong>${fmtQtyIt(fermi)} pezzi fermi</strong>: escono all'avvio della prima fase e tornano col versamento, che apre un collaudo nuovo.`
+    : 'Gli scarti non sono a magazzino: l\'ordine parte <strong>senza prelievo</strong>, e il versamento finale apre un collaudo nuovo.'} Eredita piano e commessa di ${esc(orig.number || '')}, e nasce già lanciato.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="ncRipresaSalva('${nc.id}')">Crea e lancia</button>
+    </div>`, false, 'form');
+}
+function ncRipresaSalva(ncId) {
+  const fasiDopo = (window.__ripFasi || []).filter((id, i) => { const el = document.getElementById('rip-f-' + i); return el && el.checked; });
+  const carico = document.getElementById('rip-carico');
+  const dati = { qty: rawNum('rip-qty'), dueDate: val('rip-due'), descr: val('rip-descr'), workCenterId: val('rip-wc'), supplierId: val('rip-sup'),
+    ore: rawNum('rip-ore'), giorni: rawNum('rip-giorni'), aCarico: !!(carico && carico.checked), prezzo: rawNum('rip-prezzo'), fasiDopo };
+  return conNumeri({ ODP: 1 }, () => {
+    const o = ncRipresaCrea(ncId, dati); if (!o) return;
+    closeModal(); ncRidisegna();
+    showToast(`Ripresa ${o.number} lanciata`);
+  });
+}
+// Sull'ODP di ripresa: da dove viene.
+function odpRipresaHtml(o) {
+  if (!o || !o.reworkOfId) return '';
+  const orig = getOdp(o.reworkOfId);
+  const nc = o.ncId && typeof ncGet === 'function' ? ncGet(o.ncId) : null;
+  return `<p class="empty-text qc-hint" style="text-align:left">${ico('refresh', 'tinted', '')} Ripresa di
+    ${orig ? `<a href="#" onclick="openOdpEdit('${orig.id}');return false">${esc(orig.number || '')}</a>` : 'un ordine eliminato'}${nc ? ` per la non conformità <a href="#" onclick="ncApriDaAltrove('${nc.id}');return false">${esc(nc.number || '')}</a>` : ''}.</p>`;
 }

@@ -283,3 +283,95 @@ describe('Annullare il versamento', () => {
     assert.equal(num(a, 'qcTutti().length'), 1);
   });
 });
+
+describe('L\'ODP di ripresa (0.145.0)', () => {
+  // Respinti 4 da rilavorare, NC aperta: si lancia la ripresa.
+  function conFermi(opz) {
+    const a = app(opz);
+    finisci(a, 10);
+    a.eval(`qcRegistraEsito(qcTutti()[0].id, { esito: 'respinto', qtyKo: 4, destino: 'rilavorazione', respPhase: ${JSON.stringify(faseId(a, 0))} })`);
+    return a;
+  }
+  const ripresa = (a, dati) => a.eval(`(function(){ const o = ncRipresaCrea(ncTutte()[0].id, ${JSON.stringify(dati)}); return o ? o.id : null; })()`);
+
+  it('nasce lanciata, con la fase di ripristino, piano e commessa dell\'originale', () => {
+    const a = conFermi();
+    a.eval(`getOdp('odp1').planId = 'pl9'; getOdp('odp1').jobId = 'jb9'`);
+    const id = ripresa(a, { qty: 4, descr: 'Ripresa del foro', workCenterId: 'tor', ore: 0.25 });
+    assert.ok(id);
+    const o = J(a, `getOdp(${JSON.stringify(id)})`);
+    assert.equal(o.status, 'lanciato');
+    assert.equal(o.qty, 4);
+    assert.equal(o.reworkOfId, 'odp1');
+    assert.equal(o.ncId, a.eval('ncTutte()[0].id'));
+    assert.equal(o.planId, 'pl9');
+    assert.equal(o.jobId, 'jb9');
+    assert.equal(o.phases.length, 1);
+    assert.equal(o.phases[0].note, 'Ripresa del foro');
+    assert.equal(o.phases[0].workCenterId, 'tor');
+    assert.equal(o.phases[0].seq, 10);
+    assert.deepEqual(o.materials.map(m => [m.itemId, m.qty]), [['p1', 4]], 'il materiale sono i pezzi fermi');
+    assert.match(a.eval(`odpRipresaHtml(getOdp(${JSON.stringify(id)}))`), /Ripresa di/);
+    assert.match(a.eval('ncProduzioneHtml(ncTutte()[0], true)'), /costo finora/);
+  });
+
+  it('i pezzi restano fermi fino al prelievo, poi tornano col versamento e un collaudo nuovo', () => {
+    const a = conFermi();
+    const id = ripresa(a, { qty: 4, descr: 'Ripresa', workCenterId: 'tor', ore: 0.25 });
+    assert.equal(num(a, 'inQCOf("p1")'), 4);
+    const f = a.eval(`getOdp(${JSON.stringify(id)}).phases[0].id`);
+    assert.equal(a.eval(`opAvvia(${JSON.stringify(id)}, ${JSON.stringify(f)})`), true);
+    assert.equal(num(a, 'onHandOf("p1")'), 6, 'i 4 sono usciti verso la ripresa');
+    assert.equal(num(a, 'inQCOf("p1")'), 0, 'e non sono più fermi');
+    assert.equal(num(a, 'qcFermi(qcTutti()[0])'), 0);
+    assert.equal(a.eval(`opDichiara(${JSON.stringify(id)}, ${JSON.stringify(f)}, { qty: 4 })`), true);
+    assert.equal(num(a, 'onHandOf("p1")'), 10);
+    assert.equal(num(a, 'qcAperti().length'), 1);
+    assert.equal(a.eval('qcAperti()[0].orderId'), id);
+    assert.equal(num(a, 'inQCOf("p1")'), 4);
+    assert.ok(num(a, `qcCostoRipresa(getOdp(${JSON.stringify(id)}))`) > 0);
+    assert.equal(a.eval('ncCostoDaRipresa(ncTutte()[0].id)'), true);
+    assert.equal(num(a, 'ncTutte()[0].cost'), num(a, `qcCostoRipresa(getOdp(${JSON.stringify(id)}))`));
+  });
+
+  it('dagli scarti a metà ciclo: niente prelievo, e le fasi che mancano dopo il ripristino', () => {
+    const a = app();
+    avvia(a, 0);
+    dichiara(a, 0, { qty: 8, scrap: 2, motivo: 'Errore di attrezzaggio' });
+    const id = ripresa(a, { qty: 2, descr: 'Ripresa', workCenterId: 'tor', ore: 0.1, fasiDopo: [faseId(a, 1)] });
+    const o = J(a, `getOdp(${JSON.stringify(id)})`);
+    assert.equal(o.materials.length, 0);
+    assert.deepEqual(o.phases.map(f => f.seq), [10, 20]);
+    assert.equal(o.phases[1].workCenterId, 'fre');
+    assert.notEqual(o.phases[1].id, faseId(a, 1), 'fasi nuove, non quelle dell\'originale');
+    assert.equal(o.reworkInspectionId, null);
+  });
+
+  it('dal terzista a suo carico il prezzo è zero; addebitato è quello scritto', () => {
+    const a = conFermi();
+    const id = ripresa(a, { qty: 4, descr: 'Rizincatura', supplierId: 'beta', aCarico: true, prezzo: 3, giorni: 4 });
+    const f = J(a, `getOdp(${JSON.stringify(id)}).phases[0]`);
+    assert.equal(f.supplierId, 'beta');
+    assert.equal(f.cost, 0);
+    a.eval(`getOdp(${JSON.stringify(id)}).status = 'annullato'`);
+    const id2 = ripresa(a, { qty: 4, descr: 'Rizincatura', supplierId: 'beta', aCarico: false, prezzo: 3, giorni: 4 });
+    assert.equal(num(a, `getOdp(${JSON.stringify(id2)}).phases[0].cost`), 3);
+  });
+
+  it('i rifiuti: una ripresa per NC, non oltre i pezzi, con la descrizione e un posto dove farla', () => {
+    const a = conFermi();
+    assert.equal(ripresa(a, { qty: 5, descr: 'x', workCenterId: 'tor' }), null, 'più dei fermi');
+    assert.equal(ripresa(a, { qty: 4, descr: '', workCenterId: 'tor' }), null, 'senza descrizione');
+    assert.equal(ripresa(a, { qty: 4, descr: 'x' }), null, 'senza centro né terzista');
+    assert.ok(ripresa(a, { qty: 4, descr: 'x', workCenterId: 'tor' }));
+    assert.equal(ripresa(a, { qty: 4, descr: 'x', workCenterId: 'tor' }), null, 'una sola');
+  });
+
+  it('la scheda della NC offre la ripresa, e la finestra si apre', () => {
+    const a = conFermi();
+    assert.match(a.eval('ncProduzioneHtml(ncTutte()[0], true)'), /Lancia l'ODP di ripresa/);
+    a.eval('globalThis.__m = ""; openModal = h => { __m = h; };');
+    a.eval('ncRipresaModal(ncTutte()[0].id)');
+    assert.match(a.eval('__m'), /La fase di ripristino/);
+  });
+});

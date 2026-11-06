@@ -1953,6 +1953,28 @@ per il materiale. Si corregge anche dopo, dalla NC, finché è aperta.
 **Annullare la dichiarazione** dell'ultima fase toglie il collaudo se è ancora aperto. Se ha già
 un esito non si annulla: la merce si è già mossa.
 
+**L'ODP di ripresa** (dalla 0.145.0). Dalla non conformità di un ODP, *Ufficio acquisti* o
+l'amministratore premono **Lancia l'ODP di ripresa**: un ordine di produzione separato, collegato
+all'originale e alla NC, che nasce già lanciato.
+
+- **La fase di ripristino** si scrive per quel caso: che cosa si fa, e dove. In casa con il centro
+  di lavoro e le ore per pezzo; dal terzista con i giorni e il prezzo, che è zero se il
+  rifacimento è **a suo carico** o quello scritto se è **addebitato**. Una fase esterna genera il
+  suo ordine di lavoro come ogni altra.
+- **Le fasi dopo.** Sotto ci sono le fasi dell'ODP originale che vengono dopo quella
+  responsabile. Per uno scarto sono spuntate, perché il pezzo non le ha ancora fatte; per un
+  respinto al collaudo no, perché il pezzo ha già fatto tutto il ciclo, e si spuntano solo quelle
+  da rifare.
+- **Il materiale** sono i pezzi da riprendere. Quelli fermi da rilavorare escono all'avvio della
+  prima fase, e da lì non sono più fermi; gli scarti non sono mai entrati a magazzino, e l'ordine
+  parte senza prelievo. Il versamento finale apre un collaudo nuovo.
+- **Piano e commessa** sono quelli dell'originale: il fabbisogno conta la ripresa come
+  rifornimento, e non propone un altro ordine per gli stessi pezzi.
+- **Il costo.** La NC mostra la ripresa con il suo costo finora: le fasi interne per i pezzi
+  lavorati, più l'attrezzaggio, e i rientri dell'ordine di lavoro al suo prezzo. **Porta nel costo
+  della NC** lo scrive come costo della non qualità. Il materiale non conta, perché sono gli
+  stessi pezzi.
+
 ### Le non conformità (modulo Qualità)
 
 **A cosa servono.** A dare a ogni problema un numero, un responsabile e una data di chiusura.
