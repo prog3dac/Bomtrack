@@ -99,7 +99,7 @@ function ncCrea(dati) {
       qty: Math.max(0, Number(d.qty) || 0), uom: d.uom || (it ? itemUom(it) : ''),
       date: oggi, cause: String(d.cause || ''), gravita: NC_GRAVITA[d.gravita] ? d.gravita : 'maggiore',
       description: String(d.description || '').trim(), decision: NC_DECISIONI[d.decision] !== undefined ? (d.decision || '') : '',
-      actions: [], cost: 0, dueDate: ncScadenzaDa(oggi), status: 'aperta', closedAt: null, note: '', active: true,
+      actions: Array.isArray(d.actions) ? d.actions : [], cost: 0, dueDate: ncScadenzaDa(oggi), status: 'aperta', closedAt: null, note: '', active: true,
     });
   };
   return typeof conNumeri === 'function' ? conNumeri({ NC: 1 }, fare) : fare();
@@ -116,8 +116,15 @@ function ncDaCollaudo(insp) {
     insp.supplierLot ? `lotto fornitore ${insp.supplierLot}` : '',
     insp.ddt ? (/^ddt\b/i.test(insp.ddt) ? insp.ddt : `DDT ${insp.ddt}`) : '',
     fuori.length ? `fuori specifica: ${fuori.join(', ')}` : '',
+    respinto && insp.destino === 'accredito' ? 'reso a credito' : '',
     insp.note || '',
   ].filter(Boolean).join(' · ');
+  // Reso a credito (dalla 0.143.0): la merce non torna, torna un documento.
+  // L'azione ricorda di aspettare la nota di credito prima di chiudere la NC,
+  // e compare nel Riepilogo quando si avvicina la scadenza.
+  const actions = respinto && insp.destino === 'accredito'
+    ? [{ id: gid(), text: 'Ricevere la nota di credito dal fornitore', who: '', due: ncScadenzaDa(oggiISO(), Math.min(15, ncGiorni())), done: false }]
+    : [];
   const causa = fuori.length ? 'Fuori tolleranza dimensionale'
     : (qcCertificatoRichiesto(insp) && insp.cert !== 'ok' ? 'Certificato mancante o errato' : '');
   return ncCrea({
@@ -125,6 +132,7 @@ function ncDaCollaudo(insp) {
     itemId: insp.itemId, supplierId: insp.supplierId, qty: respinto ? insp.qtyKo : insp.qty, uom: insp.uom,
     description: testo, cause: ncCausali().includes(causa) ? causa : '',
     decision: !respinto ? 'deroga' : insp.destino === 'scarto' ? 'rottamazione' : 'reso',
+    actions,
   });
 }
 

@@ -1786,10 +1786,17 @@ l'esito.
 
 **Il respinto torna indietro per la strada da cui è venuto**, e non inventa movimenti nuovi:
 
-- **da un ordine fornitore**, il **ricevuto della riga scende**. È la stessa correzione che si
-  farebbe a mano scrivendo un numero più basso nella colonna *Ricevuto*: la giacenza cala, la riga
-  torna ad avere un residuo, l'ordine torna *Parziale*, la merce torna *in arrivo* e il fabbisogno
-  la aspetta di nuovo;
+- **da un ordine fornitore, da sostituire**, il **ricevuto della riga scende**. È la stessa
+  correzione che si farebbe a mano scrivendo un numero più basso nella colonna *Ricevuto*: la
+  giacenza cala, la riga torna ad avere un residuo, l'ordine torna *Parziale*, la merce torna *in
+  arrivo* e il fabbisogno la aspetta di nuovo. Quando il fornitore la rimanda si riceve sulla
+  stessa riga, come una consegna qualsiasi: si apre un nuovo collaudo e, a ricevuto pari
+  all'ordinato, l'ordine torna *Evaso* da solo;
+- **da un ordine fornitore, a credito** (dalla 0.143.0), scendono il **ricevuto** e anche
+  l'**ordinato** della riga: il fornitore non rimanda niente, quindi la riga si chiude su quello
+  che resta e il fabbisogno torna scoperto, da riordinare. La non conformità nasce con l'azione
+  *Ricevere la nota di credito dal fornitore*. Lo registra chi scrive gli ordini (*Ufficio
+  acquisti* o l'amministratore), perché cambia la riga d'ordine;
 - **da un ordine di lavoro**, i pezzi **escono verso il terzista** con un'uscita a conto lavoro, e
   l'ordine torna ad aspettarli. Da lì in poi il prospetto *Presso terzi* li racconta come prima;
 - **tenuta e rottamata** è la terza scelta: la merce non torna a nessuno ed esce come consumo. Il

@@ -185,6 +185,62 @@ describe('Il respinto torna indietro per la strada da cui è venuto', () => {
   });
 });
 
+describe('Il reso a credito chiude la riga (0.143.0)', () => {
+  it('scendono ricevuto e ordinato: niente più in arrivo, l\'ordine si chiude', () => {
+    const a = app();
+    ricevi(a, 100);
+    const id = a.eval('qcTutti()[0].id');
+    assert.equal(a.eval(`qcRegistraEsito(${JSON.stringify(id)}, { esito: 'respinto', qtyKo: 20, destino: 'accredito' })`), true);
+    assert.equal(num(a, 'getOrder("o1").lines[0].received'), 80);
+    assert.equal(num(a, 'getOrder("o1").lines[0].qty'), 80);
+    assert.equal(a.eval('getOrder("o1").status'), 'evaso');
+    assert.equal(num(a, 'stockOf("c1").incoming'), 0, 'il fornitore non li rimanda');
+    assert.equal(num(a, 'onHandOf("c1")'), 80);
+  });
+
+  it('da sostituire invece la riga resta aperta ad aspettarli', () => {
+    const a = app();
+    ricevi(a, 100);
+    const id = a.eval('qcTutti()[0].id');
+    a.eval(`qcRegistraEsito(${JSON.stringify(id)}, { esito: 'respinto', qtyKo: 20, destino: 'sostituzione' })`);
+    assert.equal(num(a, 'getOrder("o1").lines[0].qty'), 100);
+    assert.equal(a.eval('getOrder("o1").status'), 'parziale');
+    assert.equal(num(a, 'stockOf("c1").incoming'), 20);
+  });
+
+  it('la NC nasce con l\'azione di aspettare la nota di credito', () => {
+    const a = app();
+    ricevi(a, 40);
+    const id = a.eval('qcTutti()[0].id');
+    a.eval(`qcRegistraEsito(${JSON.stringify(id)}, { esito: 'respinto', qtyKo: 40, destino: 'accredito' })`);
+    const nc = JSON.parse(a.eval('JSON.stringify(ncTutte()[0])'));
+    assert.equal(nc.decision, 'reso');
+    assert.match(nc.description, /reso a credito/);
+    assert.equal(nc.actions.length, 1);
+    assert.match(nc.actions[0].text, /nota di credito/);
+    assert.equal(nc.actions[0].done, false);
+  });
+
+  it('l\'officina non lo registra: cambierebbe l\'ordine', () => {
+    const a = app(base(), 'officina');
+    ricevi(a, 40);
+    const id = a.eval('qcTutti()[0].id');
+    assert.equal(a.eval(`qcRegistraEsito(${JSON.stringify(id)}, { esito: 'respinto', qtyKo: 10, destino: 'accredito' })`), false);
+    assert.equal(a.eval('qcTutti()[0].status'), 'aperto');
+    assert.equal(num(a, 'getOrder("o1").lines[0].received'), 40);
+    assert.equal(num(a, 'getOrder("o1").lines[0].qty'), 100);
+  });
+
+  it('la scheda lo dice prima di premere', () => {
+    const a = app();
+    ricevi(a, 40);
+    const x = a.eval('JSON.stringify(qcTutti()[0])');
+    assert.match(a.eval(`qcConseguenzaTesto(${x}, 'respinto', 10, 'accredito')`), /ordinato/);
+    assert.match(a.eval(`qcConseguenzaTesto(${x}, 'respinto', 10, 'scarto')`), /consumo/);
+    assert.doesNotMatch(a.eval(`qcConseguenzaTesto(${x}, 'respinto', 10, 'sostituzione')`), /ordinato/);
+  });
+});
+
 describe('Gli esiti che non stanno in piedi si rifiutano', () => {
   it('un accettato con dei pezzi respinti non si registra', () => {
     const a = app();

@@ -2,6 +2,14 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.143.0 — 2026-11-06
+
+**Collaudo: il reso a credito chiude la riga d'ordine.**
+- Un lotto respinto con destinazione **Reso al fornitore, a credito** ora toglie dalla riga d'ordine sia il **ricevuto** sia l'**ordinato**: il fornitore non rimanda i pezzi, quindi la riga non resta aperta ad aspettarli, l'ordine si chiude su quello che resta (*Evaso*) e il fabbisogno torna scoperto, pronto per un nuovo ordine. Prima faceva come *da sostituire* e l'MRP aspettava pezzi che non sarebbero arrivati. *Da sostituire* non cambia: la riga torna *Parziale* e i pezzi rimandati si ricevono sulla stessa riga, con un nuovo collaudo.
+- La NC che nasce da un reso a credito lo dice nella descrizione e ha già l'azione **Ricevere la nota di credito dal fornitore**, con la scadenza.
+- Il reso a credito lo registra chi scrive gli ordini (Ufficio acquisti, amministratore): l'officina lo vede rifiutato, perché cambia la riga d'ordine. Dai rientri di un ordine di lavoro la scelta *a credito* non c'è.
+- La frase sotto l'esito («*Cosa succederà*») segue anche la destinazione scelta, compresa la rottamazione, che prima veniva descritta come un reso.
+
 ### 0.142.0 — 2026-11-05
 
 **Modulo Qualità: i codici del piano, le tolleranze ISO e i QR dei documenti.**
