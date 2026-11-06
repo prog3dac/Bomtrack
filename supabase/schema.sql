@@ -727,6 +727,12 @@ alter table public.inspections add column if not exists qty_held numeric;
 alter table public.nonconformities add column if not exists production_order_id uuid;
 alter table public.nonconformities add column if not exists resp_phase text;
 alter table public.nonconformities add column if not exists scrap_decls jsonb;
+-- 0.145.0: l'ODP di ripresa porta l'ordine d'origine, la NC che l'ha lanciato
+-- e, se riprende pezzi fermi a magazzino, il collaudo che li tiene. Niente
+-- chiavi esterne, per la stessa ragione delle colonne qui sopra.
+alter table public.production_orders add column if not exists rework_of_id uuid;
+alter table public.production_orders add column if not exists nc_id uuid;
+alter table public.production_orders add column if not exists rework_inspection_id uuid;
 -- 0.140.0: il controllo in entrata su articoli e famiglie, per i database già creati.
 alter table public.items add column if not exists qc text;
 alter table public.items add column if not exists qc_cert text;
@@ -1706,7 +1712,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 3)
+    'schema_versione', 4)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

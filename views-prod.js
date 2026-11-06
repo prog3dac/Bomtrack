@@ -915,7 +915,8 @@ function odpSetField(id, field, value) {
     // nessuno. Ricongelarlo qui tiene le due cose d'accordo senza chiederlo.
     o.qty = Math.max(0, Number(value) || 0);
     const part = getItem(o.itemId);
-    if (part && o.status === 'bozza') o.materials = opFreezeMaterials(part, o.qty, o.planId);
+    // Una ripresa (dalla 0.145.0) non ha la distinta per materiale: ha i pezzi stessi.
+    if (part && o.status === 'bozza') o.materials = o.reworkOfId ? (o.materials || []).map(m => Object.assign(m, { qty: o.qty * (Number(m.perPezzo) || 1) })) : opFreezeMaterials(part, o.qty, o.planId);
     if (o.status === 'bozza') odpPianifica(o);
   } else {
     o[field] = campoTesto(value) || (field === 'jobId' ? null : '');
@@ -1018,6 +1019,7 @@ function renderOdpEdit(id) {
       </div>
     </div>
     ${docStepperHtml('odp', o)}${docLinksHtml('odp', o)}
+    ${typeof odpRipresaHtml === 'function' ? odpRipresaHtml(o) : ''}
     ${lockBanner}
     <div class="modal-grid">
       <div class="modal-field"><label>${part && isAssembly(part.type) ? esc(typeLabel(part.type)) : 'Parte'}</label>
