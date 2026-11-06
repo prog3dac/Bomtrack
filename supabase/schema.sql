@@ -715,6 +715,18 @@ create table if not exists public.nonconformities (
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.144.0: il collaudo a fine ciclo degli ODP e le NC degli scarti. Sul
+-- collaudo la dichiarazione che l'ha aperto (decl_id), la fase che ha generato
+-- il difetto (resp_phase: l'id della fase, 'materiale' o 'nd', quindi testo) e
+-- i pezzi da rilavorare ancora fermi (qty_held). Sulla NC l'ODP, la fase e le
+-- dichiarazioni di scarto che raccoglie. Niente chiavi esterne, come
+-- `order_id`: un ODP si annulla, non si elimina, e la NC resta.
+alter table public.inspections add column if not exists decl_id uuid;
+alter table public.inspections add column if not exists resp_phase text;
+alter table public.inspections add column if not exists qty_held numeric;
+alter table public.nonconformities add column if not exists production_order_id uuid;
+alter table public.nonconformities add column if not exists resp_phase text;
+alter table public.nonconformities add column if not exists scrap_decls jsonb;
 -- 0.140.0: il controllo in entrata su articoli e famiglie, per i database già creati.
 alter table public.items add column if not exists qc text;
 alter table public.items add column if not exists qc_cert text;
@@ -1694,7 +1706,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 2)
+    'schema_versione', 3)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

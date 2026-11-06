@@ -49,7 +49,7 @@ const QC_CARTELLINI = {
   nonconforme: { colore: [200, 30, 30], titolo: 'MATERIALE NON CONFORME', title: 'NON-CONFORMING MATERIAL',
     riga: 'Non usare  ·  Tenere separato  ·  Do not use  ·  Keep segregated' },
 };
-const QC_DESTINI_EN = { sostituzione: 'return for replacement', accredito: 'return for credit', scarto: 'scrap' };
+const QC_DESTINI_EN = { sostituzione: 'return for replacement', accredito: 'return for credit', scarto: 'scrap', rilavorazione: 'rework, on hold' };
 // I fogli che servono per un collaudo, nel suo stato di adesso.
 function qcCartelliniTipi(x) {
   if (!x) return [];
@@ -98,8 +98,11 @@ function qcCartellinoPagina(doc, x, tipo) {
   doc.text(tipo === 'collaudo' ? 'Inquadra per collaudare · Scan to inspect' : 'Inquadra per i dettagli · Scan for details', W - M - lato / 2, 58 + lato + 12, { align: 'center' });
   // I dati.
   const ordine = typeof qcOrdineNumero === 'function' ? qcOrdineNumero(x) : '';
-  const forn = [x.source === 'odl' ? 'Terzista / Subcontractor' : 'Fornitore / Supplier', supplierName(x.supplierId) || '—'];
-  const arrivo = [['Ordine / Order', ordine || '—'], ['DDT / Delivery note', x.ddt || '—'], ['Lotto fornitore / Supplier lot', x.supplierLot || '—']];
+  const forn = x.source === 'odp'
+    ? ['Fatto da / Made by', supplierName(x.supplierId) || 'In casa / In-house']
+    : [x.source === 'odl' ? 'Terzista / Subcontractor' : 'Fornitore / Supplier', supplierName(x.supplierId) || '—'];
+  const arrivo = x.source === 'odp' ? [['Ordine di produzione / Work order', ordine || '—']]
+    : [['Ordine / Order', ordine || '—'], ['DDT / Delivery note', x.ddt || '—'], ['Lotto fornitore / Supplier lot', x.supplierLot || '—']];
   const chi = x.updatedBy && typeof actorName === 'function' ? actorName(x.updatedBy) : '';
   const quando = fmtDateIt(String(x.closedAt || '').slice(0, 10));
   const righe = tipo === 'collaudo' ? [

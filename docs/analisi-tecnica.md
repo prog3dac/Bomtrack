@@ -1062,6 +1062,17 @@ e la scheda dell'altro piano lo segnala (`qcPianoContesi`). Per chiuderla
 servirebbe una tabella `quality_plan_items` con l'articolo come chiave unica,
 oppure un trigger su `quality_plans` che rifiuta un codice già preso.
 
+**D12 — la ripresa dei pezzi respinti si fa ancora fuori dall'app** *(0.144.0)*.
+Un respinto di ODP *da rilavorare* resta fermo (`qtyHeld` sul collaudo) finché
+dalla NC non torna al collaudo o non si rottama, ma la rilavorazione stessa
+non ha un documento: niente ore, niente conto lavoro, e il costo della NC si
+scrive a mano. È il passo 2 del piano: l'ODP di ripresa con la fase dedicata al
+ripristino, lanciato dalla NC, con il suo consuntivo come costo della non
+qualità. Due limiti noti nel frattempo: una NC da scarto per *Materiale non
+conforme* nasce interna, perché l'app non sa da quale ricevimento viene il
+materiale prelevato; e i pezzi fermi da rilavorare tolgono il libero, quindi
+l'MRP può proporre un ODP nuovo per gli stessi pezzi.
+
 ---
 
 ## Note in positivo

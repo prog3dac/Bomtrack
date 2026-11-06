@@ -640,8 +640,12 @@ function odlDichiara(docId, lineId, dati) {
   const qty = Math.max(0, Number(d.qty) || 0);
   const scrap = Math.max(0, Number(d.scrap) || 0);
   if (!(qty > 0) && !(scrap > 0)) { showToast('Niente da dichiarare: pezzi e scarti sono a zero', 'error'); return false; }
+  const motivo = scrap > 0 ? String(d.motivo || '').trim() : '';
+  if (typeof qcScartoMotivoOk === 'function' && !qcScartoMotivoOk(scrap, motivo)) return false;
   const note = String(d.note || '').trim();
-  const decl = odlNuovoEvento(o, l, 'avanzamento', { qty, scrap, note });
+  const decl = odlNuovoEvento(o, l, 'avanzamento', { qty, scrap, note, motivo });
+  // Lo scarto del terzista apre la NC verso di lui (dalla 0.144.0).
+  if (scrap > 0 && typeof ncDaScarto === 'function') ncDaScarto({ odl: o, riga: l }, a.part ? a.part.id : (l.itemId || null), scrap, motivo, decl.id);
   if (qty > 0 && a.part && hasStock(a.part) && a.inKind) {
     const extra = { orderId: o.id, lineId: l.id, declId: decl.id };
     if (a.inKind === 'clStep') { extra.fromSupplierId = o.supplierId; addMovement(a.part.id, 'clStep', qty, note || `Pezzi dal terzista per ${o.number}`, extra); }
@@ -674,6 +678,7 @@ function odlAnnullaEvento(declId) {
   const ok = odlEventoAnnullabile(o, d);
   if (!ok.ok) { showToast(`Non si può annullare: ${ok.motivo}`, 'error'); return false; }
   (db.movements || []).filter(m => m.declId === declId).forEach(m => Store.remove('movements', m.id));
+  if (typeof ncScartoAnnulla === 'function') ncScartoAnnulla(declId);
   Store.remove('prodDecls', declId);
   const l = (o.lines || []).find(x => x.id === d.odlLineId);
   if (l && d.kind === 'avanzamento') odlSpostaRientrati(o, odlAncore(o, l).sorelle, -((Number(d.qty) || 0) + (Number(d.scrap) || 0)));
@@ -855,6 +860,7 @@ function odlDichiaraModal(docId, lineId) {
         <input class="num" type="number" id="odl-d-qty" min="0" step="any" value="${+resta.toFixed(4)}"></div>
       <div class="modal-field"><label>Scarti</label>
         <input class="num" type="number" id="odl-d-scrap" min="0" step="any" value="0"></div>
+      ${typeof qcScartoCampoHtml === 'function' ? qcScartoCampoHtml('odl-d-motivo') : ''}
     </div>
     <p class="empty-text" style="text-align:left;padding:8px 0">${spiega}</p>
     <div class="modal-field"><label>Nota</label><input id="odl-d-note" placeholder="es. bolla 412" autocomplete="off"></div>
@@ -864,7 +870,7 @@ function odlDichiaraModal(docId, lineId) {
     </div>`, false, 'form');
 }
 function odlDichiaraSave(docId, lineId) {
-  if (!odlDichiara(docId, lineId, { qty: rawNum('odl-d-qty'), scrap: rawNum('odl-d-scrap'), note: val('odl-d-note') })) return;
+  if (!odlDichiara(docId, lineId, { qty: rawNum('odl-d-qty'), scrap: rawNum('odl-d-scrap'), note: val('odl-d-note'), motivo: val('odl-d-motivo') })) return;
   closeModal(); renderOdl(); showToast('Rientro registrato');
 }
 function odlAnnullaEventoAsk(declId) {
