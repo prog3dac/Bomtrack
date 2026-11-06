@@ -141,7 +141,7 @@ function stockIndex() {
   const idx = new Map();
   const tocca = id => {
     let e = idx.get(id);
-    if (!e) { e = { onHand: 0, incoming: 0, arrivi: [], nMov: 0 }; idx.set(id, e); }
+    if (!e) { e = { onHand: 0, incoming: 0, inQC: 0, arrivi: [], nMov: 0 }; idx.set(id, e); }
     return e;
   };
   (db.orders || []).forEach(o => {
@@ -184,12 +184,21 @@ function stockIndex() {
     if (!movimentoToccaMagazzino(m.kind)) return;
     tocca(m.itemId).onHand += Number(m.qty) || 0;   // i consumi sono già negativi
   });
+  // La merce ferma in collaudo (modulo Qualità, 0.140.0). **Non** si toglie
+  // dall'esistente: è a scaffale, ed è stata pagata. Si toglie dal *libero*,
+  // che è la colonna che dice di quanto si può davvero disporre — come
+  // l'impegnato, e per la stessa ragione.
+  if (typeof qcIndice === 'function') {
+    qcIndice().forEach((q, itemId) => { tocca(itemId).inQC += q; });
+  }
   _stockIdx = idx;
   return idx;
 }
 let _esplosi = new Map();   // mrpExplodePlan
 function invalidateStock() { _costoMedioIdx = null; _stockIdx = null; _commitIdx = null; _prelIdx = null; _clIdx = null; _scaffaleIdx = null; _ordinePiani = null; _esplosi = new Map(); }
-function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, arrivi: [], nMov: 0 }; }
+function stockOf(itemId) { return stockIndex().get(itemId) || { onHand: 0, incoming: 0, inQC: 0, arrivi: [], nMov: 0 }; }
+// Quanto di questo articolo aspetta un esito di collaudo.
+function inQCOf(itemId) { return Number(stockOf(itemId).inQC) || 0; }
 function onHandOf(itemId) { return stockOf(itemId).onHand; }
 function incomingOf(itemId) { return stockOf(itemId).incoming; }
 
@@ -557,7 +566,9 @@ function committedOf(itemId, exceptPlanId) {
 // di quanta ne esista, ed è esattamente il numero che serve vedere.
 function freeStockOf(itemId, exceptPlanId) {
   const s = stockOf(itemId);
-  return s.onHand + s.incoming - committedOf(itemId, exceptPlanId);
+  // Il collaudo trattiene: finché non c'è l'esito quella merce non si promette
+  // a nessuno, esattamente come quella già impegnata da un piano.
+  return s.onHand + s.incoming - committedOf(itemId, exceptPlanId) - (Number(s.inQC) || 0);
 }
 
 function safetyStockOf(it) { return Math.max(0, Number(it && it.safetyStock) || 0); }
@@ -604,8 +615,8 @@ function stockFor(it, lordo, committed) {
   const safety = safetyStockOf(it);
   const imp = Math.max(0, Number(committed) || 0);
   const net = netRequirement(lordo, s.onHand, s.incoming, safety, lotSizeOf(it), imp, lotModeOf(it));
-  return { onHand: s.onHand, incoming: s.incoming, safety, lotSize: lotSizeOf(it), lotMode: lotModeOf(it),
-    committed: imp, libero: s.onHand + s.incoming - imp, net,
+  return { onHand: s.onHand, incoming: s.incoming, inQC: Number(s.inQC) || 0, safety, lotSize: lotSizeOf(it), lotMode: lotModeOf(it),
+    committed: imp, libero: s.onHand + s.incoming - imp - (Number(s.inQC) || 0), net,
     coperto: net === 0 && lordo > 0 };
 }
 
@@ -1143,7 +1154,7 @@ function clMaterialsOf(part, pezzi) {
     .filter(r => r.itemId)
     .map(r => {
       const pp = (Number(r.qty) || 0) * (1 + (Number(r.scrapPct) || 0) / 100);
-      return { item: getItem(r.itemId), perPezzo: pp, qty: pp * pezzi };
+      return { item: getItem(r.itemId), perPezzo: pp, qty: pp * pezzi, opIndex: faseConsumo(r, part) };
     })
     .filter(x => x.item && hasStock(x.item));
 }
@@ -1307,7 +1318,7 @@ function contoLavoroModal(soloItemId) {
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Le righe di un <strong>ordine di produzione</strong> non vengono dai movimenti e non potrebbero: fra una fase e l&rsquo;altra non se ne scrivono, perché i pezzi non sono più il materiale e non sono ancora la parte. Lì il luogo lo dà la <strong>fase corrente</strong> dell&rsquo;ordine, ed è marcato accanto al codice.</p>
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Il blocco <strong>«in casa, fra due fasi»</strong> sono i pezzi tornati da un terzista che devono ancora andare al successivo: non sono a magazzino — il codice prodotto si carica una volta sola, al rientro dell&rsquo;ultima fase — e non sono più da nessuno. Sono l&rsquo;unico posto in cui compaiono.</p>
     ${blocchi || '<div class="empty-text">Nessun materiale fuori: tutto quello che è uscito è rientrato.</div>'}
-    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'contolavoro');
+    <div class="modal-actions">${righe.length && !soloItemId ? listExportButtons('contoLavoroExportSpec') : ''}<button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'contolavoro');
 }
 // Il pulsante in toolbar del Magazzino: compare solo se c'è davvero qualcosa
 // fuori. Un pulsante permanente che apre una scheda vuota è rumore.
@@ -1421,7 +1432,7 @@ function stockState(it) {
   const s = stockOf(it.id);
   const safety = safetyStockOf(it);
   return {
-    onHand: s.onHand, incoming: s.incoming,
+    onHand: s.onHand, incoming: s.incoming, inQC: Number(s.inQC) || 0,
     committed: committedOf(it.id, null),
     libero: freeStockOf(it.id, null),
     safety, lotSize: lotSizeOf(it), lotMode: lotModeOf(it),
@@ -1447,12 +1458,15 @@ const STOCK_STATE_FILTERS = {
   // scaffale non c'è, e le due condizioni stanno insieme perché la domanda che
   // le fa è la stessa — «cosa ho in giro?».
   terzi: st => st.atSupplier > 0.000001 || st.inWork > 0.000001,
+  // Merce arrivata che aspetta un esito (modulo Qualità).
+  collaudo: st => st.inQC > 0.000001,
 };
 // Le stesse voci del menu in pagina: servono all'export, che scrive nel file i
 // filtri per esteso e non il valore interno.
 const STOCK_STATE_LABELS = {
   sotto: 'Sotto la scorta minima', zero: 'Giacenza a zero', sottozero: 'Esistente negativo',
   con: 'Con giacenza', arrivo: 'Con merce in arrivo', negativo: 'Libero negativo', terzi: 'Presso terzi o in lavorazione',
+  collaudo: 'In collaudo',
 };
 
 // Etichette della modalità lotto, stesse parole dei valori proposti nella
@@ -1474,6 +1488,7 @@ function stockRow(it) {
     <td class="col-uom">${esc(u)}</td>
     <td class="col-location" style="font-family:var(--mono)${ubicazioneOf(it) ? '' : ';color:var(--text-dim)'}">${esc(ubicazioneOf(it) || '—')}</td>
     ${num(st.onHand, st.sotto ? 'var(--orange, #d90)' : '', 'onhand')}
+    ${num(st.inQC, st.inQC > 0.000001 ? 'var(--purple)' : 'var(--text-dim)', 'inqc')}
     ${num(st.incoming, st.incoming > 0 ? 'var(--accent)' : 'var(--text-dim)', 'incoming')}
     ${num(st.committed, st.committed > 0 ? 'var(--orange, #d90)' : 'var(--text-dim)', 'committed')}
     ${num(st.libero, st.libero < 0 ? 'var(--red)' : '', 'free')}
@@ -1563,6 +1578,7 @@ function renderStock() {
     <th scope="col" class="col-type">Tipo</th><th scope="col" class="col-family">Famiglia</th><th scope="col" class="col-uom">U.M.</th>
     <th scope="col" class="col-location">Ubicazione</th>
     <th scope="col" class="col-onhand" style="text-align:right" title="Ricevuto sugli ordini più i movimenti">Esistente</th>
+    <th scope="col" class="col-inqc" style="text-align:right" title="Merce arrivata che aspetta l'esito di un collaudo: è a scaffale, ma non è libera">In collaudo</th>
     <th scope="col" class="col-incoming" style="text-align:right" title="Atteso da ordini inviati, confermati o parziali">In arrivo</th>
     <th scope="col" class="col-committed" style="text-align:right" title="Promesso dai piani di fabbisogno aperti">Impegnato</th>
     <th scope="col" class="col-free" style="text-align:right" title="Esistente + in arrivo − impegnato: quanto se ne può ancora promettere">Libero</th>
@@ -1637,6 +1653,7 @@ const STOCK_EXPORT_COLS = {
   uom: { h: 'U.M.', w: 8, v: x => itemUom(x.it) },
   location: { h: 'Ubicazione', w: 14, v: x => ubicazioneOf(x.it) },
   onhand: { h: 'Esistente', w: 12, num: true, v: x => x.st.onHand },
+  inqc: { h: 'In collaudo', w: 12, num: true, v: x => Number(x.st.inQC) || 0 },
   incoming: { h: 'In arrivo', w: 12, num: true, v: x => x.st.incoming },
   committed: { h: 'Impegnato', w: 12, num: true, v: x => x.st.committed },
   free: { h: 'Libero', w: 12, num: true, v: x => x.st.libero },

@@ -65,6 +65,19 @@ describe('Terminale di reparto', () => {
     assert.deepEqual(Array.from(a.eval("repartoFasi('', true).map(x => x.f.id + ':' + x.stato)")), ['fa2:avviabile', 'fb:avviabile', 'fa:chiusa']);
     assert.equal(a.eval("repartoSituazione(getOdp('A'), getOdp('A').phases[0], 'chiusa').id"), 'terminata');
   });
+  it('le schede di un ordine completato restano in vista, finché non si chiude', () => {
+    const a = app({ officina: true });
+    a.eval("opDichiara('A', 'fa', { qty: 12 })");
+    assert.equal(a.eval("getOdp('A').status"), 'completato');
+    // La barra dei centri conta solo le fasi da lavorare…
+    assert.deepEqual(Array.from(a.eval("repartoFasi('').map(x => x.f.id)")), ['fb']);
+    // …la schermata le tiene tutte, la terminata in fondo.
+    assert.deepEqual(Array.from(a.eval("repartoFasi('', true).map(x => x.f.id + ':' + x.stato)")), ['fb:avviabile', 'fa:chiusa']);
+    a.eval("setView('reparto')");
+    assert.match(a.html('view-reparto'), /data-odp="A" data-fase="fa"/);
+    a.eval("getOdp('A').status = 'chiuso'");
+    assert.deepEqual(Array.from(a.eval("repartoFasi('', true).map(x => x.f.id)")), ['fb']);
+  });
   it('la scheda dice chi lavora e chi è in pausa; i centri in una barra', () => {
     const a = app({ officina: true });
     a.eval("timbraInizia('A', 'fa'); setView('reparto')");

@@ -75,6 +75,7 @@ function itemInfoClose() { _itemInfoStack = []; window.__itemInfoId = null; clos
 // ha già suo. Il corpo è lo stesso — due copie divergerebbero al primo ritocco.
 function itemInfoBody(it) {
   return `${itemInfoAnagrafica(it)}
+    ${itemInfoTecnici(it)}
     ${itemInfoAcquisto(it)}
     ${itemInfoCosto(it)}
     ${itemInfoMagazzino(it)}
@@ -146,6 +147,29 @@ function itemInfoAnagrafica(it) {
     it.favorite ? ['Preferito', '★ sì'] : null,
     it.obsolete ? ['Obsoleto', rawHtml('<span style="color:var(--red)">' + ico('blocked', 'tinted', '') + ' non più utilizzabile</span>')] : null,
     it.notes ? ['Note', it.notes] : null,
+  ]));
+}
+
+// Dati tecnici (dalla 0.138.0). Il peso di un assieme senza peso scritto è la
+// somma della distinta, e lo si dice; se qualche riga non ha un peso, la
+// somma è per difetto e si dice anche quello.
+function itemInfoTecnici(it) {
+  const w = itemWeight(it), vol = itemVolume(it);
+  const pesoTxt = w && (w.calcolato || numTecnico(it.weightKg) != null)
+    ? fmtTech(+w.value.toFixed(3)) + ' kg' + (w.calcolato ? (w.completo ? ' (dalla distinta)' : ' (dalla distinta, per difetto: righe senza peso)') : '')
+    : '';
+  return itemInfoSection('Dati tecnici', itemInfoRows([
+    ['Dimensioni (L × P × H)', itemDimLabel(it)],
+    ['Peso', pesoTxt],
+    ['Peso lordo', numTecnico(it.grossWeightKg) != null ? fmtTech(it.grossWeightKg) + ' kg' : ''],
+    ['Volume', vol ? fmtTech(+vol.value.toFixed(6)) + ' m³' + (vol.calcolato ? ' (dalle dimensioni)' : '') : ''],
+    ['Produttore', it.manufacturer || ''],
+    ['Codice produttore', it.manufacturerCode ? rawHtml(_mono(it.manufacturerCode)) : ''],
+    ['Materiale', it.material || ''],
+    ['Finitura', it.finish || ''],
+    ['Trattamento', it.treatment || ''],
+    ['Riferimento disegno', it.drawingRef || ''],
+    ['Codice a barre', it.barcode ? rawHtml(_mono(it.barcode)) : ''],
   ]));
 }
 
@@ -272,7 +296,7 @@ function itemInfoComposizione(it) {
     const righeOp = ops.map((o, k) => {
       const wc = getWorkCenter(o.workCenterId);
       const sup = o.supplierId ? supplierName(o.supplierId) : '';
-      const tempo = o.supplierId ? fmtUom(Number(o.days) || 0, 'gg') : fmtUom(o.hours, 'h');
+      const tempo = o.supplierId ? fmtUom(Number(o.days) || 0, 'gg') : fmtMin(o.hours) + '/pz';
       return `<tr><td><span class="cycle-phase">${cyclePhaseNumber(k)}</span></td><td>${ico('wrench', 'tinted')} ${esc(wc ? wc.name : '?')}${sup ? ' · ' + esc(sup) : ''}</td>
         <td style="font-family:var(--mono);text-align:right">${tempo}</td><td>—</td>
         <td style="font-family:var(--mono);text-align:right">${fmtN(cycleRowCost(o))}</td></tr>`;
@@ -447,6 +471,7 @@ const STORICO_COLL = {
   attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione', settings: 'Impostazioni',
   revisions: 'Revisione', movements: 'Movimento di magazzino', receipts: 'Ricevimento', prodDecls: 'Dichiarazione di produzione',
   timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina',
+  inspections: 'Collaudo', qualityPlans: 'Piano di controllo', nonconformities: 'Non conformità',
 };
 const STORICO_CAMPI = {
   code: 'Codice', name: 'Nome', description: 'Descrizione', type: 'Tipo', uom: 'U.M.',
@@ -458,6 +483,7 @@ const STORICO_CAMPI = {
   email: 'Email', passwordHash: 'Password', transport: 'Trasporto', payment: 'Pagamento',
   number: 'Numero', leadDays: 'Giorni di consegna', weight: 'Peso', workCenterId: 'Centro di lavoro',
   itemId: 'Articolo', jobId: 'Commessa', planId: 'Piano', makeOrBuy: 'Fare o comprare',
+  startedAt: 'Inizio', endedAt: 'Fine', userId: 'Operatore',
   // Articoli
   unitCost: 'Costo unitario', purchasePrice: 'Prezzo d\'acquisto', subFamilyId: 'Sottofamiglia',
   altUom: 'U.M. alternativa', altFactor: 'Fattore di conversione', conceptId: 'Concetto',
@@ -490,10 +516,16 @@ const STORICO_CAMPI = {
   // Modulo Alternativi
   alternatives: 'Alternativi', replacedById: 'Sostituito da', substitutions: 'Sostituzioni',
   altItemId: 'Alternativo',
+  // Dati tecnici e contatti (dalla 0.138.0)
+  weightKg: 'Peso (kg)', volumeM3: 'Volume (m³)', lengthM: 'Lunghezza (m)', widthM: 'Larghezza (m)', heightM: 'Altezza (m)',
+  manufacturer: 'Produttore', manufacturerCode: 'Codice produttore', material: 'Materiale', finish: 'Finitura',
+  treatment: 'Trattamento', contacts: 'Contatti', opIndex: 'Fase di consumo',
+  // Dalla 0.139.0
+  grossWeightKg: 'Peso lordo (kg)', barcode: 'Codice a barre', drawingRef: 'Riferimento disegno',
 };
 const STORICO_RIF = { supplierId: 'suppliers', customerId: 'customers', familyId: 'families',
   workCenterId: 'workCenters', itemId: 'items', jobId: 'jobs', planId: 'plans',
-  machineItemId: 'items', groupItemId: 'items', replacedById: 'items', altItemId: 'items', rfqId: 'rfqs', odpId: 'prodOrders', docId: 'attachmentDocs' };
+  userId: 'users', machineItemId: 'items', groupItemId: 'items', replacedById: 'items', altItemId: 'items', rfqId: 'rfqs', odpId: 'prodOrders', docId: 'attachmentDocs' };
 // Valori in codice che hanno un nome per chi legge.
 const STORICO_VALORI = {
   sourcing: { make: 'produzione interna', buy: 'acquisto' },
@@ -515,6 +547,8 @@ function _storicoNomeRif(k, v, e) {
     const it = e && e.c === 'items' ? (db.items || []).find(x => x && x.id === e.id) : null;
     return storicoQuotazione(it, v) || 'quotazione non più a listino';
   }
+  // Le ore di una timbratura (dalla 0.136.0): come si leggono, non in ISO.
+  if ((k === 'startedAt' || k === 'endedAt') && e && e.c === 'timeLogs') return _storicoQuando(v) || v;
   if (k === 'subFamilyId') {
     for (const f of db.families || []) {
       const s = (f.subs || []).find(x => x && x.id === v);

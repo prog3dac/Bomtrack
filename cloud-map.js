@@ -242,14 +242,20 @@ const CLOUD_TYPES = (() => {
   const t = {};
   ['qty', 'price', 'minQty', 'leadDays', 'scrapPct', 'hours', 'days', 'rate', 'cost', 'costOverride',
     'unitCost', 'purchasePrice', 'altFactor', 'overheadPctOverride', 'marginPctOverride', 'hourlyRate',
-    'capacityHours', 'hoursPerDay', 'operators', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size'].forEach(k => { t[k] = 'numeric'; });
+    'capacityHours', 'hoursPerDay', 'operators', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size',
+    'weightKg', 'volumeM3', 'lengthM', 'widthM', 'heightM', 'grossWeightKg'].forEach(k => { t[k] = 'numeric'; });
   ['pos', 'runFrom', 'runTo', 'seq', 'opIndex', 'passata', 'page', 'incrDigitsN', 'incrDigitsS', 'gCodeLen'].forEach(k => { t[k] = 'int'; });
   ['everyDays', 'everyHours', 'machineRate', 'hoursStart'].forEach(k => { t[k] = 'numeric'; });
+  // Modulo Qualità: le quantità del collaudo.
+  ['qtyOk', 'qtyKo', 'qtyHeld', 'sampleQty', 'samplePct', 'aql', 'sampleSize', 'defects'].forEach(k => { t[k] = 'numeric'; });
+  ['acceptNo', 'rejectNo', 'skipAfter', 'skipEvery'].forEach(k => { t[k] = 'int'; });
+  t.skipLot = 'bool';
+  ['characteristics', 'checks', 'actions', 'itemIds', 'scrapDecls'].forEach(k => { t[k] = 'jsonb'; });
   t.year = 'int';
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'plannedStart', 'plannedEnd', 'downFrom', 'downTo'].forEach(k => { t[k] = 'date'; });
-  ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt', 'startedAt', 'endedAt'].forEach(k => { t[k] = 'timestamptz'; });
+  ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt', 'startedAt', 'endedAt', 'closedAt'].forEach(k => { t[k] = 'timestamptz'; });
   ['active', 'favorite', 'obsolete', 'done', 'codeManual'].forEach(k => { t[k] = 'bool'; });
-  ['snapshot', 'record', 'ecoImpact', 'configChoices', 'costSnapshot', 'ricambi'].forEach(k => { t[k] = 'jsonb'; });
+  ['snapshot', 'record', 'ecoImpact', 'configChoices', 'costSnapshot', 'ricambi', 'contacts'].forEach(k => { t[k] = 'jsonb'; });
   ['createdBy', 'updatedBy', 'deletedBy', 'codeManualBy'].forEach(k => { t[k] = 'uuid'; });
   return t;
 })();

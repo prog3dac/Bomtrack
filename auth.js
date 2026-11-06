@@ -88,7 +88,7 @@ function renderLogin() {
     ? `${ico('cloud', 'tinted', '')} Archivio condiviso: accedi con l'email e la password di Supabase. <a href="#" onclick="cloudPasswordDimenticata();return false">Password dimenticata?</a> · <a href="#" onclick="cloudPannello();return false">Collegamento</a>`
     : `I dati risiedono in questo browser: l'accesso separa i ruoli tra colleghi, non protegge i dati. <a href="#" onclick="cloudPannello();return false">Collega un archivio condiviso…</a>`) + orgLink;
   // Il selettore delle organizzazioni e il titolo della scheda del browser,
-  // che dice in quale si è anche con la finestra ridotta (dalla 0.136.0).
+  // che dice in quale si è anche con la finestra ridotta (dalla 0.147.0).
   if (typeof orgDisegnaLogin === 'function') orgDisegnaLogin();
   orgTitoloPagina();
   const saved = !setup && emailRicordata();

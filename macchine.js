@@ -60,7 +60,10 @@ function costoFaseDettaglio(r) {
   if (!r || r.costMode !== 'orario') return '';
   const n = v => numIt(v, v % 1 ? 2 : 0);
   const op = (Number(r.hours) || 0) * (Number(r.rate) || 0);
-  const righe = [`Operatore: ${n(Number(r.hours) || 0)} h × ${n(Number(r.rate) || 0)} = ${n(op)}`];
+  // Una fase interna ha il tempo in minuti (dalla 0.137.0): il conto lo mostra
+  // in minuti e in ore, perché la tariffa è oraria.
+  const tempo = r.supplierId ? `${n(Number(r.hours) || 0)} h` : `${fmtMin(r.hours)} (${n(Number(r.hours) || 0)} h)`;
+  const righe = [`Operatore: ${tempo} × ${n(Number(r.rate) || 0)} = ${n(op)}`];
   const mac = costoMacchinaFase(r);
   if (mac > 0 || (r.machineId && moduloAttivo('macchine') && !r.supplierId)) {
     const m = getMachine(r.machineId);

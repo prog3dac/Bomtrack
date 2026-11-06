@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.136.0 — 2026-11-03
+### 0.147.0 — 2026-11-06
 
 **Più organizzazioni sullo stesso PC, con i dati separati.** Chi lavora per più aziende, ognuna con il suo progetto Supabase e i suoi utenti, ora le tiene tutte nella stessa app:
 - con due o più organizzazioni la **schermata d'accesso** ha il campo **Organizzazione**: si sceglie, l'app si ricarica con i dati di quella e si accede con l'utente di quel progetto;
@@ -13,9 +13,159 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - ogni **scheda del browser** resta sull'organizzazione con cui è stata aperta;
 - il **controllo notturno** su GitHub tiene svegli anche gli altri progetti, con il segreto `SUPABASE_PROGETTI` (manuale, cap. 31).
 
-**Lo schema dice la sua versione.** All'accesso l'app controlla che il progetto abbia lo schema di questa versione e, se è rimasto indietro, lo dice con il nome dell'organizzazione. Con più progetti è facile dimenticarne uno.
+**L'avviso dello schema dice quale organizzazione.** Il controllo della versione dello schema all'accesso (dalla 0.141.0) nomina l'organizzazione il cui progetto è rimasto indietro: con più progetti, `supabase/schema.sql` va rieseguito in ognuno.
 
-Cambio a `supabase/schema.sql`: `archivio_stato()` restituisce anche `schema_versione`. Va rieseguito in **ogni** progetto; finché non lo si fa tutto funziona, ma all'accesso compare l'avviso.
+Nessun cambio a `supabase/schema.sql`.
+
+### 0.146.0 — 2026-11-06
+
+**Storia documenti: da cosa è nato un documento e che cosa ha generato.**
+- Nuova pagina **Riepilogo → Storia documenti**. Si sceglie un documento qualsiasi (commessa, piano, richiesta d'offerta, ordine fornitore, ODP, ODL, collaudo, non conformità, modifica tecnica) e un **grafo** da sinistra a destra mostra la sua famiglia: in blu la linea del documento, sbiadito il resto, tratteggiate le modifiche tecniche che la riguardano.
+- **Un clic su un documento del grafo lo mette al centro.** *Tutta la famiglia / Solo la linea* sceglie quanto mostrare; oltre 80 documenti si vede solo la linea.
+- Sotto il grafo il documento al centro: dati, da cosa è nato e perché, che cosa ha generato, ricevimenti e rientri, e **Apri il documento**.
+- Pulsante **Storia** in testa a commesse, piani, richieste, ordini, ODP, ODL, collaudi e non conformità.
+- Sul telefono il grafo diventa un elenco rientrato.
+- L'ODP di ripresa lanciato da una NC (0.145.0) sta sotto la sua NC: il giro ordine → collaudo → NC → ripresa si legge di fila.
+
+Nessun cambio allo schema: i legami ci sono già.
+
+### 0.145.0 — 2026-11-06
+
+**Qualità in produzione: l'ODP di ripresa.**
+- Dalla non conformità di un ODP, **Lancia l'ODP di ripresa** crea un ordine di produzione separato, già lanciato, collegato all'originale e alla NC. Ha una **fase dedicata al ripristino** (che cosa si fa, il centro di lavoro con le ore per pezzo, oppure il terzista con i giorni), più le fasi dell'originale da rifare: per uno scarto a metà ciclo sono proposte quelle che mancano.
+- **Il materiale sono i pezzi da riprendere.** Quelli fermi da rilavorare escono all'avvio della prima fase e da lì non sono più fermi; gli scarti, che a magazzino non sono mai entrati, partono senza prelievo. Il versamento finale apre un collaudo nuovo.
+- **Dal terzista** il ripristino è *a suo carico* (prezzo zero) o addebitato al prezzo scritto, e genera il suo ODL come ogni fase esterna.
+- **Eredita piano e commessa** dell'originale: il fabbisogno la conta come rifornimento e non propone un altro ODP per gli stessi pezzi.
+- La NC mostra la ripresa con il suo **costo finora** (fasi interne lavorate, attrezzaggio, rientri dell'ODL), e **Porta nel costo della NC** lo scrive come costo della non qualità.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Aggiunge a `production_orders` le colonne `rework_of_id`, `nc_id` e `rework_inspection_id`; `schema_versione` passa a 4.
+
+### 0.144.0 — 2026-11-06
+
+**Qualità in produzione: il collaudo a fine ciclo degli ODP e le NC degli scarti.**
+- **Il collaudo nasce alla dichiarazione dell'ultima fase** di un ODP, se l'articolo è da collaudare, anche quando l'ultima fase è di un terzista (prima quel rientro non apriva niente). Fino all'esito i pezzi sono fermi: nell'esistente ma non nel libero. Stesso piano, scheda, cartellino e rapporto degli acquisti.
+- **Il respinto si rilavora o si rottama.** *Da rilavorare* lascia i pezzi a magazzino ma fermi, finché dalla NC **Rilavorati: di nuovo al collaudo** non li rimette in un collaudo nuovo, o non si rottamano.
+- **La fase che ha generato il difetto** si sceglie nel collaudo (una fase dell'ODP, il materiale o *non individuata*) e decide la NC: di produzione per una fase interna, verso il terzista per una sua, che conta nella sua valutazione. Si corregge dalla NC finché è aperta.
+- **Gli scarti chiedono la causale** su ODP e ODL, e aprono la NC da soli: *minore*, da rottamare, una per documento, fase e causale finché è aperta. Annullare la dichiarazione toglie lo scarto dalla NC.
+- **Rottamato, chiudi** sulla NC chiude in un colpo il caso più comune.
+- Nuove causali di serie: *Errore di attrezzaggio*, *Usura o rottura utensile*, *Errore di programma*, *Errore dell'operatore*.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Aggiunge a `inspections` le colonne `decl_id`, `resp_phase` e `qty_held`, e a `nonconformities` `production_order_id`, `resp_phase` e `scrap_decls`; `schema_versione` passa a 3.
+
+### 0.143.0 — 2026-11-06
+
+**Collaudo: il reso a credito chiude la riga d'ordine.**
+- Un lotto respinto con destinazione **Reso al fornitore, a credito** ora toglie dalla riga d'ordine sia il **ricevuto** sia l'**ordinato**: il fornitore non rimanda i pezzi, quindi la riga non resta aperta ad aspettarli, l'ordine si chiude su quello che resta (*Evaso*) e il fabbisogno torna scoperto, pronto per un nuovo ordine. Prima faceva come *da sostituire* e l'MRP aspettava pezzi che non sarebbero arrivati. *Da sostituire* non cambia: la riga torna *Parziale* e i pezzi rimandati si ricevono sulla stessa riga, con un nuovo collaudo.
+- La NC che nasce da un reso a credito lo dice nella descrizione e ha già l'azione **Ricevere la nota di credito dal fornitore**, con la scadenza.
+- Il reso a credito lo registra chi scrive gli ordini (Ufficio acquisti, amministratore): l'officina lo vede rifiutato, perché cambia la riga d'ordine. Dai rientri di un ordine di lavoro la scelta *a credito* non c'è.
+- La frase sotto l'esito («*Cosa succederà*») segue anche la destinazione scelta, compresa la rottamazione, che prima veniva descritta come un reso.
+
+### 0.142.0 — 2026-11-05
+
+**Modulo Qualità: i codici del piano, le tolleranze ISO e i QR dei documenti.**
+- **Un piano vale per un elenco di codici.** La scelta «articolo o famiglia» (e il fornitore) è tolta: *Scegli i codici…* apre una finestra con tutti gli articoli a magazzino, i filtri (testo, tipo, famiglia, sottofamiglia, fornitore, solo i selezionati) e una spunta a sinistra. Nella scheda il riquadro dei codici nasce chiuso e si apre con la freccia, come le Opzioni delle varianti. **Un codice sta in un piano solo**: chi è già in un altro piano si vede con la spunta spenta e il nome del piano. I piani vecchi diventano elenchi alla prima apertura di chi li scrive; il fornitore non conta più.
+- **Caratteristiche su due righe**, con la **classe ISO 286** (`h7`, `G8`, `js6`…): dal nominale e dalla classe escono scostamenti e limiti. Fori D…P e alberi d…p, IT5–IT11, fino a 500 mm; fuori da lì l'app lo dice e si scrivono gli scostamenti. Un valore che non è un numero non si salva più in silenzio.
+- **Esito a mano nel collaudo**: OK / Fuori per le misure senza limiti, e per correggere il calcolo su quelle con limiti (segnato *a mano*, e *manuale* nel rapporto).
+- **Messaggio se il controllo fallisce**, scritto nel piano e mostrato in rosso nel collaudo quando una caratteristica è fuori.
+- Il campo **Istruzioni** del piano e le **Note interne** della non conformità hanno la grafica e la larghezza degli altri campi.
+- **QR** nel rapporto di collaudo, nel rapporto NC e nella nuova **scheda PDF del piano**; il **cartellino A4** da attaccare al bancale, con lo stato grande in italiano e inglese: giallo *da collaudare*, verde *accettato* (o *in deroga*), rosso *non conforme*, due fogli se il lotto è diviso. A richiesta, o proposto a ogni ricevimento (*Gestione → Qualità*).
+- Il **Riepilogo** avvisa degli articoli da collaudare senza piano, elenca le **NC aperte** e le **azioni delle NC da fare entro 7 giorni**, con chi le deve fare. Le stesse date, con quella di chiusura di ogni NC, sono anche nel **calendario**, con il filtro *Non conformità*.
+- **Correzione: nei campi di ricerca di Collaudi, Non conformità, Piani di controllo e Ordini di produzione** dopo la prima lettera non si poteva più scrivere: la vista si ridisegnava e il campo perdeva il fuoco. Ora lo riprende, con il cursore dov'era.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Aggiunge a `quality_plans` le colonne `item_ids` e `fail_message`; `schema_versione` passa a 2, e l'app avvisa chi ha lo schema indietro.
+
+### 0.141.0 — 2026-11-04
+
+**Il database condiviso si difende da solo.** Le correzioni dell'analisi del codice del 4 novembre.
+- **Nessuna funzione si chiama senza accesso.** Postgres e Supabase davano a chiunque avesse indirizzo e chiave pubblica (che viaggiano nel link e nel QR di collegamento) il permesso di eseguire le funzioni del database: `riserva_numeri` poteva bruciare 500 numeri di documento a chiamata. Ora un blocco in fondo a `schema.sql` toglie il permesso all'utente anonimo su ogni funzione, anche su quelle che verranno, e `riserva_numeri`/`libera_numeri` rispondono solo a chi crea documenti numerati.
+- **Il codice articolo è unico anche sul server** (voce A6): un indice che non bada a maiuscole e spazi. Su un archivio con doppioni storici non si crea e lo dice.
+- **Nessuna distinta dentro sé stessa, nemmeno fra due PC** (voce A8): un controllo alla fine di ogni invio, che mette in fila due invii contemporanei.
+- **Un id con apici o tag dentro non entra**, né da un backup modificato a mano né dall'API: gli id finiscono negli `onclick` delle viste.
+- Un indice per ogni chiave esterna (89), la scrittura in tre policy invece di una che valeva anche per la lettura, `search_path` fisso sui quattro trigger che non l'avevano.
+- **All'accesso, l'app dice se lo schema del progetto è indietro** (`archivio_stato().schema_versione`).
+
+**L'app.**
+- Content-Security-Policy in `index.html`: gli script vengono solo dall'app e da `vendor/`, niente plugin né `<base>`. Provata in Chromium da file e da indirizzo web, in ogni vista e con un Excel e un PDF.
+- Il prospetto **Presso terzi** ha il suo export Excel e PDF, che il manuale prometteva e mancava. Nell'elenco di fornitori e clienti, il numero dei contatti dice chi sono al passaggio del mouse.
+- Tolte sette funzioni che nessuno chiamava; un test ora fallisce se ne resta una.
+- I tre file più lunghi sono divisi per argomento: `views-listino.js` e `views-cicli.js` da `views-catalog.js`, `views-mrp-documenti.js` da `views-mrp.js`, `views-oda.js` da `views-docs.js`. Stesso ordine di caricamento, nessun cambio di comportamento; un test ferma ogni script oltre le 3.000 righe.
+
+**Per chi sviluppa.** `tools/versione.js` dà il numero di versione all'ultimo passo prima del merge: fonde main, rinumera la voce del ramo e la scrive in `APP_VERSION`, `sw.js`, nel manuale e nei commenti «dalla 0.x.y» del ramo; si ferma davanti a un conflitto vero. Le regole stanno in `CLAUDE.md`. Il benchmark misura anche salvataggio e fabbisogno su 5.000 articoli e 15.000 movimenti.
+
+`supabase/schema.sql`: va **rieseguito** nel SQL Editor. Non cambia i dati; aggiunge l'indice sui codici, il controllo delle distinte, gli indici, le policy e i permessi.
+
+### 0.140.0 — 2026-11-04
+
+**Modulo Qualità: il collaudo della merce in entrata.** Spento di serie, si accende in *Gestione → Aree e moduli* (area Magazzino). Un articolo — o la sua famiglia — può chiedere il **controllo in entrata**: da quel momento ogni ricevimento di un ordine fornitore, e ogni rientro dall'ultima fase di un ordine di lavoro, apre da solo un **collaudo**.
+
+**La merce in collaudo è a scaffale ma non è libera.** Resta nell'esistente — è stata pagata e sullo scaffale c'è — e si sottrae dal **libero**, come l'impegnato. Nel Magazzino arrivano la colonna *In collaudo* (nascosta di serie), il filtro di stato *In collaudo* e, sull'etichetta QR dell'articolo, il pulsante **Collauda**. Il fabbisogno continua a contarla: è merce arrivata, e ricomprarla sarebbe peggio del male che si cura.
+
+**Tre esiti, in *Qualità → Collaudi*.** *Accettato* libera la quantità; *accettato in deroga* la libera lasciando scritto che è passata con riserva; *respinto* (tutto o in parte) rimanda la merce indietro per la strada da cui è venuta — su un ordine fornitore **scende il ricevuto** (la riga torna ad avere un residuo, l'ordine torna *Parziale*, il fabbisogno la aspetta di nuovo), su un ordine di lavoro i pezzi **escono verso il terzista**, e la terza scelta è tenerla e rottamarla, che la fa uscire come consumo. Prima di registrare, la scheda dice a parole che cosa succederà. Un esito non si corregge. Lo registrano *Officina e magazzino*, *Ufficio acquisti* e l'amministratore; i collaudi da fare compaiono nel Riepilogo.
+
+**Piani di controllo.** Per un articolo o una famiglia, eventualmente per un solo fornitore: le **caratteristiche** da verificare (misura con nominale e tolleranze, o controllo sì/no), il **campionamento** (tutto, un numero fisso, una percentuale, o **AQL** con il piano singolo normale ISO 2859-1 a livello II, frecce comprese) e il **salto lotti** (dopo N accettati di fila se ne collauda uno ogni K; al primo respinto, o con una non conformità aperta, si guarda tutto). Un piano attivo basta a far collaudare l'articolo. Il collaudo ne prende una copia: le misure si scrivono sulla scheda, una fuori tolleranza si colora di rosso e la scheda suggerisce l'esito. Certificato richiesto e non arrivato: si accetta solo in deroga. **Rapporto di collaudo** PDF in italiano e inglese, archiviabile.
+
+**Non conformità.** Nascono da sole da un collaudo respinto o accettato in deroga, o a mano (fornitore, produzione con gli scarti dell'ODP, reclamo cliente, interna). Causa da un elenco in *Gestione → Qualità*, gravità, decisione sulla merce, costo, scadenza, **azioni** con chi e entro quando. Si chiudono con decisione e causa; le scadute vanno nel Riepilogo. **Rapporto NC** PDF bilingue, archiviabile. Il numero `NC-` lo riserva il server.
+
+**Valutazione fornitori.** Lotti collaudati, accettati, deroghe, respinti, PPM, non conformità e **puntualità** rispetto alla data confermata, per periodo. Punteggio da 0 a 100 con pesi e soglie in Gestione, **classe A/B/C** anche nel listino e nell'anagrafica fornitori. Export Excel e PDF.
+
+Tutto il modulo ha il suo gruppo **Qualità** nella barra, che c'è solo con il modulo acceso.
+
+Spegnendo il modulo l'app torna quella di prima: collaudi, piani e non conformità restano scritti e nessuna trattenuta vale più.
+
+`supabase/schema.sql`: nuove tabelle `inspections`, `quality_plans` e `nonconformities`, colonne `qc`/`qc_cert` su `items` e `families` e `qc` su `sub_families`, serie `NC` con numero unico. Va eseguito prima di usare il modulo con l'archivio condiviso.
+
+### 0.139.0 — 2026-11-04
+
+**La scheda articolo è divisa in sottoschede.** Creando o modificando un articolo, i campi stanno ora in quattro sottoschede per argomento, scelte da una barra verticale a sinistra (al telefono, una fila di pulsanti in alto):
+- **Anagrafica**: tipo, codice, descrizione, unità di misura, famiglia, codifica, preferito, obsoleto e note;
+- **Acquisto**: fornitore e prezzo dal listino, unità d'acquisto e fattore di conversione;
+- **Magazzino**: il riquadro della giacenza in cima, poi scorta minima, lotto di riordino, ubicazione e codice a barre;
+- **Tecnico**: approvvigionamento, distinta e ciclo, dati fisici, produttore, materiale e disegno.
+
+Ogni tipo vede solo le sue: macchine, gruppi e sottogruppi hanno Anagrafica e Tecnico, e senza l'area Magazzino la sottoscheda Magazzino non c'è. La scheda si apre su Anagrafica; se al salvataggio un campo non va, porta da sola alla sottoscheda di quel campo. Nessun campo esistente cambia significato.
+
+**Tre campi nuovi.** **Peso lordo** (kg, su tutti i tipi), **codice a barre / EAN** (su ciò che sta a scaffale; lo stesso codice su due articoli è rifiutato, anche nell'import, e duplicando un articolo non si copia) e **riferimento disegno** (su parti e assiemi). Compaiono nella scheda in sola lettura, nello storico e nel file Excel degli articoli (colonne *Peso lordo kg*, *Codice a barre*, *Riferimento disegno*).
+
+`supabase/schema.sql`: nuove colonne `items.gross_weight_kg`, `barcode`, `drawing_ref`. Va eseguito prima di usare i nuovi campi con l'archivio condiviso.
+
+### 0.138.0 — 2026-11-04
+
+**Più dati in anagrafica.**
+- **Dati tecnici dell'articolo**: lunghezza, larghezza e altezza in metri, **peso** in kg e **volume** in m³, su ogni tipo. Il volume lasciato vuoto è il prodotto delle tre dimensioni; il peso di un assieme lasciato vuoto è la somma della distinta (una materia prima a kg pesa la sua quantità), e la scheda dice se è per difetto.
+- **Produttore** e **codice produttore** su commerciali e materie prime, distinti da fornitore e codice del fornitore.
+- **Materiale**, **finitura** e **trattamento** sulle parti, con i valori già usati proposti mentre si scrive.
+- Tutto compare nella nuova sezione *Dati tecnici* della scheda in sola lettura, nello storico delle modifiche e nel file Excel degli articoli (colonne *Lunghezza m*, *Larghezza m*, *Altezza m*, *Peso kg*, *Volume m3*, *Produttore*, *Codice produttore*, *Materiale*, *Finitura*, *Trattamento*). Anche macchine, gruppi e sottogruppi hanno misure e peso nel loro foglio.
+
+**Contatti multipli su fornitori e clienti.** Oltre al referente, la scheda di modifica tiene quanti contatti servono, ciascuno con nome, ruolo, email e telefono. L'elenco dice quanti sono, e l'export delle impostazioni ha il nuovo foglio *Contatti*, che si reimporta.
+
+**Fase di consumo.** Una riga della distinta di una parte, o di un assieme con un ciclo, può dire in quale fase si usa (*Modifica componente → Fase di consumo*, o la colonna *Fase* nell'import delle distinte). Il fabbisogno la fa arrivare per l'inizio di quella fase invece che della prima, e così il programma e il Gantt; l'ordine di produzione la congela sul materiale e la mostra nella colonna *Si usa*. Il prelievo dal magazzino resta all'avvio della prima fase. Senza fase scritta non cambia niente.
+
+`supabase/schema.sql`: nuove colonne `items.weight_kg`, `volume_m3`, `length_m`, `width_m`, `height_m`, `manufacturer`, `manufacturer_code`, `material`, `finish`, `treatment`; `suppliers.contacts` e `customers.contacts` (jsonb); `item_components.op_index` e `production_order_materials.op_index`. Va eseguito prima di usare i nuovi campi con l'archivio condiviso.
+
+### 0.137.0 — 2026-11-03
+
+**Tempo fase e attrezzaggio in minuti.** Nel **ciclo di lavorazione** il tempo di una fase interna si scrive ora in **minuti per pezzo** (*Tempo fase (min/pz)*) e l'attrezzaggio in **minuti** (*Attrezzaggio (min)*), sia nella riga della fase sia quando se ne aggiunge una; anche l'*Attrezzaggio proposto* del centro di lavoro è in minuti. In minuti anche il foglio Excel del ciclo, l'anteprima dell'articolo, il documento dell'ODP («15 min/pz + 30 min att.»), il Carico centri (*Codici da produrre* e il suo export) e il dettaglio del consuntivo.
+
+I **valori già inseriti restano giusti**: sotto l'app continua a salvare in ore, come le tariffe orarie, le capacità e le timbrature, e li mostra convertiti (0,25 h → 15 min). Nessun costo, data o carico cambia. Le **ore fatturate** dal terzista su una fase in conto lavoro a costo orario restano in ore, accanto alla tariffa. Nel foglio *Centri di lavoro* delle impostazioni la colonna diventa *Attrezzaggio min*; un file esportato prima, con *Attrezzaggio h*, si reimporta ancora in ore.
+
+Nessun cambio a `supabase/schema.sql`.
+
+### 0.136.0 — 2026-11-03
+
+**Le timbrature di una fase si correggono a mano.** In *Produzione → Reparto*, sotto il *Tempo lavorato* di ogni scheda, chi gestisce gli ordini di produzione (amministratore e ufficio acquisti, non l'officina) trova **Correggi i tempi**. Si apre l'elenco delle timbrature della fase, con chi le ha fatte, la durata, l'**inizio** e la **fine**:
+- una fase rimasta **attiva per errore** (la pausa dimenticata la sera) si chiude scrivendo l'ora giusta della fine; una fine vuota vuol dire che si lavora ancora;
+- l'icona del cestino **elimina** una timbratura (si può ripensarci prima di salvare; dopo, è nel cestino);
+- **Aggiungi una timbratura** registra a mano un lavoro per cui nessuno ha premuto Inizia, scegliendo l'operatore.
+
+Prima di salvare l'app controlla che la fine venga dopo l'inizio, che niente sia nel futuro e che le timbrature di una persona non si sovrappongano, né su questa fase né sulle altre. Ogni correzione finisce nello **storico delle modifiche**, con l'ODP e la fase, chi l'ha fatta e gli orari di prima e di dopo; le ore corrette entrano subito nel consuntivo e nelle manutenzioni «ogni N ore».
+
+Nessun cambio a `supabase/schema.sql`.
+
+### 0.135.1 — 2026-11-03
+
+**Le schede delle fasi fatte restano in Reparto.** In *Produzione → Reparto*, quando si dichiarava l'ultima fase di un ordine l'ordine passava a *Completato* e tutte le sue schede sparivano insieme, anche quelle già terminate prima. Ora restano in vista con la fascia verde *Terminata*, in fondo alla loro colonna, finché l'ordine non viene **chiuso**. Ordinamento per codice, data e ODP e stampa delle schede le comprendono; il numero accanto a ogni centro conta ancora solo le fasi da lavorare.
+
+Nessun cambio a `supabase/schema.sql`.
 
 ### 0.135.0 — 2026-11-02
 

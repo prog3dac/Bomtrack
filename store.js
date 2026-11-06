@@ -392,6 +392,14 @@ const SCHEMA = {
   // `received` resta sulla riga come **lettura**, ricavata da qui
   // (riallineaRicevuti), e non si invia: vedi `derived`.
   receipts: { table: 'order_receipts' },
+  // Modulo Qualità (0.140.0): i collaudi della merce in entrata. Collezione
+  // radice e non figlia dell'ordine: un collaudo nasce anche dal rientro di un
+  // ordine di lavoro, e vive più a lungo della riga che lo ha fatto nascere.
+  inspections: { table: 'inspections' },
+  // I piani di controllo (caratteristiche in jsonb: si leggono e si scrivono
+  // sempre col piano) e le non conformità, con le loro azioni.
+  qualityPlans: { table: 'quality_plans' },
+  nonconformities: { table: 'nonconformities' },
   // Allegati: **solo i dati**. I byte dei file stanno in IndexedDB (allegati.js)
   // e non passano né da qui né dal backup JSON — un disegno pesa più di tutto il
   // database, e localStorage non li reggerebbe. Il record dice che il file
@@ -550,6 +558,11 @@ const REFS = {
   // `orderId` e `lineId` restano fuori: REFS non ha una destinazione 'order',
   // e gli ordini non sono mai stati rimappati. Va scritto, non lasciato muto.
   movements: { fields: { itemId: 'item', supplierId: 'supplier', fromSupplierId: 'supplier' } },
+  // `orderId` e `lineId` restano fuori come nei movimenti: REFS non ha una
+  // destinazione 'order'.
+  inspections: { fields: { itemId: 'item', supplierId: 'supplier' } },
+  qualityPlans: { fields: { itemId: 'item', supplierId: 'supplier' } },
+  nonconformities: { fields: { itemId: 'item', supplierId: 'supplier' } },
   // `docId` resta fuori, come `orderId` sulle righe di movimento e per la stessa
   // ragione: REFS è la mappa degli id **legacy** da riscrivere nella migrazione
   // v2, e non ha (né avrebbe senso che avesse) una destinazione
@@ -663,6 +676,61 @@ function parteDistintaViva(it) {
     it.cycle = cyc.filter(r => r && r.kind === 'op');
   }
   return it;
+}
+// ── Dati tecnici dell'articolo (dalla 0.138.0) ──
+// Peso in kg, volume in m³, dimensioni in m (lunghezza × larghezza × altezza).
+// Vuoto vuol dire «non scritto», mai zero.
+const ITEM_DIM_CAMPI = ['lengthM', 'widthM', 'heightM'];
+function numTecnico(v) { const n = Number(v); return v == null || v === '' || !isFinite(n) || n <= 0 ? null : n; }
+// Il volume: quello scritto, altrimenti il prodotto delle tre dimensioni se
+// ci sono tutte. `calcolato` dice da dove viene.
+function itemVolume(it) {
+  if (!it) return null;
+  const v = numTecnico(it.volumeM3);
+  if (v != null) return { value: v, calcolato: false };
+  const d = ITEM_DIM_CAMPI.map(k => numTecnico(it[k]));
+  return d.every(x => x != null) ? { value: d[0] * d[1] * d[2], calcolato: true } : null;
+}
+// Il peso: quello scritto, altrimenti la somma della distinta (quantità ×
+// scarto × peso del figlio). Un figlio gestito a kg pesa la sua quantità.
+// `completo` è falso se qualche riga non ha un peso: la somma è per difetto.
+function itemWeight(it, visti) {
+  if (!it) return null;
+  const w = numTecnico(it.weightKg);
+  if (w != null) return { value: w, calcolato: false, completo: true };
+  if (String(it.uom || '').toLowerCase() === 'kg') return { value: 1, calcolato: false, completo: true };
+  const righe = distintaRighe(it);
+  if (!righe.length) return null;
+  const v = visti || new Set();
+  if (v.has(it.id)) return null;
+  v.add(it.id);
+  let tot = 0, completo = true, qualcuno = false;
+  righe.forEach(r => {
+    const f = getItem(r.itemId);
+    const pf = f ? itemWeight(f, v) : null;
+    if (!pf) { completo = false; return; }
+    qualcuno = true;
+    if (!pf.completo) completo = false;
+    tot += (Number(r.qty) || 0) * (1 + (Number(r.scrapPct) || 0) / 100) * pf.value;
+  });
+  v.delete(it.id);
+  return qualcuno ? { value: tot, calcolato: true, completo } : null;
+}
+// Le dimensioni come si leggono: «1,2 × 0,8 × 0,5 m», con «–» per quella che manca.
+function itemDimLabel(it) {
+  const d = ITEM_DIM_CAMPI.map(k => numTecnico(it && it[k]));
+  if (d.every(x => x == null)) return '';
+  return d.map(x => x == null ? '–' : String(+x.toFixed(4)).replace('.', ',')).join(' × ') + ' m';
+}
+
+// ── La fase di consumo di una riga di distinta (dalla 0.138.0) ──
+// `opIndex` sulla riga dice in quale fase del ciclo del padre si consuma
+// (indice fra le sole fasi, da 0). Assente, o oltre l'ultima fase: la prima,
+// com'era sempre stato.
+function faseConsumo(riga, padre) {
+  const n = cicloFasi(padre).length;
+  const k = riga && riga.opIndex != null && riga.opIndex !== '' ? Math.floor(Number(riga.opIndex)) : 0;
+  return n && k > 0 && k < n ? k : 0;
 }
 // Un assieme con almeno una fase: si monta con un ordine di produzione.
 function asmHaCiclo(it) { return !!it && isAssembly(it.type) && cicloFasi(it).length > 0; }
@@ -828,6 +896,9 @@ function migrateDB() {
   if (!db.maintPlans) db.maintPlans = []; // piani di manutenzione
   if (!db.maintEvents) db.maintEvents = []; // interventi di manutenzione
   if (!db.machines) db.machines = [];       // macchine utensili dei centri
+  if (!db.inspections) db.inspections = []; // collaudi della merce in entrata
+  if (!db.qualityPlans) db.qualityPlans = []; // piani di controllo
+  if (!db.nonconformities) db.nonconformities = []; // non conformità
   // Cestino: le eliminazioni recenti, recuperabili. Si svuota da solo passata
   // la finestra di ripristino, altrimenti crescerebbe finché lo spazio del
   // browser non finisce — e a quel punto il rimedio sarebbe peggio del male.
@@ -1419,6 +1490,27 @@ function migrateV2() {
 // impostazioni sono un oggetto, la versione dello schema è una che sappiamo
 // leggere. Il resto lo normalizza migrateDB(), che è fatto per dati vecchi ma
 // non per dati assurdi.
+// Gli identificativi finiscono dentro gli attributi `onclick` delle viste
+// (`onclick="apri('${id}')"`), e lì non passano da esc(). L'app li crea da sé
+// (UUID, o sigle brevi negli archivi più vecchi), ma un backup è un file che
+// si può aprire e modificare: un id con un apice o un `<` dentro diventava
+// codice eseguito al primo clic (dalla 0.141.0). Si guardano `id`, le chiavi
+// che finiscono in `Id` e gli elenchi in `Ids`, a ogni profondità.
+const ID_SICURO_RE = /^[^'"<>`\\\s&]{1,200}$/;
+function idNonSicuro(x, dove) {
+  if (Array.isArray(x)) {
+    for (let i = 0; i < x.length; i++) { const r = idNonSicuro(x[i], (dove || '') + '[' + i + ']'); if (r) return r; }
+    return '';
+  }
+  if (!x || typeof x !== 'object') return '';
+  for (const k of Object.keys(x)) {
+    const val = x[k], qui = dove ? dove + '.' + k : k;
+    if ((k === 'id' || /Id$/.test(k)) && typeof val === 'string' && val !== '' && !ID_SICURO_RE.test(val)) return qui;
+    if (/Ids$/.test(k) && Array.isArray(val) && val.some(v => typeof v === 'string' && v !== '' && !ID_SICURO_RE.test(v))) return qui;
+    if (val && typeof val === 'object') { const r = idNonSicuro(val, qui); if (r) return r; }
+  }
+  return '';
+}
 function validateSnapshot(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return 'il file non contiene un database Bomtrack';
   // Gli articoli sono l'unica collezione obbligatoria: un backup senza `items`
@@ -1431,6 +1523,8 @@ function validateSnapshot(data) {
   if (data.settings != null && (typeof data.settings !== 'object' || Array.isArray(data.settings))) {
     return 'le impostazioni sono danneggiate';
   }
+  const strano = idNonSicuro(data);
+  if (strano) return `un identificativo contiene caratteri non ammessi (${strano}): il file è danneggiato o è stato modificato a mano`;
   const v = data.schemaVersion;
   if (v != null && (typeof v !== 'number' || !isFinite(v) || v < 1)) return 'versione dello schema non leggibile';
   // Un file più recente dell'app va fermato: le migrazioni sanno salire, non
@@ -1983,6 +2077,12 @@ function storicoFotografa() {
 // Il nome con cui una persona riconosce il record, preso al momento.
 function storicoEtichetta(r) {
   if (!r) return '';
+  // Una timbratura non ha nome: si riconosce dall'ODP e dalla fase.
+  if (r.odpId && r.phaseId && 'startedAt' in r) {
+    const o = (db && db.prodOrders || []).find(x => x && x.id === r.odpId);
+    const f = o && (o.phases || []).find(x => x && x.id === r.phaseId);
+    if (o) return `${o.number || o.code || ''}${f ? ' fase ' + f.seq : ''}`.slice(0, STORICO_LUNG);
+  }
   return String(r.code || r.number || r.name || r.title || r.username || r.email || r.id || '').slice(0, STORICO_LUNG);
 }
 function _storicoValore(v) {

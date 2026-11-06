@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  BOMTRACK — organizzazioni.js (più organizzazioni sullo stesso PC, dalla 0.136.0)
+//  BOMTRACK — organizzazioni.js (più organizzazioni sullo stesso PC, dalla 0.147.0)
 // ═══════════════════════════════════════════════════════════
 // Ogni organizzazione è un progetto Supabase a sé, con i suoi utenti, il suo
 // schema e la sua funzione degli utenti. Sul PC ha **tutto suo**: l'archivio

@@ -1,4 +1,4 @@
-// Più organizzazioni sullo stesso PC (organizzazioni.js, dalla 0.136.0).
+// Più organizzazioni sullo stesso PC (organizzazioni.js, dalla 0.147.0).
 //
 // Il requisito è uno: i dati di un'organizzazione non devono mai finire in
 // un'altra. Qui si prova che è così da tutti i lati da cui potrebbe succedere:
@@ -177,7 +177,7 @@ describe('Organizzazioni — i dati restano separati', () => {
     st.setItem('bomtrack_cloud_sessione', JSON.stringify({ access_token: 't', refresh_token: 'r', expires_at: 9e9, url: 'https://beta.supabase.co', user: { id: 'u' } }));
     const a = loadApp({ silent: true, storage: st });
     assert.equal(a.eval('cloudSessione()'), null);
-    // Quella del suo progetto sì, e una di prima della 0.136.0 (senza indirizzo) anche.
+    // Quella del suo progetto sì, e una di prima della 0.147.0 (senza indirizzo) anche.
     a.eval(`cloudSalvaSessione({ access_token: 't2', refresh_token: 'r', expires_in: 3600, user: { id: 'u' } })`);
     assert.equal(ev(a, 'cloudSessione()').url, 'https://acme.supabase.co');
     st.setItem('bomtrack_cloud_sessione', JSON.stringify({ access_token: 't3', expires_at: 9e9, user: { id: 'u' } }));
@@ -247,7 +247,7 @@ describe('Organizzazioni — il link di collegamento', () => {
       return { st, scheda, a };
     };
     const unita = prova(false);
-    assert.equal(JSON.parse(unita.st.getItem('bomtrack_cloud')).url, 'https://beta.supabase.co', 'collegati: come prima della 0.136.0');
+    assert.equal(JSON.parse(unita.st.getItem('bomtrack_cloud')).url, 'https://beta.supabase.co', 'collegati: come prima della 0.147.0');
     assert.equal(unita.a.eval('orgElenco().length'), 1);
     const separata = prova(true);
     assert.equal(separata.st.getItem('bomtrack_cloud'), null, 'separati: questo PC resta senza collegamento');

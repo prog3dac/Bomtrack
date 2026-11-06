@@ -165,6 +165,33 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .modal-field input[type=color]::-moz-color-swatch{border:none;border-radius:5px}
 .modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:520px){.modal-grid{grid-template-columns:1fr}}
+.contact-row{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:end;margin-bottom:4px}
+@media(max-width:520px){.contact-row{grid-template-columns:1fr 1fr}}
+/* Scheda articolo a sottoschede (0.139.0): barra a sinistra, campi a destra;
+   al telefono la barra diventa una fila di pulsanti in alto. */
+.modal-grid-3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:520px){.modal-grid-3{grid-template-columns:1fr 1fr}}
+.dim3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.it-tabs{display:grid;grid-template-columns:168px minmax(0,1fr);gap:18px;align-items:start;margin-top:4px}
+.it-nav{display:flex;flex-direction:column;gap:2px;position:sticky;top:0;border-right:1px solid var(--border);padding-right:10px}
+.it-tabbtn{display:flex;align-items:center;gap:9px;text-align:left;background:none;border:0;border-radius:8px;padding:10px 12px;color:var(--text-dim);font:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:40px}
+.it-tabbtn:hover{background:var(--card-hover);color:var(--text)}
+.it-tabbtn.on{background:var(--accent-soft-hi);color:var(--accent)}
+.it-tabbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.it-pane{min-width:0}
+.it-pane-title{font-size:15px;margin:0 0 4px}
+.it-pane-sub{color:var(--text-dim);font-size:12px;margin:0 0 14px}
+.it-sec{font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px;padding-top:12px;border-top:1px solid var(--border)}
+.it-pane .empty-text{text-align:left}
+.it-pane .empty-text.it-hint{padding:0 0 10px;margin:-4px 0 0}
+.it-pane > .cloud-section:first-of-type{margin-top:0!important}
+@media(max-width:620px){
+  .it-tabs{grid-template-columns:1fr;gap:10px}
+  .it-nav{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;border-right:0;border-bottom:1px solid var(--border);padding:0 0 8px;position:static}
+  .it-tabbtn{flex-direction:column;gap:3px;justify-content:center;text-align:center;padding:7px 2px;font-size:11.5px;min-height:52px}
+  .it-tabbtn svg{font-size:17px}
+  .it-pane .cost-summary{grid-template-columns:1fr 1fr;gap:8px}
+}
 /* Conferme in scheda (al posto di confirm()) */
 .confirm-text{font-size:14px;line-height:1.55;color:var(--text);margin-bottom:12px}
 .btn-danger{background:var(--red)!important}
@@ -1096,11 +1123,29 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .reparto-stampa{padding:2px 6px;min-height:0;flex:0 0 auto}
 #reparto-qr-scheda .reparto-stampa{display:none}
 .reparto-qr{display:none}
+.reparto-correggi{display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:2px 0;border:none;background:none;color:var(--accent-solid);font-size:12.5px;font-weight:600;cursor:pointer}
+.reparto-correggi:hover{text-decoration:underline}
+.reparto-correggi svg{width:13px;height:13px}
+/* Correggere le timbrature (dalla 0.136.0): una riga per timbratura, con
+   inizio e fine affiancati, uno sotto l'altro al telefono. */
+.tmb-riga{border:1px solid var(--border);border-radius:10px;padding:8px 12px 0;margin-bottom:8px;background:var(--card)}
+.tmb-riga.nuova{border-style:dashed;border-color:var(--accent-line)}
+.tmb-riga.via{opacity:.6}
+.tmb-riga.via .tmb-ore{text-decoration:line-through}
+.tmb-testa{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tmb-testa>strong,.tmb-testa>select{flex:1;min-width:0}
+.tmb-testa>select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);font-size:13px}
+.tmb-durata{font-size:12.5px;color:var(--text-dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tmb-via{padding:4px 8px;flex:0 0 auto}
+.tmb-ore{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tmb-ore .modal-field{margin-bottom:8px;min-width:0}
+.tmb-ore input{min-width:0}
+@media (max-width:520px){.tmb-ore{grid-template-columns:1fr;gap:0}}
 /* Sul foglio (dalla 0.132.0): le schede, due per riga, ciascuna col suo QR in
    alto a destra che apre la scheda della fase. I colori della situazione e
    del lavoro si stampano: sono l'informazione, non decorazione. */
 @media print{
-  #view-reparto .reparto-centri,#view-reparto .rfq-warn,#view-reparto .reparto-azioni{display:none!important}
+  #view-reparto .reparto-centri,#view-reparto .rfq-warn,#view-reparto .reparto-azioni,.reparto-correggi{display:none!important}
   #view-reparto .reparto-layout{display:block}
   #view-reparto .reparto-lista{grid-template-columns:1fr 1fr;gap:6mm}
   #view-reparto .reparto-ordina{display:none!important}
@@ -1133,7 +1178,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .user-pill{display:flex;align-items:center;gap:5px;padding:3px 10px 3px 7px;border-radius:20px;border:1.5px solid var(--border);font-size:13px;font-weight:500;white-space:nowrap}
 .user-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .user-role{color:var(--text-dim);font-size:11px}
-/* L'organizzazione aperta, accanto all'utente: solo con più organizzazioni sul PC (dalla 0.136.0). */
+/* L'organizzazione aperta, accanto all'utente: solo con più organizzazioni sul PC (dalla 0.147.0). */
 .user-org{margin-left:4px;padding:1px 7px;border-radius:10px;background:var(--bg);border:1px solid var(--border);font-size:11px;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .login-org-label{display:block;font-size:13px;color:var(--text-dim);margin-bottom:4px}
 .org-elenco{width:100%;border-collapse:collapse;margin:8px 0 4px}
@@ -1564,3 +1609,124 @@ select.combo-nascosto{display:none!important}
 .cl-qr-testo .cl-nota{margin:0 0 4px}
 @media (max-width:520px){.cl-qr{flex-direction:column;align-items:center;text-align:center}.cl-qr-testo{align-items:center}}
 .login-note a{color:var(--accent)}
+
+/* ─── Modulo Qualità (0.140.0) ─── */
+/* La scheda di collaudo riusa i riquadri della Gestione: stessa carta, stesso
+   titolino in maiuscoletto delle sezioni di Gestione, perché è la stessa cosa
+   — un blocco di campi con un nome sopra. */
+.qc-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:14px}
+.qc-card h3{margin:0 0 12px;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+.qc-val{font-size:14px;padding:6px 0}
+.qc-hint{text-align:left;padding:8px 0 0;line-height:1.5}
+/* L'etichetta sulla riga di un ordine: dice in una riga se quella merce è
+   ancora ferma. Tre colori, gli stessi degli stati dei documenti. */
+.qc-line-tag{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.qc-line-tag.qc-open{color:var(--accent);background:var(--accent-soft)}
+.qc-line-tag.qc-ok{color:var(--green);background:var(--green-soft)}
+.qc-line-tag.qc-ko{color:var(--red);background:var(--red-soft)}
+/* Le tabelle del modulo: caratteristiche, misure, azioni, valutazione. Campi
+   in cella senza bordo pesante, come le righe dei documenti. */
+.qc-table{width:100%;border-collapse:collapse;font-size:13px}
+.qc-table th{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+.qc-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.qc-table th.num,.qc-table td.num{text-align:right}
+.qc-table input,.qc-table select{width:100%;min-width:70px;min-height:32px}
+.qc-table input.num{text-align:right;font-family:var(--mono)}
+.qc-table .qc-row-cmds{white-space:nowrap;text-align:right}
+.qc-table tr.qc-row-ko td{background:var(--red-soft)}
+.qc-table input.qc-ko-val{color:var(--red);font-weight:700}
+.qc-toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:4px 0 14px}
+.qc-stats{margin-bottom:14px}
+.vf-table td{white-space:nowrap}
+/* Il testo per i lettori di schermo (.sr-only) è assoluto: senza un antenato
+   posizionato scapperebbe dallo scorrimento della tabella e allargherebbe la
+   pagina al telefono. */
+.qc-card .table-wrap,.vf-table{position:relative}
+.qc-toolbar .wl-filter-dates input{min-height:36px;padding:7px 8px;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit}
+.qc-toolbar .wl-filter-dates input:focus{border-color:var(--accent);outline:none}
+.qc-val a,.qc-hint a{color:var(--accent)}
+.qc-campo-largo{grid-column:1/-1}
+.qc-conta{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;text-transform:none;letter-spacing:0}
+.qc-avviso{color:var(--red)}
+.qc-fail-msg{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-weight:600;line-height:1.45}
+/* Le caratteristiche del piano (dalla 0.142.0): una scheda per riga, su due
+   righe di campi, invece di una tabella da otto colonne. */
+.qc-card h3 .pq-codici-toggle{font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;min-height:32px}
+.qc-car-list{display:flex;flex-direction:column;gap:10px}
+.qc-car{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--bg)}
+.qc-car .modal-field label{font-size:11px}
+.qc-car .modal-field input,.qc-car .modal-field select{padding:8px 10px}
+.qc-car input.num{text-align:right;font-family:var(--mono)}
+.qc-car input[readonly]{color:var(--text-dim);background:var(--card)}
+.qc-car-riga1{display:grid;grid-template-columns:24px minmax(0,2fr) minmax(0,1fr) minmax(0,1.4fr) auto;gap:8px 10px;align-items:end}
+.qc-car-riga2{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1.4fr);gap:8px 10px;align-items:end;margin-top:8px;padding-left:34px}
+.qc-car-num{font-family:var(--mono);font-size:12px;color:var(--text-dim);padding-bottom:10px;text-align:center}
+.qc-car .qc-row-cmds{display:flex;gap:4px;padding-bottom:2px}
+.qc-car .qc-row-cmds .mini-btn{min-width:36px;min-height:36px}
+.qc-car .qc-hint{padding-left:34px}
+.qc-limiti{font-family:var(--mono);font-size:13px;padding:8px 0}
+.qc-campo-ko{border-color:var(--red)!important;color:var(--red)!important}
+@media(max-width:720px){
+  .qc-car-riga1{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .qc-car-riga1 .qc-car-num{grid-column:1/-1;text-align:left;padding:0}
+  .qc-car-riga1 .modal-field:first-of-type{grid-column:1/-1}
+  .qc-car-riga1 .qc-row-cmds{grid-column:1/-1}
+  .qc-car-riga2{grid-template-columns:repeat(2,minmax(0,1fr));padding-left:0}
+  .qc-car .qc-hint{padding-left:0}
+}
+.qc-esito-cella{white-space:nowrap}
+.qc-table select.qc-verdetto{min-width:120px;width:auto}
+.qc-table select.qc-ko-val{color:var(--red);font-weight:700}
+/* La finestra di scelta dei codici */
+.qcs-comandi{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.qcs-list{max-height:min(52vh,460px)}
+.qcs-row .mono{font-family:var(--mono);white-space:nowrap}
+.qcs-nome{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto}
+.qcs-fam{font-size:11.5px;color:var(--text-dim);white-space:nowrap}
+.qcs-row.qcs-preso{opacity:.6;cursor:not-allowed}
+.qcs-row input{min-width:18px;min-height:18px}
+
+/* ─── Storia documenti (genealogia.js, dalla 0.146.0) ─── */
+.storia-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+.storia-barra{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
+.storia-cerca{flex:1;min-width:240px;position:relative}
+.storia-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-size:14px;outline:none}
+.storia-input:focus{border-color:var(--accent)}
+.storia-cerca .picker-results:not(:empty){margin-top:6px;max-height:320px;overflow:auto}
+.storia-seg{display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.storia-seg button{background:none;border:0;padding:9px 12px;font-size:13px;color:var(--text-dim);cursor:pointer}
+.storia-seg button.on{background:var(--accent-soft-hi);color:var(--accent);font-weight:600}
+.storia-seg button:disabled{cursor:default;opacity:.5}
+.storia-guida{font-size:12.5px;color:var(--text-dim);margin:2px 0 12px}
+.storia-avviso{font-size:12.5px;color:var(--orange);margin:0 0 8px}
+.storia-tela{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:10px;padding:18px;
+  background:radial-gradient(circle,var(--hairline) 1px,transparent 1px) 0 0/18px 18px}
+.storia-piano{position:relative}
+.storia-archi{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+.storia-arco{fill:none;stroke:var(--border);stroke-width:1.6}
+.storia-arco.accesa{stroke:var(--accent);stroke-width:2.2}
+.storia-arco.tratto{stroke-dasharray:5 4}
+.storia-punta{fill:var(--border)}.storia-punta.accesa{fill:var(--accent)}
+.storia-nodo{position:absolute;display:flex;flex-direction:column;gap:1px;text-align:left;background:var(--card);color:var(--text);
+  border:1px solid var(--border);border-left:4px solid var(--c,var(--accent));border-radius:9px;padding:7px 9px;font:inherit;font-size:12px;line-height:1.3;cursor:pointer;overflow:hidden}
+.storia-nodo:hover{background:var(--card-hover)}
+.storia-nodo:focus-visible,.storia-riga:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.storia-nodo.is-focus,.storia-riga.is-focus{border-color:var(--accent);border-left-color:var(--c,var(--accent));box-shadow:0 0 0 3px var(--accent-line)}
+.storia-nodo.is-fuori>*,.storia-riga.is-fuori>*{opacity:.45}
+.storia-tipo{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--c,var(--accent))}
+.storia-num{font-family:var(--mono);font-weight:700;font-size:11.5px}
+.storia-tit{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.storia-sotto{color:var(--text-dim);font-size:11.5px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.storia-badge .doc-badge{font-size:9.5px;padding:1px 6px}
+.storia-elenco{display:flex;flex-direction:column;gap:6px}
+.storia-riga{display:flex;flex-direction:column;gap:2px;text-align:left;background:var(--card);color:var(--text);border:1px solid var(--border);
+  border-left:4px solid var(--c,var(--accent));border-radius:10px;padding:8px 10px;font:inherit;font-size:12.5px;cursor:pointer}
+.storia-riga-testa{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.storia-riga .doc-badge{font-size:9.5px;padding:1px 6px}
+.storia-dett{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.storia-h3{font-size:13px;margin:0 0 6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.storia-dato{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--hairline);font-size:12.5px}
+.storia-dato>span:first-child{color:var(--text-dim)}
+.storia-dato>span:last-child{text-align:right}
+.storia-mono{font-family:var(--mono)}
+@media print{.storia-cerca,.storia-seg{display:none}.storia-tela{max-height:none;overflow:visible}}

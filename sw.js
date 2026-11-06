@@ -27,7 +27,7 @@
 // La versione la tiene allineata `test/pwa.test.js` a quella di core.js:
 // dimenticarla vorrebbe dire spedire una versione nuova che i browser già
 // visitati continuano a servire dalla cache vecchia, per sempre.
-const VERSIONE = '0.136.0';
+const VERSIONE = '0.147.0';
 const CACHE = 'bomtrack-v' + VERSIONE;
 
 // Tutto ciò che serve a disegnare la prima schermata. L'elenco ricalca
@@ -64,26 +64,38 @@ const FILE = [
   './views-bom.js',
   './views-rev.js',
   './views-stock.js',
+  './views-listino.js',
   './views-catalog.js',
+  './views-cicli.js',
   './views-report.js',
   './views-jobs.js',
   './views-home.js',
   './views-dash.js',
   './produzione.js',
   './views-mrp.js',
+  './views-mrp-documenti.js',
   './alternativi.js',
   './varianti.js',
   './consuntivo.js',
   './officina.js',
   './capacita.js',
   './macchine.js',
+  './qualita.js',
+  './qualita-iso.js',
+  './qualita-piani.js',
+  './qualita-nc.js',
+  './qualita-fornitori.js',
+  './qualita-qr.js',
+  './qualita-produzione.js',
   './allegati.js',
   './archivio.js',
   './documenti.js',
   './views-item.js',
   './views-docs.js',
+  './views-oda.js',
   './views-prod.js',
   './views-avanzamento.js',
+  './genealogia.js',
   './views-manage.js',
   './export-lists.js',
   './import-catalog.js',

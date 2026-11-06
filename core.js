@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.136.0';
+const APP_VERSION = '0.147.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -133,6 +133,23 @@ function uomSuffix(u) { return u ? ' ' + esc(u) : ''; }
 function fmtUom(n, u) { return fmtQtyIt(n) + uomSuffix(u); }
 function fmtPer(n, u) { return fmtN(n) + (u ? '/' + esc(u) : ''); }
 function labelUom(testo, u) { return u ? `${testo} (${esc(u)})` : String(testo); }
+// ─── Tempo fase e attrezzaggio in minuti (dalla 0.137.0) ───
+// Nel ciclo il tempo di una fase interna (per pezzo) e il suo attrezzaggio si
+// scrivono e si leggono in **minuti**. Sotto restano in ore (`hours`,
+// `setupHours`), come le tariffe orarie, le capacità, le timbrature e il
+// carico dei centri: nessun dato salvato cambia e nessun conto si sposta, è
+// solo l'unità di chi li scrive e li legge. Due decimali di minuto bastano:
+// 0,01 min sono sei decimi di secondo.
+function minDaOre(h) { return +((Number(h) || 0) * 60).toFixed(2); }
+function oreDaMin(m) { return (Number(m) || 0) / 60; }
+function fmtMin(h) { return fmtQtyIt(minDaOre(h)) + ' min'; }
+// Il campo in minuti riletto in ore. Se a video c'è ancora il valore di prima
+// tornano le ore di prima, intatte: 0,33 h fanno 19,8 min, e riconvertirli
+// non deve cambiare il dato a chi ha solo passato il campo col tabulatore.
+function oreDaCampoMin(id, orePrima) {
+  const m = numVal(id, 0);
+  return orePrima != null && m === minDaOre(orePrima) ? Math.max(0, Number(orePrima) || 0) : oreDaMin(m);
+}
 // L'unità di un articolo, pronta da appendere. `itemUom(null)` non lancia:
 // molte righe puntano ad articoli che possono essere spariti.
 function itemUom(it) { return (it && it.uom) || ''; }
@@ -692,6 +709,13 @@ const MODULI = {
     descr: 'Le fasi interne degli ordini di produzione in fila sui centri, per data di consegna, senza superare le ore che ogni centro lavora e fuori dai fermi. Ogni ordine ha la sua data fattibile accanto a quella richiesta; il Carico centri mostra la coda. Propone, non cambia le date.',
     area: 'produzione',
   },
+  // Dalla 0.140.0: collaudo in entrata, piani di controllo, non conformità e
+  // valutazione fornitori (qualita*.js).
+  qualita: {
+    nome: 'Qualità',
+    descr: 'Il controllo della merce che arriva. Gli articoli (o le famiglie) che lo chiedono aprono un collaudo a ogni ricevimento e a ogni rientro dal terzista: fino all\'esito quella quantità è a scaffale ma non è libera, e il Magazzino la mostra nella colonna «In collaudo». I piani di controllo dicono che cosa misurare e su quanti pezzi (anche AQL e salto lotti); un respinto o una deroga aprono una non conformità con causa, azioni e rapporto PDF; la valutazione dei fornitori dà a ciascuno una classe A, B o C.',
+    area: 'magazzino',
+  },
   // Dalla 0.126.0: le macchine dei centri, con tariffa e manutenzione proprie (macchine.js).
   macchine: {
     nome: 'Macchine utensili',
@@ -725,7 +749,7 @@ const AREE = {
     nome: 'Magazzino',
     descr: 'Giacenze, movimenti, rettifiche, inventario, scorte minime ed etichette QR di magazzino. Spento, le giacenze non si vedono ma i ricevimenti restano sugli ordini: riaccendendo, il magazzino è già al suo posto.',
     // Il cruscotto è quasi tutto magazzino: valore, fermi, sotto scorta.
-    viste: ['stock', 'dash'],
+    viste: ['stock', 'dash', 'collaudi', 'nc', 'pianiqc', 'fornitoriqc'],
   },
   pianificazione: {
     nome: 'Pianificazione',
@@ -789,10 +813,10 @@ function roleGuardRuolo(area) {
 // Area di scrittura corrispondente a ciascuna vista (per il banner di sola lettura)
 // `load` (Carico centri) è null come `report`: è un prospetto derivato, in sola
 // lettura, da cui non si scrive niente.
-const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', manage: 'manage' };
+const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, storia: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', collaudi: 'docs', nc: 'docs', pianiqc: 'docs', fornitoriqc: null, manage: 'manage' };
 // Le viste in cui l'officina lavora pur senza l'area della vista: lì non va in
 // sola lettura, e le guardie dei singoli gesti fanno il resto.
-const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione']);
+const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione', 'collaudi']);
 
 // Le due viste di anagrafica: ciò che si compra e ciò che si progetta.
 // Ogni vista ha i suoi filtri (prefisso degli id nella pagina) e la creazione
@@ -1024,7 +1048,6 @@ function duplicateSiglaGroups(kind) {
   fam.forEach(f => raggruppa(f.subs || [], f.name, { kind: f.kind || 'acquistato', familyId: f.id }));
   return out.sort((a, b) => a.dove.localeCompare(b.dove) || a.sigla.localeCompare(b.sigla));
 }
-function escapeRegExp(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // Numero di cifre della parte incrementale (configurabile in Gestione → Codifica articoli)
 function codeDigits() {
   const n = parseInt(db.settings && db.settings.codeDigits, 10);
@@ -1089,8 +1112,16 @@ const SERIE_DOCUMENTI = {
   RFQ: () => db.rfqs || [], ODA: () => db.orders || [], ODL: () => db.workOrders || [],
   ODP: () => db.prodOrders || [], FAB: () => db.plans || [], COM: () => db.jobs || [],
   MT: () => (db.revisions || []).map(r => ({ id: r.id, number: r.ecoNumber })),   // le modifiche tecniche
+  // I collaudi (modulo Qualità). Il numero non lo riserva il server: un
+  // collaudo non esce dall'azienda, e il Controllo dati scopre il doppione
+  // come per le altre serie.
+  COL: () => db.inspections || [],
+  // Le non conformità sì, le riserva il server: il rapporto esce verso il
+  // fornitore, e due NC con lo stesso numero sarebbero una contestazione
+  // che non si sa a che cosa si riferisce.
+  NC: () => db.nonconformities || [],
 };
-const SERIE_COLLEZIONE = { RFQ: 'rfqs', ODA: 'orders', ODL: 'workOrders', ODP: 'prodOrders', FAB: 'plans', COM: 'jobs', MT: 'revisions' };
+const SERIE_COLLEZIONE = { RFQ: 'rfqs', ODA: 'orders', ODL: 'workOrders', ODP: 'prodOrders', FAB: 'plans', COM: 'jobs', MT: 'revisions', COL: 'inspections', NC: 'nonconformities' };
 function seriePrefisso(sigla) { return `${sigla}-${new Date().getFullYear()}-`; }
 function serieMassimo(prefisso, lista) {
   return (lista || []).reduce((m, d) => {
@@ -2008,15 +2039,6 @@ function closePanel(p) {
 // Chiude la scheda in primo piano: le decine di "Annulla" e i salvataggi che
 // chiamano closeModal() intendono sempre quella con cui si sta lavorando.
 function closeModal() { closePanel(panelTop()); }
-function closeAllPanels() {
-  const r = panelRoot();
-  if (r) Array.prototype.forEach.call(r.children, el => {
-    const k = el.dataset && el.dataset.panelKey;
-    if (k) panelCleanup(k);
-  });
-  if (r) r.innerHTML = '';
-  _panelZ = PANEL_Z;
-}
 
 // ─── Conferme in scheda ───
 // confirm() nativo blocca il browser, esce dallo stile dell'app e non lascia
@@ -2253,6 +2275,21 @@ function setVal(id, v) { const e = document.getElementById(id); if (e) e.value =
 // campi diversi non si annullano a vicenda.
 const SEARCH_DELAY = 160;   // ms: sotto la soglia in cui si percepisce un ritardo
 const _debounceTimers = {};
+// Per le viste che si ridisegnano per intero, campo di ricerca compreso: senza
+// rimettergli il fuoco e il cursore, dopo la prima lettera non si scriveva più
+// (ODP e modulo Qualità). Le altre viste ridisegnano solo l'elenco, con
+// renderInto().
+function ridisegnaCercando(id, ridisegna) {
+  const prima = document.getElementById(id);
+  const attivo = prima && document.activeElement === prima;
+  const pos = attivo ? prima.selectionStart : null;
+  ridisegna();
+  if (!attivo) return;
+  const el = document.getElementById(id);
+  if (!el || !el.focus) return;
+  el.focus();
+  if (pos != null && el.setSelectionRange) { try { el.setSelectionRange(pos, pos); } catch (e) { /* campo senza selezione */ } }
+}
 function debounced(key, fn, ms) {
   clearTimeout(_debounceTimers[key]);
   _debounceTimers[key] = setTimeout(fn, ms == null ? SEARCH_DELAY : ms);

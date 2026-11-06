@@ -29,7 +29,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      # Più organizzazioni, cioè più progetti (dalla 0.136.0): una riga per
+      # Più organizzazioni, cioè più progetti (dalla 0.147.0): una riga per
       # progetto, «indirizzo chiave-pubblica» separati da uno spazio. Si
       # aggiunge a SUPABASE_URL e SUPABASE_KEY, che restano il primo.
       SUPABASE_PROGETTI: ${{ secrets.SUPABASE_PROGETTI }}

@@ -203,6 +203,33 @@ const CAT_COL_ALTUOM = [
   ['UM acquisto', it => it.altUom || ''],
   ['Fattore', it => catNumOut(it.altFactor)],
 ];
+// Dati tecnici (dalla 0.138.0). L'unità sta nell'intestazione, che è anche la
+// chiave: «Peso kg» si legge «pesokg» e non incontra nessun'altra colonna.
+const CAT_COL_TECH = [
+  ['Lunghezza m', it => catNumOut(it.lengthM)],
+  ['Larghezza m', it => catNumOut(it.widthM)],
+  ['Altezza m', it => catNumOut(it.heightM)],
+  ['Peso kg', it => catNumOut(it.weightKg)],
+  ['Peso lordo kg', it => catNumOut(it.grossWeightKg)],
+  ['Volume m3', it => catNumOut(it.volumeM3)],
+];
+const CAT_COL_MFR = [
+  ['Produttore', it => it.manufacturer || ''],
+  ['Codice produttore', it => it.manufacturerCode || ''],
+];
+const CAT_COL_MATFIN = [
+  ['Materiale', it => it.material || ''],
+  ['Finitura', it => it.finish || ''],
+  ['Trattamento', it => it.treatment || ''],
+];
+const CAT_TECH_NUM = [['Lunghezza m', 'lengthM'], ['Larghezza m', 'widthM'], ['Altezza m', 'heightM'], ['Peso kg', 'weightKg'], ['Peso lordo kg', 'grossWeightKg'], ['Volume m3', 'volumeM3']];
+// Dalla 0.139.0 anche codice a barre e riferimento disegno. Quale colonna vale
+// per quale tipo lo dice itemTechCampoVale, la stessa regola della scheda.
+const CAT_COL_BARCODE = [['Codice a barre', it => it.barcode || '']];
+const CAT_COL_DRAWING = [['Riferimento disegno', it => it.drawingRef || '']];
+const CAT_TECH_TXT = [['Produttore', 'manufacturer'], ['Codice produttore', 'manufacturerCode'],
+  ['Materiale', 'material'], ['Finitura', 'finish'], ['Trattamento', 'treatment'],
+  ['Codice a barre', 'barcode'], ['Riferimento disegno', 'drawingRef']];
 // Commerciali e materie prime condividono tutto: usesFamily, hasPriceList,
 // hasStock e canFavorite li trattano allo stesso modo. Una definizione, due fogli.
 const CAT_COLS_BUY = [
@@ -212,6 +239,7 @@ const CAT_COLS_BUY = [
 ].concat(CAT_COL_ALTUOM, CAT_COL_FAMILY, CAT_COL_PRICE, CAT_COL_STOCK, [
   ['Preferito', it => catSiNoEsplicito(it.favorite)],
   ['Obsoleto', it => catSiNoEsplicito(it.obsolete)],
+], CAT_COL_MFR, CAT_COL_TECH, CAT_COL_BARCODE, [
   ['Note', it => it.notes || ''],
 ]);
 const CAT_COLS_MACCHINA = [
@@ -223,6 +251,8 @@ const CAT_COLS_MACCHINA = [
   ['Tipo sigla gruppo', it => it.gCodeType || ''],
   ['Cifre progressivo S', it => catNumOut(it.incrDigitsS)],
   ['Cifre numerazione', it => catNumOut(it.incrDigitsN)],
+  ...CAT_COL_TECH,
+  ...CAT_COL_DRAWING,
   ['Note', it => it.notes || ''],
 ];
 const CAT_COLS_GRUPPO = [
@@ -231,6 +261,8 @@ const CAT_COLS_GRUPPO = [
   ['Sigla', it => it.sigla || ''],
   ['Descrizione *', it => it.name || ''],
   ['UM *', it => it.uom || ''],
+  ...CAT_COL_TECH,
+  ...CAT_COL_DRAWING,
   ['Note', it => it.notes || ''],
 ];
 const CAT_COLS_SOTTOGRUPPO = [
@@ -239,6 +271,8 @@ const CAT_COLS_SOTTOGRUPPO = [
   ['Codice gruppo', it => catItemCode(it.groupItemId)],
   ['Descrizione *', it => it.name || ''],
   ['UM *', it => it.uom || ''],
+  ...CAT_COL_TECH,
+  ...CAT_COL_DRAWING,
   ['Note', it => it.notes || ''],
 ];
 const CAT_COLS_PARTE = [
@@ -252,6 +286,7 @@ const CAT_COLS_PARTE = [
   ['Approvvigionamento', it => PART_SOURCING[partSourcingScritto(it)] || ''],
 ].concat(CAT_COL_FAMILY, CAT_COL_ALTUOM, CAT_COL_PRICE, CAT_COL_STOCK, [
   ['Obsoleto', it => catSiNoEsplicito(it.obsolete)],
+], CAT_COL_MATFIN, CAT_COL_TECH, CAT_COL_DRAWING, CAT_COL_BARCODE, [
   ['Note', it => it.notes || ''],
   // Di sola lettura: il nome di una parte si compone da concetto + descrizione
   // (composePartName). Scriverlo qui non cambierebbe niente, e l'import lo ignora.
@@ -449,6 +484,7 @@ function catInfoAoa(scope) {
     // cui l'import riconosce le colonne, e rinominarle romperebbe i file già in
     // giro. L'unità si dichiara qui, dove si legge prima di compilare.
     ['', 'Scorta minima, Lotto riordino e le quantità sono nell\'UM dell\'articolo (colonna UM).'],
+    ['', 'Lunghezza, Larghezza e Altezza sono in metri, Peso in kg, Volume in m³: le misure di un pezzo. Vuoto = non scritto.'],
     ['', 'Q.tà min è invece nell\'UM della quotazione (UM prezzo, se valorizzata; altrimenti UM).'],
     ['', 'GG consegna è in giorni lavorativi, o di calendario se così impostato in Gestione › Calendario di fabbrica.'],
     [],
@@ -788,6 +824,24 @@ function catApplyItemRow(row, def, ctx, ln, st) {
       if (isNaN(v) || v < 0) { err(`${h}: valore non valido`); return; }
       it[campo] = v;
     }
+  }
+  for (const [h, campo] of CAT_TECH_NUM) {
+    const v = catNum(row, h);
+    if (v === null) continue;
+    if (v === '') { delete it[campo]; continue; }
+    if (isNaN(v) || v < 0) { err(`${h}: valore non valido`); return; }
+    if (v > 0) it[campo] = v; else delete it[campo];
+  }
+  for (const [h, campo] of CAT_TECH_TXT.filter(([, c]) => itemTechCampoVale(c, type))) {
+    const v = catCell(row, h);
+    if (v === null) continue;
+    const t = String(v).trim();
+    // Un codice a barre è di un articolo solo, come nella scheda.
+    if (campo === 'barcode' && t) {
+      const altro = (db.items || []).find(x => x.id !== it.id && String(x.barcode || '').trim() === t);
+      if (altro) { err(`Codice a barre ${t} già usato da ${altro.code}`); return; }
+    }
+    if (t) it[campo] = t; else delete it[campo];
   }
   if (canFavorite(type)) { const f = catBool(row, 'Preferito'); if (f !== null) it.favorite = f; }
   if (usesFamily(type)) { const ob = catBool(row, 'Obsoleto'); if (ob !== null) it.obsolete = ob; }

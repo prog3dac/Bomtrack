@@ -652,6 +652,70 @@ describe('Postgres: permessi per ruolo (D6)', () => {
     assert.throws(() => d.come(PROG).push({ upsert: { items: [strano] } }), /items_tipo_noto/);
   }));
 
+  // 0.141.0: Postgres dà `execute` a PUBLIC, Supabase anche ad `anon`.
+  // riserva_numeri, chiamata con la sola chiave pubblica, bruciava i numeri.
+  it('nessuna funzione si esegue senza accesso', conDb(d => {
+    assert.equal(d.sql(`select string_agg(p.proname, ', ') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                         where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')`), '');
+    assert.throws(() => d.sql(`set role anon; select public.riserva_numeri('ODA-2026-', 500, 0);`), /permission denied/);
+    assert.throws(() => d.sql(`set role anon; select public.push_changes('{}'::jsonb);`), /permission denied/);
+  }));
+
+  it('i numeri li riserva solo chi crea documenti numerati', conDb(d => {
+    const prefisso = 'ODA-' + new Date().getFullYear() + '-';
+    assert.throws(() => d.come(SOSP).sql(`select public.riserva_numeri('${prefisso}', 5, 0)`), /non scrive documenti numerati/);
+    assert.throws(() => d.come(LETT).sql(`select public.riserva_numeri('${prefisso}', 5, 0)`), /non scrive documenti numerati/);
+    assert.throws(() => d.come(SOSP).sql(`select public.libera_numeri('${prefisso}', array[1])`), /non scrive documenti numerati/);
+    assert.equal(d.sql(`select count(*) from numeri_impegnati`), '0', 'nessun numero preso dai rifiutati');
+    assert.ok(Number(JSON.parse(d.come(ACQ).sql(`select to_jsonb(public.riserva_numeri('${prefisso}', 1, 0))`))[0]) > 0);
+  }));
+
+  // A6, chiusa nella 0.141.0.
+  it('due articoli non hanno lo stesso codice, nemmeno con maiuscole e spazi diversi', conDb(d => {
+    const a0 = righe.items[0];
+    const doppio = Object.assign({}, a0, { id: U(780), code: ' ' + a0.code.toLowerCase() + ' ', updated_at: new Date().toISOString() });
+    assert.throws(() => d.come(PROG).push({ upsert: { items: [doppio] } }), /items_codice_unico/);
+    const altro = Object.assign({}, doppio, { code: a0.code + '-BIS' });
+    assert.deepEqual(d.come(PROG).push({ upsert: { items: [altro] } }).rejected, []);
+  }));
+
+  it('il codice unico non si crea su un archivio con doppioni storici, e lo dice', conDb(d => {
+    d.sql('drop index public.items_codice_unico');
+    const a0 = righe.items[0];
+    d.sql(`insert into items (id, code, name, type) values ('${U(781)}', '${a0.code}', 'doppione storico', '${a0.type}')`);
+    d.sql(fs.readFileSync(path.join(__dirname, '..', 'supabase', 'schema.sql'), 'utf8'));
+    assert.equal(d.sql(`select count(*) from pg_indexes where indexname = 'items_codice_unico'`), '0');
+  }));
+
+  // A8, chiusa nella 0.141.0: due PC che chiudono insieme un anello.
+  it('una distinta non contiene sé stessa, nemmeno attraverso un altro', conDb(d => {
+    const c = righe.item_components.find(r => r.child_item_id);
+    const figlio = righe.items.find(i => i.id === c.child_item_id);
+    const quando = new Date().toISOString();
+    const ritorno = Object.assign({}, c, { id: c.child_item_id + ':anello', item_id: c.child_item_id, child_item_id: c.item_id });
+    assert.throws(() => d.come(PROG).push({ upsert: { items: [Object.assign({}, figlio, { updated_at: quando })], item_components: [ritorno] } }),
+      /distinta_senza_anelli/);
+    assert.equal(d.sql(`select count(*) from item_components where item_id = '${c.child_item_id}' and child_item_id = '${c.item_id}'`), '0');
+    // Una quantità ritoccata non rifà il controllo e passa.
+    assert.deepEqual(d.come(PROG).push({ upsert: { items: [Object.assign({}, righe.items.find(i => i.id === c.item_id), { updated_at: quando })],
+      item_components: righe.item_components.filter(r => r.item_id === c.item_id).map(r => Object.assign({}, r, { qty: 7 })) } }).rejected, []);
+  }));
+
+  it('un id con apici o tag dentro non entra nemmeno dall\'API', conDb(d => {
+    const c = righe.item_components.find(r => r.child_item_id);
+    const it0 = righe.items.find(i => i.id === c.item_id);
+    const cattivo = Object.assign({}, c, { id: "x');alert(1);('" });
+    assert.throws(() => d.come(PROG).push({ upsert: { items: [Object.assign({}, it0, { updated_at: new Date().toISOString() })], item_components: [cattivo] } }),
+      /un id contiene caratteri non ammessi/);
+  }));
+
+  it('ogni chiave esterna ha il suo indice', conDb(d => {
+    assert.equal(d.sql(`select string_agg(c.conname, ', ') from pg_constraint c
+                         where c.contype = 'f' and c.connamespace = 'public'::regnamespace
+                           and not exists (select 1 from pg_index i where i.indrelid = c.conrelid
+                                            and (i.indkey::int2[])[0:array_length(c.conkey, 1) - 1] = c.conkey)`), '');
+  }));
+
   it('i registri si leggono e non si scrivono', conDb(d => {
     assert.equal(d.come(LETT).sql('select count(*) from role_areas'), String(ev(app(makeDb({})), 'Object.values(ROLE_WRITE).flat().length')));
     assert.throws(() => d.come(ADMIN).sql(`insert into role_areas values ('lettore', 'docs')`), /row-level security/);

@@ -284,7 +284,17 @@ function importBom(rows) {
     if (createsCycle(parent.id, child.id)) {
       report.errors.push(`Riga ${ln}: "${esc(cCode)}" in "${esc(pCode)}" creerebbe un ciclo`); return;
     }
-    parent.components.push({ itemId: child.id, qty: numOr(pick(row, 'Qta', 'Quantità', 'Qty', 'Quantita'), 1), scrapPct: numOr(pick(row, 'Scarto%', 'Scarto', 'ScrapPct'), 0) });
+    const riga = { itemId: child.id, qty: numOr(pick(row, 'Qta', 'Quantità', 'Qty', 'Quantita'), 1), scrapPct: numOr(pick(row, 'Scarto%', 'Scarto', 'ScrapPct'), 0) };
+    // La fase di consumo (dalla 0.138.0), col numero di fase del ciclo: 10, 20…
+    // Vuota o 10: la prima. Una fase che il ciclo del padre non ha si segnala,
+    // e la riga entra sulla prima.
+    const fz = String(pick(row, 'Fase', 'FaseConsumo', 'Fase di consumo') == null ? '' : pick(row, 'Fase', 'FaseConsumo', 'Fase di consumo')).trim();
+    if (fz) {
+      const k = Math.round(numOr(fz, NaN) / 10) - 1;
+      if (k > 0 && k < cicloFasi(parent).length) riga.opIndex = k;
+      else if (k !== 0) report.errors.push(`Riga ${ln}: fase "${esc(fz)}" non presente nel ciclo di "${esc(pCode)}", la riga si usa alla prima`);
+    }
+    parent.components.push(riga);
     touch(parent);
     report.added++;
   });
@@ -306,13 +316,13 @@ function importBom(rows) {
 
 // ─── Template scaricabili ───
 function downloadBomTemplate() {
-  const data = [['CodicePadre', 'CodiceFiglio', 'Qta', 'Scarto%'],
-    ['MAC-100', 'GRP-100', 1, 0],
-    ['GRP-100', 'PRT-100', 2, 0],
-    ['GRP-100', 'SGR-100', 1, 0],
+  const data = [['CodicePadre', 'CodiceFiglio', 'Qta', 'Scarto%', 'Fase'],
+    ['MAC-100', 'GRP-100', 1, 0, ''],
+    ['GRP-100', 'PRT-100', 2, 0, ''],
+    ['GRP-100', 'SGR-100', 1, 0, ''],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 8 }, { wch: 10 }];
+  ws['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 8 }];
   const info = XLSX.utils.aoa_to_sheet([
     ['ISTRUZIONI — Import Distinte'],
     [],
@@ -326,6 +336,7 @@ function downloadBomTemplate() {
     ['CodiceFiglio', 'Codice del componente contenuto.'],
     ['Qta', 'Quantità del figlio dentro il padre, nell\'UM del figlio (default 1).'],
     ['Scarto%', 'Percentuale di scarto, in % (default 0).'],
+    ['Fase', 'Facoltativa: la fase del ciclo del padre in cui si usa il figlio (10, 20, 30…). Vuota = la prima. Il fabbisogno lo fa arrivare per l\'inizio di quella fase.'],
   ]);
   info['!cols'] = [{ wch: 16 }, { wch: 70 }];
   const wb = XLSX.utils.book_new();
@@ -459,6 +470,16 @@ function settingsSheets() {
         c.street || '', c.streetNumber || '', c.zip || '', c.city || '', c.province || '', c.country || '',
         c.notes || '', siNo(c.active)])) });
 
+  // I contatti (dalla 0.138.0): una riga per contatto, con l'anagrafica a cui
+  // appartiene. Il referente resta nei fogli Fornitori e Clienti.
+  const contatti = [];
+  [['Fornitore', db.suppliers], ['Cliente', db.customers]].forEach(([tipo, lista]) => {
+    inOrdineAlfa(lista || [], x => x.name).forEach(x => (Array.isArray(x.contacts) ? x.contacts : [])
+      .forEach(c => contatti.push([tipo, x.name || '', c.name || '', c.role || '', c.email || '', c.phone || ''])));
+  });
+  out.push({ key: 'contacts', name: 'Contatti', cols: [{ wch: 12 }, { wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 28 }, { wch: 16 }],
+    aoa: [['Anagrafica', 'Nome', 'Contatto', 'Ruolo', 'Email', 'Telefono']].concat(contatti) });
+
   const terms = [];
   Object.keys(TERMS_KIND_LABELS).forEach(k => {
     (s[k + 'Options'] || []).forEach(o => terms.push([TERMS_KIND_LABELS[k], o, o === s[k + 'Default'] ? 'Sì' : '']));
@@ -487,9 +508,9 @@ function settingsSheets() {
   // I tempi per la programmazione a ritroso (0.88.0) stanno in coda, prima di
   // «Attivo» no: un foglio vecchio, senza quelle colonne, li lascia com'erano.
   out.push({ key: 'workcenters', name: 'Centri di lavoro', cols: [{ wch: 30 }, { wch: 16 }, { wch: 18 }, { wch: 8 }, { wch: 12 }, { wch: 16 }, { wch: 10 }],
-    aoa: [['Nome', 'Tariffa oraria', 'Capacità h/sett', 'Attivo', 'Ore/giorno', 'Attrezzaggio h', 'Coda gg']].concat((db.workCenters || [])
+    aoa: [['Nome', 'Tariffa oraria', 'Capacità h/sett', 'Attivo', 'Ore/giorno', 'Attrezzaggio min', 'Coda gg']].concat((db.workCenters || [])
       .map(w => [w.name || '', Number(w.hourlyRate) || 0, Number(w.capacityHours) || 0, siNo(w.active),
-        Number(w.hoursPerDay) || 0, Number(w.setupHours) || 0, Number(w.queueDays) || 0])) });
+        Number(w.hoursPerDay) || 0, minDaOre(w.setupHours), Number(w.queueDays) || 0])) });
 
   out.push({ key: 'uoms', name: 'Unità di misura', cols: [{ wch: 12 }, { wch: 30 }, { wch: 12 }],
     aoa: [['Codice', 'Descrizione', 'Predefinita']].concat(
@@ -520,6 +541,7 @@ function settingsInfoAoa() {
     ['Utenti', 'Chiave: Email. Le password NON sono esportate né importate: un utente nuovo nasce senza password e non può accedere finché un amministratore non gliene imposta una (Gestione → Utenti → 🔑). Deve restare almeno un amministratore attivo, e non puoi cambiare ruolo o stato a te stesso.'],
     ['Fornitori', 'Chiave: Nome (maiuscole/minuscole ignorate).'],
     ['Clienti', 'Chiave: Nome (maiuscole/minuscole ignorate). Il nome è anche ciò che la commessa cita: da qui non si rinomina un cliente — si rinomina in Gestione → Clienti, che allinea le commesse — e un nome diverso crea un cliente nuovo.'],
+    ['Contatti', 'Una riga per contatto. Anagrafica = Fornitore o Cliente, Nome = il suo nome come nel foglio Fornitori o Clienti. I contatti di un\'anagrafica presente qui si sostituiscono con quelli del foglio; un\'anagrafica assente resta com\'è.'],
     ['Condizioni offerta', 'Tipo = Trasporto o Pagamento. Predefinita = Sì sulla voce che precompila le nuove richieste.'],
     ['Famiglie (tre fogli)', 'Un foglio per ambito — ' + FAMILY_SHEETS.map(f => f.name).join(', ') + ' — così l\'ambito è il foglio e non una colonna da sbagliare. Chiave: Macrofamiglia. Una riga per sottofamiglia; riga con Sottofamiglia vuota = solo macrofamiglia. Si legge ancora anche il vecchio foglio unico "Famiglie" con la colonna Ambito.'],
     ['Concetti', 'Sempre in MAIUSCOLO. Chiave: il nome stesso.'],
@@ -588,6 +610,7 @@ const SETTINGS_SHEET_DEFS = [
 }))).concat([
   { key: 'suppliers', name: 'Fornitori', apply: (r, rep) => applySuppliersSheet(r, rep) },
   { key: 'customers', name: 'Clienti', apply: (r, rep) => applyCustomersSheet(r, rep) },
+  { key: 'contacts', name: 'Contatti', apply: (r, rep) => applyContactsSheet(r, rep) },
   { key: 'users', name: 'Utenti', apply: (r, rep) => applyUsersSheet(r, rep) },
 ]);
 // `byName`: { 'Nome foglio': [righe già lette] }. I fogli si riconoscono dal
@@ -739,13 +762,18 @@ function applyWorkCentersSheet(rows, rep) {
     }
     // I tempi: colonna assente = invariato, come la capacità.
     const tempi = {};
-    for (const [campo, nomi, etichetta] of [['hoursPerDay', ['Ore/giorno', 'Ore al giorno'], 'ore al giorno'],
-      ['setupHours', ['Attrezzaggio h', 'Attrezzaggio'], 'attrezzaggio'], ['queueDays', ['Coda gg', 'Coda'], 'coda']]) {
+    // L'attrezzaggio si scrive in minuti (dalla 0.137.0): «Attrezzaggio min», o
+    // solo «Attrezzaggio». Un file di prima ha «Attrezzaggio h», in ore, e
+    // rientra com'era. Sotto si salva sempre in ore.
+    for (const [campo, nomi, etichetta, conv] of [['hoursPerDay', ['Ore/giorno', 'Ore al giorno'], 'ore al giorno'],
+      ['setupHours', ['Attrezzaggio min', 'Attrezzaggio'], 'attrezzaggio', oreDaMin],
+      ['setupHours', ['Attrezzaggio h'], 'attrezzaggio'], ['queueDays', ['Coda gg', 'Coda'], 'coda']]) {
+      if (campo in tempi) continue;
       const raw = cell(row, ...nomi);
       if (raw === null || raw === '') continue;
       const n = numOr(raw, NaN);
       if (isNaN(n) || n < 0) { rep.errors.push(`Centri di lavoro, riga ${i + 2}: ${etichetta} non valida ("${esc(raw)}")`); return; }
-      tempi[campo] = campo === 'queueDays' ? Math.round(n) : n;
+      tempi[campo] = campo === 'queueDays' ? Math.round(n) : conv ? conv(n) : n;
     }
     if (!Array.isArray(db.workCenters)) db.workCenters = [];
     const w = db.workCenters.find(x => (x.name || '').toLowerCase() === name.toLowerCase());
@@ -861,6 +889,35 @@ function applySuppliersSheet(rows, rep) {
     if (isNew) out.created++;
     else if (cambiato) { touch(s); out.updated++; }
     else out.skipped++;
+  });
+  return out;
+}
+// Il foglio Contatti: per ogni anagrafica che vi compare, l'elenco del foglio
+// prende il posto di quello di prima. Un contatto con lo stesso nome ed email
+// tiene il suo id, così la riga non risulta nuova a ogni giro.
+function applyContactsSheet(rows, rep) {
+  const out = _stat();
+  const nuovi = new Map();
+  rows.forEach((row, i) => {
+    const tipo = normHeader(cell(row, 'Anagrafica', 'Tipo') || '');
+    const nome = cell(row, 'Nome', 'Fornitore', 'Cliente');
+    const vals = { name: cell(row, 'Contatto') || '', role: cell(row, 'Ruolo') || '', email: cell(row, 'Email') || '', phone: cell(row, 'Telefono', 'Phone') || '' };
+    if (!nome && !Object.values(vals).some(Boolean)) { out.skipped++; return; }
+    const coll = tipo === 'fornitore' ? 'suppliers' : tipo === 'cliente' ? 'customers' : null;
+    if (!coll) { rep.errors.push(`Contatti, riga ${i + 2}: Anagrafica deve essere Fornitore o Cliente`); return; }
+    const r = (db[coll] || []).find(x => (x.name || '').toLowerCase() === String(nome || '').toLowerCase());
+    if (!r) { rep.errors.push(`Contatti, riga ${i + 2}: ${tipo === 'fornitore' ? 'fornitore' : 'cliente'} "${esc(nome || '')}" non in anagrafica`); return; }
+    if (!nuovi.has(r)) nuovi.set(r, []);
+    if (Object.values(vals).some(Boolean)) nuovi.get(r).push(vals);
+  });
+  nuovi.forEach((lista, r) => {
+    const prima = Array.isArray(r.contacts) ? r.contacts : [];
+    const chiave = c => (c.name || '').toLowerCase() + '|' + (c.email || '').toLowerCase();
+    const dopo = lista.map(c => { const v = prima.find(p => chiave(p) === chiave(c)); return Object.assign({ id: v ? v.id : gid() }, c); });
+    const uguale = JSON.stringify(prima.map(c => [c.name, c.role, c.email, c.phone])) === JSON.stringify(dopo.map(c => [c.name, c.role, c.email, c.phone]));
+    if (uguale) { out.skipped++; return; }
+    if (dopo.length) r.contacts = dopo; else delete r.contacts;
+    touch(r); out.updated++;
   });
   return out;
 }
@@ -1412,7 +1469,8 @@ const TRASH_LABELS = { items: 'Articolo', suppliers: 'Fornitore', customers: 'Cl
   jobs: 'Commessa', movements: 'Movimento', receipts: 'Ricevimento', revisions: 'Revisione',
   prodOrders: 'Ordine di produzione', prodDecls: 'Dichiarazione di produzione', reminders: 'Promemoria',
   attachments: 'Allegato', attachmentDocs: 'Documento d\'archivio', generatedDocs: 'Documento emesso', productions: 'Produzione',
-  timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina' };
+  timeLogs: 'Timbratura', maintPlans: 'Piano di manutenzione', maintEvents: 'Intervento di manutenzione', machines: 'Macchina', inspections: 'Collaudo',
+  qualityPlans: 'Piano di controllo', nonconformities: 'Non conformità' };
 function trashDescr(t) {
   const r = t.record || {};
   return r.number || r.code || r.name || r.title || '(senza nome)';

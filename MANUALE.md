@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.136.0**
+**Versione dell'app documentata: 0.147.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -88,7 +88,9 @@ in un'officina meccanica:
 - i **cicli di lavorazione** delle parti, con le fasi interne e quelle affidate fuori;
 - il **fabbisogno materiali** che nasce dalle commesse dei clienti;
 - il ciclo acquisti completo: **richieste di offerta**, **ordini a fornitore**,
-  **ordini di lavoro** al terzista, ricevimenti e **conto lavoro**.
+  **ordini di lavoro** al terzista, ricevimenti e **conto lavoro**;
+- la **qualità**, per chi la accende: il collaudo della merce in entrata con i piani di controllo,
+  le non conformità e la valutazione dei fornitori (→ [cap. 17](#17-magazzino)).
 
 È pensata per chi progetta, chi compra e chi manda in produzione, e tiene queste tre viste sullo
 stesso archivio: la parte che il progettista disegna è la stessa che l'ufficio acquisti ordina ed
@@ -250,7 +252,7 @@ ricorda l'ultima voce usata**: tornando su *Acquisti* si riapre dove si era rima
 
 | Gruppo | Voci |
 |---|---|
-| 🏠 **Riepilogo** | Riepilogo · Cruscotto |
+| 🏠 **Riepilogo** | Riepilogo · Cruscotto · Storia documenti |
 | 🌳 **Tecnico** | Articoli di progetto · Articoli d'acquisto · Gestione DB · Visualizza DB · Cicli di lavorazione |
 | 📋 **Pianificazione** | Commesse · Fabbisogno · Carico centri · Avanzamento |
 | 🛒 **Acquisti** | Richieste offerta · Ordini fornitore · Listino fornitori |
@@ -719,6 +721,37 @@ insieme in una pagina sola. È in sola lettura, per tutti i ruoli.
 riga — quindi per gli *articoli fermi* un ricevimento conta con la **data dell'ordine**. Tutto il
 cruscotto si esporta in Excel o PDF, un foglio per sezione.
 
+### La storia di un documento
+
+**Come ci si arriva.** 🏠 *Riepilogo → Storia documenti*, oppure dal pulsante **Storia** in testa a
+ogni documento: commessa, piano di fabbisogno, richiesta d'offerta, ordine fornitore, ordine di
+produzione, ordine di lavoro, collaudo e non conformità (dalla 0.146.0).
+
+Si sceglie un documento — dal pulsante, o scrivendo nel campo di ricerca il numero, l'oggetto, il
+fornitore o il cliente — e il **grafo** mostra da cosa è nato e che cosa ha generato. Si legge da
+sinistra a destra: la commessa, il piano, la richiesta, l'ordine, il collaudo del ricevimento, la
+non conformità. Il colore del bordo dice l'area (commerciale, pianificazione, acquisti,
+produzione, qualità).
+
+- **In blu** la linea del documento scelto: da dove viene e cosa ne è nato. Gli altri documenti
+  della stessa famiglia (per esempio gli altri ordini dello stesso piano) restano sbiaditi.
+- **Tratteggiate** le modifiche tecniche che riguardano un documento della famiglia: sono i
+  documenti che erano aperti al rilascio della revisione.
+- **Un clic su un documento lo mette al centro**: il grafo si ridisegna attorno a lui.
+- **Tutta la famiglia / Solo la linea** sceglie quanto mostrare. Una famiglia di più di 80
+  documenti si mostra solo per la linea, e la pagina lo dice.
+- Sotto il grafo, il documento al centro: i dati, da cosa è nato e perché, che cosa ha generato, e
+  per ordini e ordini di lavoro i ricevimenti e i rientri. **Apri il documento** lo apre nella sua
+  vista.
+
+Sul telefono lo stesso albero diventa un elenco dall'alto in basso, rientrato a ogni generazione.
+
+**Da sapere.** Ogni documento ha un padre solo, il più vicino: un ordine nato da una richiesta è
+figlio della richiesta, anche se porta il piano e la commessa. Se il padre è stato eliminato si
+passa al successivo (una richiesta cancellata lascia l'ordine sotto il piano). Gli ordini di
+produzione di un sottoassieme e del suo assieme non sono legati fra loro, ma solo al piano: nel
+grafo stanno uno accanto all'altro.
+
 ---
 
 # Parte III — Gli archivi
@@ -831,31 +864,64 @@ un costo che non c'è.
 **Come ci si arriva.** **+ Nuovo articolo** in una delle due anagrafiche, oppure il comando
 *Modifica articolo* su una riga esistente.
 
+### Le sottoschede
+
+Dalla 0.139.0 la scheda è divisa per argomento: a sinistra la barra delle **sottoschede**, a destra
+i campi di quella scelta. Al telefono la barra diventa una fila di pulsanti in alto. Ogni tipo vede
+solo le sottoschede che gli servono:
+
+| Sottoscheda | Cosa contiene | Su quali tipi |
+|---|---|---|
+| **Anagrafica** | Chi è l'articolo: tipo, codice, descrizione, unità di misura, famiglia, codifica, preferito, obsoleto, note | tutti |
+| **Acquisto** | Fornitore e prezzo (dal listino), unità d'acquisto | commerciali, materie prime, parti |
+| **Magazzino** | Giacenza, scorta minima, lotto, ubicazione, codice a barre | commerciali, materie prime, parti, con l'area Magazzino accesa |
+| **Tecnico** | Approvvigionamento, distinta e ciclo, dati fisici, produttore, materiale, disegno | tutti |
+
+La scheda si apre sempre su **Anagrafica**. Si passa da una sottoscheda all'altra con un clic o,
+da tastiera, con le frecce. Se al **Salva** un campo non va (una descrizione vuota, un codice a
+barre già usato), la scheda porta da sola alla sottoscheda di quel campo. **Parti da**, in
+creazione, sta sopra le sottoschede perché le riempie tutte.
+
 ### I campi
 
-| Campo | Quando serve | Note |
-|---|---|---|
-| **Parti da** | solo in creazione | Ricerca live: si sceglie un articolo esistente e la scheda si precompila con i suoi dati. Facoltativo. |
-| **Tipo** | sempre | **Bloccato in modifica**: un commerciale non diventa una parte. |
-| **Codice** | sempre | Composto automaticamente e in sola lettura (→ [cap. 9](#9-i-codici-automatici)). Per scriverlo a mano si spunta **Manuale** e si conferma con **Sì**; il **motivo** è facoltativo. |
-| **Descrizione** | tutti i tipi tranne le parti | Testo libero. |
-| **Concetto** + **Descrizione** | **solo parti** | Il nome di una parte è composto: `ALBERO` + `motore 20×100` → `ALBERO motore 20×100`. Il concetto è **obbligatorio** e si sceglie dall'elenco di *Gestione → Concetti*. Sotto i due campi c'è l'anteprima del nome che ne esce. |
-| **Unità di misura** | sempre | Dall'elenco di *Gestione → Unità di misura*. |
-| **Approvvigionamento** | solo parti | *Produzione interna* / *Acquisto da fornitore* (→ [cap. 7](#7-tecnico--articoli-di-progetto)). |
-| **Fornitore e prezzo d'acquisto** | — | **Riquadro in sola lettura.** Mostra la quotazione in uso; il pulsante accanto apre il **listino**. |
-| **Macrofamiglia** / **Sottofamiglia** | consigliato | Servono ai filtri, ai raggruppamenti e ai codici automatici. |
-| **Macchina di appartenenza** / **Gruppo** / **Sigla** | codifica gerarchica | Dicono dove sta l'articolo nella struttura di prodotto, e da lì nasce il suo codice. |
-| **Distinta e ciclo** | solo parti | Non si compilano qui: la distinta in *Gestione DB*, il ciclo con il pulsante **Apri il ciclo**. |
-| **★ Preferito** | facoltativo | Ha un filtro dedicato nelle anagrafiche. |
-| **⛔ Obsoleto** | facoltativo | Non più utilizzabile; resta visibile, spento. |
-| **U.M. d'acquisto (se diversa)** + **Fattore di conversione** | quando si compra in un'unità e si usa in un'altra | Si compra la barra a pezzi da 6 m e la si consuma a metri. |
-| **Scorta minima** | magazzino | Sotto questa quantità l'articolo compare fra i segnali del Riepilogo, e il netto la ricostituisce. |
-| **Lotto di riordino** | magazzino | La quantità a cui si arrotondano gli acquisti. |
-| **Il lotto è** | magazzino | *un multiplo esatto* (si ordina 100, 200, 300) oppure *una quantità minima* (sotto 100 non si ordina, sopra si ordina il fabbisogno esatto). |
-| **Note** | facoltativo | Testo libero interno. |
+| Campo | Sottoscheda | Quando serve | Note |
+|---|---|---|---|
+| **Parti da** | sopra le sottoschede | solo in creazione | Ricerca live: si sceglie un articolo esistente e la scheda si precompila con i suoi dati (tranne il codice a barre). Facoltativo. |
+| **Tipo** | Anagrafica | sempre | **Bloccato in modifica**: un commerciale non diventa una parte. |
+| **Codice** | Anagrafica | sempre | Composto automaticamente e in sola lettura (→ [cap. 9](#9-i-codici-automatici)). Per scriverlo a mano si spunta **Manuale** e si conferma con **Sì**; il **motivo** è facoltativo. |
+| **Descrizione** | Anagrafica | tutti i tipi tranne le parti | Testo libero. |
+| **Concetto** + **Descrizione** | Anagrafica | **solo parti** | Il nome di una parte è composto: `ALBERO` + `motore 20×100` → `ALBERO motore 20×100`. Il concetto è **obbligatorio** e si sceglie dall'elenco di *Gestione → Concetti*. Sotto i due campi c'è l'anteprima del nome che ne esce. |
+| **Unità di misura** | Anagrafica | sempre | Dall'elenco di *Gestione → Unità di misura*. |
+| **Macrofamiglia** / **Sottofamiglia** | Anagrafica | consigliato | Servono ai filtri, ai raggruppamenti e ai codici automatici. |
+| **Macchina di appartenenza** / **Gruppo** / **Sigla** | Anagrafica (Codifica) | codifica gerarchica | Dicono dove sta l'articolo nella struttura di prodotto, e da lì nasce il suo codice. |
+| **★ Preferito** | Anagrafica | facoltativo | Ha un filtro dedicato nelle anagrafiche. |
+| **⛔ Obsoleto** | Anagrafica | facoltativo | Non più utilizzabile; resta visibile, spento. |
+| **Note** | Anagrafica | facoltativo | Testo libero interno. |
+| **Fornitore e prezzo d'acquisto** | Acquisto | — | **Riquadro in sola lettura.** Mostra la quotazione in uso; il pulsante accanto apre il **listino**. |
+| **U.M. d'acquisto (se diversa)** + **Fattore di conversione** | Acquisto | quando si compra in un'unità e si usa in un'altra | Si compra la barra a pezzi da 6 m e la si consuma a metri. |
+| **Scorta minima** | Magazzino | magazzino | Sotto questa quantità l'articolo compare fra i segnali del Riepilogo, e il netto la ricostituisce. |
+| **Lotto di riordino** | Magazzino | magazzino | La quantità a cui si arrotondano gli acquisti. |
+| **Il lotto è** | Magazzino | magazzino | *un multiplo esatto* (si ordina 100, 200, 300) oppure *una quantità minima* (sotto 100 non si ordina, sopra si ordina il fabbisogno esatto). |
+| **Ubicazione a scaffale** | Magazzino | facoltativo | Dove sta l'articolo, con le ubicazioni già usate proposte. |
+| **Codice a barre / EAN** | Magazzino | facoltativo, ciò che sta a scaffale | Dalla 0.139.0. Un codice a barre è di un articolo solo: lo stesso su due articoli è rifiutato. |
+| **Approvvigionamento** | Tecnico | solo parti | *Produzione interna* / *Acquisto da fornitore* (→ [cap. 7](#7-tecnico--articoli-di-progetto)). |
+| **Distinta e ciclo** | Tecnico | solo parti | Non si compilano qui: la distinta in *Gestione DB*, il ciclo con il pulsante **Apri il ciclo**. |
+| **Peso netto (kg)** | Tecnico | facoltativo, tutti i tipi | Su un assieme lasciato vuoto la scheda di sola lettura mostra la **somma della distinta** (quantità × scarto × peso di ogni riga; una materia prima gestita a kg pesa la sua quantità), e dice se è per difetto perché qualche riga non ha un peso. |
+| **Peso lordo (kg)** | Tecnico | facoltativo, tutti i tipi | Dalla 0.139.0: il peso con l'imballo, per spedizioni e trasporti. |
+| **Volume (m³)** | Tecnico | facoltativo, tutti i tipi | Vuoto: vale il prodotto delle tre dimensioni, che il campo propone mentre si scrivono. |
+| **Dimensioni L × P × H (m)** | Tecnico | facoltativo, tutti i tipi | Lunghezza, larghezza e altezza d'ingombro, in metri, in tre caselle affiancate. |
+| **Produttore** · **Codice produttore** | Tecnico | commerciali e materie prime | Chi fa l'articolo e con che codice, distinti da fornitore e codice del fornitore: lo stesso cuscinetto SKF si compra da più rivenditori. |
+| **Materiale** · **Finitura** · **Trattamento** | Tecnico | parti | Testo libero, con i valori già usati su altri articoli proposti mentre si scrive, così «S235JR» si scrive sempre allo stesso modo. |
+| **Riferimento disegno** | Tecnico | parti e assiemi | Dalla 0.139.0: numero e revisione del disegno, es. *DIS-0412 rev. B*. |
 
-In modifica, la scheda mostra anche un **pannello giacenza** con la situazione a magazzino, e in
-fondo la **riga autore**: chi ha creato il record e chi l'ha aggiornato per ultimo, con data e ora.
+Tutti i dati tecnici (dalla 0.138.0) compaiono nella sezione **Dati tecnici** della scheda di sola
+lettura, ed entrano ed escono dal file Excel degli articoli con le colonne *Lunghezza m*, *Larghezza
+m*, *Altezza m*, *Peso kg*, *Peso lordo kg*, *Volume m3*, *Produttore*, *Codice produttore*,
+*Materiale*, *Finitura*, *Trattamento*, *Riferimento disegno* e *Codice a barre*.
+
+In modifica, la sottoscheda **Magazzino** si apre con il **pannello giacenza**, la situazione a
+magazzino; in fondo alla scheda, fuori dalle sottoschede, c'è la **riga autore**: chi ha creato il
+record e chi l'ha aggiornato per ultimo, con data e ora.
 
 ### Le finestre che si aprono da qui
 
@@ -1217,6 +1283,12 @@ sue fasi.
 - In più c'è il **costo riga forzato**: il costo della riga intera al posto di quello calcolato
   (vuoto = calcolato). Nell'albero la riga forzata ha un asterisco. Inserendo un articolo che è già
   in distinta la quantità si somma, ma non su una riga forzata: lì nasce una riga nuova.
+- **Fase di consumo** (dalla 0.138.0): se la parte ha più di una fase, la finestra *Modifica
+  componente* chiede in quale fase si usa la riga (10, 20, 30…). Vale anche nelle distinte degli
+  assiemi con un ciclo. Il fabbisogno fa arrivare la riga **per l'inizio di quella fase** invece che
+  della prima: la vernice della fase 30 non si ordina per il giorno del taglio. Nell'albero la riga
+  porta l'etichetta *fase 30*; vuota, o la prima, non si scrive niente. Nell'import delle distinte è
+  la colonna facoltativa **Fase**.
 - Una parte **acquistata** ha la distinta documentale: non entra né nel costo né nel fabbisogno, e
   la vista lo dice in testa.
 - Fino alla 0.124 il materiale si scriveva nella sezione *Distinta parte* del ciclo. All'avvio
@@ -1385,9 +1457,9 @@ posto per infilarne una in mezzo).
 | **Interna / Conto lavoro** | Se conto lavoro, si sceglie il **fornitore** |
 | **Macchina** | Con il modulo Macchine utensili (dalla 0.126.0), per le fasi interne di un centro che ha macchine: a costo orario la sua tariffa si somma a quella del centro, sulle ore divise per gli operatori (→ [cap. 24](#24-carico-dei-centri-di-lavoro)) |
 | **Costo** | *Fisso* oppure *Orario* |
-| **Ore (h)** | Fase **interna**: le ore-uomo per pezzo, cioè le ore che il pezzo occupa il centro sommate su tutti quelli che ci lavorano. Entrano nel costo (a costo orario) e nel carico |
+| **Tempo fase (min/pz)** | Fase **interna**: i minuti-uomo per pezzo, cioè il tempo che il pezzo occupa il centro sommato su tutti quelli che ci lavorano (dalla 0.137.0 in **minuti**: prima si scriveva in ore, e i valori già inseriti si leggono convertiti, 0,25 h = 15 min). Entrano nel costo (a costo orario, alla tariffa oraria: 15 min a 40 €/h = 10 €) e nel carico. Su una fase in conto lavoro a costo orario il campo è **Ore fatturate (h/pz)**, in ore, accanto alla tariffa |
 | **Operatori (op)** | Fase **interna** (dalla 0.124.0): quanti lavorano insieme sulla fase, di serie 1. I giorni sono ore ÷ (ore al giorno di un operatore × operatori), arrotondati, più la coda della fase: 80 h con 2 operatori a 8 h al giorno sono 5 giorni |
-| **Attrezzaggio (att.)** | Fase **interna** (dalla 0.131.0): le ore di attrezzaggio della fase, contate **una volta per lotto**. Proposte dal centro quando si aggiunge la fase, si cambiano qui. Entrano nei giorni, nel Carico centri e, a costo orario, nel preventivo e nel consuntivo della commessa; non nel costo per pezzo, che non sa su quanti pezzi dividerle |
+| **Attrezzaggio (min)** | Fase **interna** (dalla 0.131.0; in **minuti** dalla 0.137.0): il tempo di attrezzaggio della fase, contate **una volta per lotto**. Proposte dal centro quando si aggiunge la fase, si cambiano qui. Entrano nei giorni, nel Carico centri e, a costo orario, nel preventivo e nel consuntivo della commessa; non nel costo per pezzo, che non sa su quanti pezzi dividerle |
 | **Coda (gg)** | Fase **interna** (dalla 0.131.0): i giorni che il pezzo aspetta davanti al centro prima della fase. Proposti dal centro |
 | **Giorni (gg)** | Fase in **conto lavoro**: i giorni di attraversamento dal terzista |
 | **Trasporto (trasp.)** | Fase in **conto lavoro** (dalla 0.131.0): i giorni di trasporto verso e dal terzista, andata più ritorno. Proposti dal fornitore, si cambiano qui. In una tratta di più fasi consecutive dello stesso terzista vale quello della **prima** fase: il pezzo va e torna una volta sola, e sulle altre il campo è spento |
@@ -1683,7 +1755,7 @@ riga sbagliata.
 
 Il pulsante **Presso terzi (N)** apre il prospetto di cosa sta fuori, **raggruppato per
 fornitore**, con *Uscito* / *Rientrato* / **Ancora fuori** e il riferimento all'ordine.
-Ha il suo export Excel e PDF.
+Ha il suo export Excel e PDF, in fondo alla scheda (il pulsante c'è dalla 0.141.0).
 
 In fondo c'è il blocco **«in casa, fra due fasi»**: i pezzi tornati da un terzista e non ancora
 ripartiti per il successivo. È **un luogo a sé** — esistono, non sono a scaffale, e non sono da
@@ -1703,6 +1775,302 @@ movimenti. Quando si scrive *ricevuto 50* su una riga d'ordine, quei 50 entrano 
 
 > ⚠️ **Cancellare un ordine già ricevuto toglie la sua merce dal magazzino.** È coerente, ma chi
 > cancella un ordine vecchio va avvisato.
+
+### Il collaudo della merce in entrata (modulo, dalla 0.140.0)
+
+**A cosa serve.** A non montare materiale che nessuno ha guardato. Con il modulo **Qualità**
+acceso (*Gestione → Aree e moduli*), un articolo può chiedere il **controllo in entrata**: da quel
+momento, ogni volta che ne arriva — il ricevimento di un ordine fornitore, o i pezzi che rientrano
+dall'ultima fase di un ordine di lavoro — nasce da solo un **collaudo**, e quella quantità resta
+**in collaudo** finché qualcuno non registra l'esito.
+
+**Dove si accende il controllo.** Nella scheda articolo, sottoscheda *Magazzino*, il campo
+**Si collauda all'arrivo**: *sì*, *no*, oppure *come la famiglia*, che è il valore di serie. La
+regola vera è quasi sempre di categoria — tutti i cuscinetti sì, tutta la bulloneria no — e si
+scrive una volta sola sulla **macrofamiglia** (*Gestione → Famiglie*, casella *Controllo in
+entrata*). Una **sottofamiglia** può scostarsene, e un articolo vince su tutti. Accanto c'è il
+**certificato richiesto** (un testo: `3.1 EN 10204`, `Dichiarazione di conformità`), che compare
+sulla scheda del collaudo per ricordare che va chiesto.
+
+**Cosa cambia a magazzino.** La merce in collaudo **resta nell'esistente**: è a scaffale, ed è
+stata pagata. Quello che cambia è il **libero**, che è già la colonna che dice di quanto si può
+davvero disporre: da lì il collaudo si sottrae, esattamente come l'impegnato. Nel Magazzino
+compare la colonna **In collaudo** (nascosta di serie: si accende da *Colonne*), c'è il filtro di
+stato *In collaudo*, e l'etichetta QR dell'articolo lo dice con il pulsante **Collauda** —
+perché è davanti al bancale, col telefono in mano, che il controllo si fa davvero.
+
+> **Il fabbisogno continua a contarla.** È merce arrivata: ricomprarla perché aspetta un esito
+> sarebbe peggio del male che si vuole curare.
+
+**La scheda del collaudo.** *Qualità → Collaudi*, l'elenco a destra e la scheda al centro come
+negli ordini. In alto l'arrivo (articolo, fornitore, documento d'origine, quantità e data) con due
+campi da compilare mentre la merce è lì: il **DDT del fornitore** e il **lotto o colata**. Sotto,
+l'esito.
+
+**I tre esiti.**
+
+| Esito | Cosa succede |
+|---|---|
+| **Accettato** | La quantità diventa merce libera, e basta |
+| **Accettato in deroga** | Come sopra, ma resta scritto che è passata con riserva |
+| **Respinto** (tutto o in parte) | La merce torna indietro — vedi qui sotto |
+
+**Il respinto torna indietro per la strada da cui è venuto**, e non inventa movimenti nuovi:
+
+- **da un ordine fornitore, da sostituire**, il **ricevuto della riga scende**. È la stessa
+  correzione che si farebbe a mano scrivendo un numero più basso nella colonna *Ricevuto*: la
+  giacenza cala, la riga torna ad avere un residuo, l'ordine torna *Parziale*, la merce torna *in
+  arrivo* e il fabbisogno la aspetta di nuovo. Quando il fornitore la rimanda si riceve sulla
+  stessa riga, come una consegna qualsiasi: si apre un nuovo collaudo e, a ricevuto pari
+  all'ordinato, l'ordine torna *Evaso* da solo;
+- **da un ordine fornitore, a credito** (dalla 0.143.0), scendono il **ricevuto** e anche
+  l'**ordinato** della riga: il fornitore non rimanda niente, quindi la riga si chiude su quello
+  che resta e il fabbisogno torna scoperto, da riordinare. La non conformità nasce con l'azione
+  *Ricevere la nota di credito dal fornitore*. Lo registra chi scrive gli ordini (*Ufficio
+  acquisti* o l'amministratore), perché cambia la riga d'ordine;
+- **da un ordine di lavoro**, i pezzi **escono verso il terzista** con un'uscita a conto lavoro, e
+  l'ordine torna ad aspettarli. Da lì in poi il prospetto *Presso terzi* li racconta come prima;
+- **tenuta e rottamata** è la terza scelta: la merce non torna a nessuno ed esce come consumo. Il
+  ricevuto resta — il fornitore ha consegnato — ma a scaffale non c'è più niente.
+
+Prima di premere, la scheda dice a parole che cosa succederà: «*30 pz diventano liberi; 10 pz
+tolgono il ricevuto dalla riga d'ordine…*». **Un esito non si corregge**: la merce si è già mossa,
+e quello che è tornato indietro si rivede sul documento d'origine.
+
+**Chi lo registra.** *Officina e magazzino* (è chi sta davanti alla merce), *Ufficio acquisti* e
+l'amministratore. I collaudi da fare compaiono nel **Riepilogo**.
+
+**Il certificato.** Se l'articolo, la famiglia o il piano chiedono un certificato, la scheda ha il
+campo **Certificato**: *non ancora arrivato* o *arrivato e conforme*. Finché manca, il lotto si
+può accettare **solo in deroga** (o respingere): accettarlo pulito vorrebbe dire dichiarare
+conforme una cosa di cui manca la prova. Il file del certificato si allega all'articolo.
+
+**Il rapporto di collaudo.** Il pulsante **Rapporto PDF** in testa alla scheda dà il rapporto in
+italiano e inglese — arrivo, campione, misure, esito — da mandare al fornitore o da tenere. Con la
+cartella d'archivio impostata, *Archivia il PDF* ne conserva una copia in `Documenti
+Bomtrack/COL/<anno>/`, come per gli ordini.
+
+**Da sapere.**
+
+- Un ricevuto corretto **in giù** non apre un collaudo: non è arrivato niente di nuovo.
+- Due arrivi sulla stessa riga aprono **due collaudi**: sono due lotti, e si guardano separatamente.
+- La quantità del collaudo è nell'**unità della riga d'ordine** (il fornitore consegna chili), la
+  trattenuta sul libero è in quella **di gestione** (il magazzino conta metri).
+- Eliminando l'ordine, i suoi collaudi aperti **si chiudono**: quella merce non c'è più, e tenere
+  trattenuto un libero che non esiste non servirebbe a nessuno.
+- Spegnendo il modulo l'app torna esattamente quella di prima: i collaudi scritti **restano**, e
+  nessuna trattenuta vale più. Riaccendendolo tornano a valere.
+- Con l'archivio condiviso va rilanciato `supabase/schema.sql`: aggiunge le tabelle `inspections`,
+  `quality_plans` e `nonconformities` e le colonne del controllo su articoli e famiglie, senza
+  toccare il resto.
+
+Tutto il modulo sta nel gruppo **Qualità** della barra, che c'è solo con il modulo acceso:
+*Collaudi*, *Non conformità*, *Piani di controllo*, *Valutazione fornitori*.
+
+### I piani di controllo (modulo Qualità)
+
+**A cosa servono.** A dire a chi collauda **che cosa misurare** e **su quanti pezzi**, e a lasciare
+scritto che cosa ha misurato. *Qualità → Piani di controllo*, **Nuovo piano**.
+
+**I codici del piano.** Un piano vale per un **elenco di codici**. Il riquadro *Codici del piano*
+nasce chiuso, con il numero dei codici e i primi tre; la freccia accanto al titolo lo apre con
+l'elenco intero e lo richiude, come le *Opzioni* dei modelli a varianti. **Scegli i codici…** apre la finestra con tutti gli articoli a magazzino. In alto ci sono
+i filtri: testo, tipo, famiglia e sottofamiglia, fornitore abituale e *Solo i selezionati*. A sinistra
+di ogni riga c'è una spunta. *Spunta i visibili* e *Togli i visibili* lavorano su quello che i filtri
+mostrano: per mettere nel piano tutti i cuscinetti si filtra la famiglia e si spunta. Le spunte valgono
+solo con **Conferma**.
+
+**Un codice sta in un piano solo.** Un articolo che è già in un altro piano si vede lo stesso, ma la
+sua spunta è spenta e la riga dice *nel piano …*: per spostarlo si toglie prima di là. Così chi
+collauda non si chiede mai quale piano vale. Con due PC che salvano insieme lo stesso codice in due
+piani diversi (succede solo con l'archivio condiviso), vale il piano creato per primo, e la scheda
+dell'altro lo segnala.
+
+**Un piano attivo basta a far collaudare** l'articolo, anche senza toccare il campo *Si collauda
+all'arrivo*; un articolo segnato espressamente **No** resta fuori lo stesso. Il piano può chiedere il
+suo certificato, che vince su quello dell'articolo. Il **Riepilogo** avvisa quando ci sono articoli
+da collaudare che non hanno un piano.
+
+> **Dalla 0.142.0** il piano non si sceglie più per articolo, per famiglia o per fornitore. I piani
+> vecchi diventano elenchi alla prima apertura di *Piani di controllo* da parte di chi li scrive: un
+> piano di famiglia prende i codici a magazzino della famiglia, tranne quelli che hanno già un piano
+> loro. Il fornitore non conta più: un piano che valeva per un solo fornitore vale per tutti.
+
+**Il campionamento.** Quattro regole:
+
+| Regola | Quanti pezzi | Quando si respinge |
+|---|---|---|
+| Tutti i pezzi | il lotto intero | al primo non conforme |
+| Numero fisso | quelli scritti (al massimo il lotto) | al primo non conforme |
+| Percentuale | la percentuale del lotto, arrotondata in su | al primo non conforme |
+| AQL | dalla tabella ISO 2859-1, piano singolo normale, livello generale II | dal numero di rifiuto *Re* |
+
+Con l'AQL l'app ricava la lettera di codice dal lotto, segue le frecce della tabella e scrive sul
+collaudo campione, *Ac* e *Re*: per esempio un lotto di 1000 pezzi ad AQL 2,5 è lettera J, 80 pezzi,
+si accetta con 5 non conformi e si respinge con 6. Gli AQL offerti vanno da 0,065 a 6,5 (pezzi non
+conformi per cento); la scheda del piano mostra subito che cosa vorrebbe dire su un lotto di 500.
+
+**Il salto lotti.** Due numeri: *dopo quanti accettati di fila* e *se ne collauda uno ogni*. Con 5 e
+3, dopo cinque lotti accettati di fila dallo stesso fornitore se ne guarda uno su tre: gli altri
+nascono come collaudo **saltato**, già chiusi e accettati — restano scritti, ma non trattengono
+niente. Se il piano chiede un certificato, il lotto saltato resta aperto solo per quello, con zero
+pezzi da guardare. **Al primo respinto**, o finché c'è una **non conformità aperta** su quell'articolo
+e quel fornitore, si passa al **rinforzato**: si guarda tutto il lotto, finché non tornano cinque
+accettati di fila. Una deroga interrompe la serie. Lo stato non si salva: si ricava ogni volta dalla
+storia, e la scheda del collaudo dice quale livello si è applicato e perché.
+
+> La norma passa da normale a ridotto e rinforzato con tabelle proprie (II-B e II-C). Qui si fa come
+> nella maggior parte dei gestionali: ridotto vuol dire saltare lotti, rinforzato guardare tutto. È
+> più severo della norma nel rinforzato e più semplice nel ridotto.
+
+**Le caratteristiche.** Ognuna sta su due righe: sopra nome, tipo e strumento; sotto, per una
+misura, i numeri. Un **controllo sì/no** dice solo *passa* o *non passa*. Una **misura** si scrive in
+uno di due modi:
+
+- con la **classe ISO**, come sul disegno: nominale `20` e classe `h7`. Le tolleranze e i limiti
+  (*19,979 – 20*) li calcola l'app dalle tabelle ISO 286. Le minuscole sono alberi, le maiuscole fori.
+  Valgono le lettere d e f g h js k m n p (fori D … P), i gradi da IT5 a IT11 e i nominali fino a
+  500 mm. Una classe fuori da queste non si calcola e l'app lo dice: si scrivono gli scostamenti a mano;
+- con i **due scostamenti**, con il segno: `-0,05` e `+0,05`. I limiti si calcolano lo stesso.
+
+Senza nominale, o senza tolleranze, i limiti non ci sono e la scheda lo dice: **esito a mano**. Un
+valore che non è un numero non si salva, e il campo diventa rosso.
+
+**Nel collaudo** ogni caratteristica ha la sua casella. Per una misura con limiti, il valore fuori si
+colora di rosso e l'esito si calcola da solo. Accanto c'è la scelta **Esito**: *OK* o *Fuori*. Per una
+misura senza limiti (un colore, una rugosità a confronto) è chi collauda a sceglierlo. Su una misura con
+limiti la scelta corregge il calcolo, per esempio quando lo strumento ha un'incertezza che il calcolo
+non conosce: la riga lo segna *a mano*, e il rapporto PDF *(manuale / manual)*. La scheda dice che cosa
+suggeriscono le misure (e i pezzi non conformi contati nel campione). **Suggerisce, non decide**: un
+pezzo fuori quota si può accettare in deroga, ed è giusto che lo dica chi collauda.
+
+**Per chi collauda.** Due testi: le **istruzioni**, che la scheda del collaudo mostra sempre, e il
+**messaggio se il controllo fallisce**, che compare in rosso solo quando una caratteristica è fuori o
+non passa. Per esempio: «Fermare il lotto, metterlo nell'area rossa e avvisare l'ufficio acquisti».
+
+**La scheda del piano** (**Scheda PDF**) è il foglio da tenere al banco di collaudo: codici,
+campionamento, caratteristiche con i limiti, istruzioni e messaggio, e il QR che riapre il piano.
+
+**Il piano si copia nel collaudo.** Caratteristiche, campione e numeri di accettazione restano
+quelli del giorno dell'arrivo: cambiare il piano domani non riscrive i collaudi di ieri, ed
+eliminarlo non li tocca. I piani li scrive chi scrive i documenti (*Ufficio acquisti* e
+l'amministratore); l'officina li usa.
+
+### Il collaudo dei pezzi fatti in casa (modulo Qualità, dalla 0.144.0)
+
+**Quando nasce.** Alla dichiarazione dell'**ultima fase** di un ordine di produzione, per i pezzi
+buoni dichiarati, se l'articolo è da collaudare (articolo, famiglia o piano di controllo, come per
+gli acquisti). Vale anche quando l'ultima fase è di un terzista: i pezzi si dichiarano sull'ODP e
+il collaudo nasce lì. Ogni dichiarazione fa il suo collaudo. Gli assiemi non lo aprono, perché non
+hanno giacenza.
+
+**Fino all'esito i pezzi sono fermi**: nell'esistente ma non nel libero, come la merce di un
+fornitore. Il piano di controllo, la scheda, il cartellino e il rapporto PDF sono gli stessi. La
+scheda dice da quale ODP e da quale fase vengono, e non chiede DDT e certificato.
+
+**Il respinto non torna a nessun fornitore**, quindi le strade sono due:
+
+| Che fine fanno | Cosa succede |
+|---|---|
+| **Da rilavorare, restano fermi** | La merce resta a magazzino, ma non è libera. Dalla non conformità, a rilavorazione fatta, **Rilavorati: di nuovo al collaudo** apre un collaudo nuovo per quei pezzi; oppure si rottamano |
+| **Tenuto e rottamato** | Escono come scarto |
+
+**La fase che ha generato il difetto.** Con un respinto o una deroga la scheda chiede quale fase
+ha prodotto il problema: una delle fasi dell'ODP, *il materiale* o *non individuata*. La proposta è
+l'ultima fase. La scelta decide di chi è la non conformità: di **produzione** per una fase
+interna, **verso il terzista** per una fase sua (e il lotto conta nella sua valutazione), **interna**
+per il materiale. Si corregge anche dopo, dalla NC, finché è aperta.
+
+**Annullare la dichiarazione** dell'ultima fase toglie il collaudo se è ancora aperto. Se ha già
+un esito non si annulla: la merce si è già mossa.
+
+**L'ODP di ripresa** (dalla 0.145.0). Dalla non conformità di un ODP, *Ufficio acquisti* o
+l'amministratore premono **Lancia l'ODP di ripresa**: un ordine di produzione separato, collegato
+all'originale e alla NC, che nasce già lanciato.
+
+- **La fase di ripristino** si scrive per quel caso: che cosa si fa, e dove. In casa con il centro
+  di lavoro e le ore per pezzo; dal terzista con i giorni e il prezzo, che è zero se il
+  rifacimento è **a suo carico** o quello scritto se è **addebitato**. Una fase esterna genera il
+  suo ordine di lavoro come ogni altra.
+- **Le fasi dopo.** Sotto ci sono le fasi dell'ODP originale che vengono dopo quella
+  responsabile. Per uno scarto sono spuntate, perché il pezzo non le ha ancora fatte; per un
+  respinto al collaudo no, perché il pezzo ha già fatto tutto il ciclo, e si spuntano solo quelle
+  da rifare.
+- **Il materiale** sono i pezzi da riprendere. Quelli fermi da rilavorare escono all'avvio della
+  prima fase, e da lì non sono più fermi; gli scarti non sono mai entrati a magazzino, e l'ordine
+  parte senza prelievo. Il versamento finale apre un collaudo nuovo.
+- **Piano e commessa** sono quelli dell'originale: il fabbisogno conta la ripresa come
+  rifornimento, e non propone un altro ordine per gli stessi pezzi.
+- **Il costo.** La NC mostra la ripresa con il suo costo finora: le fasi interne per i pezzi
+  lavorati, più l'attrezzaggio, e i rientri dell'ordine di lavoro al suo prezzo. **Porta nel costo
+  della NC** lo scrive come costo della non qualità. Il materiale non conta, perché sono gli
+  stessi pezzi.
+
+### Le non conformità (modulo Qualità)
+
+**A cosa servono.** A dare a ogni problema un numero, un responsabile e una data di chiusura.
+*Qualità → Non conformità*.
+
+**Da dove nascono.** Da sole, da un collaudo **respinto** (decisione *reso* o *rottamazione*, la
+quantità respinta, il lotto e il DDT nella descrizione, la causa *fuori tolleranza* se una misura era
+fuori) o **accettato in deroga** (decisione *uso in deroga*). A mano, con **Nuova non conformità**:
+dal **fornitore**, dalla **produzione** — scegliendo l'ordine di produzione, articolo e quantità si
+compilano con i suoi scarti —, da un **reclamo del cliente** o **interna**.
+
+**Che cosa portano.** La **causa**, da un elenco che si tiene in *Gestione → Qualità*; la
+**gravità** (minore, maggiore, critica); la **decisione** sulla merce (reso, rilavorazione, uso in
+deroga, rottamazione, accettato com'è); il **costo**; la data **entro cui chiuderla** (di serie 30
+giorni, si cambia in Gestione); le **azioni**, ognuna con chi e entro quando, da spuntare man mano.
+
+**Chiuderla** chiede decisione e causa: una NC chiusa senza le due cose non insegna niente a chi la
+rilegge. Le azioni non ancora fatte non bloccano, ma l'app lo chiede prima. Chiusa, non si cambia:
+si riapre. **Scaduta** è una NC aperta oltre la sua data, o con un'azione aperta oltre la sua: il
+**Riepilogo** le elenca come avviso di gravità alta. Le altre NC aperte stanno nel Riepilogo come informazione, e le **azioni da fare entro 7 giorni** come avviso, ognuna con chi la deve fare: un clic apre la NC. Nel **Calendario scadenze** compaiono la data entro cui chiudere ogni NC aperta e quella di ogni azione non ancora fatta, con il filtro *Non conformità*.
+
+**Il rapporto PDF**, in italiano e inglese, porta origine, riferimenti, causa, decisione,
+descrizione e azioni: è quello che si manda al fornitore. Le note interne restano dentro. Si
+archivia in `Documenti Bomtrack/NC/<anno>/`.
+
+**Il numero** `NC-2026-001` con l'archivio condiviso lo riserva il server, come per gli ordini: il
+rapporto esce dall'azienda, e due NC con lo stesso numero non si devono poter dare. Si elimina solo
+l'ultima della serie; le altre si chiudono.
+
+**Dagli scarti** (dalla 0.144.0). Chi dichiara degli scarti su una fase di ODP o sul rientro di un
+ODL sceglie la **causale**: senza, la dichiarazione non si registra. La NC nasce da sola, *minore*,
+con decisione *rottamazione*, la fase già indicata come responsabile e il documento d'origine. Se
+la fase è di un terzista la NC va verso di lui. **Una NC per documento, fase e causale finché è
+aperta**: un secondo scarto con la stessa causale sulla stessa fase si somma a quella invece di
+aprirne un'altra. Annullare la dichiarazione toglie il suo scarto dalla NC, e la NC stessa se non
+resta niente e nessuno ci ha ancora lavorato. Alle causali di serie si aggiungono *Errore di
+attrezzaggio*, *Usura o rottura utensile*, *Errore di programma* ed *Errore dell'operatore*.
+
+**Rottamato, chiudi.** Su una NC con decisione *rottamazione* il pulsante la chiude in un colpo, con
+la causa *Errore di lavorazione* se mancava. Se la NC ha dei pezzi ancora fermi da rilavorare, li
+rottama.
+
+**Chi le lavora.** Le apre anche l'officina, registrando un collaudo respinto o dichiarando degli
+scarti; causa, decisione, azioni e chiusura le scrivono *Ufficio acquisti* e l'amministratore.
+
+### La valutazione dei fornitori (modulo Qualità)
+
+*Qualità → Valutazione fornitori* è il riesame che la ISO 9001 chiede al punto 8.4, fatto con i dati
+che l'app ha già. Per ogni fornitore, nel periodo scelto (di serie gli ultimi dodici mesi):
+
+- i **lotti collaudati**, quanti accettati, in deroga e respinti, e i **PPM** (pezzi respinti per
+  milione arrivati). I lotti saltati si contano a parte: non guardati, non dicono niente;
+- le **non conformità** che lo riguardano, aperte e chiuse;
+- la **puntualità**: gli arrivi sulle righe dei suoi ordini rispetto alla data **confermata** (o
+  richiesta, se non l'ha confermata). L'arrivo si data dal ricevimento registrato con l'archivio
+  condiviso, oppure dal collaudo che ha aperto; una riga ancora aperta oltre la sua data conta come
+  un ritardo.
+
+**Il punteggio**, da 0 a 100, pesa due parti (di serie 60 e 40, si cambiano in *Gestione →
+Qualità*): la **qualità** è la quota di lotti accettati, con la deroga che vale mezzo, meno 10 punti
+per ogni non conformità che non viene da un collaudo (un reclamo, uno scarto); la **puntualità** è la
+quota di arrivi in tempo. Se una delle due non ha dati vale l'altra; senza nessuna il fornitore resta
+**senza classe**, invece di averne una inventata. La **classe** A, B o C segue le soglie (di serie 85
+e 70) e compare anche accanto al nome nel **listino fornitori** e in *Gestione → Fornitori*.
+L'elenco si esporta in **Excel** e **PDF**.
 
 ### Le etichette QR
 
@@ -1741,6 +2109,31 @@ svuota quella che non arriva, e la conferma registra e **salva subito**. Il nume
 **quanto arriva adesso** — quello sulla bolla in mano — non il totale ricevuto. Le righe di un ODL
 che vengono da un ordine di produzione restano fuori, come in *Ricevi tutto*: si dichiarano
 sull'ODP.
+
+**I documenti della Qualità** (dalla 0.142.0) hanno anche loro il QR:
+
+| Documento | Dove sta il QR | Cosa apre |
+|---|---|---|
+| **Rapporto di collaudo** | in alto a destra nel PDF | la scheda rapida del collaudo: articolo, quantità, stato, esito, e *Apri il collaudo* |
+| **Cartellino** | a destra, grande | il collaudo; sul cartellino rosso la non conformità |
+| **Rapporto NC** | in alto a destra nel PDF | la scheda rapida della non conformità: stato, gravità, scadenza, azioni aperte |
+| **Scheda del piano** | in alto a destra nel PDF | il piano di controllo |
+
+Il **cartellino** è un foglio A4 da attaccare al bancale, con lo stato scritto grande in italiano e
+in inglese e un colore che si riconosce da lontano:
+
+| Cartellino | Quando | Che cosa porta |
+|---|---|---|
+| **Giallo** · *Materiale da collaudare / Material to be inspected* | collaudo aperto | arrivo, fornitore, ordine, DDT, lotto, piano, pezzi da guardare, certificato; in fondo le caselle dell'esito, data e firma |
+| **Verde** · *Materiale collaudato e accettato / Inspected and accepted* | accettato | la quantità accettata, quando e da chi è stato collaudato, il piano; data e firma di chi libera la merce. In deroga diventa *Accettato in deroga* e porta la NC |
+| **Rosso** · *Materiale non conforme / Non-conforming material* | respinto | la quantità respinta, la NC, la destinazione e la causa; le caselle reso / rottamato / rilavorato, data e firma. Il QR apre la NC |
+
+Si stampa con **Cartellino** in testa alla scheda del collaudo, ed esce quello dello stato di adesso:
+un lotto **in parte accettato e in parte respinto** dà due fogli, uno per mucchio. La quantità è
+nell'unità del collaudo (quella della riga d'ordine). In *Gestione → Qualità → Collaudi* si può
+chiedere all'app di **proporlo a ogni ricevimento** che apre un collaudo: compare un avviso con il
+pulsante per stamparlo. Inquadrato, il QR di un collaudo apre quello ancora aperto con quel numero,
+o il più recente.
 
 I pulsanti aprono le **stesse finestre** dell'app, con le stesse regole: chi ha un ruolo in sola
 lettura vede i numeri ma non i comandi.
@@ -2058,7 +2451,7 @@ consegna del gruppo (ven 16)
 | Che cosa | Quanto dura | In che giorni |
 |---|---|---|
 | **Montaggio** di un assieme | le fasi del suo ciclo in fila: le interne per le ore sul centro, quelle dal terzista per i giorni più il trasporto (dalla 0.124.0) | lavorativi |
-| **Fase interna** | (attrezzaggio della fase + ore/pz × pezzi) ÷ (ore al giorno di un operatore × operatori), arrotondato al giorno, + giorni di coda della fase | lavorativi |
+| **Fase interna** | (attrezzaggio della fase + tempo fase × pezzi, in ore) ÷ (ore al giorno di un operatore × operatori), arrotondato al giorno, + giorni di coda della fase | lavorativi |
 | **Tratta di conto lavoro** (fasi consecutive dello stesso terzista) | somma dei giorni di attraversamento + giorni di trasporto della prima fase della tratta | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); l'invio cade sempre in un giorno lavorativo |
 | **Acquisto** | giorni di consegna del listino | dei fornitori: lavorativi di serie, o di calendario (vedi sotto); la data d'ordine cade sempre in un giorno lavorativo |
 
@@ -2075,7 +2468,9 @@ lavorativo dopo. I dati salvati non cambiano: cambia solo come si contano.
 - Le date sono «il mattino in cui il pezzo è pronto»: una fase di un giorno che deve finire
   lunedì comincia venerdì, e la fase prima deve finire venerdì. Nessun buco, nessuna
   sovrapposizione.
-- Il **materiale del ciclo** di una parte serve all'inizio della **prima** fase: è lì che esce.
+- Il **materiale** di una parte o di un assieme serve all'inizio della **prima** fase, se in distinta
+  non ha una **fase di consumo** diversa (dalla 0.138.0): allora serve all'inizio di quella. Il
+  prelievo dal magazzino, nell'ordine di produzione, resta all'avvio della prima fase.
 - Una fase **senza tempi** (zero ore, zero giorni) non sposta niente: senza dati le date restano
   quelle della consegna, come prima della 0.88.0.
 - Lo stesso articolo chiesto da due rami con date diverse tiene **la data più vicina**.
@@ -2584,6 +2979,10 @@ copre i pezzi **entrati**.
 > **Solo i pezzi buoni proseguono.** 100 lanciati, 95 buoni e 5 scarti alla fase 10 significa che
 > alla 20 ne entrano **95**, e che a magazzino entrerà la **resa vera**, non la quantità lanciata.
 
+Col modulo Qualità acceso gli scarti chiedono la **causale** e aprono una non conformità, e i pezzi
+dell'ultima fase passano dal collaudo prima di diventare liberi (dalla 0.144.0, → *Il collaudo dei
+pezzi fatti in casa*).
+
 Una dichiarazione sbagliata si **annulla** dallo storico, e con lei se ne vanno i movimenti di
 magazzino che aveva generato — solo i suoi.
 
@@ -2989,7 +3388,7 @@ quest'ordine:
 
 - le fasi interne che si possono lavorare adesso, per data di consegna;
 - le **fasi future**, in attesa che finisca la fase prima, per inizio previsto e senza pulsanti;
-- le fasi **terminate** degli ordini ancora aperti.
+- le fasi **terminate**, con la fascia verde *Terminata*: restano anche quando l'ordine è **completato** (tutte le fasi dichiarate) e spariscono solo quando l'ordine si chiude (dalla 0.135.1).
 
 **Ordina per**, in alto a destra, dispone le schede in **colonne** da scorrere di lato: *Codice*
 (una colonna per parte, con le sue fasi per consegna e numero di fase), *Data* (una per giorno di
@@ -3029,6 +3428,22 @@ corso. Il **QR**
 dell'ODP, con il modulo acceso, porta gli stessi pulsanti. Le ore timbrate entrano nel
 **consuntivo** della commessa al posto delle ore del ciclo, e fanno scadere le manutenzioni «ogni
 N ore».
+
+**Correggere le timbrature** (dalla 0.136.0). Chi gestisce gli ordini di produzione (amministratore e
+ufficio acquisti; non l'officina) trova **Correggi i tempi** sotto il *Tempo lavorato* su ogni scheda. Si
+apre l'elenco delle timbrature della fase, con l'operatore, la durata, l'inizio e la fine:
+
+- una fase rimasta **attiva per errore**, per esempio una pausa dimenticata, si chiude scrivendo
+  l'ora giusta in *Fine*; una fine vuota vuol dire che si lavora ancora;
+- il **cestino** su una riga la segna da eliminare (un secondo clic la tiene); salvando, la
+  timbratura finisce nel cestino dell'app;
+- **Aggiungi una timbratura** registra un lavoro per cui nessuno ha premuto *Inizia*, con
+  l'operatore scelto e inizio e fine scritti a mano.
+
+**Salva** controlla che la fine venga dopo l'inizio, che niente sia nel futuro e che le timbrature
+di una persona non si sovrappongano, su questa fase o sulle altre: se qualcosa non torna non salva
+niente e dice cosa. Ogni correzione entra nello **storico delle modifiche** (*Timbratura ODP-… fase
+…*, con chi l'ha fatta e gli orari di prima e di dopo).
 
 ### Manutenzione (modulo Officina, dalla 0.123.0)
 
@@ -3103,7 +3518,7 @@ Ragione sociale · Referente · Email · Telefono · P.IVA/C.F. · indirizzo.
 ### 🏭 Fornitori
 
 Nome · Referente · Email · Telefono · P.IVA/C.F. · **Pagamento predefinito** ·
-**Trasporto predefinito** · indirizzo · **Trasporto conto lavoro (gg)**.
+**Trasporto predefinito** · indirizzo · **Contatti** · **Trasporto conto lavoro (gg)**.
 I due predefiniti si riproporranno su ogni richiesta e ogni ordine a quel fornitore.
 I giorni di trasporto, andata più ritorno, si **propongono** alle fasi di conto lavoro affidate a
 quel terzista, che li possono cambiare; è il trasporto della fase a sommarsi all'attraversamento
@@ -3113,10 +3528,21 @@ Si possono **sospendere** (⏸).
 
 ### 📇 Clienti
 
-Nome (**unico**) · Referente · Email · Telefono · P.IVA/C.F. · indirizzo · Note.
+Nome (**unico**) · Referente · Email · Telefono · P.IVA/C.F. · indirizzo · **Contatti** · Note.
 I nomi si **propongono nel campo Cliente della commessa**.
 **Rinominare un cliente allinea le commesse** che lo citavano; un cliente citato da una commessa
 **non si elimina**.
+
+### I contatti di fornitori e clienti (dalla 0.138.0)
+
+Oltre al referente, nella scheda di modifica di un fornitore o di un cliente si aggiungono
+**quanti contatti servono** con **+ Aggiungi un contatto**: nome, ruolo (Acquisti, Amministrazione,
+Tecnico… o uno scritto da sé), email e telefono. Il cestino toglie una riga, e una riga lasciata
+vuota non si salva. Nell'elenco compare quanti sono («+2 contatti»); passandoci sopra col mouse
+si leggono nome, ruolo, email e telefono di ciascuno (dalla 0.141.0). Nell'export delle impostazioni
+c'è il foglio **Contatti**, una riga per contatto con l'anagrafica a cui appartiene: reimportandolo,
+i contatti di un fornitore o cliente che compare nel foglio si sostituiscono con quelli del file,
+gli altri restano com'erano.
 
 ### 🚚 Condizioni offerta
 
@@ -3144,7 +3570,7 @@ così i nomi già composti non cambiano da soli.
 | **Tariffa (€/h)** | Entra nel costo delle fasi interne a costo orario |
 | **Capacità (h/settimana, tutti gli operatori)** | Le ore **totali** del centro in una settimana: tre montatori per 40 ore sono 120. Il metro del Carico centri, e il tetto di un giorno della capacità finita. **0 = non dichiarata** |
 | **Ore al giorno di un operatore** | Per la durata delle fasi interne: giorni = ore ÷ (queste ore × gli **operatori** della fase). **0 = 8**. Fino alla 0.123 a zero si ricavavano dalla capacità (dalla 0.124.0) |
-| **Attrezzaggio proposto (h)** | Si propone alle fasi nuove su questo centro (dalla 0.131.0): l'attrezzaggio vero è quello della fase, nel ciclo |
+| **Attrezzaggio proposto (min)** | Si propone alle fasi nuove su questo centro (dalla 0.131.0; in minuti dalla 0.137.0): l'attrezzaggio vero è quello della fase, nel ciclo. Nel foglio Excel delle impostazioni è la colonna *Attrezzaggio min*; un file di prima con *Attrezzaggio h* si reimporta ancora, in ore |
 | **Coda proposta (gg)** | Si propone alle fasi nuove su questo centro, in giorni lavorativi (dalla 0.131.0) |
 
 Cambiando attrezzaggio o coda proposti, la scheda offre di aggiornare anche le fasi di ciclo che
@@ -3210,6 +3636,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Officina: terminale di reparto e manutenzione (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Capacità finita (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
+| Qualità: collaudo in entrata, piani di controllo, non conformità, valutazione fornitori (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
@@ -3933,6 +4360,19 @@ subito un numero nuovo riservato dal server, e lo dice. Se l'archivio conteneva 
 quando si è rieseguito `schema.sql`, l'esecuzione lo segnala: si correggono (il controllo delle
 serie in *Gestione → Backup* li elenca) e si riesegue il file.
 
+**Un codice, un articolo; nessuna distinta dentro sé stessa** (dalla 0.141.0). Le stesse due regole
+che l'app fa valere su un PC le fa valere anche il server, fra due colleghi che lavorano insieme:
+due articoli non hanno lo stesso codice (maiuscole e spazi ai lati non contano), e una distinta non
+può contenere, nemmeno attraverso un sottogruppo, l'articolo di cui è la distinta. Se una modifica
+le viola, lo stato della nuvola dice quale articolo e come uscirne. Se l'archivio aveva già dei
+codici doppi quando si è rieseguito `schema.sql`, l'esecuzione lo segnala con un avviso e il
+controllo dei codici non si accende: si correggono (*Gestione → Backup → codici duplicati*) e si
+riesegue il file.
+
+**Lo schema indietro si vede subito** (dalla 0.141.0). Se il progetto Supabase ha uno schema più
+vecchio di quello che l'app si aspetta, all'accesso compare un avviso che chiede di rieseguire
+`supabase/schema.sql`, prima che la sincronizzazione si fermi su una colonna che il server non ha.
+
 Alcuni casi particolari:
 
 - **Le impostazioni** (*Gestione → Aree e moduli*, *Costi e margini*, unità di misura, condizioni d'offerta…) le
@@ -3982,7 +4422,7 @@ scelta (almeno 4 caratteri), che diventa la sua password su questo PC. Gli altri
 
 ### Più organizzazioni sullo stesso PC
 
-Dalla 0.136.0 lo stesso PC (o telefono) può lavorare per **più organizzazioni**, ognuna con il suo
+Dalla 0.147.0 lo stesso PC (o telefono) può lavorare per **più organizzazioni**, ognuna con il suo
 progetto Supabase, i suoi utenti e i suoi dati. Serve a chi segue più aziende, o a un'azienda con
 archivi che devono restare divisi.
 
@@ -3997,7 +4437,7 @@ compatta, colonne, filtri e ordinamenti.
 che ti manda l'amministratore di quell'organizzazione:
 
 - se il PC è già collegato a un altro progetto, il link **aggiunge** un'organizzazione nuova, con
-  il nome che le dai, e la apre. Il collegamento di prima resta com'era (fino alla 0.135.0 il link
+  il nome che le dai, e la apre. Il collegamento di prima resta com'era (fino alla 0.146.0 il link
   lo sostituiva);
 - se il PC non è collegato ma ha dei dati suoi, scegli: **Collega** porta quei dati nel progetto,
   come prima; **Aggiungi come organizzazione separata** li lascia qui e apre il progetto a parte;
@@ -4025,7 +4465,7 @@ link. Non si toglie quella aperta, né la prima. Dentro l'app lo fa solo un ammi
 
 **Una per progetto, uno schema per progetto.** Ogni progetto va preparato come al passo 2
 (`supabase/schema.sql`) e al passo della funzione `bomtrack-utenti`, e **ogni aggiornamento dello
-schema va eseguito in ogni progetto**. Dalla 0.136.0 l'app controlla la versione dello schema
+schema va eseguito in ogni progetto**. L'app controlla la versione dello schema (dalla 0.141.0)
 all'accesso e, se un progetto è rimasto indietro, lo dice con il nome dell'organizzazione.
 
 **Su un PC condiviso**, chi può aprire il browser ha le copie locali di tutte le organizzazioni
@@ -4064,7 +4504,7 @@ variables → Actions → New repository secret**.
 - **GitHub spegne i lavori notturni** di un repository in cui non si pubblica niente da 60 giorni,
   e lo dice per email. Si riaccende da **Actions → supabase-veglia → Enable workflow**.
 - Senza segreti il lavoro non fa niente e lo scrive, senza errori.
-- **Più organizzazioni** (dalla 0.136.0): aggiungi il segreto `SUPABASE_PROGETTI`, con **una riga
+- **Più organizzazioni** (dalla 0.147.0): aggiungi il segreto `SUPABASE_PROGETTI`, con **una riga
   per ogni altro progetto**: indirizzo, uno spazio, chiave pubblica. Il lavoro li tocca tutti; se
   uno non risponde finisce rosso e il log dice quale per numero (*Progetto 2*), mai per indirizzo,
   perché il log del repository è pubblico. La copia del database qui sotto si fa una volta per
@@ -4382,7 +4822,7 @@ Con l'**archivio condiviso** se ne aggiungono altre, sempre di questo PC:
 | `bomtrack_cloud_nuovapassword` | Solo fra l'apertura di un invito e la scelta della password | Le due cartelle, archivio e backup, stanno fra queste di proposito: ogni PC ha la
 sua, e importarla da un backup imporrebbe a tutti la lettera di unità del primo che l'ha scelta.
 
-**Con più organizzazioni** (dalla 0.136.0) la prima tiene tutti i nomi qui sopra. Ogni altra ha i
+**Con più organizzazioni** (dalla 0.147.0) la prima tiene tutti i nomi qui sopra. Ogni altra ha i
 suoi, con il suffisso `@<id>`: `bomtrack_archivio@<id>`, `bomtrack_allegati@<id>`,
 `bomtrack_cloud@<id>`, `bomtrack_session@<id>` e così via. Le preferenze personali (tema, colonne,
 densità, filtri) restano senza suffisso, comuni a tutte. L'elenco sta in
@@ -4419,6 +4859,9 @@ timestamp). Le migrazioni sono **idempotenti**: un backup vecchio si auto-migra 
 | `prodDecls` | Le dichiarazioni di avanzamento: eventi, non stato | — |
 | `plans` | I piani di fabbisogno | `lines` |
 | `jobs` | Le commesse | — |
+| `inspections` | **I collaudi** della merce in entrata (modulo Qualità): da quale arrivo vengono, la quantità trattenuta, la copia del piano con le misure e l'esito | — |
+| `qualityPlans` | **I piani di controllo**: a che cosa si applicano, il campionamento, il salto lotti e le caratteristiche | — |
+| `nonconformities` | **Le non conformità**: origine, causa, decisione, costo, scadenza e le azioni | — |
 | `users` | Gli utenti (con `passwordHash` e `passwordSalt`) | — |
 | `trash` | Il cestino | — |
 
@@ -4455,14 +4898,16 @@ fasi, `kind: 'op'`, con `workCenterId`, `supplierId`, `costMode`, `hours`, `oper
 | `columns.js` · `inspector.js` | Scelta colonne · pannello laterale |
 | `views-bom.js` · `views-rev.js` | Distinte e revisioni |
 | `views-stock.js` | Magazzino, movimenti, conto lavoro |
-| `views-catalog.js` | Anagrafiche, listino, scheda articolo, cicli |
+| `views-listino.js` · `views-catalog.js` · `views-cicli.js` | Listino fornitori · anagrafiche e scheda articolo · cicli di lavorazione |
 | `views-report.js` · `views-item.js` · `views-home.js` · `views-dash.js` | Costificazione · scheda di sola lettura · Riepilogo · Cruscotto |
-| `views-mrp.js` | Fabbisogno e Carico centri |
+| `views-mrp.js` · `views-mrp-documenti.js` | Fabbisogno e Carico centri · i documenti che nascono dal piano |
 | `views-avanzamento.js` | Avanzamento: il Gantt del piano con lo stato dei documenti |
-| `views-jobs.js` · `views-docs.js` | Commesse · RFQ, ODA, ODL |
+| `views-jobs.js` · `views-docs.js` · `views-oda.js` | Commesse · parte comune dei documenti e RFQ · ODA e ODL |
 | `views-prod.js` | Ordini di produzione: fasi congelate, avanzamento, movimenti |
 | `views-manage.js` | Gestione |
 | `produzione.js` | Avanzamento di produzione |
+| `qualita.js` · `qualita-piani.js` | Modulo Qualità: collaudo della merce in entrata, la trattenuta sul libero, gli esiti · piani di controllo, campionamento ISO 2859-1, salto lotti, rapporto di collaudo |
+| `qualita-nc.js` · `qualita-fornitori.js` | Modulo Qualità: non conformità, azioni, rapporto NC e impostazioni · valutazione dei fornitori |
 | `allegati.js` · `archivio.js` | Allegati e documenti degli articoli · la cartella d'archivio (scelta, permesso, lettura, copia, verifica) |
 | `documenti.js` | Le copie dei documenti emessi nella cartella d'archivio: quando si archiviano, le revisioni, la sezione in scheda e la verifica |
 | `export-lists.js` · `import-catalog.js` · `import-export.js` | Export elenchi · import articoli · import distinte, backup, avvio |

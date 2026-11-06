@@ -86,6 +86,7 @@ create table if not exists public.suppliers (
   name text, referente text, email text, phone text, vat text,
   street text, street_number text, zip text, city text, province text, country text,
   default_transport text, default_payment text, transit_days numeric, notes text, active boolean,
+  contacts jsonb,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -94,7 +95,7 @@ create table if not exists public.customers (
   id uuid primary key,
   name text, referente text, email text, phone text, vat text,
   street text, street_number text, zip text, city text, province text, country text,
-  notes text, active boolean,
+  notes text, active boolean, contacts jsonb,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -129,7 +130,7 @@ create table if not exists public.machines (
 
 create table if not exists public.families (
   id uuid primary key,
-  name text, kind text, sigla text, child_sets text,
+  name text, kind text, sigla text, child_sets text, qc text, qc_cert text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -137,7 +138,7 @@ create table if not exists public.families (
 create table if not exists public.sub_families (
   id uuid primary key,
   family_id uuid not null references public.families(id) on delete cascade deferrable initially deferred,
-  name text, sigla text,
+  name text, sigla text, qc text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -175,7 +176,11 @@ create table if not exists public.items (
   replaced_by_id uuid references public.items(id) on delete set null deferrable initially deferred,
   configured_from_id uuid references public.items(id) on delete set null deferrable initially deferred,
   config_choices jsonb, config_key text, config_hash text,
+  weight_kg numeric, volume_m3 numeric, length_m numeric, width_m numeric, height_m numeric,
+  manufacturer text, manufacturer_code text, material text, finish text, treatment text,
+  gross_weight_kg numeric, barcode text, drawing_ref text,
   child_sets text,
+  qc text, qc_cert text,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -202,8 +207,43 @@ alter table public.items add column if not exists configured_from_id uuid refere
 alter table public.items add column if not exists config_choices jsonb;
 alter table public.items add column if not exists config_key text;
 alter table public.items add column if not exists config_hash text;
--- A6: `unique (code)` va aggiunto dopo la bonifica dei duplicati storici
--- (Gestione › Backup › codici duplicati). Prima, rifiuterebbe dati veri.
+-- 0.138.0: dati tecnici dell'articolo (peso, volume, dimensioni), il
+-- produttore con il suo codice, e materiale, finitura e trattamento.
+alter table public.items add column if not exists weight_kg numeric;
+alter table public.items add column if not exists volume_m3 numeric;
+alter table public.items add column if not exists length_m numeric;
+alter table public.items add column if not exists width_m numeric;
+alter table public.items add column if not exists height_m numeric;
+alter table public.items add column if not exists manufacturer text;
+alter table public.items add column if not exists manufacturer_code text;
+alter table public.items add column if not exists material text;
+alter table public.items add column if not exists finish text;
+alter table public.items add column if not exists treatment text;
+-- 0.139.0: peso lordo, codice a barre (EAN) e riferimento disegno.
+alter table public.items add column if not exists gross_weight_kg numeric;
+alter table public.items add column if not exists barcode text;
+alter table public.items add column if not exists drawing_ref text;
+-- 0.138.0: i contatti di fornitori e clienti (nome, ruolo, email, telefono).
+-- Un elenco che si legge sempre insieme alla sua anagrafica: jsonb.
+alter table public.suppliers add column if not exists contacts jsonb;
+alter table public.customers add column if not exists contacts jsonb;
+-- A6: il codice è unico anche nel database (dalla 0.141.0), senza badare a
+-- maiuscole e spazi ai lati, come l'app (codeIndex) e impegna_codici. Gli
+-- impegni dei codici evitano già i doppioni fra due PC, ma per un'ora soltanto
+-- e solo a chi li chiede: l'indice è la garanzia. Su un archivio che ha ancora
+-- dei doppioni storici non si crea — rifiuterebbe dati veri e fermerebbe tutto
+-- il file — e lo si dice: si bonificano da Gestione › Backup › codici
+-- duplicati, poi si riesegue.
+do $$
+begin
+  if exists (select 1 from public.items where btrim(coalesce(code, '')) <> ''
+              group by lower(btrim(code)) having count(*) > 1) then
+    raise warning 'items_codice_unico non creato: ci sono codici articolo doppi. Bonificali (Gestione › Backup › codici duplicati) e riesegui questo file';
+  else
+    create unique index if not exists items_codice_unico on public.items (lower(btrim(code)))
+      where btrim(coalesce(code, '')) <> '';
+  end if;
+end $$;
 
 -- Le tre tabelle «replace»: l'insieme è la definizione dell'articolo, le righe
 -- non hanno identità propria e la chiave è costruita (testo). Si riscrivono
@@ -212,7 +252,7 @@ create table if not exists public.item_components (
   id text primary key,
   item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
   child_item_id uuid references public.items(id) deferrable initially deferred,
-  qty numeric, scrap_pct numeric, cond text, qty_expr text, cost_override numeric, pos int,
+  qty numeric, scrap_pct numeric, cond text, qty_expr text, cost_override numeric, op_index int, pos int,
   synced_at timestamptz not null default clock_timestamp()
 );
 
@@ -275,6 +315,8 @@ alter table public.item_components add column if not exists qty_expr text;
 -- 0.125.0: anche le parti hanno la distinta (il materiale che prima stava nel
 -- ciclo), e una riga di distinta di una parte può forzare il costo di riga.
 alter table public.item_components add column if not exists cost_override numeric;
+-- 0.138.0: la fase del ciclo in cui si consuma la riga (indice fra le fasi, da 0).
+alter table public.item_components add column if not exists op_index int;
 
 -- ─── Documenti ──────────────────────────────────────────────
 create table if not exists public.production_plans (
@@ -422,10 +464,12 @@ create table if not exists public.production_order_materials (
   id uuid primary key,
   production_order_id uuid not null references public.production_orders(id) on delete cascade deferrable initially deferred,
   item_id uuid references public.items(id) deferrable initially deferred,
-  code text, name text, uom text, per_pezzo numeric, qty numeric,
+  code text, name text, uom text, per_pezzo numeric, qty numeric, op_index int,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.138.0: la fase di consumo della riga, come in item_components.
+alter table public.production_order_materials add column if not exists op_index int;
 
 create table if not exists public.work_orders (
   id uuid primary key,
@@ -600,6 +644,102 @@ alter table public.production_time_logs add column if not exists machine_id uuid
 alter table public.maintenance_plans add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 alter table public.maintenance_events add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 
+-- 0.140.0, modulo Qualità: il collaudo della merce in entrata. Nasce dal
+-- ricevimento di un ordine fornitore o dal rientro dall'ultima fase di un
+-- ordine di lavoro, e finché è aperto quella quantità non è merce libera.
+-- Collezione radice: vive più a lungo della riga che l'ha fatto nascere, e
+-- `order_id` può puntare a un ordine o a un ordine di lavoro (lo dice
+-- `source`), quindi niente chiave esterna — come per i movimenti.
+create table if not exists public.inspections (
+  id uuid primary key,
+  number text, source text, order_id uuid, line_id uuid,
+  item_id uuid references public.items(id) deferrable initially deferred,
+  supplier_id uuid references public.suppliers(id) deferrable initially deferred,
+  qty numeric, uom text, date date,
+  ddt text, supplier_lot text, cert text,
+  status text, esito text, qty_ok numeric, qty_ko numeric, destino text, note text,
+  closed_at timestamptz, active boolean,
+  plan_id uuid, plan_state text, sample_rule text, sample_size numeric, accept_no int, reject_no int,
+  defects numeric, skip_lot boolean, checks jsonb,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- Il piano di controllo dentro il collaudo (fase 2): la copia delle
+-- caratteristiche con le misure, il campione e i numeri di accettazione.
+-- `plan_id` senza chiave esterna: il collaudo tiene la sua copia e sopravvive
+-- al piano eliminato.
+alter table public.inspections add column if not exists plan_id uuid;
+alter table public.inspections add column if not exists plan_state text;
+alter table public.inspections add column if not exists sample_rule text;
+alter table public.inspections add column if not exists sample_size numeric;
+alter table public.inspections add column if not exists accept_no int;
+alter table public.inspections add column if not exists reject_no int;
+alter table public.inspections add column if not exists defects numeric;
+alter table public.inspections add column if not exists skip_lot boolean;
+alter table public.inspections add column if not exists checks jsonb;
+
+-- 0.140.0, modulo Qualità: i piani di controllo. Le caratteristiche sono una
+-- lista dentro il piano (jsonb): si leggono e si scrivono sempre insieme a lui.
+create table if not exists public.quality_plans (
+  id uuid primary key,
+  name text,
+  item_id uuid references public.items(id) on delete set null deferrable initially deferred,
+  family_id uuid references public.families(id) on delete set null deferrable initially deferred,
+  supplier_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
+  cert text, sampling text, sample_qty numeric, sample_pct numeric, aql numeric,
+  skip_after int, skip_every int, characteristics jsonb, notes text, active boolean,
+  item_ids jsonb, fail_message text,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- 0.142.0: un piano vale per l'elenco dei codici scelti (item_ids, un elenco
+-- di id che si legge sempre intero: jsonb), e porta il messaggio da mostrare
+-- quando il controllo fallisce. item_id e family_id restano per i piani nati
+-- prima, finché l'app non li converte.
+alter table public.quality_plans add column if not exists item_ids jsonb;
+alter table public.quality_plans add column if not exists fail_message text;
+
+-- 0.140.0, modulo Qualità: le non conformità, con le azioni (jsonb). Il
+-- numero NC-… lo riserva il server come per gli ordini: il rapporto va al
+-- fornitore. `order_id` può essere l'ordine fornitore del collaudo o un ordine
+-- di produzione (lo dice `source`): niente chiave esterna, come nei collaudi.
+create table if not exists public.nonconformities (
+  id uuid primary key,
+  number text, source text,
+  inspection_id uuid references public.inspections(id) on delete set null deferrable initially deferred,
+  order_id uuid,
+  item_id uuid references public.items(id) on delete set null deferrable initially deferred,
+  supplier_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
+  qty numeric, uom text, date date, cause text, gravita text, description text, decision text,
+  actions jsonb, cost numeric, due_date date, status text, closed_at timestamptz, note text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- 0.144.0: il collaudo a fine ciclo degli ODP e le NC degli scarti. Sul
+-- collaudo la dichiarazione che l'ha aperto (decl_id), la fase che ha generato
+-- il difetto (resp_phase: l'id della fase, 'materiale' o 'nd', quindi testo) e
+-- i pezzi da rilavorare ancora fermi (qty_held). Sulla NC l'ODP, la fase e le
+-- dichiarazioni di scarto che raccoglie. Niente chiavi esterne, come
+-- `order_id`: un ODP si annulla, non si elimina, e la NC resta.
+alter table public.inspections add column if not exists decl_id uuid;
+alter table public.inspections add column if not exists resp_phase text;
+alter table public.inspections add column if not exists qty_held numeric;
+alter table public.nonconformities add column if not exists production_order_id uuid;
+alter table public.nonconformities add column if not exists resp_phase text;
+alter table public.nonconformities add column if not exists scrap_decls jsonb;
+-- 0.145.0: l'ODP di ripresa porta l'ordine d'origine, la NC che l'ha lanciato
+-- e, se riprende pezzi fermi a magazzino, il collaudo che li tiene. Niente
+-- chiavi esterne, per la stessa ragione delle colonne qui sopra.
+alter table public.production_orders add column if not exists rework_of_id uuid;
+alter table public.production_orders add column if not exists nc_id uuid;
+alter table public.production_orders add column if not exists rework_inspection_id uuid;
+-- 0.140.0: il controllo in entrata su articoli e famiglie, per i database già creati.
+alter table public.items add column if not exists qc text;
+alter table public.items add column if not exists qc_cert text;
+alter table public.families add column if not exists qc text;
+alter table public.families add column if not exists qc_cert text;
+alter table public.sub_families add column if not exists qc text;
+
 create table if not exists public.trash (
   id uuid primary key,
   coll text, deleted_at timestamptz, deleted_by uuid, record jsonb,
@@ -653,6 +793,9 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('maintenance_plans', null, null, 'root'),
   ('maintenance_events', null, null, 'root'),
   ('machines', null, null, 'root'),
+  ('inspections', null, null, 'root'),
+  ('quality_plans', null, null, 'root'),
+  ('nonconformities', null, null, 'root'),
   ('trash', null, null, 'root')
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
 
@@ -661,7 +804,7 @@ on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = e
 -- quella del server e decide che cosa un altro client non ha ancora visto.
 -- Sono due domande diverse: un client con l'orologio indietro scrive un
 -- updated_at vecchio, ma la sua riga va comunque mandata a chi fa pull dopo.
-create or replace function public.sync_stamp() returns trigger language plpgsql as $$
+create or replace function public.sync_stamp() returns trigger language plpgsql set search_path = public as $$
 declare
   quando timestamptz;
   nuovo jsonb;
@@ -743,7 +886,7 @@ end $$;
 create or replace function public.colonna_numero(tab text) returns text
 language sql immutable set search_path = public as $$
   select case when tab = 'item_revisions' then 'eco_number'
-              when tab in ('rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs') then 'number' end
+              when tab in ('rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'nonconformities') then 'number' end
 $$;
 
 -- ─── Invio ──────────────────────────────────────────────────
@@ -851,6 +994,13 @@ begin
     righe := payload->'upsert'->reg.tab;
     if jsonb_typeof(righe) <> 'array' then
       raise exception 'push_changes: % non è un elenco', reg.tab;
+    end if;
+    -- Gli id finiscono negli `onclick` dell'app senza passare da esc() (dalla
+    -- 0.141.0): un id con un apice o un `<` dentro, scritto dall'API da un
+    -- collega, diventava codice eseguito nel browser degli altri. L'app li crea
+    -- UUID o sigle brevi; gli altri si rifiutano qui, come fa il backup.
+    if exists (select 1 from jsonb_array_elements(righe) e where (e->>'id') !~ '^[^''"<>`\\[:space:]&]{1,200}$') then
+      raise exception 'push_changes: %: un id contiene caratteri non ammessi', reg.tab;
     end if;
 
     select string_agg(distinct k, ', ') into sconosciuti
@@ -1177,6 +1327,14 @@ select t, a from (values
   ('maintenance_plans', 'manage'),
   -- Le macchine sono anagrafica dei centri, come i centri.
   ('machines', 'manage'),
+  -- Modulo Qualità: il collaudo lo registra chi sta in magazzino davanti alla
+  -- merce (`shop`) o chi scrive i documenti (`docs`). Un esito respinto
+  -- riscrive il ricevuto di un ordine, cioè tabelle che entrambi già toccano.
+  ('inspections', 'shop'), ('inspections', 'docs'),
+  -- I piani sono la regola: li scrive l'ufficio. Le non conformità le apre
+  -- anche chi registra un collaudo respinto (`shop`); le lavora l'ufficio.
+  ('quality_plans', 'docs'),
+  ('nonconformities', 'shop'), ('nonconformities', 'docs'),
   -- Il cestino e le lapidi li scrive chiunque elimini qualcosa, in qualunque area.
   ('trash', 'catalog'), ('trash', 'bom'), ('trash', 'docs'), ('trash', 'manage'), ('trash', 'agenda'), ('trash', 'shop'),
   ('sync_tombstones', 'catalog'), ('sync_tombstones', 'bom'), ('sync_tombstones', 'docs'),
@@ -1209,7 +1367,8 @@ language sql immutable set search_path = public as $$
     ('workOrders', 'work_orders'), ('plans', 'production_plans'), ('prodOrders', 'production_orders'),
     ('prodDecls', 'production_declarations'), ('jobs', 'jobs'), ('reminders', 'reminders'),
     ('timeLogs', 'production_time_logs'), ('maintPlans', 'maintenance_plans'), ('maintEvents', 'maintenance_events'),
-    ('machines', 'machines'),
+    ('machines', 'machines'), ('inspections', 'inspections'),
+    ('qualityPlans', 'quality_plans'), ('nonconformities', 'nonconformities'),
     ('trash', 'trash'), ('users', 'profiles')
   ) v(k, t) where k = c
 $$;
@@ -1222,7 +1381,7 @@ $$;
 -- auth.uid() è nullo. Anche l'**email** è della gestione utenti: il link per
 -- reimpostare la password parte dall'utente di Supabase Auth, ma un'email del
 -- profilo cambiata a mano farebbe credere all'app di parlare con un altro.
-create or replace function public.profiles_guardia() returns trigger language plpgsql as $$
+create or replace function public.profiles_guardia() returns trigger language plpgsql set search_path = public as $$
 begin
   if current_user in ('authenticated', 'anon') and not public.puo_scrivere_tabella('profiles')
      and (new.role is distinct from old.role or new.active is distinct from old.active or new.id <> old.id
@@ -1244,7 +1403,7 @@ create trigger profiles_guardia before update on public.profiles for each row ex
 -- E non si elimina (dalla 0.105.4), da nessuna parte: né dall'API né
 -- eliminando il suo utente nel pannello di Supabase, che porta via il profilo
 -- con sé. Senza amministratori l'archivio non ha più chi gestisce gli utenti.
-create or replace function public.profiles_ultimo_admin() returns trigger language plpgsql as $$
+create or replace function public.profiles_ultimo_admin() returns trigger language plpgsql set search_path = public as $$
 begin
   if old.role = 'admin' and old.active is not false
      and not exists (select 1 from public.profiles p
@@ -1270,7 +1429,7 @@ create trigger profiles_ultimo_admin before delete on public.profiles for each r
 --  - un'eliminazione si ferma con un errore: saltarla lascerebbe la lapide, e
 --    gli altri PC cancellerebbero una riga che il server ha ancora.
 -- Dal SQL Editor (auth.uid() nullo, current_user postgres) non vale.
-create or replace function public.officina_guardia() returns trigger language plpgsql as $$
+create or replace function public.officina_guardia() returns trigger language plpgsql set search_path = public as $$
 declare
   -- created_by: con ON CONFLICT la riga proposta passa prima dal trigger
   -- d'inserimento, che la attribuisce a chi invia; sync_stamp, dopo questo,
@@ -1316,6 +1475,102 @@ begin
   end loop;
 end $$;
 
+-- ─── Un indice per ogni chiave esterna (dalla 0.141.0) ──────
+-- Postgres indicizza la chiave primaria, non le chiavi esterne. Senza indice,
+-- cancellare un articolo o un documento scorre per intero ogni tabella che lo
+-- cita, e così le letture «le righe di questo ordine». Con poche centinaia di
+-- righe non si vede; con decine di migliaia di movimenti sì. Il ciclo li crea
+-- tutti, anche per le tabelle aggiunte in futuro, e solo dove non ci sono già
+-- (un indice che comincia con quelle colonne basta).
+do $$
+declare fk record; nome text;
+begin
+  for fk in
+    select c.conrelid::regclass as tab, c.conrelid as relid, c.conkey as cols,
+           (select string_agg(quote_ident(a.attname), ', ' order by k.ord)
+              from unnest(c.conkey) with ordinality k(attnum, ord)
+              join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum) as elenco,
+           (select string_agg(a.attname, '_' order by k.ord)
+              from unnest(c.conkey) with ordinality k(attnum, ord)
+              join pg_attribute a on a.attrelid = c.conrelid and a.attnum = k.attnum) as suffisso,
+           (select relname from pg_class where oid = c.conrelid) as relname
+      from pg_constraint c join pg_namespace n on n.oid = c.connamespace
+     where c.contype = 'f' and n.nspname = 'public'
+  loop
+    continue when exists (select 1 from pg_index i
+                           where i.indrelid = fk.relid
+                             and (i.indkey::int2[])[0:array_length(fk.cols, 1) - 1] = fk.cols);
+    nome := left(fk.relname || '_' || fk.suffisso, 59) || '_fkx';
+    execute format('create index if not exists %I on %s (%s)', nome, fk.tab, fk.elenco);
+  end loop;
+end $$;
+
+-- ─── A8: niente anelli in distinta, anche fra due PC (dalla 0.141.0) ──
+-- createsCycle() li impedisce dentro un client, ma due colleghi possono
+-- chiuderne uno insieme senza che nessuno dei due lo veda: A mette B in C
+-- mentre B mette C in B. Il costo e l'esplosione ricorrono per tutti, ed è il
+-- vincolo la cui violazione rende l'app inutilizzabile all'intero team.
+--
+-- Un trigger di vincolo **differito**: le righe di distinta si riscrivono in
+-- blocco per padre (cancellate e reinserite nello stesso invio), quindi il
+-- controllo si fa alla fine della transazione, su quello che resta. Il
+-- lucchetto mette in fila i controlli di due invii contemporanei: il secondo
+-- guarda dopo che il primo è entrato, e lo vede. Figlio è ogni riga di distinta
+-- e ogni riga di ciclo che non è una fase (kind <> 'op'), come parentIndex()
+-- e il motore di costo nell'app.
+create or replace function public.distinta_senza_anelli() returns trigger
+language plpgsql set search_path = public as $$
+declare padre uuid; figlio uuid; tipo text; anello boolean;
+begin
+  if tg_table_name = 'item_cycle_rows' then
+    select r.item_id, r.child_item_id, r.kind into padre, figlio, tipo from public.item_cycle_rows r where r.id = new.id;
+    if tipo = 'op' then return null; end if;
+  else
+    select r.item_id, r.child_item_id into padre, figlio from public.item_components r where r.id = new.id;
+  end if;
+  -- La riga è già sparita (riscritta dallo stesso invio), o non ha un figlio.
+  if padre is null or figlio is null then return null; end if;
+  perform pg_advisory_xact_lock(hashtext('bomtrack-distinta'));
+  -- `union` e non `union all`: un nodo già visto non si riesplora, e la
+  -- discesa finisce anche se un anello ci fosse già.
+  with recursive giu(id) as (
+    select figlio
+    union
+    select c.child_item_id
+      from (select item_id, child_item_id from public.item_components
+            union all
+            select item_id, child_item_id from public.item_cycle_rows where kind is distinct from 'op') c
+      join giu on c.item_id = giu.id
+     where c.child_item_id is not null
+  )
+  select exists (select 1 from giu where id = padre) into anello;
+  if anello then
+    raise exception 'distinta_senza_anelli: «%» finirebbe dentro sé stesso attraverso «%»',
+      coalesce((select code from public.items where id = padre), padre::text),
+      coalesce((select code from public.items where id = figlio), figlio::text)
+      using errcode = '23514';
+  end if;
+  return null;
+end $$;
+do $$
+declare t text;
+begin
+  foreach t in array array['item_components', 'item_cycle_rows'] loop
+    execute format('drop trigger if exists distinta_senza_anelli on public.%I', t);
+    execute format('drop trigger if exists distinta_senza_anelli_mod on public.%I', t);
+    execute format('create constraint trigger distinta_senza_anelli after insert on public.%I
+                    deferrable initially deferred for each row execute function public.distinta_senza_anelli()', t);
+    -- Una modifica conta solo se cambia padre, figlio o tipo: l'invio riscrive
+    -- tutte le colonne, e senza questo filtro ogni quantità ritoccata
+    -- rifarebbe la discesa.
+    execute format('create constraint trigger distinta_senza_anelli_mod after update on public.%I
+                    deferrable initially deferred for each row
+                    when (old.item_id is distinct from new.item_id or old.child_item_id is distinct from new.child_item_id%s)
+                    execute function public.distinta_senza_anelli()', t,
+                   case when t = 'item_cycle_rows' then ' or old.kind is distinct from new.kind' else '' end);
+  end loop;
+end $$;
+
 -- RLS attiva ovunque: in Supabase una tabella senza RLS è leggibile da chiunque
 -- abbia la chiave pubblica. Le funzioni sono `security invoker`: push_changes()
 -- e pull_changes() rispettano queste policy senza bisogno di saperle.
@@ -1327,19 +1582,34 @@ begin
     execute format('drop policy if exists provvisoria_autenticati on public.%I', t);
     execute format('drop policy if exists lettura on public.%I', t);
     execute format('drop policy if exists scrittura on public.%I', t);
+    execute format('drop policy if exists inserimento on public.%I', t);
+    execute format('drop policy if exists modifica on public.%I', t);
+    execute format('drop policy if exists eliminazione on public.%I', t);
     -- `(select …)`: Postgres calcola la funzione una volta per interrogazione
     -- invece che una per riga. Su un archivio grande la differenza è fra un
     -- download che sta nei limiti di tempo di Supabase e uno che non ci sta.
     execute format('create policy lettura on public.%I for select to authenticated using ((select public.ruolo_attivo()) is not null)', t);
-    execute format('create policy scrittura on public.%I for all to authenticated using ((select public.puo_scrivere_tabella(%L))) with check ((select public.puo_scrivere_tabella(%L)))', t, t, t);
+    -- La scrittura in tre policy e non una `for all` (dalla 0.141.0): una
+    -- `for all` vale anche per la lettura, e Postgres valutava due policy per
+    -- ogni riga letta. Chi scrive una tabella la legge già con `lettura`.
+    execute format('create policy inserimento on public.%I for insert to authenticated with check ((select public.puo_scrivere_tabella(%L)))', t, t);
+    execute format('create policy modifica on public.%I for update to authenticated using ((select public.puo_scrivere_tabella(%L))) with check ((select public.puo_scrivere_tabella(%L)))', t, t, t);
+    execute format('create policy eliminazione on public.%I for delete to authenticated using ((select public.puo_scrivere_tabella(%L)))', t, t);
   end loop;
   -- Le lapidi, riga per riga (dalla 0.105.3): ne scrive una solo chi può
   -- scrivere la tabella a cui si riferisce. Con la regola generale l'officina
   -- poteva, dall'API, far sparire un articolo dagli archivi di tutti.
   drop policy if exists scrittura on public.sync_tombstones;
-  create policy scrittura on public.sync_tombstones for all to authenticated
+  drop policy if exists inserimento on public.sync_tombstones;
+  drop policy if exists modifica on public.sync_tombstones;
+  drop policy if exists eliminazione on public.sync_tombstones;
+  create policy inserimento on public.sync_tombstones for insert to authenticated
+    with check (public.puo_scrivere_tabella(tab) and deleted_at <= clock_timestamp() + interval '5 minutes');
+  create policy modifica on public.sync_tombstones for update to authenticated
     using (public.puo_scrivere_tabella(tab))
     with check (public.puo_scrivere_tabella(tab) and deleted_at <= clock_timestamp() + interval '5 minutes');
+  create policy eliminazione on public.sync_tombstones for delete to authenticated
+    using (public.puo_scrivere_tabella(tab));
   -- Il cestino, riga per riga (dalla 0.105.4): una voce la scrive solo chi può
   -- scrivere la tabella del record che contiene. Con la regola generale
   -- chiunque poteva, dall'API, mettere nel cestino un articolo inventato, e
@@ -1366,7 +1636,7 @@ begin
   -- Il proprio profilo, in aggiunta: vedi profiles_guardia.
   drop policy if exists se_stesso on public.profiles;
   create policy se_stesso on public.profiles for update to authenticated
-    using (id = auth.uid() and (select public.ruolo_attivo()) is not null) with check (id = auth.uid());
+    using (id = (select auth.uid()) and (select public.ruolo_attivo()) is not null) with check (id = (select auth.uid()));
   -- I registri si leggono, non si scrivono.
   foreach t in array array['sync_tables', 'role_areas', 'table_areas'] loop
     execute format('alter table public.%I enable row level security', t);
@@ -1429,10 +1699,12 @@ select public.profilo_crea(a.id, a.email, a.raw_user_meta_data->>'name')
 -- l'archivio è ancora vuoto, cioè se tocca a questo PC caricarlo.
 -- `security definer` perché un profilo sospeso non legge niente per policy;
 -- restituisce solo la propria riga e un sì/no, nient'altro.
--- `schema_versione` (dalla 0.136.0): con più organizzazioni, cioè più progetti,
--- è facile che uno resti indietro. L'app la confronta con CLOUD_SCHEMA_VERSIONE
--- (cloud.js) e dice quale organizzazione va aggiornata. Si alza insieme a
--- quella costante quando questo file cambia in un modo da cui l'app dipende.
+-- `schema_versione` (dalla 0.141.0): l'app la confronta con
+-- CLOUD_SCHEMA_VERSIONE (cloud.js) e, se il progetto è indietro, dice di
+-- rieseguire questo file prima che un invio fallisca. Con più organizzazioni
+-- (dalla 0.147.0), cioè più progetti, va rieseguito in ognuno, e l'avviso
+-- dice quale. Si alza insieme a quella
+-- costante quando questo file cambia in un modo da cui l'app dipende.
 create or replace function public.archivio_stato() returns jsonb
 language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
@@ -1442,7 +1714,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 1)
+    'schema_versione', 4)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 
@@ -1495,6 +1767,7 @@ begin
   tab := case split_part(prefisso, '-', 1)
     when 'RFQ' then 'rfqs' when 'ODA' then 'orders' when 'ODL' then 'work_orders'
     when 'ODP' then 'production_orders' when 'FAB' then 'production_plans' when 'COM' then 'jobs'
+    when 'COL' then 'inspections' when 'NC' then 'nonconformities'
     when 'MT' then 'item_revisions' end;
   if tab = 'item_revisions' then col := 'eco_number'; end if;   -- le modifiche tecniche MT-…
   if tab is null or prefisso !~ '^[A-Z]{2,3}-[0-9]{4}-$' then
@@ -1516,6 +1789,13 @@ create or replace function public.riserva_numeri(prefisso text, quanti int defau
 returns int[] language plpgsql security definer set search_path = public as $$
 declare usati int[]; alto int; presi int[] := '{}'; n int;
 begin
+  -- Solo chi scrive almeno una tabella numerata (dalla 0.141.0). Prima la
+  -- chiamava chiunque avesse l'indirizzo e la chiave pubblica, anche senza
+  -- accesso: ogni chiamata bruciava fino a 500 numeri e la serie saltava.
+  if not exists (select 1 from public.sync_tables s
+                  where public.colonna_numero(s.tab) is not null and public.puo_scrivere_tabella(s.tab)) then
+    raise exception 'il ruolo non scrive documenti numerati' using errcode = '42501';
+  end if;
   if quanti is null or quanti < 1 or quanti > 500 then raise exception 'quantità non valida: %', quanti; end if;
   -- Prima il lucchetto, poi i numeri usati (dalla 0.105.6). Letti prima, un
   -- documento arrivato mentre si aspettava il lucchetto non stava né fra gli
@@ -1555,6 +1835,11 @@ create or replace function public.libera_numeri(prefisso text, numeri int[])
 returns int language plpgsql security definer set search_path = public as $$
 declare usati int[]; n int;
 begin
+  -- Come riserva_numeri (dalla 0.141.0).
+  if not exists (select 1 from public.sync_tables s
+                  where public.colonna_numero(s.tab) is not null and public.puo_scrivere_tabella(s.tab)) then
+    raise exception 'il ruolo non scrive documenti numerati' using errcode = '42501';
+  end if;
   perform pg_advisory_xact_lock(hashtext('bomtrack-numeri:' || prefisso));   -- prima, come in riserva_numeri
   usati := array(select public.numeri_serie_usati(prefisso));
   with tolti as (
@@ -1589,7 +1874,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions'] loop
+  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions', 'nonconformities'] loop
     execute format('drop trigger if exists numeri_chiudi_impegno on public.%I', t);
     execute format('create trigger numeri_chiudi_impegno after insert or update on public.%I for each row execute function public.numeri_chiudi_impegno()', t);
   end loop;
@@ -1607,7 +1892,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions'] loop
+  foreach t in array array['rfqs', 'orders', 'work_orders', 'production_orders', 'production_plans', 'jobs', 'item_revisions', 'nonconformities'] loop
     begin
       execute format('create unique index if not exists %I on public.%I (%I) where %I ~ %L',
         t || '_numero_unico', t, public.colonna_numero(t), public.colonna_numero(t), '^[A-Z]{2,3}-[0-9]{4}-[0-9]+$');
@@ -1741,3 +2026,28 @@ begin
 end $$;
 revoke execute on function public.pulizia_archivio() from public, anon;
 grant execute on function public.pulizia_archivio() to authenticated;
+
+-- ─── Chi esegue le funzioni (dalla 0.141.0) ─────────────────
+-- Postgres dà `execute` a PUBLIC su ogni funzione nuova, e Supabase anche ad
+-- `anon` in modo esplicito: senza questo blocco l'API lasciava chiamare
+-- riserva_numeri e le altre a chi aveva solo l'indirizzo e la chiave pubblica,
+-- che viaggiano nel link e nel QR di collegamento. Nessuna funzione di Bomtrack
+-- serve prima dell'accesso. Si toglie a tutti e si ridà ai soli autenticati;
+-- le due interne restano chiuse anche a loro. In fondo al file, così vale
+-- anche per le funzioni aggiunte sopra in futuro. test/schema-sql.test.js
+-- fallisce se `anon` può eseguirne una.
+do $$
+declare f record;
+begin
+  for f in select p.oid::regprocedure as firma, p.proname
+             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.prokind = 'f' loop
+    execute format('revoke execute on function %s from public, anon', f.firma);
+    if f.proname in ('profilo_crea', 'numeri_serie_usati') then
+      execute format('revoke execute on function %s from authenticated', f.firma);
+    else
+      execute format('grant execute on function %s to authenticated', f.firma);
+    end if;
+  end loop;
+end $$;
+alter default privileges in schema public revoke execute on functions from anon;

@@ -17,7 +17,9 @@ function app(dbObj) {
   a.asRole('admin');
   return a;
 }
-const sorgente = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+// Un file diviso nella 0.141.0 si legge con le sue parti.
+const DIVISI = { 'views-catalog.js': ['views-listino.js', 'views-catalog.js', 'views-cicli.js'], 'views-docs.js': ['views-docs.js', 'views-oda.js'], 'views-mrp.js': ['views-mrp.js', 'views-mrp-documenti.js'] };
+const sorgente = f => (DIVISI[f] || [f]).map(x => fs.readFileSync(path.join(__dirname, '..', x), 'utf8')).join('\n');
 
 describe('Testi coerenti con il comportamento', () => {
   it('dichiarare una parte fatta dice che la mette a magazzino, e la mette', () => {

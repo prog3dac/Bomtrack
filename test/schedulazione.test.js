@@ -217,8 +217,8 @@ describe('Programmazione: i tempi nelle impostazioni Excel', () => {
     const app = conDb();
     app.eval("Object.assign(getWorkCenter('tor'), { setupHours: 1.5, queueDays: 2 });");
     const aoa = foglio(app, 'Centri di lavoro');
-    assert.deepEqual(aoa[0].slice(-3), ['Ore/giorno', 'Attrezzaggio h', 'Coda gg']);
-    assert.deepEqual(aoa.find(r => r[0] === 'CDL tor').slice(-3), [8, 1.5, 2]);
+    assert.deepEqual(aoa[0].slice(-3), ['Ore/giorno', 'Attrezzaggio min', 'Coda gg']);
+    assert.deepEqual(aoa.find(r => r[0] === 'CDL tor').slice(-3), [8, 90, 2]);
   });
 
   it('reimportati, i tempi tornano; una colonna assente li lascia com erano', () => {

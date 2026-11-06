@@ -125,20 +125,20 @@ function opFreezePhases(part) {
 function opFreezeMaterials(part, qty, planId) {
   if (part && isAssembly(part.type)) {
     return montaggioComponenti(part, Number(qty) || 0, planId).stock.map(x => ({ id: newId(), itemId: x.item.id,
-      code: x.item.code || '', name: x.item.name || '', uom: itemUom(x.item), perPezzo: x.perPezzo, qty: x.qty }));
+      code: x.item.code || '', name: x.item.name || '', uom: itemUom(x.item), perPezzo: x.perPezzo, qty: x.qty, opIndex: x.opIndex || 0 }));
   }
-  let righe = clMaterialsOf(part, Number(qty) || 0).map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo, qty: x.qty }));
+  let righe = clMaterialsOf(part, Number(qty) || 0).map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo, qty: x.qty, opIndex: x.opIndex || 0 }));
   if (planId && typeof sostituzioniPrelievo === 'function') {
     const orig = new Map(righe.map(r => [r.itemId, r]));
     righe = sostituzioniPrelievo(planId, righe).map(r => {
       const o = orig.get(r.sostituisce || r.itemId);
-      return Object.assign({}, r, { perPezzo: o && o.qty > 0 ? o.perPezzo * r.qty / o.qty : r.perPezzo });
+      return Object.assign({}, r, { perPezzo: o && o.qty > 0 ? o.perPezzo * r.qty / o.qty : r.perPezzo, opIndex: o ? o.opIndex : 0 });
     });
   }
   return righe.map(r => {
     const it = getItem(r.itemId);
     return { id: newId(), itemId: r.itemId, code: (it && it.code) || '', name: (it && it.name) || '',
-      uom: itemUom(it), perPezzo: r.perPezzo, qty: r.qty };
+      uom: itemUom(it), perPezzo: r.perPezzo, qty: r.qty, opIndex: r.opIndex || 0 };
   }).filter(r => r.code || r.name);
 }
 
@@ -553,13 +553,19 @@ function opDichiara(id, faseId, dati) {
   const qty = Math.max(0, Number(d.qty) || 0);
   const scrap = Math.max(0, Number(d.scrap) || 0);
   if (!(qty > 0) && !(scrap > 0)) { showToast('Niente da dichiarare: pezzi e scarti sono a zero', 'error'); return false; }
-  const decl = opDecl(o, fase, 'avanzamento', { qty, scrap, note: String(d.note || '').trim() });
+  // Col modulo Qualità uno scarto dice perché, e apre la sua NC (dalla 0.144.0).
+  const motivo = scrap > 0 ? String(d.motivo || '').trim() : '';
+  if (typeof qcScartoMotivoOk === 'function' && !qcScartoMotivoOk(scrap, motivo)) return false;
+  const decl = opDecl(o, fase, 'avanzamento', { qty, scrap, note: String(d.note || '').trim(), motivo });
   if (opEUltima(o, fase) && qty > 0) {
     const extra = { orderId: o.id, lineId: fase.id, declId: decl.id };
     const kind = opKindEntrata(o);
     if (kind === 'clIn') extra.supplierId = fase.supplierId;
     addMovement(o.itemId, kind, qty, String(d.note || '').trim() || `Versamento da ${o.number}`, extra);
+    // E il collaudo a fine ciclo, se l'articolo è da collaudare.
+    if (typeof qcDopoVersamento === 'function') qcDopoVersamento(o, fase, qty, decl);
   }
+  if (scrap > 0 && typeof ncDaScarto === 'function') ncDaScarto({ odp: o, fase }, o.itemId, scrap, motivo, decl.id);
   // Il rientro dichiarato qui è lo stesso fatto che l'ordine di lavoro chiama
   // «rientrati»: scriverlo in due posti a mano significherebbe tenerli
   // d'accordo a mano. Il padrone è questo, l'ODL lo rispecchia.
@@ -619,6 +625,7 @@ function opDichiarazioneAnnullabile(o, d) {
   if (d.kind === 'avvio' && opDecls(o.id, fase.id).some(x => x.kind === 'avanzamento' || x.kind === 'chiusura')) {
     return { ok: false, motivo: `la fase ${fase.seq} ha già delle dichiarazioni: annulla prima quelle` };
   }
+  if (typeof qcDichiarazioneAnnullabile === 'function') return qcDichiarazioneAnnullabile(d.id);
   return { ok: true };
 }
 function opAnnullaDichiarazione(declId) {
@@ -629,6 +636,7 @@ function opAnnullaDichiarazione(declId) {
   const ok = opDichiarazioneAnnullabile(o, d);
   if (o && !ok.ok) { showToast(`Non si può annullare: ${ok.motivo}`, 'error'); return false; }
   (db.movements || []).filter(m => m.declId === declId).forEach(m => Store.remove('movements', m.id));
+  if (typeof qcAnnullaDichiarazione === 'function') qcAnnullaDichiarazione(declId);
   Store.remove('prodDecls', declId);
   if (o) { const fase = (o.phases || []).find(f => f.id === d.phaseId); if (fase) opSyncOdlReceived(o, fase); odpAutoStatus(o); touch(o); }
   saveDB();
@@ -840,7 +848,7 @@ function odpFilterChange() {
   odpFilters.from = val('odp-f-from'); odpFilters.to = val('odp-f-to');
   renderOdp();
 }
-function odpFilterInput() { debounced('odpf', odpFilterChange); }
+function odpFilterInput() { debounced('odpf', () => ridisegnaCercando('odp-f-q', odpFilterChange)); }
 function odpFilterReset() { odpFilters.q = ''; odpFilters.status = ''; odpFilters.from = ''; odpFilters.to = ''; renderOdp(); }
 
 function renderOdp() {
@@ -907,7 +915,8 @@ function odpSetField(id, field, value) {
     // nessuno. Ricongelarlo qui tiene le due cose d'accordo senza chiederlo.
     o.qty = Math.max(0, Number(value) || 0);
     const part = getItem(o.itemId);
-    if (part && o.status === 'bozza') o.materials = opFreezeMaterials(part, o.qty, o.planId);
+    // Una ripresa (dalla 0.145.0) non ha la distinta per materiale: ha i pezzi stessi.
+    if (part && o.status === 'bozza') o.materials = o.reworkOfId ? (o.materials || []).map(m => Object.assign(m, { qty: o.qty * (Number(m.perPezzo) || 1) })) : opFreezeMaterials(part, o.qty, o.planId);
     if (o.status === 'bozza') odpPianifica(o);
   } else {
     o[field] = campoTesto(value) || (field === 'jobId' ? null : '');
@@ -998,6 +1007,7 @@ function renderOdpEdit(id) {
         ${worklistCloseBtn('odpBackToList()', "l'ordine di produzione")}
         <h2 class="section-title" style="font-family:var(--mono)">${esc(o.number)}</h2>
         ${statusBadge(ODP_STATUS, o.status)}
+        ${storiaBtn('odp', id)}
         ${ODP_APERTI.includes(o.status) || o.status === 'completato'
     ? `<button class="btn-outline" onclick="odpChiudi('${id}')" title="Chiude l'ordine: non si dichiara più niente">${ico('lock', 'tinted', '')} Chiudi</button>` : ''}
       </div>
@@ -1010,6 +1020,7 @@ function renderOdpEdit(id) {
       </div>
     </div>
     ${docStepperHtml('odp', o)}${docLinksHtml('odp', o)}
+    ${typeof odpRipresaHtml === 'function' ? odpRipresaHtml(o) : ''}
     ${lockBanner}
     <div class="modal-grid">
       <div class="modal-field"><label>${part && isAssembly(part.type) ? esc(typeLabel(part.type)) : 'Parte'}</label>
@@ -1121,6 +1132,13 @@ function odpPhaseActions(o, f, st, legame) {
   return `<div class="line-cl-actions">${cmd.join('')}</div>`;
 }
 
+// La fase in cui si usa una riga di materiale dell'ordine (dalla 0.138.0):
+// quella del ciclo congelato con lo stesso indice fra le fasi.
+function odpFaseConsumoLabel(o, m) {
+  const k = Number(m.opIndex) || 0;
+  const f = (o.phases || []).find(x => Number(x.opIndex) === k) || (o.phases || [])[k];
+  return f ? `fase ${f.seq}${f.wcName ? ' ' + f.wcName : ''}` : 'fase ' + cyclePhaseNumber(k);
+}
 function odpMaterialBlock(o) {
   const righe = opMaterialeResiduo(o);
   if (!righe.length) {
@@ -1128,16 +1146,18 @@ function odpMaterialBlock(o) {
       <p class="empty-text" style="text-align:left">${odpDiAssieme(o) ? "Questo assieme non ha componenti diretti a magazzino: i suoi sottoassiemi si montano ciascuno col proprio ordine." : "Il ciclo di questa parte non ha materiale a magazzino: lo mette chi la lavora."} Non c'è niente da prelevare, e infatti non c'è niente da scaricare.</p></div>`;
   }
   const prima = opPrima(o);
+  const conFase = righe.some(m => Number(m.opIndex) > 0);
   const resto = opPuoPrelevareResto(o) && canWriteShop('docs')
     ? `<button class="add-btn-sm" onclick="opPrelevaRestoModal('${esc(o.id)}')" title="Fa uscire il materiale non prelevato all'avvio">Preleva il resto</button>` : '';
   return `<div class="mrp-section">
     <div class="cycle-section-head"><h3>${ico('package', 'tinted pill', '')} Materiale del ciclo</h3>${resto}</div>
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Esce <strong>una volta sola</strong>, all'avvio della fase ${prima ? esc(String(prima.seq)) : ''}${prima && prima.supplierId ? ` — e va da ${esc(prima.supplierName || '')}` : ''}. Le quantità vengono dal ciclo moltiplicate per i pezzi dell'ordine.</p>
+    ${conFase ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">La colonna <strong>Si usa</strong> è la fase di consumo scritta in distinta: dice per quando serve il materiale, e su quella data lo fa arrivare il fabbisogno.</p>` : ''}
     <div class="table-wrap"><table>
-      <thead><tr><th scope="col">Codice</th><th scope="col">Articolo</th><th scope="col" style="width:100px">Per pezzo</th>
+      <thead><tr><th scope="col">Codice</th><th scope="col">Articolo</th>${conFase ? '<th scope="col" style="width:150px">Si usa</th>' : ''}<th scope="col" style="width:100px">Per pezzo</th>
         <th scope="col" style="width:100px">Previsto</th><th scope="col" style="width:100px">Uscito</th><th scope="col" style="width:100px">Residuo</th></tr></thead>
       <tbody>${righe.map(m => `<tr>
-        <td>${codeLink(m.itemId, m.code)}</td><td>${esc(m.name)}</td>
+        <td>${codeLink(m.itemId, m.code)}</td><td>${esc(m.name)}</td>${conFase ? `<td>${esc(odpFaseConsumoLabel(o, m))}</td>` : ''}
         <td class="num">${fmtQtyIt(m.perPezzo)} ${esc(m.uom)}</td>
         <td class="num">${fmtQtyIt(m.qty)}</td>
         <td class="num">${fmtQtyIt(m.gia)}</td>
@@ -1402,6 +1422,7 @@ function opDichiaraModal(id, faseId) {
         <input class="num" type="number" id="op-d-qty" min="0" step="any" value="${esc(String(+residua.toFixed(4)))}"></div>
       <div class="modal-field"><label>Scarti</label>
         <input class="num" type="number" id="op-d-scrap" min="0" step="any" value="0"></div>
+      ${typeof qcScartoCampoHtml === 'function' ? qcScartoCampoHtml('op-d-motivo') : ''}
     </div>
     <p class="empty-text" style="text-align:left;padding:8px 0">${ultima
     ? (odpDiAssieme(o) ? `È l'<strong>ultima fase</strong>: i buoni sono gli assiemi <strong>${esc(o.code || '')}</strong> montati, e contano come fatti nel piano. Un assieme non ha giacenza: il magazzino non si muove.`
@@ -1414,7 +1435,7 @@ function opDichiaraModal(id, faseId) {
     </div>`, false, 'form');
 }
 function opDichiaraSave(id, faseId) {
-  if (!opDichiara(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note') })) return;
+  if (!opDichiara(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note'), motivo: val('op-d-motivo') })) return;
   closeModal(); opRidisegna(); showToast('Avanzamento registrato');
 }
 // ─── La tratta dal terzista, dichiarata in un colpo (dalla 0.116.0) ───
@@ -1435,11 +1456,12 @@ function opDichiaraTratta(id, faseId, dati) {
   const qty = Math.max(0, Number(d.qty) || 0);
   const scrap = Math.max(0, Number(d.scrap) || 0);
   if (!(qty > 0) && !(scrap > 0)) { showToast('Niente da dichiarare: pezzi e scarti sono a zero', 'error'); return false; }
+  if (typeof qcScartoMotivoOk === 'function' && !qcScartoMotivoOk(scrap, d.motivo)) return false;
   for (const g of fasi.slice(1)) if (!opAvviata(o, g) && !opAvvia(id, g.id)) return false;
   const ultima = fasi[fasi.length - 1];
   for (const g of fasi) {
     const fine = g.id === ultima.id;
-    if (!opDichiara(id, g.id, { qty: fine ? qty : qty + scrap, scrap: fine ? scrap : 0, note: d.note })) return false;
+    if (!opDichiara(id, g.id, { qty: fine ? qty : qty + scrap, scrap: fine ? scrap : 0, note: d.note, motivo: fine ? d.motivo : '' })) return false;
   }
   return true;
 }
@@ -1467,6 +1489,7 @@ function opDichiaraTrattaModal(id, faseId) {
         <input class="num" type="number" id="op-d-qty" min="0" step="any" value="${esc(String(+c.resta.toFixed(4)))}"></div>
       <div class="modal-field"><label>Scarti</label>
         <input class="num" type="number" id="op-d-scrap" min="0" step="any" value="0"></div>
+      ${typeof qcScartoCampoHtml === 'function' ? qcScartoCampoHtml('op-d-motivo') : ''}
     </div>
     <p class="empty-text" style="text-align:left;padding:8px 0">I pezzi tornati sono passati da tutte le fasi della tratta: si dichiarano su ciascuna, e gli scarti sull'ultima. ${ultimaDelCiclo
     ? (odpDiAssieme(o) ? `È la <strong>fine del montaggio</strong>: i buoni sono gli assiemi <strong>${esc(o.code || '')}</strong> montati.`
@@ -1479,7 +1502,7 @@ function opDichiaraTrattaModal(id, faseId) {
     </div>`, false, 'form');
 }
 function opDichiaraTrattaSave(id, faseId) {
-  if (!opDichiaraTratta(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note') })) { opRidisegna(); return; }
+  if (!opDichiaraTratta(id, faseId, { qty: rawNum('op-d-qty'), scrap: rawNum('op-d-scrap'), note: val('op-d-note'), motivo: val('op-d-motivo') })) { opRidisegna(); return; }
   closeModal(); opRidisegna(); showToast('Rientro registrato');
 }
 // La forzatura chiede il motivo, e il testo del blocco è **lo stesso** che il
@@ -1684,7 +1707,7 @@ function odpDocSpec(o) {
   const fasi = (o.phases || []).map(f => [String(f.seq), f.wcName,
     f.supplierId ? (f.supplierName || supplierName(f.supplierId) || '') : (faseMacchinaNome(f) || 'Interna'),
     f.supplierId ? (f.days ? f.days + ' gg' : '')
-      : [f.hours ? fmtQtyIt(f.hours) + ' h/pz' : '', faseAttrezzaggio(f) ? '+ ' + fmtQtyIt(faseAttrezzaggio(f)) + ' h att.' : ''].filter(Boolean).join(' '),
+      : [f.hours ? fmtMin(f.hours) + '/pz' : '', faseAttrezzaggio(f) ? '+ ' + fmtMin(faseAttrezzaggio(f)) + ' att.' : ''].filter(Boolean).join(' '),
     opDaFare(o, f), opFatti(o, f), opScarti(o, f),
     ODP_FASE_LABELS[opStatoFase(o, f)] || '']);
   const mat = opMaterialeResiduo(o).map(m => [m.code, m.name, m.uom, m.qty, m.gia, m.residuo]);

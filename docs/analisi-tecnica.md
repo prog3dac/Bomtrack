@@ -5,6 +5,8 @@ Controllo generale del codice fatto insieme al lavoro della 0.21.0. Diviso in
 stata rimandata. Ogni voce porta file e riga: se il codice si sposta, il
 riferimento va aggiornato o la voce va chiusa.
 
+> **Nota di lettura (0.141.0).** Il documento è stato ripreso il 4 novembre 2026: le voci fra la 0.108.0 e la 0.140.0 stanno in `CHANGELOG.md`, quelle dell'analisi di quel giorno nella sezione «Risolto nella 0.141.0». La sezione «Aperto» è aggiornata.
+
 > **Nota di lettura (0.76.0).** Questo documento è nato col lavoro della 0.21.0
 > e le sue sezioni «Risolto» arrivano fino alla 0.43.0. Fra la 0.44.0 e la
 > 0.75.0 l'app è cresciuta parecchio (conto lavoro, ODL, carico centri, barra
@@ -872,6 +874,81 @@ stati confrontati prima e dopo con i finti di `test/export-docs.test.js`:
 identici. L'unica differenza a schermo è voluta: i suggerimenti di trasporto e
 pagamento, che erano diversi sulla richiesta, sono gli stessi sui tre.
 
+## Risolto nella 0.141.0 — l'analisi del 4 novembre
+
+Fra la 0.107.0 e la 0.140.0 questo documento non è stato seguito: le voci di quel
+tratto stanno in `CHANGELOG.md`. Il 4 novembre il codice è stato riletto per
+intero (storia dei commit, suite, linter di Supabase sul progetto vero); qui le
+voci trovate e chiuse.
+
+### 59. Le funzioni del database si eseguivano senza accesso
+Postgres dà `execute` a PUBLIC su ogni funzione nuova e Supabase anche ad
+`anon`: 11 funzioni `security definer` erano chiamabili con la sola chiave
+pubblica, che viaggia nel link e nel QR di collegamento. `riserva_numeri` non
+controllava il ruolo, e ogni chiamata impegnava fino a 500 numeri per 7 giorni:
+la serie degli ordini saltava. Ora un blocco in fondo a `schema.sql` toglie
+`execute` ad `anon` su **tutte** le funzioni dello schema (anche quelle che
+verranno) e lo ridà agli autenticati; `riserva_numeri` e `libera_numeri`
+rispondono solo a chi scrive una tabella numerata. `test/schema-sql.test.js`
+fallisce se `anon` può eseguire una funzione.
+
+### 60. A6 — il codice unico nel database
+Il prerequisito (nessun doppione) era soddisfatto: 0 su 95 articoli. Indice
+unico su `lower(btrim(code))`, come `codeIndex()` e `impegna_codici`. Su un
+archivio con doppioni non si crea e lo dice con un avviso, invece di fermare
+l'intero file.
+
+### 61. A8 — gli anelli in distinta fra due PC
+Un trigger di vincolo differito su `item_components` e `item_cycle_rows`
+(righe non `op`), con un lucchetto che mette in fila due invii contemporanei.
+Differito perché le righe si riscrivono in blocco per padre; filtrato perché
+una quantità ritoccata non rifaccia la discesa.
+
+### 62. Id con caratteri pericolosi
+Gli id finiscono negli attributi `onclick` senza passare da `esc()`. L'app li
+crea UUID, ma un backup modificato a mano o un invio dall'API potevano portarne
+uno con un apice dentro. `validateSnapshot` (`idNonSicuro`) e `push_changes` li
+rifiutano. In più una Content-Security-Policy in `index.html`: niente script da
+fuori, niente plugin, niente `<base>`. `'unsafe-inline'` resta, per i 455
+gestori `onclick`.
+
+### 63. Linter di Supabase
+Un indice per ogni chiave esterna (erano 81 senza, ora un ciclo li crea tutti,
+anche per le tabelle future); la scrittura in tre policy invece di una `for all`
+che si sommava alla lettura; `search_path` fisso su `sync_stamp`,
+`profiles_guardia`, `profiles_ultimo_admin`, `officina_guardia`;
+`(select auth.uid())` nella policy `se_stesso`.
+
+### 64. Lo schema indietro non si vedeva
+Ogni versione che tocca lo schema chiede di rieseguire `schema.sql` a mano, e
+dimenticarlo fermava la sincronizzazione su una colonna sconosciuta.
+`archivio_stato()` restituisce `schema_versione` e l'app avvisa all'accesso.
+
+### 65. Codice dimenticato
+Sei funzioni non le chiamava nessuno. `contattoTesto` (0.138.0) ora dà il
+dettaglio dei contatti nell'elenco; `contoLavoroExportSpec` aveva l'export del
+prospetto *Presso terzi* che il manuale prometteva, senza pulsante: aggiunto.
+Tolte `allegatoDocDescrizione`, `archivioDimentica`, `closeAllPanels`,
+`escapeRegExp`, `rfqMarkDirty`, `qcDiArticolo`, `qcInCollaudoDi`.
+`test/scripts.test.js` ora fallisce se una funzione non la nomina nessuno.
+
+### 66. C4 — i file lunghi, a metà
+`views-mrp.js` (3.483 righe), `views-catalog.js` (2.773) e `views-docs.js`
+(2.706) divisi per argomento in sette file, caricati nello stesso ordine. Un
+test ferma ogni script oltre le 3.000 righe.
+
+### 67. I numeri di versione fra lavori paralleli
+Sette merge servivano solo a rinumerare, e la PR #52 è rimasta in conflitto.
+`tools/versione.js` assegna il numero all'ultimo passo, con i suoi test;
+`CLAUDE.md` lo dice a chi lavora sul codice.
+
+### 68. La ripresa dei pezzi respinti si faceva fuori dall'app *(0.145.0)*
+Aperta nella 0.144.0 come D12. Ora la NC lancia l'**ODP di ripresa**
+(`ncRipresaCrea`, `qualita-produzione.js`): fase dedicata al ripristino, le
+fasi mancanti dell'originale, i pezzi fermi come materiale, piano e commessa
+ereditati (il fabbisogno lo conta come rifornimento, e non propone un ODP in
+più per gli stessi pezzi), il suo costo come costo della NC.
+
 ## Aperto
 
 > **Lettura per la situazione attuale (0.107.0).** L'archivio condiviso su
@@ -894,21 +971,16 @@ locale — è una conseguenza inevitabile del tenere dei file su un browser — 
 il primo punto in cui «esporta un backup JSON» non basta più a mettersi al
 sicuro, e va chiuso insieme al backend, non dopo.
 
-**A6 residuo — il vincolo `unique` su `items.code` va scritto in SQL.** *[solo con backend]* Il lato
-applicativo è chiuso (§12), ma finché il vincolo non è nel database due client
-possono ancora assegnare lo stesso codice in concorrenza: nessuno dei due vede
-l'altro. Prerequisito: la bonifica dei duplicati storici, che ora ha lo
-strumento per essere fatta.
+*(A6 residuo — il codice unico nel database — chiusa nella 0.141.0, §60.)*
+
+**A11 — protezione dalle password compromesse spenta.** *[solo con backend]* È
+un'impostazione del progetto Supabase, non dello schema: *Authentication →
+Providers → Email → Prevent use of leaked passwords*. Va accesa a mano.
 
 *(A7 — numerazione documenti — chiusa nella 0.105.6: con l'archivio condiviso i
 numeri li riserva il server, e un indice unico rifiuta i doppioni.)*
 
-**A8 residuo — i cicli in distinta restano impediti solo lato client.** *[solo con backend: in locale il client è uno, e basta]* Il lato
-applicativo è chiuso e ora copre anche la distinta parte (§15), ma `createsCycle()`
-protegge dentro **un solo** client. In cloud due utenti possono creare
-congiuntamente un anello che nessuno dei due vede, e `costOf` ricorre **per
-tutti**: è l'unico vincolo la cui violazione rende l'app inutilizzabile a tutto
-il team. Serve un trigger ricorsivo su `item_components`, e non è opzionale.
+*(A8 residuo — gli anelli in distinta fra due PC — chiusa nella 0.141.0, §61.)*
 
 *(A9 — `workCenters[].suppliers` fuori da `SCHEMA` — chiusa nella 0.80.1, §36.)*
 
@@ -921,12 +993,25 @@ condivisi lo stesso ramo si riesplode per ogni percorso. Meno grave di quanto
 sembri: le quantità dipendono dal percorso, quindi la memoizzazione va fatta sul
 *profilo* del sottoalbero, non sul risultato — non è un `Map` e basta.
 
+*Misura 0.141.0* (`test/bench.js`, «Su grandi numeri»): con 5.000 articoli su
+cinque livelli, sei figli ciascuno, il fabbisogno di un piano su 20 macchine
+costa circa **1 secondo**, contro 20 ms del salvataggio e 26 ms del costo di
+tutto il catalogo. È il primo punto da guardare se un piano grande diventa lento.
+
+**B3 — ogni salvataggio riscrive l'archivio intero.** Misurato: 20 ms con 5.000
+articoli e 15.000 movimenti, 70 ms con 20.000 e 60.000 (in Node; nel browser
+IndexedDB aggiunge il suo). Non serve intervenire adesso.
+
 ### C. Manutenibilità
 
 *(C1 residuo — la presentazione dei documenti — chiuso nella 0.107.0, §58.)*
 
 *(C3 residuo e C5 — test della stampa e delle anagrafiche minori, quantità con
 la virgola — chiusi nella 0.107.0, §56–57.)*
+
+*Aggiornamento 0.141.0.* I tre più lunghi sono divisi (§66); restano sopra le
+2.000 righe `store.js`, `core.js` e `cloud.js`, sotto il limite di 3.000 che ora
+un test fa valere.
 
 **C4 — file lunghi con scope globale piatto:** `views-docs.js` ~1990 righe,
 `views-catalog.js` ~1970, `views-mrp.js` ~1880, `core.js` ~1430, `store.js` ~1240,
@@ -973,6 +1058,32 @@ altri nascono sospesi, gli inviti partono da `bomtrack-utenti`; la procedura è
 nel manuale, cap. 31.)*
 
 *(D10 — un ruolo per l'officina — chiusa nella 0.96.0, §54.)*
+
+**D11 — un codice in un piano di controllo solo, fra due PC** *(0.142.0)*. La
+regola «un codice, un piano» si fa rispettare al salvataggio
+(`qcPianoCodiciSet`, `qualita-piani.js`), ma due PC che mettono insieme lo
+stesso codice in due piani diversi passano entrambi: la sincronizzazione fonde
+riga per riga e `item_ids` è un elenco dentro il piano. Non si perde niente,
+perché vale un piano solo, sempre lo stesso (`qcPianoPeso`, poi il più vecchio),
+e la scheda dell'altro piano lo segnala (`qcPianoContesi`). Per chiuderla
+servirebbe una tabella `quality_plan_items` con l'articolo come chiave unica,
+oppure un trigger su `quality_plans` che rifiuta un codice già preso.
+
+**D12 — una NC da scarto per materiale non conforme nasce interna** *(0.144.0)*.
+Con la causale *Materiale non conforme* la NC dovrebbe andare al fornitore del
+materiale, ma l'app non sa da quale ricevimento viene il materiale che l'ODP
+ha prelevato: nasce *Interna* e il fornitore si sceglie a mano. Per chiuderla
+servirebbe la tracciabilità dei lotti fino al prelievo.
+
+**D13 — legami fra documenti che lo schema non tiene** *(0.146.0)*. La Storia
+documenti (`genealogia.js`) legge i legami che ci sono, e tre mancano: l'ODP di
+un sottoassieme non dice di quale ODP d'assieme è parte (tutti e due puntano
+solo al piano: nel grafo sono fratelli); la riga d'ordine di conto lavoro
+(`order_lines.phase_key`) non dice da quale ODP viene; e il collaudo nato
+*dopo la rilavorazione* (`qcRilavoratiAlCollaudo`) cita la NC solo nella nota,
+quindi nel grafo è figlio dell'ordine e non della NC. Per chiuderli servono
+una colonna `parent_odp_id` su `production_orders`, `odp_id` su `order_lines`
+e `nc_id` su `inspections`, con `schema_versione` alzata.
 
 ---
 

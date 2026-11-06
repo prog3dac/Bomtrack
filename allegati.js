@@ -215,11 +215,6 @@ function allegatoDocCancella(doc) {
     return true;
   });
 }
-function allegatoDocDescrizione(docId, testo) {
-  if (!roleGuard('catalog')) return;
-  const doc = allegatoDoc(docId); if (!doc) return;
-  Store.update('attachmentDocs', docId, { description: String(testo || '').trim() });
-}
 // Eliminare il documento: dall'elenco e, dalla 0.112.0, anche il PDF dalla
 // cartella d'archivio. Non si fa finché qualcuno lo cita: stessa regola del
 // cliente citato da una commessa.

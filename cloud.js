@@ -41,7 +41,7 @@
 // e a proteggere i dati sono le policy — ma non stanno nel codice: il codice è
 // lo stesso per tutti, il progetto no. La chiave di servizio non passa mai di qui.
 
-// Ogni chiave è dell'organizzazione attiva (organizzazioni.js, dalla 0.136.0):
+// Ogni chiave è dell'organizzazione attiva (organizzazioni.js, dalla 0.147.0):
 // collegamento, sessione e fotografia di un'organizzazione non si vedono
 // dalle altre.
 const CLOUD_KEY = chiaveOrg(ORG_CLOUD_KEY_BASE);                        // { url, chiave, allineato, since }
@@ -49,9 +49,6 @@ const CLOUD_SESS_KEY = chiaveOrg('bomtrack_cloud_sessione');            // la se
 const CLOUD_BASE_KEY = chiaveOrg('bomtrack_cloud_base');                // la fotografia dell'ultimo invio riuscito
 const CLOUD_SCOLLEGATO_KEY = chiaveOrg('bomtrack_scollegato_da');       // { id } dell'amministratore che ha scollegato
 const CLOUD_NUOVAPW_KEY = chiaveOrg('bomtrack_cloud_nuovapassword');    // l'invito o il recupero da completare
-// La versione di supabase/schema.sql che questa app si aspetta (dalla
-// 0.136.0, vedi archivio_stato). Si alza insieme a quella del file.
-const CLOUD_SCHEMA_VERSIONE = 1;
 const CLOUD_GIRO_MS = 25000;
 const CLOUD_ATTESA_MS = 1500;
 const CLOUD_RIPROVA_MS = 5000;   // senza collegamento: ogni quanto si riprova
@@ -63,6 +60,9 @@ const CLOUD_LIMITE_MS = 90000;   // una richiesta senza risposta dopo questo val
 // del limite di Supabase per una richiesta (8 secondi). Fino alla 0.105.4 era
 // 5 secondi: le righe scritte all'inizio di un invio più lungo sfuggivano.
 const CLOUD_MARGINE_MS = 15000;
+// La versione dello schema che questa app si aspetta da archivio_stato()
+// (dalla 0.141.0): si alza insieme a `schema_versione` in supabase/schema.sql.
+const CLOUD_SCHEMA_VERSIONE = 4;
 const CLOUD_PULIZIA_MS = 6 * 3600 * 1000;   // ogni quanto un PC ricorda al server di pulire
 
 function cloudLeggi(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -151,7 +151,7 @@ async function cloudHttp(percorso, opz) {
 }
 
 // ── Sessione di Supabase Auth ──
-// La sessione porta l'indirizzo del progetto che l'ha emessa (dalla 0.136.0):
+// La sessione porta l'indirizzo del progetto che l'ha emessa (dalla 0.147.0):
 // una sessione che non è di questo collegamento non si usa, né si manda a
 // questo server. Con le chiavi separate per organizzazione non dovrebbe mai
 // succedere; se succede, è un errore da fermare, non un token da provare.
@@ -1197,6 +1197,9 @@ function cloudGestisciErrore(e) {
   // non tutto il lavoro in attesa.
   if (e && e.codice === '23503') { cloudSegna('errore', 'Una modifica cita un elemento che non c\'è più sul server. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
   if (e && e.codice === '23505' && /_numero_unico"/.test(e.message || '')) { cloudSegna('errore', 'Un documento ha un numero che sul server è già di un altro: si riprova al prossimo giro'); return; }
+  // I due vincoli della 0.141.0: il codice unico e la distinta senza anelli.
+  if (e && e.codice === '23505' && /items_codice_unico/.test(e.message || '')) { cloudSegna('errore', 'Un articolo ha un codice che sul server è già di un altro articolo: cambialo, oppure usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
+  if (e && e.codice === '23514' && /distinta_senza_anelli/.test(e.message || '')) { cloudSegna('errore', 'Una distinta conterrebbe sé stessa (' + String(e.message).replace(/^.*distinta_senza_anelli:\s*/, '') + '): togli la riga, oppure usa «Scarta solo i rifiutati» (Archivio condiviso)'); return; }
   const msg = (e && e.message) || String(e);
   cloudSegna('errore', Store.hasPendingChanges() ? msg + '. Se il problema resta, usa «Scarta solo i rifiutati» (Archivio condiviso)' : msg);
 }
@@ -1432,9 +1435,11 @@ async function cloudDopoAccesso() {
   if (!getUser(p.id)) await cloudRiceviForzato();
   return { primo: false, stato: st };
 }
-// Lo schema del progetto è più vecchio dell'app: non si blocca — le funzioni
-// che mancano rispondono già con il loro errore (PGRST202) — ma lo si dice
-// subito, con il nome dell'organizzazione, prima che un invio fallisca.
+// Lo schema del progetto è più vecchio dell'app (dalla 0.141.0): non si blocca
+// — le funzioni che mancano rispondono già con il loro errore (PGRST202), e
+// l'invio rifiuta le colonne che il server non ha — ma lo si dice subito,
+// all'accesso, prima che la sincronizzazione si fermi. Con più organizzazioni
+// (dalla 0.147.0) l'avviso dice quale.
 function cloudSchemaIndietro(st) {
   const v = Number(st && st.schema_versione) || 0;
   return v < CLOUD_SCHEMA_VERSIONE;
@@ -1681,7 +1686,7 @@ function cloudLinkCollegamento(c) {
   if (!c || typeof location === 'undefined') return '';
   const base = location.origin && location.origin !== 'null' ? location.origin + location.pathname : location.href.split(/[?#]/)[0];
   // Il nome dell'organizzazione, se gliel'hanno dato: il PC che apre il link
-  // la ritrova con lo stesso nome (dalla 0.136.0).
+  // la ritrova con lo stesso nome (dalla 0.147.0).
   const voce = orgElenco().find(o => o.id === orgAttiva());
   const nome = voce && voce.nome ? '&nome=' + encodeURIComponent(voce.nome) : '';
   return base + '?supabase=' + encodeURIComponent(c.url) + '&chiave=' + encodeURIComponent(c.chiave) + nome;
@@ -2018,7 +2023,7 @@ function cloudAllAvvio() {
   const x = cloudDaIndirizzo();
   if (!x) return false;
   // Un link di un progetto che sul PC è già un'altra organizzazione (dalla
-  // 0.136.0): si passa a quella e si ricarica **con l'indirizzo intatto**, così
+  // 0.147.0): si passa a quella e si ricarica **con l'indirizzo intatto**, così
   // l'invito o il recupero si completano dentro l'organizzazione giusta, con
   // le sue chiavi. Mai il token di un progetto nelle chiavi di un altro.
   if (x.config) {
@@ -2076,7 +2081,7 @@ function cloudAllAvvio() {
 // Il link di un progetto che sul PC non c'è ancora, mentre l'organizzazione
 // aperta ha già un collegamento o dei dati suoi.
 //  - Già collegata a un altro progetto: il progetto nuovo può solo diventare
-//    un'organizzazione nuova, vuota. Fino alla 0.135.0 il link sostituiva il
+//    un'organizzazione nuova, vuota. Fino alla 0.146.0 il link sostituiva il
 //    collegamento, e l'archivio di qui restava a fare da base a quello nuovo.
 //  - Senza collegamento ma con dei dati: si può collegarla, come sempre (i
 //    dati di qui vanno nel progetto, o li sostituisce il suo archivio), oppure
@@ -2129,7 +2134,7 @@ function cloudLinkScelta(nuova) {
   location.reload();
 }
 // ═══════════════════════════════════════════════════════════
-//  Organizzazioni (dalla 0.136.0)
+//  Organizzazioni (dalla 0.147.0)
 // ═══════════════════════════════════════════════════════════
 // L'elenco delle organizzazioni di questo PC: si apre, si rinomina, si toglie,
 // se ne aggiunge una. Le regole stanno in organizzazioni.js; qui solo la
