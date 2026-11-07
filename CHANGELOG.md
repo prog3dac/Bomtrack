@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.148.0 — 2026-11-07
+
+**Reparto: il filtro libero.**
+- Nuova casella **Cerca** in cima alla pagina Reparto: mentre si scrive restano solo le schede che contengono le parole scritte, in qualunque ordine e senza badare a maiuscole e accenti. Cerca su codice e descrizione, numero dell'ODP, commessa e cliente, fase, centro e macchina, note e situazione.
+- Vale insieme al centro scelto e a *Ordina per*; i numeri accanto ai centri contano solo le schede filtrate. La crocetta o il tasto Esc svuotano il filtro; se non resta nulla, la pagina lo dice e offre *Cancella il filtro*.
+- Sul telefono la casella prende tutta la riga. Non si stampa e non si ricorda fra una visita e l'altra.
+
+Nessun cambio allo schema.
+
 ### 0.147.0 — 2026-11-07
 
 **Storia documenti: anche le fasi di lavorazione.**

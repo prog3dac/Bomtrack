@@ -3402,6 +3402,15 @@ inizio previsto, con oggi evidenziato e in fondo le fasi senza data) o *ODP* (un
 data di consegna). Il dispositivo ricorda la scelta. Ogni scheda mostra in grande il **codice**,
 sotto la descrizione, la fase con centro e macchina, e l'**ODP** evidenziato.
 
+**Cerca** (dalla 0.x.y), accanto a *Ordina per*, filtra le schede mentre si scrive: trova il
+codice, la descrizione, il numero dell'ODP, la commessa e il cliente, la fase, il centro e la
+macchina, le note e la situazione (*in ritardo*, *avviata*…). Non badano a maiuscole e accenti, e
+ogni parola scritta deve comparire nella stessa scheda, in qualunque ordine: `albero ritardo`
+mostra gli alberi in ritardo. Il filtro vale insieme al centro scelto e all'ordinamento, e i numeri
+accanto ai centri contano solo le schede che lo superano. La crocetta, o il tasto Esc, lo
+svuota; *Stampa le schede* stampa quelle che si vedono. L'app non lo ricorda: si riparte da tutte
+le schede alla visita dopo.
+
 In cima a ogni scheda una riga colorata dice la **situazione**: *Da avviare* (blu), *Avviata*
 (giallo), *In ritardo* (rosso: secondo le date pianificate dell'ODP doveva già iniziare o finire),
 *Terminata* (verde). Sotto ci sono l'**inizio previsto** e la fine della fase, e la data in cui il

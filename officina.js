@@ -122,6 +122,40 @@ function repartoColonne(fasi, ordine) {
   });
   return colonne.sort((a, b) => per(a.ordina, b.ordina));
 }
+// Il filtro libero (dalla 0.x.y): ogni parola scritta deve comparire, in
+// qualunque ordine, senza badare a maiuscole e accenti, nel testo della scheda:
+// codice e descrizione, ODP e commessa, fase, centro e macchina, note e
+// situazione. Non si ricorda fra una visita e l'altra: è una ricerca, non una
+// preferenza. Si combina col centro scelto e con l'ordinamento.
+let repartoQ = '';
+function repartoTestoScheda(x) {
+  const { o, f } = x;
+  const job = o.jobId && typeof getJob === 'function' ? getJob(o.jobId) : null;
+  const mac = f.machineId && typeof getMachine === 'function' ? getMachine(f.machineId) : null;
+  const sit = repartoSituazione(o, f, x.stato);
+  return comboNorm([o.code, o.name, o.number, job && job.number, job && job.customer,
+    'fase ' + f.seq, f.wcName, mac ? machineLabel(mac) : f.machineName, sit.label, sit.nota,
+    ...repartoNoteFase(o, f).map(n => n.testo)].filter(Boolean).join(' \n '));
+}
+function repartoFiltra(fasi, q) {
+  const parole = comboNorm(q).split(/\s+/).filter(Boolean);
+  if (!parole.length) return fasi;
+  return fasi.filter(x => { const t = repartoTestoScheda(x); return parole.every(p => t.includes(p)); });
+}
+// Il valore si legge com'è, spazi compresi: val() li toglierebbe, e ridisegnando
+// lo spazio appena scritto fra due parole sparirebbe sotto le dita.
+function repartoCercaInput() {
+  const el = document.getElementById('reparto-q');
+  repartoQ = el ? String(el.value || '') : '';
+  debounced('reparto-q', () => ridisegnaCercando('reparto-q', renderReparto));
+}
+function repartoCercaTasto(ev) { if (ev && ev.key === 'Escape' && repartoQ) { ev.preventDefault(); repartoCercaPulisci(); } }
+function repartoCercaPulisci() {
+  repartoQ = '';
+  renderReparto();
+  const el = document.getElementById('reparto-q');
+  if (el && el.focus) el.focus();
+}
 function repartoSetCentro(id) {
   repartoCentro = id || '';
   try { localStorage.setItem(REPARTO_CENTRO_KEY, repartoCentro); } catch (e) { /* preferenza non salvata */ }
@@ -479,13 +513,14 @@ function renderReparto() {
   let centro = repartoCentroScelto();
   const conMacchine = moduloAttivo('macchine');
   if (centro && !(centro.startsWith('m:') ? conMacchine && machines().some(m => 'm:' + m.id === centro) : centri.some(w => w.id === centro))) centro = '';
-  const fasi = repartoFasi(centro, true);
+  const fasi = repartoFiltra(repartoFasi(centro, true), repartoQ);
   const ordine = repartoOrdineScelto();
+  const cerca = repartoQ.trim();
   const chi = utenteId();
   const mio = logAperto(chi);
   // La barra dei centri: ognuno con le fasi da lavorare (non le terminate).
   const voce = (id, nome, sotto) => {
-    const n = repartoFasi(id).length;
+    const n = repartoFiltra(repartoFasi(id), repartoQ).length;
     const on = id === centro;
     return `<button type="button" class="reparto-centro${sotto ? ' sotto' : ''}${on ? ' on' : ''}" aria-pressed="${on}" onclick="repartoSetCentro('${esc(id)}')">
       <span>${sotto ? '↳ ' : ''}${esc(nome)}</span><span class="reparto-centro-n">${n}</span></button>`;
@@ -496,7 +531,10 @@ function renderReparto() {
   host.innerHTML = `<div class="manage-wrap">
     <div class="bom-toolbar"><div class="bom-toolbar-left">
       <h2 class="section-title">${ico('factory', 'tinted pill', '')} Reparto</h2></div>
-      <div class="bom-toolbar-right"><div class="reparto-ordina" role="group" aria-label="Ordina le schede per"><span>Ordina per</span>${Object.keys(REPARTO_ORDINI).map(k => `<button type="button" class="${k === ordine ? 'on' : ''}" aria-pressed="${k === ordine}" onclick="repartoSetOrdine('${k}')">${REPARTO_ORDINI[k]}</button>`).join('')}</div>
+      <div class="bom-toolbar-right"><div class="reparto-cerca">
+          <input type="search" class="search" id="reparto-q" value="${esc(repartoQ)}" placeholder="Cerca codice, ODP, centro, note…" aria-label="Filtra le schede" autocomplete="off" oninput="repartoCercaInput()" onkeydown="repartoCercaTasto(event)">
+          ${repartoQ ? `<button type="button" class="reparto-cerca-via" onclick="repartoCercaPulisci()" title="Cancella il filtro" aria-label="Cancella il filtro">${ico('close', '', '')}</button>` : ''}</div>
+        <div class="reparto-ordina" role="group" aria-label="Ordina le schede per"><span>Ordina per</span>${Object.keys(REPARTO_ORDINI).map(k => `<button type="button" class="${k === ordine ? 'on' : ''}" aria-pressed="${k === ordine}" onclick="repartoSetOrdine('${k}')">${REPARTO_ORDINI[k]}</button>`).join('')}</div>
         <button class="btn-outline" onclick="repartoStampa()" ${fasi.length ? '' : 'disabled'}>${ico('printer', 'tinted', '')} Stampa le schede</button></div></div>
     <div class="reparto-layout">
       <nav class="reparto-centri" aria-label="Centri di lavoro">${barra}</nav>
@@ -505,7 +543,9 @@ function renderReparto() {
         ${fasi.length ? `<div class="reparto-colonne">${repartoColonne(fasi, ordine).map(c => `<section class="reparto-col${c.oggi ? ' oggi' : ''}">
           <header class="reparto-col-testa"><div><strong>${esc(c.titolo)}</strong>${c.sotto ? `<span>${esc(c.sotto)}</span>` : ''}</div><span class="reparto-centro-n">${c.fasi.length}</span></header>
           ${c.fasi.map(x => repartoCardHtml(x.o, x.f, x.stato)).join('')}</section>`).join('')}</div>` : ''}
-        <div class="reparto-lista">${fasi.length ? '' : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
+        <div class="reparto-lista">${fasi.length ? '' : cerca
+          ? `<div class="empty-text">Nessuna scheda corrisponde a «${esc(cerca)}»${centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : ''}. <button type="button" class="btn-ghost" onclick="repartoCercaPulisci()">Cancella il filtro</button></div>`
+          : '<div class="empty-text">Nessuna fase interna da lavorare' + (centro ? (centro.startsWith('m:') ? ' su questa macchina' : ' su questo centro') : '') + ': gli ordini vanno lanciati dalla vista Ordini di produzione.</div>'}</div>
       </div>
     </div>
   </div>`;
