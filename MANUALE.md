@@ -744,6 +744,12 @@ produzione, qualità).
   per ordini e ordini di lavoro i ricevimenti e i rientri. **Apri il documento** lo apre nella sua
   vista.
 
+**Le fasi di lavorazione** (dalla 0.147.0). Sotto ogni ordine di produzione ci sono le sue fasi,
+nell'ordine del ciclo: centro (e terzista), pezzi buoni su quelli da fare, scarti e stato. Sotto
+ciascuna fase stanno l'ordine di lavoro che la commissiona al terzista, il collaudo che ha aperto a
+fine ciclo e la non conformità dei suoi scarti. Il pulsante **Fasi** le nasconde, quando una famiglia
+ha molti ordini: i documenti tornano sotto l'ODP. Le fasi non si cercano: si arriva a loro dall'ODP.
+
 Sul telefono lo stesso albero diventa un elenco dall'alto in basso, rientrato a ogni generazione.
 
 **Da sapere.** Ogni documento ha un padre solo, il più vicino: un ordine nato da una richiesta è

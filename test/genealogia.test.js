@@ -187,6 +187,58 @@ describe('La ricerca', () => {
   });
 });
 
+describe('Le fasi degli ODP (0.147.0)', () => {
+  // L'ODP con due fasi: la 10 interna, la 20 dal terzista con il suo ODL.
+  function conFasi() {
+    const a = app();
+    a.eval(`(function () {
+      const o = getOdp('odp1');
+      o.phases = [{ id: 'f10', seq: 10, wcName: 'Saldatura', plannedStart: '2026-10-09' },
+        { id: 'f20', seq: 20, wcName: 'Zincatura', supplierId: 'zin', plannedStart: '2026-10-20' }];
+      const w = db.workOrders.find(x => x.id === 'w1');
+      w.lines[0].odpPhaseId = 'f20';
+      db.inspections.push({ id: 'c3', number: 'COL-2026-090', source: 'odp', orderId: 'odp1', lineId: 'f20', itemId: 'asm', qty: 2, uom: 'pz', status: 'aperto', date: '2026-11-04', active: true });
+      const n2 = db.nonconformities.find(x => x.id === 'n2'); n2.respPhase = 'f10';
+      invalidateCaches();
+    })()`);
+    return a;
+  }
+  it('ogni fase è figlia del suo ODP, e l\'ODL, il collaudo e gli scarti della loro fase', () => {
+    const a = conFasi();
+    assert.equal(padre(a, 'fase', 'odp1|f10'), 'odp:odp1');
+    assert.equal(padre(a, 'odl', 'w1'), 'fase:odp1|f20');
+    assert.equal(padre(a, 'insp', 'c3'), 'fase:odp1|f20');
+    assert.equal(padre(a, 'nc', 'n2'), 'fase:odp1|f10');
+  });
+  it('sotto l\'ODP le fasi vengono prima, nell\'ordine del ciclo', () => {
+    const f = J(conFasi(), `storiaIndice().figli.get('odp:odp1')`);
+    assert.deepEqual(f.slice(0, 2), ['fase:odp1|f10', 'fase:odp1|f20']);
+  });
+  it('il nodo dice centro, terzista e stato, e porta all\'ODP', () => {
+    const a = conFasi();
+    a.eval(`storiaApri('odp', 'odp1')`);
+    const h = a.html('view-storia');
+    assert.match(h, /ODP-2026-120 · 20/);
+    assert.match(h, /Zincatura · Zincatura Bassi/);
+    assert.match(h, /Da fare/);
+    a.eval(`storiaApriDocumento('fase', 'odp1|f20')`);
+    assert.equal(a.eval('activeView'), 'odp');
+  });
+  it('spente le fasi, tutto torna sotto l\'ODP e la fase al centro lascia il posto a lui', () => {
+    const a = conFasi();
+    a.eval(`storiaApri('fase', 'odp1|f20')`);
+    a.eval(`storiaSetFasi(false)`);
+    assert.deepEqual(J(a, 'storiaFocus'), { k: 'odp', id: 'odp1' });
+    assert.equal(padre(a, 'odl', 'w1'), 'odp:odp1');
+    assert.equal(padre(a, 'insp', 'c3'), 'odp:odp1');
+    assert.doesNotMatch(a.html('view-storia'), /ODP-2026-120 · 20/);
+    a.eval(`storiaSetFasi(true)`);
+  });
+  it('le fasi non si cercano', () => {
+    assert.deepEqual(J(conFasi(), `storiaCerca('ODP-2026-120').map(h => h.k)`), ['odp']);
+  });
+});
+
 describe('Il pulsante Storia', () => {
   it('c\'è sui documenti, e porta alla storia di quel documento', () => {
     const a = app();

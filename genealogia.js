@@ -28,6 +28,9 @@ const STORIA_TIPI = {
   order: { sigla: 'ODA', nome: 'Ordine fornitore', col: '--orange' },
   odp: { sigla: 'ODP', nome: 'Ordine di produzione', col: '--purple' },
   odl: { sigla: 'ODL', nome: 'Ordine di lavoro', col: '--purple' },
+  // Dalla 0.147.0 anche le fasi degli ODP: l'ODL della fase esterna, il
+  // collaudo a fine ciclo e la NC degli scarti stanno sotto la loro fase.
+  fase: { sigla: 'FASE', nome: 'Fase di lavorazione', col: '--purple' },
   insp: { sigla: 'COL', nome: 'Collaudo', col: '--green' },
   nc: { sigla: 'NC', nome: 'Non conformità', col: '--red' },
   rev: { sigla: 'MT', nome: 'Modifica tecnica', col: '--text-dim' },
@@ -40,6 +43,7 @@ const STORIA_W = 184, STORIA_H = 96, STORIA_GX = 54, STORIA_GY = 14;
 let storiaFocus = null;          // { k, id } del documento al centro
 let storiaModo = 'famiglia';     // 'famiglia' | 'linea'
 let storiaQ = '';                // il testo della ricerca
+let storiaFasi = true;           // le fasi degli ODP come nodi del grafo
 
 function storiaElenco(k) {
   if (k === 'job') return db.jobs || [];
@@ -48,10 +52,27 @@ function storiaElenco(k) {
   if (k === 'order') return db.orders || [];
   if (k === 'odl') return db.workOrders || [];
   if (k === 'odp') return db.prodOrders || [];
+  if (k === 'fase') return storiaFasi ? storiaFasiTutte() : [];
   if (k === 'insp') return (db.inspections || []).filter(x => x && x.active !== false);
   if (k === 'nc') return (db.nonconformities || []).filter(x => x && x.active !== false);
   if (k === 'rev') return (db.revisions || []).filter(r => r && r.ecoNumber);
   return [];
+}
+// Le fasi non sono documenti a sé: vivono dentro l'ODP. Qui diventano voci
+// con un id fatto di ODP e fase (`odpId|faseId`), il numero dell'ODP con la
+// fase e la data di inizio pianificata.
+function storiaFasiTutte() {
+  const out = [];
+  (db.prodOrders || []).forEach(o => (o.phases || []).forEach(f => {
+    if (!f || !f.id) return;
+    out.push({ id: o.id + '|' + f.id, odpId: o.id, odp: o, fase: f, number: (o.number || '') + ' · ' + (f.seq != null ? f.seq : ''),
+      date: f.plannedStart || '', seq: Number(f.seq) || 0 });
+  }));
+  return out;
+}
+// La fase di un ODP come voce del grafo, se le fasi si mostrano e c'è ancora.
+function storiaFaseKey(odpId, faseId) {
+  return odpId && faseId && storiaGet('fase', odpId + '|' + faseId) ? odpId + '|' + faseId : null;
 }
 // Durante un disegno i documenti si cercano in una mappa: fra padri, figli e
 // ordinamento si chiedono migliaia di volte. Fuori dal disegno la mappa non
@@ -89,18 +110,30 @@ function storiaPadre(k, d) {
   if (k === 'order') return prova('rfq', d.rfqId, 'dall\'offerta') || piano() || commessa();
   // L'ODP di ripresa (0.145.0) nasce dalla NC che l'ha lanciato.
   if (k === 'odp') return prova('nc', d.ncId, 'ripresa della NC') || piano() || commessa();
+  if (k === 'fase') return prova('odp', d.odpId, 'fase dell\'ODP');
   if (k === 'odl') {
+    // La riga che commissiona una fase dell'ODP porta l'id della fase.
+    for (const l of d.lines || []) {
+      const fk = l && l.odpPhaseId ? storiaFaseKey(l.odpId || d.odpId, l.odpPhaseId) : null;
+      if (fk) return { k: 'fase', id: fk, perche: 'fase esterna' };
+    }
     const riga = (d.lines || []).find(l => l && l.odpId && storiaGet('odp', l.odpId));
     return prova('odp', d.odpId, 'fase esterna dell\'ODP') || (riga ? { k: 'odp', id: riga.odpId, perche: 'fase esterna dell\'ODP' } : null)
       || prova('rfq', d.rfqId, 'dall\'offerta') || piano() || commessa();
   }
   if (k === 'insp') {
+    // A fine ciclo il collaudo porta la fase che l'ha aperto in `lineId`.
+    const fk = d.source === 'odp' ? storiaFaseKey(d.orderId, d.lineId) : null;
+    if (fk) return { k: 'fase', id: fk, perche: 'a fine ciclo' };
     const o = storiaDocDiOrdine(d.orderId, d.source);
     return o ? Object.assign(o, { perche: o.k === 'odp' ? 'a fine ciclo' : o.k === 'odl' ? 'al rientro dal terzista' : 'al ricevimento' }) : null;
   }
   if (k === 'nc') {
     const c = prova('insp', d.inspectionId, 'dal collaudo');
     if (c) return c;
+    // Gli scarti hanno la fase che li ha fatti (`respPhase`).
+    const fk = storiaFaseKey(d.productionOrderId || d.orderId, d.respPhase);
+    if (fk) return { k: 'fase', id: fk, perche: 'dagli scarti' };
     const o = storiaDocDiOrdine(d.orderId) || storiaDocDiOrdine(d.productionOrderId, 'odp');
     return o ? Object.assign(o, { perche: 'dagli scarti' }) : null;
   }
@@ -131,7 +164,11 @@ function storiaIndiceDentro() {
   // segue il tempo.
   const ordine = new Map();
   const chiaveOrdine = key => {
-    if (!ordine.has(key)) { const x = storiaDaChiave(key), d = storiaGet(x.k, x.id) || {}; ordine.set(key, String(d.date || '').slice(0, 10) + ' ' + (d.number || '')); }
+    // Le fasi vengono prima degli altri figli dell'ODP, nell'ordine del ciclo.
+    if (!ordine.has(key)) {
+      const x = storiaDaChiave(key), d = storiaGet(x.k, x.id) || {};
+      ordine.set(key, x.k === 'fase' ? ' ' + String(d.seq).padStart(6, '0') : String(d.date || '').slice(0, 10) + ' ' + (d.number || ''));
+    }
     return ordine.get(key);
   };
   figli.forEach(arr => arr.sort((a, b) => chiaveOrdine(a).localeCompare(chiaveOrdine(b))));
@@ -225,6 +262,13 @@ function storiaNodo(key) {
   else if (k === 'odp') { n.titolo = [d.code, d.name].filter(Boolean).join(' ') || n.titolo; n.sotto = fmtQtyIt(d.qty) + ' ' + (d.uom || 'pz'); n.badge = statusBadge(ODP_STATUS, d.status); }
   else if (k === 'insp') { n.titolo = articolo(d.itemId); n.sotto = [fmtQtyIt(d.qty) + ' ' + (d.uom || ''), forn(d.supplierId)].filter(s => s.trim()).join(' · '); n.badge = qcBadge(d); }
   else if (k === 'nc') { n.titolo = d.description || articolo(d.itemId); n.sotto = NC_DECISIONI[d.decision] || ''; n.badge = ncBadge(d); }
+  else if (k === 'fase') {
+    const f = d.fase, o = d.odp;
+    n.titolo = [f.wcName, f.supplierId ? f.supplierName || supplierName(f.supplierId) : ''].filter(Boolean).join(' · ') || 'Fase ' + (f.seq || '');
+    n.sotto = `${fmtQtyIt(opFatti(o, f))} su ${fmtQtyIt(opDaFare(o, f))}${opScarti(o, f) > 0 ? ' · scarti ' + fmtQtyIt(opScarti(o, f)) : ''}`;
+    n.badge = opChiusa(o, f) ? '<span class="doc-badge st-completato">Chiusa</span>'
+      : opAvviata(o, f) ? '<span class="doc-badge st-corso">In corso</span>' : '<span class="doc-badge st-bozza">Da fare</span>';
+  }
   else if (k === 'rev') { n.numero = d.ecoNumber || ''; n.titolo = articolo(d.itemId) + (d.rev ? ' rev. ' + d.rev : ''); n.sotto = d.motivo || ''; n.badge = '<span class="doc-badge st-chiuso">Rilasciata</span>'; }
   return n;
 }
@@ -237,7 +281,8 @@ function storiaCerca(q) {
 }
 function storiaCercaDentro(s) {
   const out = [];
-  Object.keys(STORIA_TIPI).forEach(k => storiaElenco(k).forEach(d => {
+  // Le fasi non si cercano: si arriva a loro dall'ODP.
+  Object.keys(STORIA_TIPI).filter(k => k !== 'fase').forEach(k => storiaElenco(k).forEach(d => {
     const n = storiaNodo(storiaChiave(k, d.id));
     if (n && storiaTestoRicerca(n).includes(s)) out.push(Object.assign(n, { esatto: n.numero.toLowerCase().startsWith(s) ? 0 : 1 }));
   }));
@@ -258,6 +303,15 @@ function storiaCentra(key) {
   storiaFocus = { k, id };
   renderStoria();
 }
+// Fasi sì o no. Spegnendole, una fase al centro lascia il posto al suo ODP.
+function storiaSetFasi(on) {
+  if (!on && storiaFocus && storiaFocus.k === 'fase') {
+    const f = storiaGet('fase', storiaFocus.id);
+    storiaFocus = f ? { k: 'odp', id: f.odpId } : null;
+  }
+  storiaFasi = !!on;
+  renderStoria();
+}
 function storiaSetModo(m) { storiaModo = m === 'linea' ? 'linea' : 'famiglia'; renderStoria(); }
 // Il documento nella sua vista. Torna false se la vista è spenta.
 function storiaApriDocumento(k, id) {
@@ -267,6 +321,7 @@ function storiaApriDocumento(k, id) {
     return true;
   }
   if (k === 'rev') { const r = storiaGet('rev', id); if (r) revHistoryModal(r.itemId); return !!r; }
+  if (k === 'fase') { const f = storiaGet('fase', id); if (f) homeApri('odp', f.odpId); return !!f; }
   homeApri(k, id);
   return true;
 }
@@ -374,7 +429,7 @@ function storiaDettaglioHtml(g, key) {
   return `<div class="storia-dett">
     <div><h3 class="storia-h3">${esc(n.tipo)} <span class="storia-mono">${esc(n.numero)}</span> ${n.badge}</h3>
       <div class="storia-dato"><span>Oggetto</span><span>${esc(n.titolo || '—')}</span></div>
-      ${n.sotto ? `<div class="storia-dato"><span>${n.k === 'job' ? 'Cliente' : ['rfq', 'order', 'odl'].includes(n.k) ? 'Fornitore' : 'Dettaglio'}</span><span>${esc(n.sotto)}</span></div>` : ''}
+      ${n.sotto ? `<div class="storia-dato"><span>${n.k === 'job' ? 'Cliente' : ['rfq', 'order', 'odl'].includes(n.k) ? 'Fornitore' : n.k === 'fase' ? 'Pezzi buoni' : 'Dettaglio'}</span><span>${esc(n.sotto)}</span></div>` : ''}
       ${n.data ? `<div class="storia-dato"><span>Data</span><span>${esc(fmtDateIt(n.data))}</span></div>` : ''}
       <div style="margin-top:10px"><button class="add-btn-sm" onclick="storiaApriDocumento(${jsAttr(n.k)},${jsAttr(n.id)})">${ico('eye', 'tinted', '')} Apri il documento</button></div></div>
     <div><h3 class="storia-h3">Collegamenti</h3>${legami.join('')}</div>
@@ -416,7 +471,8 @@ function renderStoriaDentro(host) {
   const tot = g.nodi.length + g.mt.length;
   const seg = (m, t) => `<button type="button" class="${g.modo === m && !g.soloMt ? 'on' : ''}" onclick="storiaSetModo('${m}')"${g.soloMt ? ' disabled' : ''}>${t}</button>`;
   host.innerHTML = `<div class="manage-wrap">${testa}<div class="storia-card">
-    <div class="storia-barra">${cerca}<div class="storia-seg" role="group" aria-label="Quanto mostrare">${seg('famiglia', 'Tutta la famiglia')}${seg('linea', 'Solo la linea')}</div></div>
+    <div class="storia-barra">${cerca}<div class="storia-seg" role="group" aria-label="Quanto mostrare">${seg('famiglia', 'Tutta la famiglia')}${seg('linea', 'Solo la linea')}</div>
+      <div class="storia-seg" role="group" aria-label="Fasi degli ordini di produzione"><button type="button" class="${storiaFasi ? 'on' : ''}" onclick="storiaSetFasi(${storiaFasi ? 'false' : 'true'})" aria-pressed="${storiaFasi}" title="Le fasi degli ordini di produzione, con l'ODL, il collaudo e gli scarti di ciascuna">Fasi</button></div></div>
     ${g.troppi ? `<p class="storia-avviso">${ico('warning', 'tinted', '')} La famiglia ha più di ${STORIA_MAX} documenti: si vede solo la linea di questo.</p>` : ''}
     <p class="storia-guida">${storiaStretto() ? 'Dall\'alto in basso: chi ha generato chi.' : 'Da sinistra a destra: chi ha generato chi.'} In blu la linea del documento scelto, tratteggiate le modifiche tecniche che lo riguardano. Un clic su un documento lo mette al centro. <span class="storia-sotto">${tot} document${tot === 1 ? 'o' : 'i'}</span></p>
     ${storiaStretto() ? storiaElencoHtml(g, key) : storiaGrafoHtml(g, key)}
