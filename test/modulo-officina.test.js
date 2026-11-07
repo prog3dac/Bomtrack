@@ -106,6 +106,42 @@ describe('Terminale di reparto', () => {
     a.eval("getItem('p1').cycle[0].workCenterId = 'w2'");
     assert.deepEqual(note().map(n => n.label), ['Note'], 'al suo posto c\'è un\'altra fase: resta la nota dell\'ODP');
   });
+  it('il filtro libero cerca su codice, ODP, centro, note e situazione, e si combina col centro', () => {
+    const a = app({ officina: true });
+    a.eval(`getOdp('B').code = 'ALBERO-22'; getOdp('B').name = 'Albero di trasmissione'; getOdp('A').phases[0].note = 'Controllo al primo pezzo'`);
+    const ids = q => Array.from(a.eval(`repartoFiltra(repartoFasi('', true), ${JSON.stringify(q)}).map(x => x.o.id)`));
+    assert.deepEqual(ids(''), ['A', 'B']);
+    assert.deepEqual(ids('   '), ['A', 'B'], 'gli spazi da soli non filtrano');
+    assert.deepEqual(ids('albero'), ['B'], 'il codice, senza maiuscole');
+    assert.deepEqual(ids('trasmissione'), ['B'], 'la descrizione');
+    assert.deepEqual(ids('odp-a'), ['A'], 'il numero dell\'ODP');
+    assert.deepEqual(ids('tornio'), ['A', 'B'], 'il centro');
+    assert.deepEqual(ids('primo pezzo'), ['A'], 'le note, ogni parola in qualunque ordine');
+    assert.deepEqual(ids('pezzo albero'), [], 'tutte le parole devono comparire nella stessa scheda');
+    assert.deepEqual(ids('avviata'), ['A'], 'la situazione');
+    assert.deepEqual(ids('contrôllo'), ['A'], 'senza badare agli accenti');
+    a.eval("db.jobs = [{ id: 'j1', number: 'COM-77', customer: 'Rossi Srl', active: true }]; getOdp('B').jobId = 'j1'; invalidateCaches()");
+    assert.deepEqual(ids('rossi'), ['B'], 'la commessa e il cliente');
+  });
+  it('la schermata filtrata: le schede, i conteggi dei centri e il vuoto con «Cancella il filtro»', () => {
+    const a = app({ officina: true });
+    a.eval("setView('reparto')");
+    assert.match(a.html('view-reparto'), /id="reparto-q"/);
+    assert.doesNotMatch(a.html('view-reparto'), /reparto-cerca-via/, 'senza testo niente crocetta');
+    a.eval("repartoQ = 'odp-b'; renderReparto()");
+    let h = a.html('view-reparto');
+    assert.match(h, /data-odp="B"/);
+    assert.doesNotMatch(h, /data-odp="A"/);
+    assert.match(h, /reparto-cerca-via/);
+    assert.match(h, /Tutti i centri<\/span><span class="reparto-centro-n">1</, 'il conteggio segue il filtro');
+    a.eval("repartoQ = 'niente del genere'; renderReparto()");
+    h = a.html('view-reparto');
+    assert.match(h, /Nessuna scheda corrisponde a «niente del genere»/);
+    assert.match(h, /onclick="repartoCercaPulisci\(\)">Cancella il filtro/);
+    a.eval("repartoCercaTasto({ key: 'Escape', preventDefault() {} })");
+    assert.equal(a.eval('repartoQ'), '');
+    assert.match(a.html('view-reparto'), /data-odp="A"/);
+  });
   it('il tempo della sessione è la timbratura aperta più vecchia', () => {
     const a = app({ officina: true }, { timeLogs: [
       { id: 't1', odpId: 'A', phaseId: 'fa', workCenterId: 'w1', userId: 'u1', startedAt: '2026-10-27T08:00:00.000Z', endedAt: '2026-10-27T10:00:00.000Z', active: true },
