@@ -2,6 +2,13 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.147.0 — 2026-11-07
+
+**Storia documenti: anche le fasi di lavorazione.**
+- Sotto ogni ordine di produzione ci sono le sue **fasi**, nell'ordine del ciclo, con centro (e terzista), pezzi buoni su quelli da fare, scarti e stato (*Da fare*, *In corso*, *Chiusa*).
+- Sotto la fase stanno i documenti che ha generato: l'**ODL** della fase esterna, il **collaudo** a fine ciclo e la **NC degli scarti** di quella fase. Un clic su una fase la mette al centro; *Apri il documento* apre il suo ODP.
+- Il pulsante **Fasi** le toglie, per le famiglie con molti ordini: tutto torna sotto l'ODP com'era.
+
 ### 0.146.0 — 2026-11-06
 
 **Storia documenti: da cosa è nato un documento e che cosa ha generato.**

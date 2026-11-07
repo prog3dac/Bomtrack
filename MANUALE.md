@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.146.0**
+**Versione dell'app documentata: 0.147.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -743,6 +743,12 @@ produzione, qualità).
 - Sotto il grafo, il documento al centro: i dati, da cosa è nato e perché, che cosa ha generato, e
   per ordini e ordini di lavoro i ricevimenti e i rientri. **Apri il documento** lo apre nella sua
   vista.
+
+**Le fasi di lavorazione** (dalla 0.147.0). Sotto ogni ordine di produzione ci sono le sue fasi,
+nell'ordine del ciclo: centro (e terzista), pezzi buoni su quelli da fare, scarti e stato. Sotto
+ciascuna fase stanno l'ordine di lavoro che la commissiona al terzista, il collaudo che ha aperto a
+fine ciclo e la non conformità dei suoi scarti. Il pulsante **Fasi** le nasconde, quando una famiglia
+ha molti ordini: i documenti tornano sotto l'ODP. Le fasi non si cercano: si arriva a loro dall'ODP.
 
 Sul telefono lo stesso albero diventa un elenco dall'alto in basso, rientrato a ogni generazione.
 
