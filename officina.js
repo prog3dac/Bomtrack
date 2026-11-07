@@ -122,7 +122,7 @@ function repartoColonne(fasi, ordine) {
   });
   return colonne.sort((a, b) => per(a.ordina, b.ordina));
 }
-// Il filtro libero (dalla 0.x.y): ogni parola scritta deve comparire, in
+// Il filtro libero (dalla 0.148.0): ogni parola scritta deve comparire, in
 // qualunque ordine, senza badare a maiuscole e accenti, nel testo della scheda:
 // codice e descrizione, ODP e commessa, fase, centro e macchina, note e
 // situazione. Non si ricorda fra una visita e l'altra: è una ricerca, non una

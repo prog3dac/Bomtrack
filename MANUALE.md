@@ -3402,7 +3402,7 @@ inizio previsto, con oggi evidenziato e in fondo le fasi senza data) o *ODP* (un
 data di consegna). Il dispositivo ricorda la scelta. Ogni scheda mostra in grande il **codice**,
 sotto la descrizione, la fase con centro e macchina, e l'**ODP** evidenziato.
 
-**Cerca** (dalla 0.x.y), accanto a *Ordina per*, filtra le schede mentre si scrive: trova il
+**Cerca** (dalla 0.148.0), accanto a *Ordina per*, filtra le schede mentre si scrive: trova il
 codice, la descrizione, il numero dell'ODP, la commessa e il cliente, la fase, il centro e la
 macchina, le note e la situazione (*in ritardo*, *avviata*…). Non badano a maiuscole e accenti, e
 ogni parola scritta deve comparire nella stessa scheda, in qualunque ordine: `albero ritardo`
