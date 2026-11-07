@@ -1631,7 +1631,7 @@ select.combo-nascosto{display:none!important}
 .qc-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
 .qc-table th.num,.qc-table td.num{text-align:right}
 /* I campi nelle tabelle della qualità hanno la grafica di quelli delle schede
-   (dalla 0.x.y): prima restavano quelli del browser, col bordo incavato. */
+   (dalla 0.148.1): prima restavano quelli del browser, col bordo incavato. */
 .qc-table input,.qc-table select{width:100%;min-width:70px;min-height:34px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:13px;outline:none}
 .qc-table input:focus,.qc-table select:focus{border-color:var(--accent)}
 .qc-table input[type=checkbox]{width:20px;height:20px;min-width:0;min-height:0;padding:0;accent-color:var(--accent);cursor:pointer;vertical-align:middle}
