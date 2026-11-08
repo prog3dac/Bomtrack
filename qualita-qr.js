@@ -192,7 +192,7 @@ function qcQrSchedaHtml(tipo, rec) {
     if (x.status === 'aperto' && qcPuoScrivere()) bottoni.push(qrBtn('Collauda', 'search', `qcApriDaAltrove('${x.id}')`, true));
     else bottoni.push(qrBtn('Apri il collaudo', 'search', `qcApriDaAltrove('${x.id}')`, true));
     bottoni.push(qrBtn('Rapporto PDF', 'file', `qcRapportoPdf('${x.id}')`));
-    const cert = qcCertificatoRichiesto(x) ? `<p>Certificato ${esc(qcCertificatoPiano(x) || qcCertificato(it) || '')}: <strong>${x.cert === 'ok' ? 'arrivato e conforme' : 'non ancora arrivato'}</strong></p>` : '';
+    const cert = qcCertificatoRichiesto(x) ? `<p>Certificato ${esc(qcCertificatoDi(x))}: <strong>${x.cert === 'ok' ? 'arrivato e conforme' : 'non ancora arrivato'}</strong></p>` : '';
     return `<h3>${ico('search', 'tinted pill', '')} ${esc(x.number || '')} ${qcBadge(x)}</h3>
       <p><strong>${it ? esc(it.code + ' — ' + (it.name || '')) : '—'}</strong></p>
       <p>${fmtQtyIt(x.qty)} ${esc(x.uom || '')} · ${esc(supplierName(x.supplierId) || '—')} · ${esc(qcOrdineNumero(x) || '')} · ${esc(fmtDateIt(x.date))}</p>

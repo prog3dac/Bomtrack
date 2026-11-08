@@ -27,9 +27,8 @@
 //
 // ── Quale piano vince ──
 // Il più specifico: articolo e fornitore, poi articolo, poi famiglia e
-// fornitore, poi famiglia. Un piano attivo vale come «sì, da collaudare»; un
-// articolo segnato espressamente «No» resta fuori anche se la sua famiglia ha
-// un piano, perché chi l'ha scritto lo ha scritto per quello.
+// fornitore, poi famiglia. Dalla 0.149.0 il piano è anche il solo a decidere
+// se un codice si collauda: dentro un piano sì, fuori da tutti no (qualita.js).
 //
 // ── Il salto lotti, e perché non le tabelle II-B e II-C ──
 // La norma prevede di passare dal collaudo normale al ridotto e al rinforzato
@@ -127,16 +126,6 @@ function qcPianoAmbito(p) {
   if (!l.length) return 'Nessun codice';
   const primo = getItem(l[0]);
   return l.length === 1 ? (primo ? `${primo.code} — ${primo.name}` : '1 codice') : `${l.length} codici`;
-}
-// Gli articoli che si collaudano (per scelta loro o della famiglia) ma non
-// stanno in nessun piano: il collaudo nasce, ma senza dire che cosa misurare.
-// Prima della 0.142 un piano di famiglia copriva anche i codici nuovi; con
-// l'elenco no, e il Riepilogo lo ricorda.
-function qcSenzaPiano() {
-  if (typeof qcAttivo !== 'function' || !qcAttivo()) return [];
-  return (db.items || []).filter(it => !it.obsolete && hasStock(it) && it.qc !== 'no'
-    && (it.qc === 'si' || qcFamigliaRichiede(it)) && !qcPianoPer(it))
-    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
 }
 // I codici che stanno anche in un altro piano: dopo una sincronizzazione può
 // capitare, e la scheda lo dice invece di lasciarlo scoprire a chi collauda.
@@ -783,7 +772,7 @@ function qcRapportoPdf(id, modo) {
       ['Quantità / Quantity', `${fmtQtyIt(x.qty)} ${u}`],
       ['DDT / Delivery note', x.ddt || '—'],
       ['Lotto fornitore / Supplier lot', x.supplierLot || '—'],
-      ['Certificato / Certificate', (qcCertificatoPiano(x) || (it ? qcCertificato(it) : '')) ? `${qcCertificatoPiano(x) || qcCertificato(it)} — ${x.cert === 'ok' ? 'ricevuto / received' : 'non ricevuto / not received'}` : '—'],
+      ['Certificato / Certificate', qcCertificatoDi(x) ? `${qcCertificatoDi(x)} — ${x.cert === 'ok' ? 'ricevuto / received' : 'non ricevuto / not received'}` : '—'],
       ['Campionamento / Sampling', x.sampleRule ? `${x.sampleRule} · ${fmtQtyIt(x.sampleSize || 0)} pz` : 'Tutti i pezzi / 100%'],
       ['Non conformi nel campione / Nonconforming', String(Number(x.defects) || 0)],
     ] });

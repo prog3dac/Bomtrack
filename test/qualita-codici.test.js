@@ -177,9 +177,20 @@ describe('I codici del piano', () => {
     assert.equal(a.eval('qcPianiConverti()'), null);
     assert.deepEqual(J(a, 'qcPianoCodici(qcPianoGet("pf"))').sort(), ['c1', 'c2']);
   });
-  it('il Riepilogo ricorda gli articoli da collaudare senza piano', () => {
-    const a = app(base({ famQc: 'si', piani: [piano()] }));
-    assert.deepEqual(J(a, 'qcSenzaPiano().map(x => x.id)'), ['c2']);
+  it('il Riepilogo dice chi ha cambiato comportamento col piano, finché non si conferma', () => {
+    // c1 è nel piano ma era segnato «No»; c2 lo voleva la famiglia e non è in
+    // nessun piano; c3 non aveva scelte e non cambia.
+    const a = app(base({ qc: 'no', famQc: 'si', piani: [piano()] }));
+    assert.deepEqual(J(a, 'qcVecchieScelte().fuori.map(x => x.id)'), ['c2']);
+    assert.deepEqual(J(a, 'qcVecchieScelte().dentro.map(x => x.id)'), ['c1']);
+    const avvisi = J(a, 'homeSegnali().map(x => x.testo)');
+    assert.ok(avvisi.some(t => /non si collauda più/.test(t)));
+    assert.ok(avvisi.some(t => /ora si collauda/.test(t)));
+    a.eval('qcVecchieScelteModal()');
+    a.eval('qcVecchieScelteConferma()');
+    assert.deepEqual(J(a, 'qcVecchieScelte()'), { fuori: [], dentro: [] });
+    assert.equal(J(a, 'getFamily("f1")').qc, undefined);
+    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), true, 'il piano decide come prima');
   });
 });
 

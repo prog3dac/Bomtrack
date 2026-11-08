@@ -1785,18 +1785,27 @@ movimenti. Quando si scrive *ricevuto 50* su una riga d'ordine, quei 50 entrano 
 ### Il collaudo della merce in entrata (modulo, dalla 0.140.0)
 
 **A cosa serve.** A non montare materiale che nessuno ha guardato. Con il modulo **Qualità**
-acceso (*Gestione → Aree e moduli*), un articolo può chiedere il **controllo in entrata**: da quel
-momento, ogni volta che ne arriva — il ricevimento di un ordine fornitore, o i pezzi che rientrano
-dall'ultima fase di un ordine di lavoro — nasce da solo un **collaudo**, e quella quantità resta
-**in collaudo** finché qualcuno non registra l'esito.
+acceso (*Gestione → Aree e moduli*), un articolo che sta in un **piano di controllo** chiede il
+**controllo in entrata**: ogni volta che ne arriva — il ricevimento di un ordine fornitore, o i pezzi
+che rientrano dall'ultima fase di un ordine di lavoro — nasce da solo un **collaudo**, e quella
+quantità resta **in collaudo** finché qualcuno non registra l'esito.
 
-**Dove si accende il controllo.** Nella scheda articolo, sottoscheda *Magazzino*, il campo
-**Si collauda all'arrivo**: *sì*, *no*, oppure *come la famiglia*, che è il valore di serie. La
-regola vera è quasi sempre di categoria — tutti i cuscinetti sì, tutta la bulloneria no — e si
-scrive una volta sola sulla **macrofamiglia** (*Gestione → Famiglie*, casella *Controllo in
-entrata*). Una **sottofamiglia** può scostarsene, e un articolo vince su tutti. Accanto c'è il
-**certificato richiesto** (un testo: `3.1 EN 10204`, `Dichiarazione di conformità`), che compare
-sulla scheda del collaudo per ricordare che va chiesto.
+**Chi decide se si collauda: il piano, e solo lui** (dalla 0.149.0). Un codice che sta in un piano
+di controllo si collauda; un codice che non sta in nessun piano entra subito come merce **libera**.
+Nella scheda articolo, sottoscheda *Magazzino*, la sezione **Controllo in entrata** non ha scelte:
+dice in quale piano sta il codice — con caratteristiche, campionamento e certificato — e porta al
+piano con **Apri il piano**; se il codice non è in nessun piano lo dice, e porta ai *Piani di
+controllo*. Per far collaudare un articolo lo si aggiunge a un piano, per smettere lo si toglie.
+Anche il **certificato richiesto** si scrive sul piano, e compare sulla scheda del collaudo per
+ricordare che va chiesto.
+
+> **Prima della 0.149.0** si sceglieva anche sull'articolo (*sì*, *no*, *come la famiglia*), sulla
+> macrofamiglia e sulla sottofamiglia, e il certificato si poteva scrivere su articolo e famiglia.
+> Quei campi non ci sono più e non contano più. Il **Riepilogo** elenca gli articoli che per questo
+> cambiano comportamento: quelli che si collaudavano e non sono in nessun piano (ora entrano liberi)
+> e quelli segnati *No* che stanno in un piano (ora si collaudano). Un clic apre l'elenco: si
+> sistemano i piani, oppure **Va bene così** toglie le vecchie scelte e l'avviso. I collaudi già
+> aperti restano come sono, compreso il certificato che aspettavano.
 
 **Cosa cambia a magazzino.** La merce in collaudo **resta nell'esistente**: è a scaffale, ed è
 stata pagata. Quello che cambia è il **libero**, che è già la colonna che dice di quanto si può
@@ -1892,10 +1901,8 @@ collauda non si chiede mai quale piano vale. Con due PC che salvano insieme lo s
 piani diversi (succede solo con l'archivio condiviso), vale il piano creato per primo, e la scheda
 dell'altro lo segnala.
 
-**Un piano attivo basta a far collaudare** l'articolo, anche senza toccare il campo *Si collauda
-all'arrivo*; un articolo segnato espressamente **No** resta fuori lo stesso. Il piano può chiedere il
-suo certificato, che vince su quello dell'articolo. Il **Riepilogo** avvisa quando ci sono articoli
-da collaudare che non hanno un piano.
+**Un piano attivo basta a far collaudare** l'articolo, ed è l'unico modo (dalla 0.149.0). Il piano
+può chiedere il suo certificato.
 
 > **Dalla 0.142.0** il piano non si sceglie più per articolo, per famiglia o per fornitore. I piani
 > vecchi diventano elenchi alla prima apertura di *Piani di controllo* da parte di chi li scrive: un
