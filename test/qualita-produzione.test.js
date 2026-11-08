@@ -24,8 +24,9 @@ function app(opz) {
   const a = loadApp({ silent: true });
   a.asRole(o.ruolo || 'admin');
   const p = parte('p1', { cycle: [fase('tor'), o.esterna ? fase('zin', 'beta') : fase('fre')] });
-  if (o.qc !== false) p.qc = 'si';
   a.setDb(makeDb({
+    qualityPlans: o.qc === false ? [] : [{ id: 'pq1', name: 'Alberi', itemIds: ['p1'], cert: '', sampling: 'tutto',
+      characteristics: [], active: true, createdAt: '2026-01-01T00:00:00Z' }],
     suppliers: [{ id: 'beta', name: 'Beta', active: true }],
     workCenters: [wc('tor', 40), wc('fre', 45), wc('zin', 30)],
     items: [p],

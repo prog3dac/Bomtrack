@@ -721,7 +721,6 @@ function readItemForm(it) {
     // Vuota: il campo sparisce, come la modalità lotto senza lotto.
     const ub = ubicazioneNorm(val('it-loc'));
     if (ub) it.location = ub; else delete it.location;
-    if (typeof qcItemLeggiCampi === 'function') qcItemLeggiCampi(it);
   }
   // Doppia unità di misura. Le due voci vanno insieme: un'unità senza fattore
   // non converte niente, un fattore senza unità non si applica a niente.

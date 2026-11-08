@@ -12,8 +12,8 @@
 // bancale costa una telefonata al fornitore.
 //
 // ── Come funziona ──
-// Un articolo (o la sua famiglia) può chiedere il **controllo in entrata**.
-// Quando arriva merce di quell'articolo — ricevimento di un ordine fornitore,
+// Un articolo che sta in un **piano di controllo** chiede il controllo in
+// entrata. Quando arriva merce di quell'articolo — ricevimento di un ordine fornitore,
 // o rientro dei pezzi dall'ultima fase di un ordine di lavoro — nasce da solo
 // un **collaudo**, e quella quantità resta **in collaudo**: è a scaffale, si
 // vede, ma non è **libera**. Il collaudo si chiude con un esito, e l'esito è il
@@ -47,33 +47,90 @@
 function qcAttivo() { return typeof moduloAttivo === 'function' && moduloAttivo('qualita'); }
 
 // ─── Chi si controlla ───
-// Tre valori sull'articolo: '' eredita dalla famiglia, 'si' e 'no' decidono.
-// La famiglia dà il valore di serie, perché la regola vera è quasi sempre di
-// categoria («tutta la bulloneria no, tutti i cuscinetti sì») e scriverla
-// articolo per articolo su un archivio di migliaia di codici non la scrive
-// nessuno.
-const QC_CHOICES = { '': 'Come la famiglia', si: 'Sì, da collaudare', no: 'No' };
-function qcFamigliaRichiede(it) {
-  if (!it || !it.familyId || typeof getFamily !== 'function') return false;
-  const f = getFamily(it.familyId);
+// Dalla 0.149.0 lo decide **solo il piano di controllo** (qualita-piani.js):
+// un codice che sta in un piano si collauda, uno che non sta in nessun piano
+// entra libero. Prima c'erano tre posti dove dirlo — l'articolo (sì, no, come
+// la famiglia), la macrofamiglia e la sottofamiglia — più il piano, e la
+// risposta usciva da una gerarchia che nessuno sapeva leggere a colpo
+// d'occhio. Ora la domanda «questo si collauda?» ha una risposta sola, ed è
+// scritta dove sta anche che cosa si misura.
+//
+// I vecchi campi (`qc` e `qcCert` su articoli, famiglie e sottofamiglie)
+// restano nell'archivio ma non decidono più niente: servono solo al Riepilogo
+// per dire chi ha cambiato comportamento (qcVecchieScelte), e il certificato
+// dell'articolo ai collaudi nati prima, che lo aspettavano già.
+function qcRichiesto(it) {
+  if (!qcAttivo() || !it || !hasStock(it)) return false;
+  return typeof qcPianoPer === 'function' && !!qcPianoPer(it);
+}
+// Che cosa avrebbe risposto la regola di prima: serve solo a trovare chi, col
+// passaggio al piano, ha cambiato comportamento.
+function qcVecchiaScelta(it) {
+  if (!it) return false;
+  if (it.qc === 'si') return true;
+  if (it.qc === 'no') return false;
+  const f = it.familyId && typeof getFamily === 'function' ? getFamily(it.familyId) : null;
   if (!f) return false;
-  // La sottofamiglia, se dice la sua, vince sulla macrofamiglia: è la più
-  // specifica delle due, e chi la imposta lo fa per distinguere.
   const sub = (f.subs || []).find(s => s.id === it.subFamilyId);
   if (sub && (sub.qc === 'si' || sub.qc === 'no')) return sub.qc === 'si';
   return f.qc === 'si';
 }
-// Conta anche un piano di controllo (qualita-piani.js): un codice in un piano
-// vale come «sì». Un «No» scritto sull'articolo resta un no anche lì.
-function qcRichiesto(it, supplierId) {
-  if (!qcAttivo() || !it || !hasStock(it)) return false;
-  if (it.qc === 'si') return true;
-  if (it.qc === 'no') return false;
-  if (typeof qcPianoPer === 'function' && qcPianoPer(it, supplierId || null)) return true;
-  return qcFamigliaRichiede(it);
+// Gli articoli per cui il piano dice il contrario di quello che si era
+// scelto prima: `fuori` si collaudavano e non stanno in nessun piano (ora
+// entrano liberi), `dentro` erano segnati «No» ma stanno in un piano (ora si
+// collaudano). Solo chi aveva una scelta scritta: chi non l'aveva non cambia.
+function qcVecchieScelte() {
+  const out = { fuori: [], dentro: [] };
+  if (!qcAttivo()) return out;
+  (db.items || []).forEach(it => {
+    if (!it || it.obsolete || !hasStock(it)) return;
+    const prima = qcVecchiaScelta(it), ora = qcRichiesto(it);
+    if (prima && !ora) out.fuori.push(it);
+    else if (!prima && ora && it.qc === 'no') out.dentro.push(it);
+  });
+  const per = (a, b) => String(a.code || '').localeCompare(String(b.code || ''));
+  out.fuori.sort(per); out.dentro.sort(per);
+  return out;
 }
-// Il certificato che il fornitore deve allegare, a parole. Vuoto: nessuno.
-function qcCertificato(it) {
+// La finestra del Riepilogo: i due elenchi, la strada per i piani e la
+// conferma. Confermare toglie le vecchie scelte (non i certificati, che i
+// collaudi già nati possono ancora aspettare): l'avviso così non torna.
+function qcVecchieScelteModal() {
+  const v = qcVecchieScelte();
+  const riga = it => `<tr><td class="mono">${esc(it.code || '')}</td><td>${esc(it.name || '')}</td></tr>`;
+  const tabella = (l, titolo, testo) => l.length ? `<div class="qc-card">
+      <h3>${titolo} <span class="qc-conta">${l.length}</span></h3>
+      <p class="empty-text qc-hint" style="padding:0 0 8px">${testo}</p>
+      <div class="table-wrap"><table class="qc-table"><thead><tr><th scope="col">Codice</th><th scope="col">Descrizione</th></tr></thead>
+      <tbody>${l.map(riga).join('')}</tbody></table></div></div>` : '';
+  openModal(`<h3>${ico('ruler', 'tinted pill', '')} Il collaudo ora lo decide il piano</h3>
+    <p class="empty-text" style="text-align:left;padding:0">Dalla 0.149.0 si collauda all'arrivo solo un codice che sta in un <strong>piano di controllo</strong>. Questi articoli avevano una scelta scritta nella scheda o nella famiglia che ora non conta più.</p>
+    ${tabella(v.fuori, 'Prima si collaudavano, ora entrano liberi', 'Non stanno in nessun piano. Se devono continuare a collaudarsi, aggiungili a un piano.')}
+    ${tabella(v.dentro, 'Prima erano esclusi, ora si collaudano', 'Erano segnati «No» ma stanno in un piano. Se non vanno collaudati, toglili dal piano.')}
+    ${!v.fuori.length && !v.dentro.length ? '<p class="empty-text">Nessun articolo da rivedere.</p>' : ''}
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button>
+      <button class="btn-outline" onclick="closeModal();setView('pianiqc')">${ico('ruler', 'tinted', '')} Piani di controllo</button>
+      ${canWrite('manage') && canWrite('catalog') ? `<button class="add-btn-sm" onclick="qcVecchieScelteConferma()">Va bene così</button>` : ''}</div>`, true);
+}
+// Tocca articoli e famiglie: serve chi può scrivere tutte e due.
+function qcVecchieScelteConferma() {
+  if (!roleGuard('manage') || !roleGuard('catalog')) return;
+  let n = 0;
+  (db.items || []).forEach(it => { if (it && 'qc' in it) { delete it.qc; touch(it); n++; } });
+  (db.families || []).forEach(f => {
+    let cambiata = false;
+    if (f && 'qc' in f) { delete f.qc; cambiata = true; }
+    (f && f.subs || []).forEach(s => { if ('qc' in s) { delete s.qc; touch(s); cambiata = true; } });
+    if (cambiata) { touch(f); n++; }
+  });
+  saveDB(); closeModal();
+  if (typeof renderHome === 'function' && typeof activeView !== 'undefined' && activeView === 'home') renderHome();
+  savedToast(n ? 'Vecchie scelte tolte: decide il piano' : 'Niente da togliere');
+}
+// Il certificato scritto sull'articolo o sulla famiglia prima della 0.149.0.
+// Non si imposta più: lo leggono solo i collaudi nati allora, che lo
+// aspettano ancora.
+function qcCertificatoVecchio(it) {
   if (!it) return '';
   if (it.qcCert) return String(it.qcCert);
   if (!it.familyId || typeof getFamily !== 'function') return '';
@@ -81,68 +138,30 @@ function qcCertificato(it) {
   return (f && f.qcCert) ? String(f.qcCert) : '';
 }
 
-// ─── I campi, dove si impostano ───
-// Tre pezzi di interfaccia, chiamati da schede che non sanno niente di
-// qualità: modulo spento restituiscono stringa vuota, e la scheda resta quella
-// di prima senza una riga di `if` in giro per l'app.
+// ─── Nella scheda articolo ───
+// Nessuna scelta: il riquadro dice in quale piano sta il codice, o che non sta
+// in nessuno, e porta al piano. Modulo spento: stringa vuota, e la scheda
+// resta quella di prima.
 function qcItemCampiHtml(it) {
   if (!qcAttivo()) return '';
-  const v = (it && it.qc) || '';
-  const eredita = it && it.familyId ? qcFamigliaRichiede(it) : false;
-  return `<div class="it-sec">Controllo in entrata</div>
-    <div class="modal-grid" id="fld-qc">
-      <div class="modal-field"><label>Si collauda all'arrivo</label>
-        <select id="it-qc">${Object.keys(QC_CHOICES).map(k =>
-    `<option value="${k}" ${v === k ? 'selected' : ''}>${esc(QC_CHOICES[k])}${k === '' ? ` (ora: ${eredita ? 'sì' : 'no'})` : ''}</option>`).join('')}</select></div>
-      <div class="modal-field"><label>Certificato richiesto</label>
-        <input id="it-qccert" maxlength="60" value="${esc((it && it.qcCert) || '')}" placeholder="es. 3.1 EN 10204"></div>
-    </div>
-    <p class="empty-text it-hint">Con il controllo acceso, ogni ricevimento di questo articolo — e ogni rientro dal terzista — apre un <strong>collaudo</strong>: la merce resta a scaffale ma <strong>non è libera</strong> finché qualcuno non registra l'esito.</p>`;
-}
-function qcItemLeggiCampi(it) {
-  if (!qcAttivo() || !it) return;
-  const v = val('it-qc');
-  if (QC_CHOICES[v] && v !== '') it.qc = v; else delete it.qc;
-  const c = val('it-qccert');
-  if (c) it.qcCert = c; else delete it.qcCert;
-}
-function qcFamigliaCampiHtml(f, pfx) {
-  if (!qcAttivo()) return '';
-  return `<div class="modal-grid">
-      <div class="modal-field"><label>Controllo in entrata</label>
-        <label class="flag-check"><input type="checkbox" id="${pfx}-qc" ${f && f.qc === 'si' ? 'checked' : ''}> Gli articoli di questa famiglia si collaudano all'arrivo</label></div>
-      <div class="modal-field"><label>Certificato richiesto</label>
-        <input id="${pfx}-qccert" maxlength="60" value="${esc((f && f.qcCert) || '')}" placeholder="es. 3.1 EN 10204"></div>
-    </div>
-    <p class="empty-text" style="text-align:left;padding:6px 0">Vale per tutti gli articoli della famiglia che non dicono il contrario nella loro scheda. Una sottofamiglia può scostarsene.</p>`;
-}
-function qcFamigliaLeggiCampi(f, pfx) {
-  if (!qcAttivo() || !f) return;
-  const el = document.getElementById(pfx + '-qc');
-  // Testo e non booleano: `qc` ha lo stesso nome sull'articolo, e
-  // nell'archivio condiviso un nome di campo ha un tipo solo (cloud-map.js).
-  if (el && el.checked) f.qc = 'si'; else delete f.qc;
-  const c = val(pfx + '-qccert');
-  if (c) f.qcCert = c; else delete f.qcCert;
-}
-// La sottofamiglia ha tre stati, non due: senza una scelta propria segue la
-// macrofamiglia, e una casella da spuntare non saprebbe dirlo.
-function qcSottofamigliaCampiHtml(s, pfx) {
-  if (!qcAttivo()) return '';
-  const v = (s && (s.qc === 'si' || s.qc === 'no') ? s.qc : '');
-  return `<div class="modal-grid">
-      <div class="modal-field"><label>Controllo in entrata</label>
-        <select id="${pfx}-qc">
-          <option value="" ${v === '' ? 'selected' : ''}>Come la macrofamiglia</option>
-          <option value="si" ${v === 'si' ? 'selected' : ''}>Sì, da collaudare</option>
-          <option value="no" ${v === 'no' ? 'selected' : ''}>No</option>
-        </select></div>
+  const testa = '<div class="it-sec">Controllo in entrata</div>';
+  if (!it) return testa + `<p class="empty-text it-hint">Se si collauda all'arrivo lo decide il <strong>piano di controllo</strong>: dopo aver creato l'articolo, aggiungilo a un piano.</p>`;
+  const p = typeof qcPianoPer === 'function' ? qcPianoPer(it) : null;
+  const vai = (azione, testo) => `<div class="qc-item-azioni"><button type="button" class="btn-outline" onclick="${azione}">${ico('ruler', 'tinted', '')} ${testo}</button></div>`;
+  if (!p) return testa + `<div class="qc-card qc-item" id="fld-qc">
+      <p class="qc-item-testa"><span class="doc-badge st-bozza">Nessun piano</span> <strong>Non si collauda all'arrivo</strong></p>
+      <p class="empty-text qc-hint">Il codice non è in nessun piano di controllo: quando arriva entra subito come merce <strong>libera</strong>. Per farlo collaudare, aggiungilo a un piano.</p>
+      ${vai("closeModal();setView('pianiqc')", 'Piani di controllo')}
     </div>`;
-}
-function qcSottofamigliaLeggiCampi(s, pfx) {
-  if (!qcAttivo() || !s) return;
-  const v = val(pfx + '-qc');
-  if (v === 'si' || v === 'no') s.qc = v; else delete s.qc;
+  const n = qcPianoCodici(p).length, car = (p.characteristics || []).length;
+  const campione = p.sampling === 'aql' ? `campione AQL ${esc(fmtQtyIt(p.aql))} (ISO 2859-1, livello II)`
+    : esc((QC_CAMPIONI[p.sampling] || QC_CAMPIONI.tutto).toLowerCase());
+  return testa + `<div class="qc-card qc-item" id="fld-qc">
+      <p class="qc-item-testa"><span class="doc-badge st-attivo">Si collauda</span> <strong>${esc(p.name || '(piano senza nome)')}</strong></p>
+      <p class="empty-text qc-hint">${car} caratteristic${car === 1 ? 'a' : 'he'} da verificare · ${campione}${p.cert ? ` · certificato <strong>${esc(p.cert)}</strong>` : ''} · il piano vale per ${n} codic${n === 1 ? 'e' : 'i'}.</p>
+      <p class="empty-text qc-hint">Ogni ricevimento di questo articolo — e ogni rientro dal terzista — apre un <strong>collaudo</strong>: la merce resta a scaffale ma <strong>non è libera</strong> finché qualcuno non registra l'esito. Per non collaudarlo più, toglilo dal piano.</p>
+      ${vai(`closeModal();pqApriDaAltrove('${p.id}')`, 'Apri il piano')}
+    </div>`;
 }
 
 // ─── I collaudi ───
@@ -202,7 +221,7 @@ function qcIndice() {
 function qcCrea(dati) {
   const d = dati || {};
   const it = getItem(d.itemId);
-  if (!it || !qcRichiesto(it, d.supplierId || null)) return null;
+  if (!it || !qcRichiesto(it)) return null;
   const qty = Number(d.qty) || 0;
   if (!(qty > 0.000001)) return null;
   const rec = {
@@ -212,7 +231,8 @@ function qcCrea(dati) {
     itemId: it.id, qty, uom: d.uom || itemUom(it),
     supplierId: d.supplierId || null,
     date: typeof oggiISO === 'function' ? oggiISO() : nowISO().slice(0, 10),
-    ddt: '', supplierLot: '', cert: qcCertificato(it) ? 'atteso' : '',
+    // Il certificato da aspettare lo dice il piano (qcApplicaPiano).
+    ddt: '', supplierLot: '', cert: '',
     status: 'aperto', esito: '', qtyOk: 0, qtyKo: 0, destino: qcDestiniDi(d.source)[0],
     note: '', closedAt: null, active: true,
   };
@@ -311,14 +331,16 @@ function qcRegistraEsito(id, dati) {
   if (esito !== 'accettato' && typeof ncDaCollaudo === 'function') ncDaCollaudo(qcGet(insp.id));
   return true;
 }
-// Il certificato che questo collaudo aspetta: quello del piano, se ne ha uno,
-// altrimenti quello dell'articolo o della famiglia.
+// Il certificato che questo collaudo aspetta: quello del piano. Un collaudo
+// nato prima della 0.149.0 può aspettare quello che allora si scriveva
+// sull'articolo o sulla famiglia, e lo trova ancora lì.
 function qcCertificatoDi(insp) {
   if (!insp) return '';
   const dalPiano = typeof qcCertificatoPiano === 'function' ? qcCertificatoPiano(insp) : '';
   if (dalPiano) return dalPiano;
+  if (!insp.cert) return '';
   const it = getItem(insp.itemId);
-  return it ? qcCertificato(it) : '';
+  return it ? qcCertificatoVecchio(it) : '';
 }
 function qcCertificatoRichiesto(insp) { return !!(insp && (insp.cert === 'atteso' || insp.cert === 'ok') && qcCertificatoDi(insp)); }
 // La merce che torna indietro. Due strade, una per origine, e nessuna delle

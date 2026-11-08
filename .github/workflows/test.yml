@@ -11,7 +11,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # playwright@1.56.1 non si installa su ubuntu-latest (26.04)
     # Un Postgres vero per test/schema-sql.test.js: carica supabase/schema.sql,
     # ci spinge dentro un database intero e prova invio, lettura e vincoli.
     # Senza BOMTRACK_PG quei test si dichiarano saltati e il resto gira uguale.

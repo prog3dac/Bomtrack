@@ -172,12 +172,16 @@ function homeSegnali() {
       agg(azioni.map(({ x, a }) => voce(`${x.number} · ${a.who || 'chi?'} · ${fmtDateIt(a.due)}`, `${a.who || 'chi?'} — ${a.text || '(azione senza testo)'} — entro ${fmtDateIt(a.due)}`,
         `ncApriDaAltrove('${x.id}')`)), 'azione di NC da fare entro 7 giorni', 'azioni di NC da fare entro 7 giorni', 'nc', 'media');
     }
-    // Articoli da collaudare che nessun piano copre (dalla 0.142.0): il
-    // collaudo nascerebbe senza dire che cosa misurare. Solo se un piano
-    // esiste già: chi i piani non li usa non deve sentirselo dire ogni giorno.
-    if (typeof qcSenzaPiano === 'function' && (db.qualityPlans || []).length) {
-      agg(qcSenzaPiano().map(it => voce(it.code, `${it.name} — si collauda all'arrivo, ma non sta in nessun piano di controllo`,
-        `setView('pianiqc')`)), 'articolo da collaudare senza piano', 'articoli da collaudare senza piano', 'pianiqc', 'info');
+    // Dalla 0.149.0 il collaudo lo decide il piano: gli articoli che avevano
+    // una scelta scritta (sull'articolo o sulla famiglia) e ora si comportano
+    // al contrario. L'avviso resta finché non si sistemano i piani o non si
+    // conferma che va bene così (qcVecchieScelteModal).
+    if (typeof qcVecchieScelte === 'function') {
+      const v = qcVecchieScelte();
+      agg(v.fuori.map(it => voce(it.code, `${it.name} — prima si collaudava, ora non sta in nessun piano ed entra libero`,
+        'qcVecchieScelteModal()')), 'articolo che non si collauda più: non è in un piano', 'articoli che non si collaudano più: non sono in un piano', 'pianiqc', 'media');
+      agg(v.dentro.map(it => voce(it.code, `${it.name} — era segnato «No», ora sta in un piano e si collauda`,
+        'qcVecchieScelteModal()')), 'articolo che ora si collauda: è in un piano', 'articoli che ora si collaudano: sono in un piano', 'pianiqc', 'info');
     }
   }
 

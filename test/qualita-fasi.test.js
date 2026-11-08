@@ -99,11 +99,11 @@ describe('Il piano entra nel collaudo', () => {
     assert.equal(arriva(a, 100).sampleSize, 7);
   });
 
-  it('un «No» sull\'articolo vince anche sul piano della famiglia', () => {
+  it('un vecchio «No» sull\'articolo non conta più: decide il piano', () => {
     const a = app(base({ qc: 'no', piani: [piano()] }));
-    assert.equal(a.eval('qcRichiesto(getItem("c1"), "s1")'), false);
+    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), true);
     arriva(a, 100);
-    assert.equal(a.eval('qcTutti().length'), 0);
+    assert.equal(a.eval('qcTutti().length'), 1);
   });
 
   it('le misure suggeriscono l\'esito, e una fuori tolleranza dice respinto', () => {

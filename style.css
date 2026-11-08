@@ -1618,6 +1618,9 @@ select.combo-nascosto{display:none!important}
 .qc-card h3{margin:0 0 12px;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
 .qc-val{font-size:14px;padding:6px 0}
 .qc-hint{text-align:left;padding:8px 0 0;line-height:1.5}
+.qc-item{margin-top:0}
+.qc-item-testa{margin:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.qc-item-azioni{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 /* L'etichetta sulla riga di un ordine: dice in una riga se quella merce è
    ancora ferma. Tre colori, gli stessi degli stati dei documenti. */
 .qc-line-tag{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;white-space:nowrap}

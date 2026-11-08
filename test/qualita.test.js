@@ -15,9 +15,11 @@ const { makeDb, mat, acq } = require('./fixtures.js');
 function base(opz) {
   const o = opz || {};
   const art = Object.assign(acq('c1', 5), { uom: 'pz', supplierId: 's1' });
-  if (o.qc !== false) art.qc = 'si';
-  if (o.cert) art.qcCert = o.cert;
+  // Dalla 0.149.0 si collauda un codice che sta in un piano, e solo quello.
+  const piani = o.qc === false ? [] : [{ id: 'pq1', name: 'Cuscinetti', itemIds: ['c1'], cert: o.cert || '',
+    sampling: 'tutto', characteristics: [], active: true, createdAt: '2026-01-01T00:00:00Z' }];
   return makeDb({
+    qualityPlans: piani,
     suppliers: [{ id: 's1', name: 'SKF', active: true }, { id: 's2', name: 'Beta', active: true }],
     items: [art, Object.assign(mat('m1', 10), { uom: 'kg' })],
     settings: { overheadPct: 0, marginPct: 0, currency: '€', modules: { qualita: o.spento ? false : true } },
@@ -63,19 +65,29 @@ describe('Il collaudo nasce dal ricevimento', () => {
     assert.equal(num(a, 'inQCOf("c1")'), 0);
   });
 
-  it('la famiglia decide per i suoi articoli, e l\'articolo può scostarsene', () => {
+  it('lo decide solo il piano: le vecchie scelte su articolo e famiglia non contano più', () => {
     const db = base({ qc: false });
     db.families = [{ id: 'f1', name: 'Cuscinetti', kind: 'acquistato', sigla: 'CUS', qc: 'si',
-      subs: [{ id: 'f1s1', name: 'A sfere', sigla: 'SFE' }, { id: 'f1s2', name: 'Volventi', sigla: 'VOL', qc: 'no' }] }];
-    db.items[0].familyId = 'f1';
+      subs: [{ id: 'f1s1', name: 'A sfere', sigla: 'SFE', qc: 'si' }] }];
+    Object.assign(db.items[0], { familyId: 'f1', subFamilyId: 'f1s1', qc: 'si' });
     const a = app(db);
-    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), true, 'eredita dalla famiglia');
-    a.eval('getItem("c1").subFamilyId = "f1s2"');
-    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), false, 'la sottofamiglia dice no');
-    a.eval('getItem("c1").subFamilyId = "f1s1"');
-    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), true, 'la sottofamiglia tace: vale la famiglia');
-    a.eval('getItem("c1").qc = "no"');
-    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), false, 'l\'articolo vince su tutto');
+    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), false, 'fuori da ogni piano entra libero');
+    ricevi(a, 40);
+    assert.equal(num(a, 'qcTutti().length'), 0);
+    a.eval('db.qualityPlans.push({ id: "pq1", name: "P", itemIds: ["c1"], sampling: "tutto", characteristics: [], active: true }); getItem("c1").qc = "no"');
+    assert.equal(a.eval('qcRichiesto(getItem("c1"))'), true, 'nel piano si collauda, anche con un vecchio «No»');
+  });
+
+  it('la scheda articolo dice il piano, senza scelte', () => {
+    const a = app();
+    const h = a.eval('qcItemCampiHtml(getItem("c1"))');
+    assert.match(h, /Si collauda/);
+    assert.match(h, /Cuscinetti/);
+    assert.match(h, /pqApriDaAltrove\('pq1'\)/);
+    assert.doesNotMatch(h, /<select|<input/);
+    const b = app(base({ qc: false }));
+    assert.match(b.eval('qcItemCampiHtml(getItem("c1"))'), /Non si collauda all'arrivo/);
+    assert.equal(app(base({ spento: true })).eval('qcItemCampiHtml(getItem("c1"))'), '');
   });
 
   it('un ricevuto corretto in giù non apre un secondo collaudo', () => {

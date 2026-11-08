@@ -750,7 +750,6 @@ function editFamilyModal(id) {
       <div class="modal-field"><label>Nome</label><input id="ef-name" value="${esc(f.name)}"></div>
       <div class="modal-field"><label>Sigla (per codifica)</label><input id="ef-sigla" value="${esc(f.sigla || siglaFromName(f.name))}" maxlength="6"></div>
     </div>
-    ${qcFamigliaCampiHtml(f, 'ef')}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveFamily('${id}')">Salva</button></div>`);
 }
@@ -766,7 +765,6 @@ function saveFamily(id) {
   const err = validateFamilySigla(sigla, f.kind, f.id, !sg);
   if (err) { showToast(err, 'error'); return; }
   f.name = nome; f.sigla = sigla;
-  qcFamigliaLeggiCampi(f, 'ef');
   touch(f);
   saveDB(); closeModal(); renderManage(); savedToast('Aggiornata');
 }
@@ -799,7 +797,6 @@ function editSubFamilyModal(familyId, subId) {
       <div class="modal-field"><label>Nome (in ${esc(f.name)})</label><input id="esf-name" value="${esc(s.name)}"></div>
       <div class="modal-field"><label>Sigla (per codifica)</label><input id="esf-sigla" value="${esc(s.sigla || siglaFromName(s.name))}" maxlength="6"></div>
     </div>
-    ${qcSottofamigliaCampiHtml(s, 'esf')}
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="saveSubFamily('${familyId}','${subId}')">Salva</button></div>`);
 }
@@ -812,7 +809,6 @@ function saveSubFamily(familyId, subId) {
   const err = validateSubFamilySigla(sigla, familyId, subId, !sg);
   if (err) { showToast(err, 'error'); return; }
   s.name = nome; s.sigla = sigla;
-  qcSottofamigliaLeggiCampi(s, 'esf');
   touch(s);
   saveDB(); closeModal(); renderManage(); savedToast('Aggiornata');
 }

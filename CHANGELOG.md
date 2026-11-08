@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.149.0 — 2026-11-08
+
+**Qualità: se un articolo si collauda lo decide il piano di controllo.**
+- Un codice che sta in un piano di controllo si collauda all'arrivo; uno che non sta in nessun piano entra subito come merce libera. Le altre strade non ci sono più.
+- Nella scheda articolo, sottoscheda *Magazzino*, la sezione **Controllo in entrata** non ha più scelte: dice in quale piano sta il codice (caratteristiche, campionamento, certificato) con **Apri il piano**, oppure che non è in nessun piano, con un pulsante per i *Piani di controllo*.
+- Tolti il campo *Si collauda all'arrivo* e il *Certificato richiesto* dalla scheda articolo, la casella *Controllo in entrata* e il certificato dalla macrofamiglia, la scelta dalla sottofamiglia. Il certificato si scrive sul piano.
+- Il **Riepilogo** elenca chi cambia comportamento: gli articoli che si collaudavano (per scelta loro o della famiglia) e non sono in nessun piano, e quelli segnati *No* che stanno in un piano. Un clic apre l'elenco; **Va bene così** toglie le vecchie scelte e l'avviso. Sostituisce l'avviso *articoli da collaudare senza piano*.
+- I collaudi già aperti restano come sono, compreso il certificato dell'articolo che aspettavano.
+
+Nessun cambio allo schema.
+
 ### 0.148.1 — 2026-11-07
 
 **Non conformità: i campi delle azioni.**
