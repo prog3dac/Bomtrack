@@ -389,11 +389,11 @@ function ncSchedaHtml(x, scrive) {
   const rifOrigine = origine ? ' · ' + link : '';
   const g = oggiISO();
   const azioni = (x.actions || []).map(a => `<tr class="${!a.done && a.due && a.due < g ? 'qc-row-ko' : ''}">
-      <td><input type="checkbox" ${a.done ? 'checked' : ''} ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','done',this.checked)" aria-label="Fatta"></td>
-      <td><input value="${esc(a.text || '')}" placeholder="es. Chiedere al fornitore l'8D" ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','text',this.value)" aria-label="Azione"></td>
-      <td><input value="${esc(a.who || '')}" placeholder="Chi" ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','who',this.value)" aria-label="Chi"></td>
-      <td><input type="date" value="${esc(a.due || '')}" ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','due',this.value)" aria-label="Entro"></td>
-      ${scrive && aperta ? `<td><button class="mini-btn danger" onclick="ncAzioneElimina('${x.id}','${a.id}')" title="Elimina l'azione">${ico('trash', 'tinted', 'Elimina')}</button></td>` : ''}
+      <td class="nc-az-fatta"><input type="checkbox" ${a.done ? 'checked' : ''} ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','done',this.checked)" aria-label="Fatta"></td>
+      <td class="nc-az-testo"><input value="${esc(a.text || '')}" placeholder="es. Chiedere al fornitore l'8D" ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','text',this.value)" aria-label="Azione"></td>
+      <td class="nc-az-chi"><input value="${esc(a.who || '')}" placeholder="Chi" ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','who',this.value)" aria-label="Chi"></td>
+      <td class="nc-az-entro"><input type="date" value="${esc(a.due || '')}" ${dis} onchange="ncAzioneSet('${x.id}','${a.id}','due',this.value)" aria-label="Entro"></td>
+      ${scrive && aperta ? `<td class="qc-row-cmds"><button class="mini-btn danger" onclick="ncAzioneElimina('${x.id}','${a.id}')" title="Elimina l'azione">${ico('trash', 'tinted', 'Elimina')}</button></td>` : ''}
     </tr>`).join('');
   return `<div class="manage-wrap">
     <div class="bom-toolbar">
@@ -441,8 +441,8 @@ function ncSchedaHtml(x, scrive) {
     </div>
     <div class="qc-card">
       <h3>Azioni</h3>
-      ${azioni ? `<div class="table-wrap"><table class="qc-table">
-        <thead><tr><th scope="col">Fatta</th><th scope="col">Azione</th><th scope="col">Chi</th><th scope="col">Entro</th>${scrive && aperta ? '<th scope="col"><span class="sr-only">Comandi</span></th>' : ''}</tr></thead>
+      ${azioni ? `<div class="table-wrap"><table class="qc-table nc-azioni">
+        <thead><tr><th scope="col" class="nc-az-fatta">Fatta</th><th scope="col">Azione</th><th scope="col">Chi</th><th scope="col">Entro</th>${scrive && aperta ? '<th scope="col"><span class="sr-only">Comandi</span></th>' : ''}</tr></thead>
         <tbody>${azioni}</tbody></table></div>` : '<p class="empty-text qc-hint">Nessuna azione: chi deve fare cosa, perché non si ripeta?</p>'}
       ${scrive && aperta ? `<div class="modal-actions" style="justify-content:flex-start">
         <button class="btn-outline" onclick="ncAzioneAggiungi('${x.id}')">${ico('plus', 'tinted', '')} Aggiungi un'azione</button></div>` : ''}

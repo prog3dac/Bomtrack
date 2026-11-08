@@ -1630,7 +1630,30 @@ select.combo-nascosto{display:none!important}
 .qc-table th{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
 .qc-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
 .qc-table th.num,.qc-table td.num{text-align:right}
-.qc-table input,.qc-table select{width:100%;min-width:70px;min-height:32px}
+/* I campi nelle tabelle della qualità hanno la grafica di quelli delle schede
+   (dalla 0.148.1): prima restavano quelli del browser, col bordo incavato. */
+.qc-table input,.qc-table select{width:100%;min-width:70px;min-height:34px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:13px;outline:none}
+.qc-table input:focus,.qc-table select:focus{border-color:var(--accent)}
+.qc-table input[type=checkbox]{width:20px;height:20px;min-width:0;min-height:0;padding:0;accent-color:var(--accent);cursor:pointer;vertical-align:middle}
+/* Le azioni della NC: il testo prende la riga, chi ed entro restano stretti. */
+.nc-azioni .nc-az-fatta{width:1%;text-align:center}
+.nc-azioni .nc-az-testo{width:100%}
+.nc-azioni .nc-az-testo input{min-width:240px}
+.nc-azioni .nc-az-chi input{min-width:120px;width:140px}
+.nc-azioni .nc-az-entro input{min-width:140px;width:150px}
+/* Al telefono ogni azione è un riquadro: in alto la casella e il testo, sotto
+   chi, entro e il cestino. Niente da far scorrere di lato. */
+@media (max-width:640px){
+  .nc-azioni thead{display:none}
+  .nc-azioni,.nc-azioni tbody{display:block}
+  .nc-azioni tr{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+  .nc-azioni td{display:block;padding:0;border:none;width:auto}
+  .nc-azioni tr.qc-row-ko{background:var(--red-soft)}
+  .nc-azioni tr.qc-row-ko td{background:none}
+  .nc-azioni .nc-az-testo{grid-column:2/-1}
+  .nc-azioni .nc-az-chi{grid-column:1/3}
+  .nc-azioni .nc-az-testo input,.nc-azioni .nc-az-chi input,.nc-azioni .nc-az-entro input{min-width:0;width:100%}
+}
 .qc-table input.num{text-align:right;font-family:var(--mono)}
 .qc-table .qc-row-cmds{white-space:nowrap;text-align:right}
 .qc-table tr.qc-row-ko td{background:var(--red-soft)}

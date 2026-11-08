@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.148.1 — 2026-11-07
+
+**Non conformità: i campi delle azioni.**
+- I campi della tabella *Azioni* hanno ora la grafica delle altre schede (sfondo, bordo arrotondato, stessa altezza); prima restavano quelli del browser. Lo stesso vale per le misure nella tabella del collaudo.
+- La colonna **Azione** prende tutto lo spazio che avanza; *Chi* ed *Entro* restano stretti. La casella *Fatta* torna di dimensione normale.
+- Sul telefono ogni azione è un riquadro: casella e testo sopra, chi, entro e cestino sotto, senza scorrere di lato.
+
+Nessun cambio allo schema.
+
 ### 0.148.0 — 2026-11-07
 
 **Reparto: il filtro libero.**
