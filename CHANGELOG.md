@@ -2,6 +2,16 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.150.0 — 2026-11-10
+
+**Correggi le timbrature: l'ora da un solo elenco.**
+- Inizio e fine hanno la data e, accanto, un solo elenco delle ore a passi di 5 minuti (00:00, 00:05 … 23:55), al posto della scelta separata di ore e minuti. Sul telefono si apre la rotella del sistema.
+- Un orario timbrato che non cade sui 5 minuti (08:02) resta nell'elenco com'è: salvando senza toccarlo non cambia.
+- Per chiudere una fase rimasta attiva basta scegliere l'ora di fine: senza data vale il giorno dell'inizio. Una data senza ora non si salva, e un avviso lo dice.
+- Una timbratura aggiunta a mano parte da un orario dell'elenco.
+
+Nessun cambio allo schema.
+
 ### 0.149.0 — 2026-11-08
 
 **Qualità: se un articolo si collauda lo decide il piano di controllo.**

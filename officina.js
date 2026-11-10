@@ -339,7 +339,7 @@ function timbratureModal(odpId, faseId) {
     <p><strong>${esc(o.number || '')}</strong> · ${esc(o.code || '')} · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}</p>
     <div id="tmb-righe">${timbratureRigheHtml()}</div>
     <button type="button" class="btn-ghost" onclick="timbratureAggiungi()">${ico('plus', 'tinted', '')} Aggiungi una timbratura</button>
-    <p class="empty-text" style="text-align:left;padding:8px 0 0">Una fase rimasta attiva per errore si chiude scrivendo la fine; una fine vuota vuol dire che si lavora ancora. Le modifiche finiscono nello storico, e una timbratura eliminata va nel cestino.</p>
+    <p class="empty-text" style="text-align:left;padding:8px 0 0">Una fase rimasta attiva per errore si chiude scegliendo l\'ora di fine (senza data vale il giorno dell\'inizio); una fine vuota vuol dire che si lavora ancora. Le modifiche finiscono nello storico, e una timbratura eliminata va nel cestino.</p>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="timbratureSalva()">Salva</button>
