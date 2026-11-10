@@ -71,9 +71,10 @@ describe('Correzione delle timbrature', () => {
     const a = app([Object.assign(log('t1', 'u2', '08:00', null), { startedAt: '2026-10-27T08:00:17.421Z' })]);
     a.eval('globalThis.__m = ""; { const vero = openModal; openModal = (h, ...r) => { __m = h; return vero(h, ...r); }; }');
     a.eval("timbratureModal('A', 'fa')");
-    assert.match(a.eval('__m'), /Correggi le timbrature[\s\S]*Bruno[\s\S]*type="datetime-local"/);
+    assert.match(a.eval('__m'), /Correggi le timbrature[\s\S]*Bruno[\s\S]*type="date"/);
     // Il campo come lo mostra la finestra, senza i secondi; la fine scritta a mano.
-    a.eval("document.getElementById('tmb-a-0').value = isoALocale('2026-10-27T08:00:17.421Z'); document.getElementById('tmb-b-0').value = isoALocale('2026-10-27T16:00:00.000Z'); timbratureSalva()");
+    a.eval(`const v = (id, x) => { document.getElementById(id).value = x.slice(0, 10); document.getElementById(id + '-h').value = x.slice(11, 16); };
+      v('tmb-a-0', isoALocale('2026-10-27T08:00:17.421Z')); v('tmb-b-0', isoALocale('2026-10-27T16:00:00.000Z')); timbratureSalva()`);
     const l = a.eval("db.timeLogs.find(l => l.id === 't1')");
     assert.equal(l.startedAt, '2026-10-27T08:00:17.421Z');
     assert.equal(l.endedAt, '2026-10-27T16:00:00.000Z');
@@ -89,5 +90,35 @@ describe('Correzione delle timbrature', () => {
     b.eval('globalThis.__m = ""; openModal = h => { __m = h; }');
     b.eval("timbratureModal('A', 'fa')");
     assert.equal(b.eval('__m'), '');
+  });
+  it('l\'ora si sceglie da un solo elenco, a passi di 5 minuti (dalla 0.151.0)', () => {
+    const h = a => a.eval("Array.from(timbratureOreOpzioni('08:02', false).matchAll(/value=\"([^\"]*)\"/g), m => m[1])");
+    const a = app([log('t1', 'u2', '08:00', null)]);
+    const ore = h(a);
+    assert.equal(ore.length, 289);
+    assert.deepEqual(Array.from(ore.slice(96, 100)), ['08:00', '08:02', '08:05', '08:10']);
+    assert.equal(a.eval("timbratureOreOpzioni('08:00', true).split('<option').length - 1"), 289);
+    assert.match(a.eval("timbratureOreOpzioni('', true)"), /^<option value="" selected>/);
+    assert.match(a.eval("timbratureOreOpzioni('23:58', false)"), /23:55<\/option><option value="23:58" selected>/);
+  });
+  it('chiude una fase scegliendo solo l\'ora: il giorno è quello dell\'inizio; una data senza ora non salva', () => {
+    const a = app([log('t1', 'u2', '08:00', null)]);
+    a.eval("timbratureModal('A', 'fa')");
+    const giorno = a.eval("isoALocale('2026-10-27T08:00:00.000Z').slice(0, 10)");
+    // Il DOM finto non legge l'HTML: i campi dell'inizio si riempiono come li mostra la finestra.
+    a.eval("document.getElementById('tmb-a-0').value = '" + giorno + "'; document.getElementById('tmb-a-0-h').value = isoALocale('2026-10-27T08:00:00.000Z').slice(11, 16)");
+    a.eval("document.getElementById('tmb-b-0').value = '" + giorno + "'; document.getElementById('tmb-b-0-h').value = ''; timbratureSalva()");
+    assert.equal(a.eval("db.timeLogs.find(l => l.id === 't1').endedAt"), null);
+    a.eval("document.getElementById('tmb-b-0').value = ''; document.getElementById('tmb-b-0-h').value = '16:30'; timbratureSalva()");
+    assert.equal(a.eval("db.timeLogs.find(l => l.id === 't1').endedAt"), a.eval("localeAIso('" + giorno + "T16:30')"));
+  });
+  it('una timbratura aggiunta parte a un orario dell\'elenco', () => {
+    const a = app([log('t1', 'u2', '08:00', '10:03')]);
+    a.eval(`timbratureModal('A', 'fa');
+      const v = (id, iso) => { const x = isoALocale(iso); document.getElementById(id).value = x.slice(0, 10); document.getElementById(id + '-h').value = x.slice(11, 16); };
+      v('tmb-a-0', '2026-10-27T08:00:00.000Z'); v('tmb-b-0', '2026-10-27T10:03:00.000Z');
+      // La riga nuova, prima che il ridisegno la rilegga dal DOM finto, che è vuoto.
+      timbratureLeggi(); const leggi = timbratureLeggi; timbratureLeggi = () => {}; timbratureAggiungi(); timbratureLeggi = leggi`);
+    assert.match(a.eval('_tmb.righe[1].inizio'), /:[0-5][05]$/);
   });
 });

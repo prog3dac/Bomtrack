@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.150.0**
+**Versione dell'app documentata: 0.151.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3494,8 +3494,12 @@ N ore».
 ufficio acquisti; non l'officina) trova **Correggi i tempi** sotto il *Tempo lavorato* su ogni scheda. Si
 apre l'elenco delle timbrature della fase, con l'operatore, la durata, l'inizio e la fine:
 
-- una fase rimasta **attiva per errore**, per esempio una pausa dimenticata, si chiude scrivendo
-  l'ora giusta in *Fine*; una fine vuota vuol dire che si lavora ancora;
+- inizio e fine hanno ciascuno la **data** e l'**ora**; l'ora si sceglie da un solo elenco a passi
+  di 5 minuti (dalla 0.151.0). Un orario timbrato fuori dai 5 minuti, per esempio 08:02, resta
+  nell'elenco com'è e non cambia se non lo si tocca;
+- una fase rimasta **attiva per errore**, per esempio una pausa dimenticata, si chiude scegliendo
+  l'ora giusta in *Fine*: senza data vale il giorno dell'inizio. Una fine vuota vuol dire che si
+  lavora ancora;
 - il **cestino** su una riga la segna da eliminare (un secondo clic la tiene); salvando, la
   timbratura finisce nel cestino dell'app;
 - **Aggiungi una timbratura** registra un lavoro per cui nessuno ha premuto *Inizia*, con
