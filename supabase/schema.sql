@@ -323,10 +323,12 @@ create table if not exists public.production_plans (
   id uuid primary key,
   number text, title text, date date, due_date date, notes text,
   job_id uuid references public.jobs(id) deferrable initially deferred,
-  active boolean, child_sets text,
+  active boolean, child_sets text, cost_snapshot jsonb,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.150.0: il preventivo fotografato di un piano senza commessa (modulo Costi reali).
+alter table public.production_plans add column if not exists cost_snapshot jsonb;
 
 create table if not exists public.production_plan_lines (
   id uuid primary key,
@@ -1712,7 +1714,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 4)
+    'schema_versione', 5)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

@@ -440,7 +440,8 @@ function repartoCardHtml(o, f, stato) {
   const ore = oreTimbrate(o.id, f.id);
   const attesa = stato === 'attesa';
   const pezzi = attesa ? opAttesiFase(o, f) : opDaFare(o, f);
-  const previste = (Number(f.hours) || 0) * pezzi;
+  // Attrezzaggio compreso, come nei Tempi del consuntivo: le timbrature lo contano.
+  const previste = consOreFase(f, pezzi, true);
   const bottoni = !scrive ? '' : aperto
     ? `<button class="add-btn-sm reparto-btn" onclick="repartoPausa('${o.id}','${f.id}')">${ico('clock', '', '')} Pausa</button>
        ${stato !== 'chiusa' ? `<button class="btn-outline reparto-btn" onclick="repartoFine('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Fine e dichiara</button>` : ''}`

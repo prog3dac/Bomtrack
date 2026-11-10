@@ -92,8 +92,14 @@ describe('Consuntivo di commessa', () => {
   });
   it('il materiale prelevato non si conta anche come ricevuto', () => {
     const c = appCommessa().eval("jobConsuntivo('J1')");
-    // 6 prelevati a listino (5 €): l'ODA da 120 € non si somma
-    assert.equal(voce(c, 'materiali').reale, 30);
+    // 6 prelevati al prezzo pagato sull'ODA della commessa (6 €, dalla
+    // 0.150.0; prima il listino): l'ODA da 120 € non si somma
+    assert.equal(voce(c, 'materiali').reale, 36);
+  });
+  it('senza un ODA della commessa il prelievo vale il magazzino', () => {
+    const a = appCommessa();
+    a.eval("db.orders = []");
+    assert.equal(voce(a.eval("jobConsuntivo('J1')"), 'materiali').reale, 30);
   });
   it('lavorazioni: fasi interne lavorate più ODL ricevuti', () => {
     const c = appCommessa().eval("jobConsuntivo('J1')");
@@ -123,17 +129,36 @@ describe('Consuntivo di commessa', () => {
 });
 
 describe('Consuntivo con le ore timbrate', () => {
-  it('con il modulo Officina le ore timbrate prendono il posto di quelle del ciclo', () => {
+  const timbra = a => a.eval(`db.timeLogs = [{ id: 't1', odpId: 'odp1', phaseId: 'f1', workCenterId: 'w1', userId: 'u', startedAt: '2026-10-01T08:00:00.000Z', endedAt: '2026-10-01T09:30:00.000Z', active: true }]`);
+  it('con il modulo Officina le ore timbrate di una fase oraria prendono il posto di quelle del ciclo', () => {
     const a = appCommessa({ costiReali: true, officina: true });
-    a.eval(`db.timeLogs = [{ id: 't1', odpId: 'odp1', phaseId: 'f1', workCenterId: 'w1', userId: 'u', startedAt: '2026-10-01T08:00:00.000Z', endedAt: '2026-10-01T09:30:00.000Z', active: true }]`);
-    // 1,5 h × 40 €/h (fase a costo fisso: vale la tariffa del centro) + ODL 50
+    a.eval("Object.assign(getOdp('odp1').phases[0], { costMode: 'orario', hours: 0.5, rate: 0 })");
+    timbra(a);
+    // 1,5 h × 40 €/h (senza tariffa sulla fase vale quella del centro) + ODL 50
     assert.equal(voce(a.eval("jobConsuntivo('J1')"), 'lavorazioni').reale, 1.5 * 40 + 50);
+  });
+  it('una fase a costo fisso resta a pezzo anche timbrata, come nel preventivo (dalla 0.150.0)', () => {
+    const a = appCommessa({ costiReali: true, officina: true });
+    timbra(a);
+    assert.equal(voce(a.eval("jobConsuntivo('J1')"), 'lavorazioni').reale, 2 * 10 + 50);
+  });
+  it('i tempi mettono le ore timbrate accanto a quelle del ciclo', () => {
+    const a = appCommessa({ costiReali: true, officina: true });
+    a.eval("getOdp('odp1').phases[0].hours = 0.5");
+    timbra(a);
+    const c = a.eval("jobConsuntivo('J1')");
+    const t = c.centri.find(x => x.wcId === 'w1');
+    assert.equal(t.standard, 1);      // 2 pezzi × 0,5 h, fase non avviata: niente attrezzaggio
+    assert.equal(t.timbrate, 1.5);
+    assert.match(a.eval("consuntivoHtml('J1')"), /Tempi per centro/);
+    assert.match(a.eval("consTempiOdpHtml(getOdp('odp1'))"), /Tempi/);
+    assert.equal(appCommessa().eval("consTempiOdpHtml(getOdp('odp1'))"), '');
   });
 });
 
 // Una parte fatta da un ODP della commessa e poi montata: il suo costo è già
 // nel materiale prelevato dall'ODP e nelle sue fasi, e il prelievo per il
-// montaggio non lo deve contare un'altra volta (dalla 0.149.1).
+// montaggio non lo deve contare un'altra volta (dalla 0.150.0).
 describe('Consuntivo con le parti fatte in casa e montate', () => {
   function appMontaggio() {
     const a = appCommessa();
@@ -157,5 +182,98 @@ describe('Consuntivo con le parti fatte in casa e montate', () => {
     a.eval("db.movements.find(m => m.id === 'm3').qty = -3; invalidateStock()");
     // un pezzo in più dalla scorta, al costo della parte: 3 × 5 + 10 = 25
     assert.equal(voce(a.eval("jobConsuntivo('J1')"), 'materiali').reale, 2 * 3 * 5 + 25);
+  });
+});
+
+// Dalla 0.150.0 il preventivo porta articoli, ore e piani, e il confronto
+// dice cosa non torna invece di nasconderlo.
+describe('Consuntivo: il confronto per articolo, i piani e i documenti fuori', () => {
+  it('per articolo lo scostamento si divide in effetto quantità ed effetto prezzo', () => {
+    const c = appCommessa().eval("jobConsuntivo('J1')");
+    const v1 = c.articoli.find(x => x.id === 'v1');
+    // previsti 2 × 3 = 6 a 5 €, usati 6 a 6 €
+    assert.equal(v1.qP, 6); assert.equal(v1.qR, 6);
+    assert.equal(v1.effQ, 0); assert.equal(v1.effP, 6);
+    assert.equal(v1.effQ + v1.effP, v1.diff);
+  });
+  it('la fotografia porta articoli, ore e piani', () => {
+    const a = appCommessa();
+    a.eval("jobApplyField('J1', 'status', 'produzione')");
+    const s = a.eval("getJob('J1').costSnapshot");
+    assert.deepEqual(Array.from(s.piani), ['P1']);
+    assert.equal(s.articoli.find(x => x.id === 'v1').qty, 6);
+    assert.ok('w1' in s.ore);
+  });
+  it('un piano aggiunto dopo il congelamento si segnala', () => {
+    const a = appCommessa();
+    a.eval("jobApplyField('J1', 'status', 'produzione')");
+    a.eval("db.plans.push({ id: 'P2', number: 'FAB2', jobId: 'J1', lines: [], active: true })");
+    const c = a.eval("jobConsuntivo('J1')");
+    assert.deepEqual(Array.from(c.pianiDopo.map(p => p.number)), ['FAB2']);
+    assert.match(a.eval("consuntivoHtml('J1')"), /FAB2 è stato aggiunto dopo il congelamento/);
+  });
+  it('un documento che cita la commessa senza venire da un suo piano è fuori preventivo', () => {
+    // l'ODL1 ha la commessa ma non il piano
+    const c = appCommessa().eval("jobConsuntivo('J1')");
+    assert.equal(c.fuori, 50);
+    assert.ok(c.dettaglio.find(d => /ODL1/.test(d.testo)).fuori);
+  });
+  it('una riga di conto lavoro rimasta in un ODA è una lavorazione', () => {
+    const a = appCommessa();
+    a.eval("db.orders.push({ id: 'o2', number: 'ODA2', status: 'evaso', planId: 'P1', lines: [{ id: 'l2', itemId: null, phaseKey: 'p1#0#w1', description: 'Tornitura', qty: 2, received: 2, price: 15 }] })");
+    const c = a.eval("jobConsuntivo('J1')");
+    assert.equal(voce(c, 'lavorazioni').reale, 2 * 10 + 50 + 30);
+    assert.equal(voce(c, 'materiali').reale, 36);
+  });
+  it('una fotografia di prima non ha il dettaglio, e la scheda lo dice', () => {
+    const a = appCommessa();
+    a.eval("getJob('J1').costSnapshot = { date: '2026-03-01', materiali: 30, lavorazioni: 20, generali: 0, totale: 50, righe: 1 }");
+    const c = a.eval("jobConsuntivo('J1')");
+    assert.equal(c.completo, false);
+    assert.equal(c.articoli.length, 0);
+    assert.match(a.eval("consuntivoHtml('J1')"), /congelato prima che portasse articoli e ore/);
+  });
+  it('le spese generali dicono la quota con cui si assorbono', () => {
+    const a = appCommessa();
+    // le spese generali si caricano sugli assiemi: qui vengono da una fotografia
+    a.eval("getJob('J1').costSnapshot = { date: '2026-03-01', materiali: 30, lavorazioni: 20, generali: 5, totale: 55, righe: 1 }");
+    assert.match(a.eval("consuntivoHtml('J1')"), /assorbite al 10/);
+  });
+  it('la tabella dei pezzi conta lanciati, buoni e scarti', () => {
+    const a = appCommessa();
+    a.eval("db.prodDecls[0].scrap = 1; db.prodDecls[0].qty = 1; invalidateProd()");
+    const p = a.eval("jobConsuntivo('J1')").pezzi[0];
+    assert.equal(p.lanciati, 2); assert.equal(p.scarti, 1);
+  });
+});
+
+describe('Consuntivo di un piano senza commessa', () => {
+  function appPiano() {
+    const a = appCommessa();
+    a.eval("db.plans[0].jobId = null; db.workOrders = []; db.prodOrders[0].status = 'bozza'");
+    return a;
+  }
+  it('ha la sua scheda nel piano; con la commessa no', () => {
+    const a = appPiano();
+    assert.match(a.eval("consuntivoPianoHtml('P1')"), /Consuntivo/);
+    assert.equal(voce(a.eval("pianoConsuntivo('P1')"), 'materiali').prev, 30);
+    assert.equal(voce(a.eval("pianoConsuntivo('P1')"), 'materiali').reale, 36);
+  });
+  it('si congela al lancio del primo ordine di produzione', () => {
+    const a = appPiano();
+    assert.equal(a.eval("getPlan('P1').costSnapshot"), undefined);
+    a.eval("opLancia('odp1')");
+    assert.ok(a.eval("!!getPlan('P1').costSnapshot"));
+    assert.equal(a.eval("pianoConsuntivo('P1').congelato"), true);
+  });
+  it('un piano con commessa al lancio non si congela: decide la commessa', () => {
+    const a = appCommessa();
+    a.eval("db.prodOrders[0].status = 'bozza'; opLancia('odp1')");
+    assert.equal(a.eval("getPlan('P1').costSnapshot"), undefined);
+  });
+  it('«Aggiorna preventivo» rifà la fotografia del piano', () => {
+    const a = appPiano();
+    a.eval("consAggiornaPreventivo('piano', 'P1')");
+    assert.equal(a.eval("getPlan('P1').costSnapshot.materiali"), 30);
   });
 });

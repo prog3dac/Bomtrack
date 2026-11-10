@@ -2291,23 +2291,54 @@ scostamento in euro e in percentuale (rosso se si è speso di più).
   *Visualizza DB*. Finché la commessa è *Aperta* è **provvisorio** e segue i costi di oggi; quando
   passa a **In produzione** si **congela**, e da lì un listino che cambia non lo tocca più.
   **Aggiorna preventivo** lo rifà con i costi di oggi (prima di andare in produzione il pulsante
-  si chiama **Congela preventivo**).
+  si chiama **Congela preventivo**). Dalla 0.150.0 il preventivo ricorda anche gli **articoli
+  d'acquisto** con quantità e prezzo, le **ore per centro** e **quali piani** comprendeva.
 - **Reale — materiali.** Per ogni articolo conta quello che la commessa ha **consumato**: i
-  prelievi degli ODP, le uscite a conto lavoro, i montaggi dichiarati, meno i resi, al valore del
-  magazzino (listino o costo medio). Un articolo mai prelevato conta per quanto è **arrivato** sui
-  suoi ODA. Mai tutte e due le cose: la merce comprata per la commessa entra a magazzino e poi ne
-  esce, e contarla due volte raddoppierebbe il costo. Per la stessa ragione una **parte fatta da
-  un ODP della commessa** e poi montata non si conta al prelievo: il suo costo c'è già, con il
-  materiale e le fasi del suo ODP. Si conta solo quello che il montaggio preleva oltre i pezzi
-  versati, perché viene dalla scorta.
+  prelievi degli ODP, le uscite a conto lavoro, i montaggi dichiarati, meno i resi. Vale il
+  **prezzo pagato** sugli ordini a fornitore della commessa, se l'articolo è arrivato con uno di
+  quelli; altrimenti il valore del magazzino (listino o costo medio). Un articolo mai prelevato
+  conta per quanto è **arrivato** sui suoi ODA. Mai tutte e due le cose: la merce comprata per la
+  commessa entra a magazzino e poi ne esce, e contarla due volte raddoppierebbe il costo. Per la
+  stessa ragione una **parte fatta da un ODP della commessa** e poi montata non si conta al
+  prelievo: il suo costo c'è già, con il materiale e le fasi del suo ODP. Si conta solo quello che
+  il montaggio preleva oltre i pezzi versati, perché viene dalla scorta.
 - **Reale — lavorazioni.** Le righe ricevute degli ODL al prezzo dell'ordine; i pezzi lavorati
   nelle fasi interne degli ODP per il costo di fase del ciclo (ore × tariffa, o costo fisso a
-  pezzo); le operazioni di montaggio degli assiemi dichiarati montati.
-- **Reale — spese generali.** Nella stessa proporzione che hanno nel preventivo.
+  pezzo). Con il modulo **Officina** una fase **a costo orario** paga le ore timbrate; una fase
+  **a costo fisso** resta a pezzo, come nel preventivo, e le sue ore si guardano nei *Tempi*. Le
+  operazioni di montaggio degli assiemi dichiarati montati senza un ordine di produzione valgono il
+  costo del loro ciclo: senza ODP non ci sono ore, e la riga lo dice.
+- **Reale — spese generali.** Nessun documento le misura: si **assorbono** sul reale con la stessa
+  quota che hanno nel preventivo, e la tabella scrive quale (*assorbite al 12%*).
 
-Sotto la tabella, **Da dove viene il reale** elenca ogni importo con il documento da cui viene.
+Sopra la tabella un avviso giallo segnala quello che il confronto non può pareggiare: un
+**piano aggiunto** alla commessa dopo il congelamento (il preventivo non lo comprende, il reale
+sì: **Aggiorna preventivo**), un piano tolto, e la parte del reale che viene da **documenti che
+citano la commessa senza venire da un suo piano** (un ODA o un ODL scritto a mano con la
+commessa): nel preventivo non ci sono.
+
+Sotto la tabella, quattro sezioni da aprire:
+
+- **Materiali per articolo.** Ogni articolo d'acquisto, previsto e usato, in quantità e in euro.
+  Lo scostamento si divide in **effetto quantità** (si è usato di più o di meno, ai prezzi del
+  preventivo: dentro ci sono scarti e sfridi) ed **effetto prezzo** (si è pagato di più o di meno,
+  sulle quantità vere). Un articolo non previsto è segnato *fuori preventivo*; una parte presa a
+  scaffale compare così, e il suo materiale come non usato.
+- **Tempi per centro** (con il modulo Officina). Per ogni centro le ore a preventivo, le ore che il
+  ciclo dà per i pezzi già lavorati (attrezzaggio compreso) e le ore timbrate, con lo scostamento;
+  sotto, le stesse cifre fase per fase.
+- **Pezzi degli ordini di produzione.** Per ogni ODP i pezzi lanciati, i buoni versati e gli
+  scarti, con la percentuale.
+- **Da dove viene il reale.** Ogni importo con il documento da cui viene; quelli fuori dai piani
+  sono segnati.
+
 Il reale cresce con il lavoro: a metà commessa è più basso del preventivo per definizione, e la
 riga sopra la tabella dice anche quanto è ordinato e non ancora arrivato.
+
+Un **piano senza commessa** (per esempio uno di scorta) ha lo stesso consuntivo nella sua scheda
+**Consuntivo** (dalla 0.150.0): il preventivo si congela al lancio del suo primo ordine di
+produzione. Un piano con la commessa si guarda nella commessa, dove il preventivo è uno per tutti
+i suoi piani.
 
 ---
 
@@ -3019,6 +3050,11 @@ fasi dopo si chiudono anche loro, e l'ordine si **completa** invece di restare *
 materiale nel lavoro in corso. Prima restavano *avviabili* con zero da fare, e bisognava avviarle e
 chiuderle a mano una per una.
 
+**I tempi dell'ordine** (modulo Officina, dalla 0.150.0). Sotto il *Materiale del ciclo* la
+sezione **Tempi** mette, fase interna per fase interna, i pezzi lavorati, le ore che il ciclo dà
+per quei pezzi (attrezzaggio compreso, se la fase è partita) e le ore timbrate in reparto, con lo
+scostamento. Le stesse cifre, sommate per centro, stanno nel consuntivo della commessa.
+
 ### Il magazzino: due movimenti, e il silenzio in mezzo
 
 Vale identico per un ciclo **tutto interno**, **tutto esterno** o **misto**.
@@ -3425,7 +3461,7 @@ In cima a ogni scheda una riga colorata dice la **situazione**: *Da avviare* (bl
 (giallo), *In ritardo* (rosso: secondo le date pianificate dell'ODP doveva già iniziare o finire),
 *Terminata* (verde). Sotto ci sono l'**inizio previsto** e la fine della fase, e la data in cui il
 pezzo serve. Il riquadro dei numeri dice i pezzi e il **tempo lavorato**, cioè la somma delle
-timbrature di tutti, con le ore previste dal ciclo. In fondo una riga dice se la fase è **in
+timbrature di tutti, con le ore previste dal ciclo (attrezzaggio compreso, dalla 0.150.0). In fondo una riga dice se la fase è **in
 lavorazione** (da quanto e chi ci lavora) o **in pausa**. I tempi si aggiornano da soli ogni minuto.
 
 Le **note della fase del ciclo** (*Note per il reparto*) sono in evidenza sotto i numeri, con
