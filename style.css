@@ -1150,6 +1150,9 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .tmb-ore{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tmb-ore .modal-field{margin-bottom:8px;min-width:0}
 .tmb-ore input{min-width:0}
+.tmb-campo{display:flex;gap:6px}
+.tmb-campo input{flex:1.6 1 0;padding-left:10px;padding-right:8px}
+.tmb-campo select{flex:1 1 0;min-width:0;font-variant-numeric:tabular-nums}
 @media (max-width:520px){.tmb-ore{grid-template-columns:1fr;gap:0}}
 /* Sul foglio (dalla 0.132.0): le schede, due per riga, ciascuna col suo QR in
    alto a destra che apre la scheda della fase. I colori della situazione e

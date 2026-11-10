@@ -358,18 +358,50 @@ function timbratureRigheHtml() {
       <div class="tmb-testa">${chi}<span class="tmb-durata">${r.elimina ? 'da eliminare' : `${durata}${r.fine ? '' : ' · in corso'}`}</span>
         <button type="button" class="btn-ghost tmb-via" onclick="timbratureElimina(${i})" title="${r.elimina ? 'Tieni' : 'Elimina'} questa timbratura" aria-label="${r.elimina ? 'Tieni' : 'Elimina'} la timbratura">${r.elimina ? ico('refresh', 'tinted', '') : ico('trash', 'tinted', '')}</button></div>
       <div class="tmb-ore">
-        <div class="modal-field"><label for="tmb-a-${i}">Inizio</label><input id="tmb-a-${i}" type="datetime-local" value="${esc(r.inizio)}"${r.elimina ? ' disabled' : ''} onchange="timbratureLeggi(true)"></div>
-        <div class="modal-field"><label for="tmb-b-${i}">Fine</label><input id="tmb-b-${i}" type="datetime-local" value="${esc(r.fine)}"${r.elimina ? ' disabled' : ''} onchange="timbratureLeggi(true)"></div>
+        <div class="modal-field"><label for="tmb-a-${i}">Inizio</label>${timbratureCampoHtml('tmb-a-' + i, r.inizio, r.elimina, false)}</div>
+        <div class="modal-field"><label for="tmb-b-${i}">Fine</label>${timbratureCampoHtml('tmb-b-' + i, r.fine, r.elimina, true)}</div>
       </div></div>`;
   }).join('');
+}
+// Il campo di un orario (dalla 0.150.0): la data, e l'ora in un solo elenco a
+// passi di 5 minuti. Un orario timbrato fuori dai 5 minuti (08:02) resta
+// nell'elenco com'è, così salvando non cambia da solo. La fine può restare vuota.
+function timbratureOreOpzioni(ora, vuota) {
+  const p2 = n => String(n).padStart(2, '0');
+  let html = vuota ? `<option value=""${ora ? '' : ' selected'}>—</option>` : '', messa = !ora;
+  for (let t = 0; t < 1440; t += 5) {
+    const s = p2(Math.floor(t / 60)) + ':' + p2(t % 60);
+    if (!messa && ora < s) { html += `<option value="${ora}" selected>${ora}</option>`; messa = true; }
+    if (s === ora) messa = true;
+    html += `<option value="${s}"${s === ora ? ' selected' : ''}>${s}</option>`;
+  }
+  if (!messa) html += `<option value="${ora}" selected>${ora}</option>`;
+  return html;
+}
+function timbratureCampoHtml(id, v, spento, vuota) {
+  const dis = spento ? ' disabled' : '';
+  const ora = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v || '') ? v.slice(11, 16) : '';
+  return `<div class="tmb-campo"><input id="${id}" type="date" value="${esc((v || '').slice(0, 10))}"${dis} onchange="timbratureLeggi(true)">`
+    + `<select id="${id}-h" aria-label="Ora"${dis} onchange="timbratureLeggi(true)">${timbratureOreOpzioni(ora, vuota || !ora)}</select></div>`;
+}
+// Data e ora di un campo. Con l'ora e senza la data vale il giorno dell'inizio
+// (chiudere una fase dimenticata è scegliere l'ora); una data senza ora resta
+// a metà, e Salva lo dice.
+function timbratureCampoLeggi(id, giorno) {
+  const d = document.getElementById(id), h = document.getElementById(id + '-h');
+  const data = d ? d.value : '', ora = h ? h.value : '';
+  if (!ora) return { v: '', meta: !!data };
+  const g = data || giorno || '';
+  return g ? { v: g + 'T' + ora, meta: false } : { v: '', meta: true };
 }
 // I campi nella bozza; con `ridisegna` anche le durate.
 function timbratureLeggi(ridisegna) {
   if (!_tmb || typeof document === 'undefined') return;
   _tmb.righe.forEach((r, i) => {
     const a = document.getElementById('tmb-a-' + i), b = document.getElementById('tmb-b-' + i), u = document.getElementById('tmb-u-' + i);
-    if (a && !a.disabled) r.inizio = a.value;
-    if (b && !b.disabled) r.fine = b.value;
+    r.aMeta = false;
+    if (a && !a.disabled) { const x = timbratureCampoLeggi('tmb-a-' + i, ''); r.inizio = x.v; r.aMeta = x.meta; }
+    if (b && !b.disabled) { const x = timbratureCampoLeggi('tmb-b-' + i, (r.inizio || '').slice(0, 10)); r.fine = x.v; r.aMeta = r.aMeta || x.meta; }
     if (u && !r.id) r.userId = u.value;
   });
   if (ridisegna) { const el = document.getElementById('tmb-righe'); if (el) el.innerHTML = timbratureRigheHtml(); }
@@ -387,13 +419,15 @@ function timbratureAggiungi() {
   timbratureLeggi();
   const ultima = _tmb.righe.filter(r => !r.elimina).slice(-1)[0];
   const base = ultima && ultima.fine ? new Date(localeAIso(ultima.fine)).getTime() : Date.now() - 3600000;
-  const inizio = Math.min(base, Date.now() - 3600000);
+  const cinque = 300000;   // a passi di 5 minuti, come l'elenco delle ore
+  const inizio = Math.floor(Math.min(base, Date.now() - 3600000) / cinque) * cinque;
   _tmb.righe.push({ id: null, userId: (ultima && ultima.userId) || utenteId(), inizio: isoALocale(new Date(inizio).toISOString()), fine: isoALocale(new Date(inizio + 3600000).toISOString()), elimina: false });
   timbratureLeggi(true);
 }
 function timbratureSalva() {
   if (!_tmb || !roleGuard('docs')) return;
   timbratureLeggi();
+  if (_tmb.righe.some(r => !r.elimina && r.aMeta)) { showToast('Manca l\'ora, o la data, in una timbratura', 'error'); return; }
   // Il campo non ha i secondi: un orario non toccato resta quello timbrato.
   const ora = (v, iso) => (iso && v === isoALocale(iso) ? iso : (v ? localeAIso(v) : null));
   const righe = _tmb.righe.map(r => ({ id: r.id, userId: r.userId, elimina: r.elimina,
