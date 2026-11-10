@@ -91,7 +91,7 @@ describe('Correzione delle timbrature', () => {
     b.eval("timbratureModal('A', 'fa')");
     assert.equal(b.eval('__m'), '');
   });
-  it('l\'ora si sceglie da un solo elenco, a passi di 5 minuti (dalla 0.150.0)', () => {
+  it('l\'ora si sceglie da un solo elenco, a passi di 5 minuti (dalla 0.151.0)', () => {
     const h = a => a.eval("Array.from(timbratureOreOpzioni('08:02', false).matchAll(/value=\"([^\"]*)\"/g), m => m[1])");
     const a = app([log('t1', 'u2', '08:00', null)]);
     const ore = h(a);

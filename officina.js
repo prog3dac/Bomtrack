@@ -363,7 +363,7 @@ function timbratureRigheHtml() {
       </div></div>`;
   }).join('');
 }
-// Il campo di un orario (dalla 0.150.0): la data, e l'ora in un solo elenco a
+// Il campo di un orario (dalla 0.151.0): la data, e l'ora in un solo elenco a
 // passi di 5 minuti. Un orario timbrato fuori dai 5 minuti (08:02) resta
 // nell'elenco com'è, così salvando non cambia da solo. La fine può restare vuota.
 function timbratureOreOpzioni(ora, vuota) {
@@ -474,7 +474,8 @@ function repartoCardHtml(o, f, stato) {
   const ore = oreTimbrate(o.id, f.id);
   const attesa = stato === 'attesa';
   const pezzi = attesa ? opAttesiFase(o, f) : opDaFare(o, f);
-  const previste = (Number(f.hours) || 0) * pezzi;
+  // Attrezzaggio compreso, come nei Tempi del consuntivo: le timbrature lo contano.
+  const previste = consOreFase(f, pezzi, true);
   const bottoni = !scrive ? '' : aperto
     ? `<button class="add-btn-sm reparto-btn" onclick="repartoPausa('${o.id}','${f.id}')">${ico('clock', '', '')} Pausa</button>
        ${stato !== 'chiusa' ? `<button class="btn-outline reparto-btn" onclick="repartoFine('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Fine e dichiara</button>` : ''}`

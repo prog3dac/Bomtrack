@@ -456,6 +456,8 @@ function opLancia(id) {
   if (!(Number(o.qty) > 0)) { showToast('Quantità a zero: non c\'è niente da produrre', 'error'); return false; }
   o.status = 'lanciato';
   opRilevaOdl(o);
+  // Costi reali: un piano senza commessa fotografa il preventivo al primo lancio.
+  consCongelaPianoAlLancio(o);
   odpAutoStatus(o); touch(o); saveDB();
   return true;
 }
@@ -1070,6 +1072,7 @@ function renderOdpEdit(id) {
         <tbody>${odpPhaseRows(o)}</tbody></table></div>
     </div>
     ${odpMaterialBlock(o)}
+    ${consTempiOdpHtml(o)}
     ${odpDeclBlock(o)}
     ${odpMovBlock(o)}
   </div>`;

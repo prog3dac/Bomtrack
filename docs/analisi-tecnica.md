@@ -949,6 +949,45 @@ fasi mancanti dell'originale, i pezzi fermi come materiale, piano e commessa
 ereditati (il fabbisogno lo conta come rifornimento, e non propone un ODP in
 più per gli stessi pezzi), il suo costo come costo della NC.
 
+### 69. Il consuntivo contava due volte le parti fatte in casa e montate *(0.150.0)*
+Una parte fatta da un ODP della commessa, versata e poi prelevata da un
+montaggio o dall'ODP dell'assieme, entrava nel reale due volte: con il
+materiale e le fasi del suo ODP, e di nuovo al valore di magazzino, che li
+contiene già. Un assieme da 2 pezzi con una parte da 25 € dava 100 € di reale
+invece di 50. Ora `consReale` (`consuntivo.js`) toglie dal prelevato quanto i
+suoi ODP hanno versato, e conta solo l'eccedenza, che è uscita dalla scorta.
+
+### 70. Il confronto fra previsto e reale *(0.150.0)*
+Chiude E1–E6, trovate con la §69, e quattro difetti trovati rileggendo
+`consuntivo.js` per intero.
+- **E1, spese generali.** Si assorbono, e la tabella lo dice con la quota.
+- **E2, prezzo di oggi.** Il materiale arrivato sugli ODA della commessa vale
+  il prezzo di quegli ordini (`consPrezziPagati`). Il preventivo fotografa gli
+  articoli d'acquisto con quantità e prezzo, e la sezione *Materiali per
+  articolo* divide lo scostamento in effetto quantità ed effetto prezzo.
+- **E3, costo fisso timbrato.** Una fase a costo fisso resta a pezzo anche con
+  le timbrature: preventivo e reale hanno la stessa base.
+- **E4, montaggi.** Senza ODP non ci sono ore: la riga dice che vale lo standard.
+- **E5, tempi.** Tempi per centro e per fase nel consuntivo, e per fase nella
+  scheda dell'ODP (`consTempiFasi`). La scheda di reparto contava le ore
+  previste senza attrezzaggio, mentre le timbrature lo comprendono: ora usa la
+  stessa misura (`consOreFase`).
+- **E6, scarti e piani senza commessa.** Lo scarto % della distinta è
+  materiale, e finisce nell'effetto quantità per articolo; i pezzi scartati
+  hanno la loro tabella. Un piano senza commessa ha il suo consuntivo, con la
+  fotografia su `production_plans.cost_snapshot` (schema 5), congelata al primo
+  lancio di un suo ODP.
+- **Piani aggiunti dopo il congelamento.** Il reale li contava, il preventivo
+  no, e niente lo diceva. La fotografia ricorda i piani, e la scheda avvisa.
+- **Documenti fuori dai piani.** Un ODA o un ODL con la commessa ma senza piano
+  entra nel reale e non nel preventivo: ora è segnato, con il suo totale.
+- **Conto lavoro sugli ODA di prima della 0.69.0.** Le righe con `phaseKey`
+  contavano fra i materiali e il materiale mandato con loro al terzista non
+  entrava: ora sono lavorazioni, e i loro `clOut` sono consumi.
+- **Attrezzaggio a preventivo dall'esplosione netta.** Il costo delle righe
+  veniva dalla lorda, l'attrezzaggio dalla netta (al netto delle parti a
+  scaffale): due misure in un numero. Ora tutto viene dalla lorda.
+
 ## Aperto
 
 > **Lettura per la situazione attuale (0.107.0).** L'archivio condiviso su
@@ -1084,6 +1123,24 @@ solo al piano: nel grafo sono fratelli); la riga d'ordine di conto lavoro
 quindi nel grafo è figlio dell'ordine e non della NC. Per chiuderli servono
 una colonna `parent_odp_id` su `production_orders`, `odp_id` su `order_lines`
 e `nc_id` su `inspections`, con `schema_versione` alzata.
+
+### E. Il confronto fra previsto e reale *(censite nella 0.150.0)*
+
+Le voci E1–E6 trovate con la §69 sono chiuse nella 0.150.0 (§70). Restano:
+
+**E7 — una parte presa a scaffale cambia voce.** Nel preventivo (esplosione
+lorda) i suoi materiali sono articoli d'acquisto e le sue ore lavorazioni; nel
+reale la parte esce dal magazzino a valore pieno, tutta fra i materiali. Il
+totale torna, la divisione per voce no: nella tabella per articolo la parte è
+*fuori preventivo* e il suo materiale «non usato». Per chiuderla servirebbe un
+preventivo netto delle parti a scaffale, fotografato con la giacenza del giorno.
+
+**E8 — il costo delle non conformità non entra nel consuntivo.** Il costo di
+una NC (`nonconformities.cost`) è una stima scritta a mano, e la ripresa di una
+NC passa già dal suo ODP, che il consuntivo conta. Sommarle raddoppierebbe la
+ripresa; non sommarle lascia fuori i costi di una NC senza ODP (un reso, una
+rottamazione). Per chiuderla servirebbe distinguere nella NC il costo già
+coperto da un documento.
 
 ---
 
