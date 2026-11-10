@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.149.1 — 2026-11-10
+
+**Consuntivo di commessa: le parti fatte in casa non si contano due volte.**
+- Una parte fatta da un ODP della commessa e poi montata (con un montaggio dichiarato o con l'ODP dell'assieme) entrava nel reale due volte: con il materiale e le fasi del suo ODP, e di nuovo come materiale prelevato al valore di magazzino, che li contiene già. Ora del prelievo si conta solo quanto supera i pezzi versati dai suoi ODP, cioè quello uscito dalla scorta.
+- In *Da dove viene il reale* la riga della parte dice quanti pezzi erano fatti dalla commessa.
+- Le commesse con assiemi e parti fatte in casa vedono scendere il reale di materiali e totale: è il valore giusto.
+
+Nessun cambio allo schema.
+
 ### 0.149.0 — 2026-11-08
 
 **Qualità: se un articolo si collauda lo decide il piano di controllo.**

@@ -15,7 +15,8 @@
 //   - materiali: per ogni articolo, quello che la commessa ha **consumato**
 //     (prelievi degli ODP, uscite a conto lavoro, montaggi dichiarati, al netto
 //     dei resi) valorizzato come il magazzino (costoGiacenza: listino, o costo
-//     medio). Un articolo che la commessa non ha mai prelevato conta per quanto
+//     medio), tolte le parti che i suoi ODP hanno versato (contano già con il
+//     loro materiale e le loro fasi). Un articolo che la commessa non ha mai prelevato conta per quanto
 //     è arrivato sui suoi ODA. Mai tutte e due: la merce comprata per la
 //     commessa entra a magazzino e poi ne esce, e contarla due volte
 //     raddoppierebbe il costo;
@@ -91,13 +92,31 @@ function consReale(jobId) {
     if (!m.itemId || !docConsumo.has(m.orderId) || !CONS_KIND_CONSUMO.has(m.kind)) return;
     consumi.set(m.itemId, (consumi.get(m.itemId) || 0) - (Number(m.qty) || 0));
   });
+  // Le parti che la commessa si è fatta da sé (dalla 0.149.1): versate dai
+  // suoi ODP e poi prelevate da un montaggio o dall'ODP dell'assieme. Il loro
+  // costo c'è già — il materiale prelevato dall'ODP e le sue fasi —, e
+  // contarle anche al valore di magazzino, che li contiene tutti e due,
+  // raddoppierebbe la parte. Vale il prelevato oltre il versato: quello è
+  // uscito dalla scorta.
+  const fatte = new Map();
+  o.odp.forEach(d => {
+    if (!d.itemId || odpDiAssieme(d)) return;
+    fatte.set(d.itemId, (fatte.get(d.itemId) || 0) + opVersato(d));
+  });
   let materiali = 0;
   consumi.forEach((q, id) => {
     if (!(Math.abs(q) > 0.000001)) return;
     const it = getItem(id);
-    const v = q * costoGiacenza(it);
+    const proprie = q > 0 ? Math.min(q, fatte.get(id) || 0) : 0;
+    const daScorta = q - proprie;
+    const qq = fmtQtyIt(+q.toFixed(4)), u = it ? itemUom(it) : '';
+    const testo = proprie > 0
+      ? `${it ? it.code : '?'} — prelevati ${qq} ${u}, di cui ${fmtQtyIt(+proprie.toFixed(4))} fatti dalla commessa (già nei loro ODP)`
+      : `${it ? it.code : '?'} — prelevati ${qq} ${u}`;
+    if (!(Math.abs(daScorta) > 0.000001)) return;
+    const v = daScorta * costoGiacenza(it);
     materiali += v;
-    dettaglio.push({ voce: 'materiali', testo: `${it ? it.code : '?'} — prelevati ${fmtQtyIt(+q.toFixed(4))} ${it ? itemUom(it) : ''}`, valore: v });
+    dettaglio.push({ voce: 'materiali', testo, valore: v });
   });
   let ordinatoAperto = 0;
   o.orders.forEach(d => (d.lines || []).forEach(l => {

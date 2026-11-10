@@ -949,6 +949,14 @@ fasi mancanti dell'originale, i pezzi fermi come materiale, piano e commessa
 ereditati (il fabbisogno lo conta come rifornimento, e non propone un ODP in
 più per gli stessi pezzi), il suo costo come costo della NC.
 
+### 69. Il consuntivo contava due volte le parti fatte in casa e montate *(0.149.1)*
+Una parte fatta da un ODP della commessa, versata e poi prelevata da un
+montaggio o dall'ODP dell'assieme, entrava nel reale due volte: con il
+materiale e le fasi del suo ODP, e di nuovo al valore di magazzino, che li
+contiene già. Un assieme da 2 pezzi con una parte da 25 € dava 100 € di reale
+invece di 50. Ora `consReale` (`consuntivo.js`) toglie dal prelevato quanto i
+suoi ODP hanno versato, e conta solo l'eccedenza, che è uscita dalla scorta.
+
 ## Aperto
 
 > **Lettura per la situazione attuale (0.107.0).** L'archivio condiviso su
@@ -1084,6 +1092,32 @@ solo al piano: nel grafo sono fratelli); la riga d'ordine di conto lavoro
 quindi nel grafo è figlio dell'ordine e non della NC. Per chiuderli servono
 una colonna `parent_odp_id` su `production_orders`, `odp_id` su `order_lines`
 e `nc_id` su `inspections`, con `schema_versione` alzata.
+
+### E. Il confronto fra previsto e reale *(censite nella 0.149.1)*
+
+**E1 — le spese generali reali non si misurano.** `jobConsuntivo` le ricava
+dal reale con la stessa percentuale del preventivo: il loro scostamento è solo
+quello delle altre voci, ripetuto.
+
+**E2 — il materiale reale vale il prezzo di oggi.** I prelievi si valorizzano
+con `costoGiacenza` (listino o costo medio di oggi), non al prezzo degli ODA
+della commessa, e lo scostamento non separa l'effetto prezzo da quello
+quantità.
+
+**E3 — basi diverse per una fase a costo fisso con le timbrature.** Nel
+preventivo vale il costo a pezzo; nel reale, se ci sono ore timbrate, ore ×
+tariffa del centro (`consReale`). Il confronto mescola due misure.
+
+**E4 — i montaggi dichiarati costano sempre lo standard.** Le loro operazioni
+si contano al costo del ciclo di oggi anche con il modulo Officina: non hanno
+timbrature.
+
+**E5 — tempi previsti e timbrati solo sulla scheda di reparto.** Il «su X
+previste» di `repartoCardHtml` (`officina.js`) è l'unico punto: manca un
+riepilogo per ODP, centro o articolo.
+
+**E6 — gli scarti dichiarati non si confrontano con lo scarto % della
+distinta**, e un piano o un ODP senza commessa non ha consuntivo.
 
 ---
 

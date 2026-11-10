@@ -130,3 +130,32 @@ describe('Consuntivo con le ore timbrate', () => {
     assert.equal(voce(a.eval("jobConsuntivo('J1')"), 'lavorazioni').reale, 1.5 * 40 + 50);
   });
 });
+
+// Una parte fatta da un ODP della commessa e poi montata: il suo costo è già
+// nel materiale prelevato dall'ODP e nelle sue fasi, e il prelievo per il
+// montaggio non lo deve contare un'altra volta (dalla 0.149.1).
+describe('Consuntivo con le parti fatte in casa e montate', () => {
+  function appMontaggio() {
+    const a = appCommessa();
+    a.eval(`db.items.push({ id: 'A', code: 'A', name: 'Assieme', type: 'assieme', uom: 'pz', active: true, components: [{ itemId: 'p1', qty: 1 }] });
+      db.plans[0].lines = [{ id: 'pl1', itemId: 'A', qty: 2 }];
+      db.orders = []; db.workOrders = [];
+      db.productions = [{ id: 'pr1', planId: 'P1', itemId: 'A', qty: 2 }];
+      db.movements.push({ id: 'm2', itemId: 'p1', kind: 'versamento', qty: 2, orderId: 'odp1', date: '2026-10-02' },
+        { id: 'm3', itemId: 'p1', kind: 'scarico', qty: -2, orderId: 'pr1', date: '2026-10-03' });
+      invalidateCaches(); invalidateStock()`);
+    return a;
+  }
+  it('la parte versata dall\'ODP e poi prelevata non si conta due volte', () => {
+    const c = appMontaggio().eval("jobConsuntivo('J1')");
+    assert.equal(voce(c, 'materiali').reale, 2 * 3 * 5);
+    assert.equal(voce(c, 'lavorazioni').reale, 2 * 10);
+    assert.equal(voce(c, 'totale').reale, voce(c, 'totale').prev);
+  });
+  it('quello prelevato oltre il versato viene dalla scorta e si conta', () => {
+    const a = appMontaggio();
+    a.eval("db.movements.find(m => m.id === 'm3').qty = -3; invalidateStock()");
+    // un pezzo in più dalla scorta, al costo della parte: 3 × 5 + 10 = 25
+    assert.equal(voce(a.eval("jobConsuntivo('J1')"), 'materiali').reale, 2 * 3 * 5 + 25);
+  });
+});

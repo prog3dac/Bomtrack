@@ -2296,7 +2296,10 @@ scostamento in euro e in percentuale (rosso se si è speso di più).
   prelievi degli ODP, le uscite a conto lavoro, i montaggi dichiarati, meno i resi, al valore del
   magazzino (listino o costo medio). Un articolo mai prelevato conta per quanto è **arrivato** sui
   suoi ODA. Mai tutte e due le cose: la merce comprata per la commessa entra a magazzino e poi ne
-  esce, e contarla due volte raddoppierebbe il costo.
+  esce, e contarla due volte raddoppierebbe il costo. Per la stessa ragione una **parte fatta da
+  un ODP della commessa** e poi montata non si conta al prelievo: il suo costo c'è già, con il
+  materiale e le fasi del suo ODP. Si conta solo quello che il montaggio preleva oltre i pezzi
+  versati, perché viene dalla scorta.
 - **Reale — lavorazioni.** Le righe ricevute degli ODL al prezzo dell'ordine; i pezzi lavorati
   nelle fasi interne degli ODP per il costo di fase del ciclo (ore × tariffa, o costo fisso a
   pezzo); le operazioni di montaggio degli assiemi dichiarati montati.
