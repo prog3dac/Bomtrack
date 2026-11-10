@@ -2,6 +2,23 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.150.0 — 2026-11-10
+
+**Consuntivo: il confronto fra previsto e reale, rivisto da cima a fondo.**
+- **Le parti fatte in casa non si contano due volte.** Una parte fatta da un ODP della commessa e poi montata (con un montaggio dichiarato o con l'ODP dell'assieme) entrava nel reale due volte: con il materiale e le fasi del suo ODP, e di nuovo come materiale prelevato al valore di magazzino. Ora del prelievo si conta solo quanto supera i pezzi versati dai suoi ODP. Le commesse con assiemi e parti fatte in casa vedono scendere il reale: è il valore giusto.
+- **Il materiale vale il prezzo pagato.** Un articolo arrivato su un ODA della commessa si valorizza al prezzo di quell'ordine (media pesata se gli ordini sono più d'uno), non al listino o al costo medio di oggi; gli altri restano al valore di magazzino. Il reale dei materiali può cambiare anche sulle commesse già aperte.
+- **Materiali per articolo.** Il preventivo ricorda gli articoli d'acquisto con quantità e prezzo. Una sezione nuova li mette accanto a quelli usati e divide lo scostamento in **effetto quantità** (scarti e sfridi compresi) ed **effetto prezzo**.
+- **Tempi per centro e per fase.** Con il modulo Officina il consuntivo ha le ore a preventivo, quelle del ciclo per i pezzi già lavorati e quelle timbrate, per centro e fase per fase. La scheda dell'ODP ha la stessa tabella per le sue fasi, e la scheda di reparto conta l'attrezzaggio nelle ore previste, come le timbrature.
+- **Fasi a costo fisso coerenti.** Con le timbrature una fase a costo fisso pagava le ore alla tariffa del centro, mentre il preventivo la contava a pezzo: ora resta a pezzo da tutte e due le parti, e le sue ore si confrontano nei Tempi. Le fasi a costo orario pagano le ore timbrate come prima.
+- **Quello che il confronto non pareggia si dice.** Un avviso segnala i piani aggiunti alla commessa dopo il congelamento (o tolti) e la parte del reale che viene da documenti che citano la commessa senza venire da un suo piano. Le spese generali dicono la quota con cui si assorbono; i montaggi dichiarati senza ODP dicono che valgono il costo standard del ciclo.
+- **Pezzi degli ordini di produzione.** Lanciati, buoni e scarti per ogni ODP, con la percentuale.
+- Le righe di conto lavoro rimaste negli ODA di prima della 0.69.0 contano fra le lavorazioni, non fra i materiali, e il materiale mandato con loro al terzista entra nei consumi.
+- L'attrezzaggio a preventivo si calcola sull'esplosione lorda, come il costo delle righe: una parte pronta a scaffale non lo toglie più.
+- **Consuntivo anche per un piano senza commessa**, nella nuova scheda *Consuntivo* del piano: il preventivo si congela al lancio del suo primo ordine di produzione.
+- Un preventivo congelato prima di questa versione non ha articoli, ore e piani: la scheda lo dice, e «Aggiorna preventivo» li aggiunge con i costi di oggi.
+
+**Schema: cambia.** Nuova colonna `cost_snapshot` su `production_plans`, `schema_versione` 5. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+
 ### 0.149.0 — 2026-11-08
 
 **Qualità: se un articolo si collauda lo decide il piano di controllo.**

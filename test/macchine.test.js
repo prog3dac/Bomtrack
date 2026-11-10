@@ -145,7 +145,7 @@ describe('Consuntivo con la macchina', () => {
     const a = app({ macchine: true, officina: true }, { timeLogs: [log('t1', 'm1', '08:00', '10:00')] });
     a.eval("db.jobs = [{ id: 'J', number: 'C1', status: 'aperta', active: true }]; getOdp('A').jobId = 'J'");
     // 2 h × 30 + 2 h ÷ 1 operatore × 20 (tariffa congelata sull'ODP) = 100
-    assert.equal(a.eval("consReale('J').lavorazioni"), 100);
+    assert.equal(a.eval("consReale(consAmbitoCommessa('J')).lavorazioni"), 100);
   });
 });
 

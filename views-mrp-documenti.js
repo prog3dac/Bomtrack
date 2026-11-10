@@ -810,6 +810,9 @@ function renderPlanEdit(id) {
           <p class="empty-text" style="text-align:left;padding:0 0 8px">Le ore che <strong>questo piano</strong> chiede ai centri interni, per settimana. Il carico vero è la somma di tutti i piani aperti: si guarda in <em>Pianificazione → Carico centri</em>, perché il centro è condiviso e un piano solo non dice se regge.</p>
           ${loadTableHtml(mrpLoad(p), id)}
         </div>` },
+      // Dalla 0.150.0 un piano senza commessa ha il suo consuntivo: con la
+      // commessa si guarda là, dove il preventivo è uno per tutti i suoi piani.
+      ...(moduloAttivo('costiReali') && !p.jobId ? [{ id: 'costi', label: 'Consuntivo', html: consuntivoPianoHtml(id) }] : []),
       { id: 'docs', label: 'Documenti', n: planDocsTotale(id), html: planDocsList(id) || '<p class="empty-text">Nessun documento generato da questo piano: si creano dai pulsanti «Genera» delle altre schede.</p>' },
     // Senza Produzione interna non c'è niente da fabbricare né da far lavorare
     // fuori, e nessun centro da caricare: restano acquisti e montaggio.
