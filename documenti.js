@@ -115,7 +115,7 @@ function docEmessoArchivia(kind, rec, blob, nomeFile) {
   });
 }
 
-// ─── Revisione e pagine sul foglio (dalla 0.153.0) ───
+// ─── Revisione e pagine sul foglio (dalla 0.153.1) ───
 // Il fornitore deve capire dal foglio se ha in mano l'ultima versione. La
 // revisione è quella con cui il PDF finirà in archivio: un documento già
 // archiviato e poi cambiato esce come la revisione dopo, e dice quale

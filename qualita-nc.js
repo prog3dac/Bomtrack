@@ -34,6 +34,9 @@ const NC_ORIGINI = {
   produzione: 'Produzione',
   cliente: 'Reclamo cliente',
   interna: 'Interna',
+  // Dalla 0.153.0: uno strumento trovato fuori alla taratura (qualita-strumenti.js).
+  // Non si apre a mano: nasce dalla taratura, con le misure da rivedere.
+  strumento: 'Strumento di misura',
 };
 const NC_GRAVITA = { minore: 'Minore', maggiore: 'Maggiore', critica: 'Critica' };
 const NC_DECISIONI = {
@@ -51,7 +54,8 @@ const NC_STATI = { aperta: 'Aperta', chiusa: 'Chiusa' };
 // dell'officina, che ora chiedono la causale.
 const NC_CAUSALI_SERIE = ['Fuori tolleranza dimensionale', 'Difetto superficiale o estetico', 'Materiale non conforme',
   'Certificato mancante o errato', 'Quantità o codice errato', 'Danno da imballo o trasporto', 'Errore di lavorazione',
-  'Errore di attrezzaggio', 'Usura o rottura utensile', 'Errore di programma', 'Errore dell\'operatore', 'Altro'];
+  'Errore di attrezzaggio', 'Usura o rottura utensile', 'Errore di programma', 'Errore dell\'operatore',
+  'Strumento di misura fuori tolleranza', 'Altro'];
 // I giorni entro cui una NC va chiusa, se nessuno dice altro.
 const NC_GIORNI_SERIE = 30;
 
@@ -107,6 +111,10 @@ function ncCrea(dati) {
       // dichiarazioni di scarto che la NC raccoglie.
       productionOrderId: d.productionOrderId || null, respPhase: String(d.respPhase || ''),
       scrapDecls: Array.isArray(d.scrapDecls) ? d.scrapDecls : [],
+      // Da uno strumento trovato fuori (dalla 0.153.0): lo strumento, la
+      // taratura e le misure da rivedere, ognuna con la sua decisione.
+      instrumentId: d.instrumentId || null, calibrationId: d.calibrationId || null,
+      impact: Array.isArray(d.impact) ? d.impact : [],
     });
   };
   return typeof conNumeri === 'function' ? conNumeri({ NC: 1 }, fare) : fare();
@@ -204,6 +212,8 @@ function ncChiudi(id) {
   const x = ncGet(id); if (!x || x.status === 'chiusa') return false;
   if (!x.decision) { showToast('Prima di chiudere scegli la decisione', 'error'); return false; }
   if (!x.cause) { showToast('Prima di chiudere scegli la causa', 'error'); return false; }
+  const daDecidere = typeof struImpattoAperto === 'function' ? struImpattoAperto(x) : 0;
+  if (daDecidere) { showToast(`Prima di chiudere decidi per ${daDecidere === 1 ? 'la misura' : 'le ' + daDecidere + ' misure'} da rivedere`, 'error'); return false; }
   const aperte = (x.actions || []).filter(a => !a.done).length;
   const chiudi = () => {
     Store.update('nonconformities', id, { status: 'chiusa', closedAt: nowISO() });
@@ -248,7 +258,7 @@ function ncNuovaModal() {
   openModal(`<h2 class="modal-title">${ico('warning', 'tinted', '')} Nuova non conformità</h2>
     <div class="modal-grid">
       <div class="modal-field"><label>Da dove viene</label>
-        <select id="nc-n-src" onchange="ncNuovaOrigine()">${Object.keys(NC_ORIGINI).map(k => `<option value="${k}" ${k === 'interna' ? 'selected' : ''}>${esc(NC_ORIGINI[k])}</option>`).join('')}</select></div>
+        <select id="nc-n-src" onchange="ncNuovaOrigine()">${Object.keys(NC_ORIGINI).filter(k => k !== 'strumento').map(k => `<option value="${k}" ${k === 'interna' ? 'selected' : ''}>${esc(NC_ORIGINI[k])}</option>`).join('')}</select></div>
       <div class="modal-field" id="nc-n-odp-f" style="display:none"><label>Ordine di produzione</label>
         <select id="nc-n-odp" class="sel-cerca" onchange="ncNuovaOdp()"><option value="">—</option>
           ${odp.map(o => `<option value="${o.id}">${esc(o.number + ' — ' + (o.code || '') + ' ' + (o.name || ''))}</option>`).join('')}</select></div>
@@ -312,6 +322,7 @@ function ncOrigineNumero(x) {
   if (x.productionOrderId && typeof getOdp === 'function') { const o = getOdp(x.productionOrderId); if (o) return o.number; }
   if (x.source === 'produzione' && x.orderId && typeof getOdp === 'function') { const o = getOdp(x.orderId); if (o) return o.number; }
   if (x.orderId && Array.isArray(x.scrapDecls) && x.scrapDecls.length && typeof getOdl === 'function') { const o = getOdl(x.orderId); if (o) return o.number; }
+  if (x.instrumentId && typeof struGet === 'function') { const s = struGet(x.instrumentId); if (s) return s.code; }
   return '';
 }
 
@@ -425,6 +436,7 @@ function ncSchedaHtml(x, scrive) {
       <div class="modal-field"><label>Che cosa è successo</label><textarea rows="3" ${dis} ${set('description')}>${esc(x.description || '')}</textarea></div>
     </div>
     ${typeof ncProduzioneHtml === 'function' ? ncProduzioneHtml(x, scrive) : ''}
+    ${typeof struNcHtml === 'function' ? struNcHtml(x, scrive) : ''}
     <div class="qc-card">
       <h3>Analisi e decisione</h3>
       <div class="modal-grid">
@@ -472,7 +484,8 @@ function ncRapportoPdf(id, modo) {
   const startY = docPdfTesta(doc, { titolo: 'Non conformità / Nonconformity report', rec: Object.assign({}, x, { title: it ? `${it.code} — ${it.name}` : '' }),
     chi: 'EMESSA DA / ISSUED BY', controparte: 'FORNITORE / SUPPLIER', vuota: '—', xControparte: 110 });
   const ins = x.inspectionId ? qcGet(x.inspectionId) : null;
-  const orig = { fornitore: 'Fornitore / Supplier', produzione: 'Produzione / Production', cliente: 'Reclamo cliente / Customer complaint', interna: 'Interna / Internal' };
+  const orig = { fornitore: 'Fornitore / Supplier', produzione: 'Produzione / Production', cliente: 'Reclamo cliente / Customer complaint', interna: 'Interna / Internal',
+    strumento: 'Strumento di misura / Measuring instrument' };
   const grav = { minore: 'Minore / Minor', maggiore: 'Maggiore / Major', critica: 'Critica / Critical' };
   const dec = { '': 'Da decidere / Pending', reso: 'Reso al fornitore / Return to supplier', rilavorazione: 'Rilavorazione / Rework',
     deroga: 'Uso in deroga / Use as is under concession', rottamazione: 'Rottamazione / Scrap', accettato: 'Accettato / Accepted' };
@@ -499,6 +512,13 @@ function ncRapportoPdf(id, modo) {
       head: [['#', 'Azione\nAction', 'Chi\nOwner', 'Entro\nDue', 'Fatta\nDone']],
       body: x.actions.map((a, i) => [i + 1, a.text || '', a.who || '', a.due ? fmtDateIt(a.due) : '', a.done ? 'sì / yes' : 'no']) });
   }
+  // Lo strumento fuori: le misure da rivedere, con la decisione per ciascuna.
+  if ((x.impact || []).length) {
+    const dec = { '': 'Da decidere / Pending', nessun_impatto: 'Nessun impatto / No impact', ricontrollare: 'Da ricontrollare / Recheck' };
+    doc.autoTable({ startY: (doc.lastAutoTable && doc.lastAutoTable.finalY > y ? doc.lastAutoTable.finalY : y) + 6, styles: { fontSize: 8 }, headStyles: { fillColor: [58, 123, 232] },
+      head: [['Collaudo\nInspection', 'Caratteristica\nCharacteristic', 'Rilevato\nMeasured', 'Margine\nMargin', 'Decisione\nDecision']],
+      body: x.impact.map(r => [r.number || '', r.name || '', String(r.value || '').replace('.', ','), r.margin == null ? '—' : fmtQtyIt(r.margin), dec[r.decision || ''] || '']) });
+  }
   return qcPdfEmetti('nonconformity', x, doc, 'non-conformita', renderNc, modo);
 }
 
@@ -509,6 +529,7 @@ function renderQcSettings() {
   return `<h3 class="settings-group-title">${ico('qr', 'tinted', '')} Collaudi</h3>
     <label class="flag-check"><input type="checkbox" id="set-qc-cartellino" ${s.qcCartellino ? 'checked' : ''}> Proponi il cartellino da stampare quando si riceve merce da collaudare</label>
     <p class="empty-text" style="text-align:left;padding:4px 0 12px">Il cartellino è l'etichetta «IN COLLAUDO» con il QR, da attaccare al bancale. Si stampa sempre anche dalla scheda del collaudo.</p>
+    ${typeof renderStruSettings === 'function' ? renderStruSettings() : ''}
     <h3 class="settings-group-title">${ico('warning', 'tinted', '')} Non conformità</h3>
     <div class="modal-field"><label>Causali (una per riga)</label>
       <textarea id="set-qc-causali" rows="8">${esc(ncCausali().join('\n'))}</textarea></div>
@@ -541,5 +562,5 @@ function readQcSettings() {
     if (sb > sa) return 'La soglia della classe B non può superare quella della classe A';
     db.settings.qcVendor = { qualita: wq, puntualita: wp, sogliaA: sa, sogliaB: sb };
   }
-  return '';
+  return typeof readStruSettings === 'function' ? readStruSettings() : '';
 }

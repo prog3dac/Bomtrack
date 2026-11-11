@@ -1,4 +1,4 @@
-// Che cosa esce sui documenti per i fornitori (dalla 0.153.0): disegno e
+// Che cosa esce sui documenti per i fornitori (dalla 0.153.1): disegno e
 // certificato sulla riga, revisione e pagine, il rimando a DDT e fattura, i
 // dati di fatturazione nostri, l'offerta del fornitore, «rispondere entro»,
 // il materiale che parte con un ordine di lavoro.

@@ -400,6 +400,11 @@ const SCHEMA = {
   // sempre col piano) e le non conformità, con le loro azioni.
   qualityPlans: { table: 'quality_plans' },
   nonconformities: { table: 'nonconformities' },
+  // Modulo Taratura strumenti (0.153.0): gli strumenti e le loro tarature, due
+  // collezioni radice. Le tarature dopo gli strumenti: al primo caricamento
+  // sul server si citano, e un lotto non può citare una riga che arriva dopo.
+  instruments: { table: 'instruments' },
+  calibrations: { table: 'calibrations' },
   // Allegati: **solo i dati**. I byte dei file stanno in IndexedDB (allegati.js)
   // e non passano né da qui né dal backup JSON — un disegno pesa più di tutto il
   // database, e localStorage non li reggerebbe. Il record dice che il file
@@ -563,6 +568,10 @@ const REFS = {
   inspections: { fields: { itemId: 'item', supplierId: 'supplier' } },
   qualityPlans: { fields: { itemId: 'item', supplierId: 'supplier' } },
   nonconformities: { fields: { itemId: 'item', supplierId: 'supplier' } },
+  // `instrumentId` resta fuori come `orderId`: REFS non ha una destinazione
+  // 'instrument', e gli strumenti nascono con id UUID.
+  instruments: { fields: { labId: 'supplier' } },
+  calibrations: { fields: { supplierId: 'supplier' } },
   // `docId` resta fuori, come `orderId` sulle righe di movimento e per la stessa
   // ragione: REFS è la mappa degli id **legacy** da riscrivere nella migrazione
   // v2, e non ha (né avrebbe senso che avesse) una destinazione
@@ -899,6 +908,8 @@ function migrateDB() {
   if (!db.inspections) db.inspections = []; // collaudi della merce in entrata
   if (!db.qualityPlans) db.qualityPlans = []; // piani di controllo
   if (!db.nonconformities) db.nonconformities = []; // non conformità
+  if (!db.instruments) db.instruments = [];   // strumenti di misura
+  if (!db.calibrations) db.calibrations = []; // tarature degli strumenti
   // Cestino: le eliminazioni recenti, recuperabili. Si svuota da solo passata
   // la finestra di ripristino, altrimenti crescerebbe finché lo spazio del
   // browser non finisce — e a quel punto il rimedio sarebbe peggio del male.
@@ -998,7 +1009,7 @@ function migrateDB() {
     if (r.notesInternal == null) r.notesInternal = '';
     if (r.planId == null) r.planId = null;   // richiesta nata da un piano di fabbisogno
     if (r.jobId == null) r.jobId = null;    // e la commessa da cui quel piano discende
-    if (r.replyBy == null) r.replyBy = '';  // «rispondere entro il» (dalla 0.153.0)
+    if (r.replyBy == null) r.replyBy = '';  // «rispondere entro il» (dalla 0.153.1)
     (r.lines || []).forEach(l => {
       if (l.price == null) {
         const o = r.offers && r.supplierId && r.offers[r.supplierId];
@@ -1030,7 +1041,7 @@ function migrateDB() {
   if (!Array.isArray(db.receipts)) db.receipts = [];
   if (modoCondiviso) riallineaRicevuti(primoGiroRicevimenti);
   // Il riferimento all'offerta del fornitore e il DDT di invio al terzista
-  // (dalla 0.153.0): vuoti sui documenti di prima.
+  // (dalla 0.153.1): vuoti sui documenti di prima.
   (db.orders || []).forEach(o => { if (o.supplierQuote == null) o.supplierQuote = ''; });
   (db.workOrders || []).forEach(o => { if (o.shipDdt == null) o.shipDdt = ''; });
   [].concat(db.orders || [], db.workOrders || []).forEach(o => {

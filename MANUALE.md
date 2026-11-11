@@ -282,7 +282,7 @@ poteva uscire a sinistra e lasciare fuori mezze voci.
 
 Richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione e commesse hanno
 (dalla 0.93.0) una **barra dei passi**: gli stati del documento in fila, con quelli superati
-spuntati e quello attuale acceso. Dalla 0.153.0 sta nella barra a sinistra del documento
+spuntati e quello attuale acceso. Dalla 0.153.1 sta nella barra a sinistra del documento
 (→ [La pagina di un documento](#la-pagina-di-un-documento)), in colonna.
 
 | Documento | Passi |
@@ -306,7 +306,7 @@ ordine di produzione.
 
 ### La pagina di un documento
 
-Dalla 0.153.0 richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione,
+Dalla 0.153.1 richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione,
 commesse e piani di fabbisogno hanno la stessa pagina:
 
 - **in alto al centro** il numero del documento;
@@ -1904,7 +1904,7 @@ Bomtrack/COL/<anno>/`, come per gli ordini.
   toccare il resto.
 
 Tutto il modulo sta nel gruppo **Qualità** della barra, che c'è solo con il modulo acceso:
-*Collaudi*, *Non conformità*, *Piani di controllo*, *Valutazione fornitori*.
+*Collaudi*, *Non conformità*, *Piani di controllo*, *Valutazione fornitori* e, con il modulo Taratura strumenti, *Strumenti*.
 
 ### I piani di controllo (modulo Qualità)
 
@@ -2108,6 +2108,76 @@ quota di arrivi in tempo. Se una delle due non ha dati vale l'altra; senza nessu
 **senza classe**, invece di averne una inventata. La **classe** A, B o C segue le soglie (di serie 85
 e 70) e compare anche accanto al nome nel **listino fornitori** e in *Gestione → Fornitori*.
 L'elenco si esporta in **Excel** e **PDF**.
+
+### La taratura degli strumenti di misura (modulo, dalla 0.153.0)
+
+**A cosa serve.** A sapere che ogni misura scritta in un collaudo è stata presa con uno strumento
+tarato, come chiede la ISO 9001 al punto 7.1.5.2, e a capire che cosa rivedere quando uno strumento
+risulta fuori. Si accende in *Gestione → Moduli → Taratura strumenti*, e solo con la **Qualità**
+accesa. Compare la vista *Qualità → Strumenti*.
+
+**Il registro.** Ogni strumento ha un **codice** (proposto `STR-0001`, `STR-0002`…, o quello inciso),
+il **tipo** (calibro a corsoio, micrometro, tampone…), marca, modello, matricola, campo di misura,
+risoluzione, l'**EMA** (errore massimo ammesso), dove sta o chi lo tiene, di chi è (*nostro*, *del
+cliente*, *del fornitore*, *personale dell'operatore*), come si controlla (*taratura esterna*,
+*verifica interna* o *nessuna, solo indicativo*) e ogni quanti **mesi** va tarato (di serie quelli
+del tipo). L'elenco parte da quelli **da fare**; il filtro mostra anche i validi, i fuori servizio e
+i dismessi.
+
+**Lo stato** non si scrive: l'app lo calcola dalla scadenza.
+
+| Stato | Quando | Si usa nel collaudo |
+|---|---|---|
+| Valido | la scadenza è oltre il preavviso | sì |
+| In scadenza | scade entro il preavviso (di serie 30 giorni) | sì |
+| Scaduto | la scadenza è passata | no |
+| Da tarare | non ha mai avuto una scadenza | no |
+| In taratura | mandato al laboratorio con **Manda in taratura** | no |
+| Fuori servizio | l'ultima taratura lo ha lasciato non conforme, o messo da parte a mano | no |
+| Indicativo | il controllo è *nessuna*: non serve per collaudare | — |
+| Dismesso | tolto dall'uso: resta con la sua storia | no |
+
+**Registrare una taratura.** Dalla scheda, **Registra taratura**: data, chi l'ha fatta (laboratorio
+esterno o interna), il laboratorio fra i fornitori, il numero di certificato e i **punti** misurati
+(il valore di riferimento e quello letto). Dai punti l'app calcola l'**errore massimo** e, se lo
+strumento ha l'EMA, propone l'esito **all'arrivo** (*conforme* se l'errore resta entro l'EMA). Se lo
+strumento è stato **regolato** o riparato si dice anche com'è **dopo**. Conforme, lo strumento torna
+in uso e la prossima scadenza è la data più i mesi dell'intervallo (si può correggere); non conforme,
+va **fuori servizio** e ci resta finché una taratura conforme non lo rimette in uso. Il PDF del
+certificato si allega quando su quel PC è scelta la cartella d'archivio, e va in
+`Documenti Bomtrack/Tarature/<codice>/`. La data della prima taratura e la scadenza si scrivono a mano
+solo finché non c'è una taratura registrata: dopo le scrive la taratura.
+
+**Nel piano di controllo** la caratteristica sceglie il **tipo di strumento** da un elenco, al posto
+del testo libero (un testo libero che corrisponde a un tipo lo ritrova da solo). **Nel collaudo** la
+colonna *Strumento* propone gli strumenti validi di quel tipo, con la scadenza: scelto uno, le altre
+righe dello stesso tipo ancora vuote lo prendono anche loro. Il collaudo ricorda **codice e scadenza
+di quel giorno**, e il rapporto PDF li stampa.
+
+**Il blocco.** L'esito non si registra se una riga misurata non ha lo strumento che il piano chiede,
+o se lo strumento scelto era scaduto, in taratura o fuori servizio il giorno della misura. In
+*Gestione → Qualità → Strumenti di misura* la regola si può allentare: **Avvisa e registra lo
+stesso**. Le righe non misurate non chiedono niente.
+
+**Trovato fuori.** Una taratura con esito *non conforme* all'arrivo apre da sola una **non
+conformità** di origine *strumento*, con causa *Strumento di misura fuori tolleranza* e l'**analisi
+d'impatto**: le misure prese con quello strumento dall'ultima taratura buona. Per ognuna l'app
+confronta il margine dal limite di tolleranza più vicino con l'errore trovato: se il margine è più
+largo la misura resta **valida** (decisione *nessun impatto*), altrimenti va **rivista**, come ogni
+controllo passa/non passa. La NC è *maggiore* se c'è almeno una misura da rivedere, *minore*
+altrimenti, e **non si chiude** finché ogni misura non ha la sua decisione (*nessun impatto* o *da
+ricontrollare*). Il rapporto PDF della NC porta la tabella.
+
+**Chi scrive.** Strumenti e tarature li scrivono *Ufficio acquisti*, l'officina e l'amministratore;
+l'**intervallo**, la **dismissione** e l'**eliminazione** solo l'amministratore. Si elimina solo uno
+strumento senza tarature e senza collaudi: gli altri si dismettono.
+
+**Avvisi e calendario.** Il **Riepilogo** elenca gli strumenti scaduti o mai tarati (gravità alta) e
+quelli in scadenza; il **Calendario scadenze** ha la data di ogni taratura, con il filtro
+*Tarature*. Ogni strumento ha la sua **etichetta QR**: inquadrata, apre la scheda.
+
+**Le impostazioni**, in *Gestione → Qualità*: l'elenco dei **tipi** (uno per riga, `nome | mesi`),
+i giorni di **preavviso** e la regola del collaudo.
 
 ### Le etichette QR
 
@@ -3766,6 +3836,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Capacità finita (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Qualità: collaudo in entrata, piani di controllo, non conformità, valutazione fornitori (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
+| Taratura strumenti: registro, tarature e blocco del collaudo (→ [cap. 17](#17-magazzino)), solo con la Qualità | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
@@ -4071,7 +4142,7 @@ Per richieste e ordini, quei pulsanti sono **disabilitati finché ci sono modifi
 alla generazione l'app propone di far passare lo stato da *Bozza* a *Inviata* / *Inviato*.
 Rifiutando, il file si scarica lo stesso e lo stato non cambia.
 
-### Che cosa c'è sul foglio per il fornitore (dalla 0.153.0)
+### Che cosa c'è sul foglio per il fornitore (dalla 0.153.1)
 
 Oltre a numero, data, oggetto, i due blocchi di chi ordina e di chi riceve, le righe e le
 condizioni, richieste, ordini e ordini di lavoro stampano:
@@ -4951,6 +5022,8 @@ timestamp). Le migrazioni sono **idempotenti**: un backup vecchio si auto-migra 
 | `inspections` | **I collaudi** della merce in entrata (modulo Qualità): da quale arrivo vengono, la quantità trattenuta, la copia del piano con le misure e l'esito | — |
 | `qualityPlans` | **I piani di controllo**: a che cosa si applicano, il campionamento, il salto lotti e le caratteristiche | — |
 | `nonconformities` | **Le non conformità**: origine, causa, decisione, costo, scadenza e le azioni | — |
+| `instruments` | **Gli strumenti di misura** (modulo Taratura strumenti): tipo, EMA, intervallo, scadenza e stato | — |
+| `calibrations` | **Le tarature**: data, laboratorio, certificato, punti, esito all'arrivo e dopo, la NC aperta | — |
 | `users` | Gli utenti (con `passwordHash` e `passwordSalt`) | — |
 | `trash` | Il cestino | — |
 

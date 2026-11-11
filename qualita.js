@@ -295,6 +295,9 @@ function qcRegistraEsito(id, dati) {
   if (esito === 'accettato' && qcCertificatoRichiesto(insp) && insp.cert !== 'ok') {
     showToast('Manca il certificato: si può accettare solo in deroga', 'error'); return false;
   }
+  // Gli strumenti (dalla 0.153.0, qualita-strumenti.js): ogni misura presa
+  // con uno strumento valido, o — con la regola «avviso» — almeno detta.
+  if (typeof struConsenteEsito === 'function' && !struConsenteEsito(insp)) return false;
   const ammessi = qcDestiniDi(insp.source);
   const destino = d.destino ? d.destino : ammessi[0];
   // Il terzista lavora roba nostra: non c'è niente da accreditare. E un ODP
@@ -597,7 +600,8 @@ function qcControlloHtml(x, u, scrivibile) {
           <option value="ok" ${c.verdict === 'ok' ? 'selected' : ''}>OK</option><option value="ko" ${c.verdict === 'ko' ? 'selected' : ''}>Fuori</option></select>
           ${qcCheckForzato(c) ? '<span class="doc-badge st-bozza" title="Diverso da quello che dicono i limiti">a mano</span>' : ''}`;
     return `<tr class="${e === 'ko' ? 'qc-row-ko' : ''}">
-      <td>${esc(c.name || '—')}</td><td>${esc(qcTolleranzaTesto(c))}</td><td>${esc(c.tool || '—')}</td>
+      <td>${esc(c.name || '—')}</td><td>${esc(qcTolleranzaTesto(c))}</td>
+      <td class="qc-str-cella">${typeof struCellaHtml === 'function' && struAttivo() ? struCellaHtml(x, c, scrivibile) : esc(c.tool || '—')}</td>
       <td class="num">${cella}</td>
       <td class="qc-esito-cella">${esito}</td></tr>`;
   }).join('');

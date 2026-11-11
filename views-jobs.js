@@ -373,7 +373,7 @@ function renderJobEdit(id) {
   const { rfqs, orders, workOrders } = jobDocs(id);
   const t = jobTotals(id);
   const cov = jobCoverage(id);
-  // I documenti della commessa in tessere su più colonne (dalla 0.153.0):
+  // I documenti della commessa in tessere su più colonne (dalla 0.153.1):
   // una riga intera con «Apri →» per ognuno faceva una pagina di trenta righe.
   // La tessera è tutta cliccabile; il conteggio sta accanto al titolo.
   const elenco = (titolo, voci, vuoto) => `<div class="mrp-section">

@@ -129,7 +129,15 @@ function dbCloudCompleto() {
     nonconformities: [st({ id: U(56), number: 'NC-2026-001', source: 'fornitore', inspectionId: U(54), orderId: ord, itemId: m1, supplierId: s1,
       qty: 5, uom: 'kg', date: '2026-03-04', cause: 'Materiale non conforme', gravita: 'maggiore', description: 'Durezza fuori', decision: 'reso',
       actions: [{ id: 'a1', text: 'Chiedere l\'8D', who: 'Acquisti', due: '2026-03-20', done: false }], cost: 120, dueDate: '2026-04-03',
-      status: 'aperta', closedAt: null, note: '', active: true })],
+      status: 'aperta', closedAt: null, note: '', active: true,
+      instrumentId: U(70), calibrationId: U(71),
+      impact: [{ id: 'r1', inspectionId: U(54), number: 'COL-2026-001', checkId: 'k1', name: 'Diametro', value: '30.02', margin: 0.08, esito: 'valida', decision: 'nessun_impatto' }] })],
+    instruments: [st({ id: U(70), code: 'STR-0001', name: 'Calibro 0-150', typeId: 'tt-calibro', brand: 'Mitutoyo', model: '530', serial: 'C-77',
+      rangeText: '0-150 mm', resolution: 0.02, ema: 0.03, uom: 'mm', location: 'Sala metrologica', holder: 'Rossi', owner: 'nostro',
+      control: 'esterna', intervalMonths: 12, labId: s1, status: 'attivo', lastCal: '2026-01-10', nextDue: '2027-01-10', sentOn: null, notes: '', active: true })],
+    calibrations: [st({ id: U(71), instrumentId: U(70), date: '2026-01-10', kind: 'esterna', supplierId: s1, certNo: 'LAT 1/2', certPath: 'Tarature/STR-0001/2026-01-10.pdf',
+      points: [{ nominal: 50, found: 50.01 }], errMax: 0.01, ema: 0.03, asFound: 'conforme', adjusted: false, asLeft: 'conforme', nextDue: '2027-01-10',
+      cost: 80, ncId: U(56), note: '', active: true })],
     trash: [{ id: trash, coll: 'suppliers', deletedAt: T0, deletedBy: usr, record: { id: U(99), name: 'Vecchio' } }],
   });
 }

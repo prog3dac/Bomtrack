@@ -86,6 +86,7 @@ const FILE = [
   './qualita-fornitori.js',
   './qualita-qr.js',
   './qualita-produzione.js',
+  './qualita-strumenti.js',
   './allegati.js',
   './archivio.js',
   './documenti.js',

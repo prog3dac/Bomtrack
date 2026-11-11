@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..');
 // Stessa sequenza di index.html: i file si caricano nello stesso contesto e
 // condividono lo scope globale, esattamente come i <script> della pagina.
 const SRC = ['icons.js', 'theme.js', 'store.js', 'cloud-map.js', 'cloud.js', 'core.js', 'auth.js', 'costing.js', 'calendario.js', 'shell.js', 'worklist.js',
-  'views-bom.js', 'views-rev.js', 'views-stock.js', 'views-listino.js', 'views-catalog.js', 'views-cicli.js', 'views-report.js', 'views-jobs.js', 'views-home.js', 'views-dash.js', 'produzione.js', 'views-mrp.js', 'views-mrp-documenti.js', 'alternativi.js', 'varianti.js', 'consuntivo.js', 'officina.js', 'capacita.js', 'macchine.js', 'qualita.js', 'qualita-iso.js', 'qualita-piani.js', 'qualita-nc.js', 'qualita-fornitori.js', 'qualita-qr.js', 'qualita-produzione.js', 'allegati.js', 'archivio.js', 'documenti.js', 'views-item.js',
+  'views-bom.js', 'views-rev.js', 'views-stock.js', 'views-listino.js', 'views-catalog.js', 'views-cicli.js', 'views-report.js', 'views-jobs.js', 'views-home.js', 'views-dash.js', 'produzione.js', 'views-mrp.js', 'views-mrp-documenti.js', 'alternativi.js', 'varianti.js', 'consuntivo.js', 'officina.js', 'capacita.js', 'macchine.js', 'qualita.js', 'qualita-iso.js', 'qualita-piani.js', 'qualita-nc.js', 'qualita-fornitori.js', 'qualita-qr.js', 'qualita-produzione.js', 'qualita-strumenti.js', 'allegati.js', 'archivio.js', 'documenti.js', 'views-item.js',
   'views-docs.js', 'views-oda.js', 'views-prod.js', 'views-avanzamento.js', 'genealogia.js', 'views-manage.js', 'export-lists.js', 'import-catalog.js', 'columns.js', 'filters.js', 'inspector.js', 'qr.js', 'inventario.js', 'combo.js', 'import-export.js'];
 
 // localStorage finto. `quotaBytes` opzionale: oltre soglia lancia lo stesso
