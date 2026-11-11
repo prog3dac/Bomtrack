@@ -3334,13 +3334,20 @@ solo. Cliccando il nome di un centro, le letture si restringono a quello.
 **Il dettaglio di cella.** Cliccando una cella si apre **chi** ha portato quelle ore: parte, fase,
 piano.
 
-**Gli ordini di produzione che nessun piano conta** (dalla 0.133.0): un ODP scritto a mano, legato
-a un piano chiuso, o su una parte che in anagrafica si acquista porta nel carico le ore delle sue
-fasi interne ancora da fare (i pezzi attesi meno i lavorati, più l'attrezzaggio se la fase non è
-partita), nella settimana d'inizio pianificata della fase. Nel dettaglio di cella, al posto del
-piano, si legge il numero dell'ODP. Un ODP generato dal piano non si somma: le sue ore sono già
-quelle del piano. Con un piano solo nel filtro compaiono soltanto i suoi ODP che il piano non
-esplode. Bozze, lanciati e in corso caricano; completati, chiusi e annullati no.
+**Gli ordini di produzione caricano con le loro fasi** (dalla 0.152.0). Ogni ODP vivo — bozza,
+lanciato o in corso — porta nel carico le ore delle sue fasi interne ancora da fare (i pezzi
+attesi meno i lavorati, fase per fase, più l'attrezzaggio se la fase non è partita), nella
+settimana d'inizio pianificata della fase. Vale per tutti: quelli generati da un piano aperto,
+quelli scritti a mano, quelli di un piano chiuso e quelli su una parte che in anagrafica si
+acquista. Il piano aggiunge solo i pezzi **non ancora lanciati**, con il ciclo dell'anagrafica e
+le date del fabbisogno: così le ore non si contano due volte. Una fase a metà conta solo i pezzi
+che restano, una data ripianificata sposta le ore, e un ODP lanciato per più pezzi del piano
+carica tutti i suoi. Nel dettaglio di cella, al posto del piano, si legge il numero dell'ODP. Con
+un piano solo nel filtro, e nella scheda del piano, contano il suo non lanciato e i suoi ODP.
+Completati, chiusi e annullati non caricano.
+
+> Prima della 0.152.0 un ODP generato da un piano aperto non caricava con le sue fasi: ne prendeva
+> il posto l'esplosione del piano, che toglieva solo i pezzi già versati a magazzino.
 
 **Da sapere — quattro avvertimenti**, perché il prospetto non prometta più di quel che dà:
 

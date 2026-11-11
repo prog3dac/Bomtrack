@@ -11,6 +11,11 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Le fasi che non si toccano stanno sulla stessa corsia. Al telefono la linea scorre di lato e si apre con oggi a sinistra.
 - I grafici della saturazione restano com'erano; la coda in tabella è ancora lì, chiusa sotto «Le fasi in tabella».
 
+**Carico centri: gli ordini di produzione con le loro fasi.**
+- Ogni ODP vivo (bozza, lanciato, in corso) carica i centri con le ore che restano **fase per fase**, nella settimana d'inizio della sua fase. Prima un ODP generato da un piano aperto non contava: al suo posto il carico rifaceva il conto dal piano, con il ciclo dell'anagrafica e le date del fabbisogno, e toglieva solo i pezzi già versati. Una fase a metà, una data ripianificata o un ODP lanciato per più pezzi non si vedevano.
+- Il piano aggiunge solo i pezzi **non ancora lanciati**, con il loro attrezzaggio: le ore non si contano due volte.
+- Vale anche per la tavola del carico nella scheda del piano. I numeri del carico possono cambiare: sono quelli giusti.
+
 Nessun cambio allo schema.
 
 ### 0.151.0 — 2026-11-10

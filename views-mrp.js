@@ -944,21 +944,33 @@ function mrpLoadEntries(plans) {
     // Le parti già fatte non caricano più i centri (0.105.5): le loro ore si
     // tolgono in proporzione ai pezzi che restano. Dalla 0.124.0 anche gli
     // assiemi, i cui montati sono le dichiarazioni e i loro ODP (prodottiDi).
+    //
+    // Dalla 0.152.0 il piano carica solo quello che **resta da lanciare**:
+    // un ODP vivo carica i centri con le sue fasi (odpLoadEntries), con le
+    // ore che restano fase per fase e le sue date. Prima il piano rifaceva il
+    // conto dal ciclo dell'anagrafica anche per i pezzi già lanciati, e una
+    // fase a metà, una data ripianificata o un ODP lanciato per più pezzi non
+    // si vedevano mai.
     const lordo = new Map(exp.make.concat(exp.asm).map(m => [m.item.id, m.qty]));
     const quota = new Map();
     const resto = itemId => {
       if (!quota.has(itemId)) {
         const q = lordo.get(itemId);
-        quota.set(itemId, q > 0 && typeof daFare === 'function' ? daFare(p.id, itemId, q) / q : 1);
+        const fare = q > 0 && typeof daFare === 'function' ? daFare(p.id, itemId, q) : q;
+        const lanciare = q > 0 && typeof daLanciare === 'function' ? daLanciare(p.id, itemId, q) : fare;
+        // L'attrezzaggio resta se i pezzi mancanti dovranno partire con un
+        // ordine nuovo; se invece una parte è già stata fatta fuori da un
+        // ODP, la fase è già stata attrezzata.
+        quota.set(itemId, q > 0 ? { f: lanciare / q, setup: fare >= q - 1e-9 } : { f: 1, setup: true });
       }
       return quota.get(itemId);
     };
     exp.load.forEach(e => {
       const voci = e.voci.map(v => {
-        const f = resto(v.itemId);
-        // L'attrezzaggio non si divide: con dei pezzi già fatti la fase è già
-        // stata attrezzata, e resta da fare solo il tempo dei pezzi.
-        return f === 1 ? v : Object.assign({}, v, { qty: v.qty * f, setup: 0, hours: (v.hours - (v.setup || 0)) * f });
+        const r = resto(v.itemId), f = r.f;
+        if (f === 1) return v;
+        const setup = r.setup && f > 0 ? (v.setup || 0) : 0;
+        return Object.assign({}, v, { qty: v.qty * f, setup, hours: (v.hours - (v.setup || 0)) * f + setup });
       }).filter(v => v.hours > 0);
       if (!voci.length) return;
       const k = e.workCenterId + '|' + e.week;
@@ -969,34 +981,26 @@ function mrpLoadEntries(plans) {
   });
   return Array.from(map.values());
 }
-// ─── Le ore degli ODP che nessun piano conta ───
-// Il carico nasce dall'esplosione dei piani, e un ordine di produzione legato
-// al suo piano ci sta già dentro: le sue ore sono quelle del «da fare» del
-// piano. Restavano fuori gli ordini che il piano non vede — scritti a mano,
-// legati a un piano chiuso, o su una parte che in anagrafica si **compra** e
-// che questa volta si fa in casa (il fabbisogno non ne esplode il ciclo). Le
-// loro fasi interne occupano i centri come le altre, e Capacità finita e
-// Reparto già le mettono in fila: il carico non poteva non vederle.
+// ─── Le ore degli ordini di produzione ───
+// Ogni ODP vivo carica i centri con le sue fasi: quelli di un piano aperto
+// (dalla 0.152.0; prima ne prendeva il posto l'esplosione del piano, che li
+// rifaceva dal ciclo dell'anagrafica), quelli scritti a mano, quelli di un
+// piano chiuso e quelli su una parte che in anagrafica si **compra** e che
+// questa volta si fa in casa. Il piano aggiunge solo il non ancora lanciato
+// (mrpLoadEntries), così le ore non si contano due volte. È lo stesso conto di
+// Capacità finita e del Reparto.
 //
 // Le ore sono quelle che restano, come in capacita.js: i pezzi attesi dalla
 // fase meno i lavorati, più l'attrezzaggio se la fase non è partita. Stanno
 // nella settimana d'inizio pianificata della fase, o della consegna.
-// `piano`: 'tutti' per la vista globale (ogni ODP fuori dai piani aperti), o
-// l'id di un piano (solo i suoi ODP che la sua esplosione non copre).
+// `piano`: 'tutti' per la vista globale (ogni ODP vivo), o l'id di un piano
+// (solo i suoi ODP).
 const ODP_CARICANO = ['bozza', 'lanciato', 'corso'];
-function odpCopertoDalPiano(o, p) {
-  if (!p) return false;
-  const exp = mrpExplodePlan(p);
-  return exp.make.concat(exp.asm).some(e => e.item.id === o.itemId);
-}
-function odpLoadEntries(piano, plans) {
-  const aperti = new Map((plans || (db.plans || []).filter(p => p.active !== false)).map(p => [p.id, p]));
+function odpLoadEntries(piano) {
   const map = new Map();
   (db.prodOrders || []).forEach(o => {
     if (o.active === false || !ODP_CARICANO.includes(o.status)) return;
-    const suo = o.planId ? aperti.get(o.planId) : null;
-    if (piano === 'tutti') { if (suo && odpCopertoDalPiano(o, suo)) return; }
-    else if (!piano || o.planId !== piano || !suo || odpCopertoDalPiano(o, suo)) return;
+    if (piano !== 'tutti' && (!piano || o.planId !== piano)) return;
     const it = getItem(o.itemId) || { id: o.itemId, code: o.code || '', name: o.name || '' };
     const sue = new Map();
     (o.phases || []).forEach(f => {
@@ -1026,10 +1030,12 @@ function mrpLoadUnisci(a, b) {
   mrpLoadMetti(map, a); mrpLoadMetti(map, b);
   return Array.from(map.values());
 }
-function mrpLoad(plan) { return mrpLoadTable(mrpLoadEntries([plan])); }
+// Il carico di un piano solo: il suo non lanciato e i suoi ODP.
+function mrpLoadPiano(plan) { return mrpLoadUnisci(mrpLoadEntries([plan]), odpLoadEntries(plan.id)); }
+function mrpLoad(plan) { return mrpLoadTable(mrpLoadPiano(plan)); }
 function mrpLoadAll() {
   const piani = (db.plans || []).filter(p => p.active !== false);
-  return mrpLoadTable(mrpLoadUnisci(mrpLoadEntries(piani), odpLoadEntries('tutti', piani)));
+  return mrpLoadTable(mrpLoadUnisci(mrpLoadEntries(piani), odpLoadEntries('tutti')));
 }
 // Dalla lista piatta alla tavola centro × settimana, pronta da disegnare.
 // La colonna «senza data» sta in testa: quelle ore esistono e non hanno una
@@ -1107,7 +1113,7 @@ function loadPiani() {
 }
 function loadEntries() {
   const piani = loadPiani();
-  return mrpLoadUnisci(mrpLoadEntries(piani), odpLoadEntries(loadSoloPiano || 'tutti', loadSoloPiano ? null : piani));
+  return mrpLoadUnisci(mrpLoadEntries(piani), odpLoadEntries(loadSoloPiano || 'tutti'));
 }
 
 function renderLoad() {
@@ -1136,7 +1142,7 @@ function renderLoad() {
         ${tab.righe.map(r => `<option value="${esc(r.workCenterId)}" ${r.workCenterId === loadSoloCentro ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
       </select>
     </div>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Le ore che i piani chiedono a ciascun centro, settimana per settimana — più quelle degli ordini di produzione che nessun piano conta, come quelli scritti a mano — contro la capacità dichiarata in <em>Gestione → Centri di lavoro</em>. Le ore stanno nella settimana in cui <strong>la fase comincia</strong>, programmata a ritroso dalla consegna sul calendario di fabbrica (montaggi, fasi interne e tratte di conto lavoro in sequenza). La capacità è <strong>infinita</strong>: le date dicono quando ciascuna fase deve partire perché la consegna regga, il sovraccarico si vede ma non si sposta.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Le ore che gli ordini di produzione aperti chiedono a ciascun centro, fase per fase, più quelle che i piani chiedono per i pezzi non ancora lanciati, settimana per settimana, contro la capacità dichiarata in <em>Gestione → Centri di lavoro</em>. Le ore stanno nella settimana in cui <strong>la fase comincia</strong>, programmata a ritroso dalla consegna sul calendario di fabbrica (montaggi, fasi interne e tratte di conto lavoro in sequenza). La capacità è <strong>infinita</strong>: le date dicono quando ciascuna fase deve partire perché la consegna regga, il sovraccarico si vede ma non si sposta.</p>
     ${senzaCap ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} ${senzaCap} ${senzaCap === 1 ? 'centro non ha' : 'centri non hanno'} una capacità dichiarata: le ore si vedono, il sovraccarico no. Si imposta in <em>Gestione → Centri di lavoro</em>.</p>` : ''}
     ${loadOverloadHtml(tab)}
     ${loadChartHtml(tab)}
@@ -1281,7 +1287,7 @@ function loadCellModal(wcId, week, planId) {
   // globale e mostrare un dettaglio che non risponde più alla cella cliccata.
   const plan = planId ? getPlan(planId) : null;
   if (planId && !plan) return;
-  const tab = mrpLoadTable(planId ? mrpLoadEntries([plan]) : loadEntries());
+  const tab = mrpLoadTable(planId ? mrpLoadPiano(plan) : loadEntries());
   const riga = tab.righe.find(r => r.workCenterId === wcId);
   const cella = riga && riga.celle.get(week);
   if (!cella) return;
