@@ -714,6 +714,7 @@ create table if not exists public.nonconformities (
   supplier_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
   qty numeric, uom text, date date, cause text, gravita text, description text, decision text,
   actions jsonb, cost numeric, due_date date, status text, closed_at timestamptz, note text, active boolean,
+  instrument_id uuid, calibration_id uuid, impact jsonb,
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
@@ -729,6 +730,36 @@ alter table public.inspections add column if not exists qty_held numeric;
 alter table public.nonconformities add column if not exists production_order_id uuid;
 alter table public.nonconformities add column if not exists resp_phase text;
 alter table public.nonconformities add column if not exists scrap_decls jsonb;
+-- 0.152.0, modulo Taratura strumenti: gli strumenti con cui si collauda. Lo
+-- stato «scaduto» non c'è: si legge da `next_due`. `type_id` è testo, come
+-- `concept_id`: i tipi vivono nelle impostazioni con id leggibili.
+create table if not exists public.instruments (
+  id uuid primary key,
+  code text, name text, type_id text, brand text, model text, serial text, range_text text,
+  resolution numeric, ema numeric, uom text, location text, holder text, owner text, control text,
+  interval_months int, lab_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
+  status text, last_cal date, next_due date, sent_on date, notes text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- Le tarature: eventi, una riga per taratura, con i punti misurati (jsonb) e
+-- il percorso del certificato nella cartella d'archivio. Una taratura vive
+-- quanto il suo strumento: uno strumento tarato non si elimina, si dismette.
+create table if not exists public.calibrations (
+  id uuid primary key,
+  instrument_id uuid references public.instruments(id) deferrable initially deferred,
+  date date, kind text, supplier_id uuid references public.suppliers(id) on delete set null deferrable initially deferred,
+  cert_no text, cert_path text, points jsonb, err_max numeric, ema numeric, as_found text, adjusted boolean, as_left text,
+  next_due date, cost numeric, nc_id uuid, note text, active boolean,
+  pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
+  synced_at timestamptz not null default clock_timestamp()
+);
+-- La NC di uno strumento trovato fuori: lo strumento, la taratura e le misure
+-- da rivedere (jsonb). Niente chiavi esterne, come `order_id`: la NC vive più
+-- a lungo, e le non conformità arrivano sul server prima degli strumenti.
+alter table public.nonconformities add column if not exists instrument_id uuid;
+alter table public.nonconformities add column if not exists calibration_id uuid;
+alter table public.nonconformities add column if not exists impact jsonb;
 -- 0.145.0: l'ODP di ripresa porta l'ordine d'origine, la NC che l'ha lanciato
 -- e, se riprende pezzi fermi a magazzino, il collaudo che li tiene. Niente
 -- chiavi esterne, per la stessa ragione delle colonne qui sopra.
@@ -798,6 +829,8 @@ insert into public.sync_tables (tab, parent_tab, parent_col, merge) values
   ('inspections', null, null, 'root'),
   ('quality_plans', null, null, 'root'),
   ('nonconformities', null, null, 'root'),
+  ('instruments', null, null, 'root'),
+  ('calibrations', null, null, 'root'),
   ('trash', null, null, 'root')
 on conflict (tab) do update set parent_tab = excluded.parent_tab, parent_col = excluded.parent_col, merge = excluded.merge;
 
@@ -1337,6 +1370,11 @@ select t, a from (values
   -- anche chi registra un collaudo respinto (`shop`); le lavora l'ufficio.
   ('quality_plans', 'docs'),
   ('nonconformities', 'shop'), ('nonconformities', 'docs'),
+  -- Gli strumenti e le tarature: chi collauda in magazzino (`shop`) e
+  -- l'ufficio (`docs`). Intervallo e dismissione li riserva l'app
+  -- all'amministratore: è una divisione fra colleghi, non una barriera.
+  ('instruments', 'shop'), ('instruments', 'docs'),
+  ('calibrations', 'shop'), ('calibrations', 'docs'),
   -- Il cestino e le lapidi li scrive chiunque elimini qualcosa, in qualunque area.
   ('trash', 'catalog'), ('trash', 'bom'), ('trash', 'docs'), ('trash', 'manage'), ('trash', 'agenda'), ('trash', 'shop'),
   ('sync_tombstones', 'catalog'), ('sync_tombstones', 'bom'), ('sync_tombstones', 'docs'),
@@ -1371,6 +1409,7 @@ language sql immutable set search_path = public as $$
     ('timeLogs', 'production_time_logs'), ('maintPlans', 'maintenance_plans'), ('maintEvents', 'maintenance_events'),
     ('machines', 'machines'), ('inspections', 'inspections'),
     ('qualityPlans', 'quality_plans'), ('nonconformities', 'nonconformities'),
+    ('instruments', 'instruments'), ('calibrations', 'calibrations'),
     ('trash', 'trash'), ('users', 'profiles')
   ) v(k, t) where k = c
 $$;
@@ -1714,7 +1753,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 5)
+    'schema_versione', 6)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

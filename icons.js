@@ -71,6 +71,8 @@ const ICONS = {
   upload: '<path d="M12 15.4V3.6"/><path d="m7.4 8.2 4.6-4.6 4.6 4.6"/><path d="M4.4 18.4v1.2a1.2 1.2 0 0 0 1.2 1.2h12.8a1.2 1.2 0 0 0 1.2-1.2v-1.2"/>',
   users: '<circle cx="9.4" cy="8.4" r="3.4"/><path d="M3.4 20c.6-3.6 3-5.6 6-5.6s5.4 2 6 5.6"/><path d="M16 5.4a3.4 3.4 0 0 1 0 6.6"/><path d="M17.4 14.8c2 .7 3.3 2.5 3.7 5.2"/>',
   ruler: '<path d="M4.2 14.4 14.4 4.2a1.4 1.4 0 0 1 2 0l3.4 3.4a1.4 1.4 0 0 1 0 2L9.6 19.8a1.4 1.4 0 0 1-2 0l-3.4-3.4a1.4 1.4 0 0 1 0-2z"/><path d="m8.4 10.2 2.2 2.2M11.4 7.2l2.2 2.2M14.4 4.2l2.2 2.2M5.4 13.2l2.2 2.2"/>',
+  // Dalla 0.152.0: lo strumento di misura, un quadrante con la lancetta.
+  gauge: '<path d="M3.6 16.4a8.6 8.6 0 1 1 16.8 0"/><path d="M12 15.2 15.6 9"/><circle cx="12" cy="15.6" r="1.4"/><path d="M6.4 12.6l1.2.6M12 7.2v1.4M17.6 12.6l-1.2.6"/><path d="M4.4 19.8h15.2"/>',
 
   // Header
   printer: '<path d="M6.8 8.6V3.4h10.4v5.2"/><path d="M6.8 17.6H5a1.6 1.6 0 0 1-1.6-1.6v-5a1.6 1.6 0 0 1 1.6-1.6h14a1.6 1.6 0 0 1 1.6 1.6v5a1.6 1.6 0 0 1-1.6 1.6h-1.8"/><rect x="6.8" y="14.4" width="10.4" height="6.2" rx="1.2"/>',
@@ -112,7 +114,7 @@ const ICON_TINT = {
   factory: 'purple', tag: 'orange', clipboard: 'accent', chart: 'purple',
   list: 'accent', receipt: 'accent', scale: 'orange',
   building: 'accent', folder: 'orange', card: 'green', pause: 'orange',
-  save: 'accent', download: 'green', upload: 'accent', users: 'accent', ruler: 'purple', shield: 'green',
+  save: 'accent', download: 'green', upload: 'accent', users: 'accent', ruler: 'purple', shield: 'green', gauge: 'purple',
   // Header
   printer: 'text-dim', qr: 'accent', key: 'orange', logout: 'red', logo: 'accent', book: 'text-dim',
   menu: 'text-dim', more: 'text-dim',
@@ -153,6 +155,7 @@ const ICON_LABEL = {
   list: 'Fabbisogno', receipt: 'Ordine', scale: 'Rettifica giacenza',
   building: 'Azienda', folder: 'Famiglia', card: 'Pagamento', pause: 'Sospendi',
   download: 'Esporta', upload: 'Importa', users: 'Utenti', ruler: 'Unità di misura', shield: 'Qualità',
+  gauge: 'Strumento di misura',
   printer: 'Stampa', qr: 'Codice QR', key: 'Password', logout: 'Esci', logo: 'Bomtrack',
 };
 

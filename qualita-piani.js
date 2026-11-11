@@ -242,6 +242,8 @@ function qcApplicaPiano(rec, it) {
   rec.checks = (p.characteristics || []).map(x => ({
     id: x.id, name: x.name || '', kind: x.kind === 'ok' ? 'ok' : 'misura',
     nominal: x.nominal, tolMin: x.tolMin, tolMax: x.tolMax, isoClass: x.isoClass || '', uom: x.uom || '', tool: x.tool || '', value: '',
+    // Il tipo di strumento (dalla 0.152.0): chi collauda sceglie quale.
+    toolTypeId: typeof qcCarTipoId === 'function' ? qcCarTipoId(x) : '',
   }));
   return rec;
 }
@@ -649,7 +651,7 @@ function pqCaratteristicheHtml(p, scrive) {
         <div class="modal-field"><label>Tipo</label>
           <select ${dis} onchange="qcCarSet('${p.id}','${c.id}','kind',this.value)">
             <option value="misura" ${c.kind !== 'ok' ? 'selected' : ''}>Misura</option><option value="ok" ${c.kind === 'ok' ? 'selected' : ''}>Sì / no</option></select></div>
-        ${campo(c, 'tool', 'Strumento', 'placeholder="es. Calibro, tampone 20 H7"', c.tool || '')}
+        ${typeof qcCarTipoHtml === 'function' && struAttivo() ? qcCarTipoHtml(p, c, dis) : campo(c, 'tool', 'Strumento', 'placeholder="es. Calibro, tampone 20 H7"', c.tool || '')}
         ${scrive ? `<div class="qc-row-cmds">
           <button class="mini-btn" onclick="qcCarSposta('${p.id}','${c.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Sposta su" aria-label="Sposta su">↑</button>
           <button class="mini-btn" onclick="qcCarSposta('${p.id}','${c.id}',1)" ${i === l.length - 1 ? 'disabled' : ''} title="Sposta giù" aria-label="Sposta giù">↓</button>
@@ -780,7 +782,7 @@ function qcRapportoPdf(id, modo) {
   if (checks.length) {
     doc.autoTable({ startY: doc.lastAutoTable.finalY + 6, styles: { fontSize: 8 }, headStyles: { fillColor: [58, 123, 232] },
       head: [['#', 'Caratteristica\nCharacteristic', 'Specifica\nSpecification', 'Strumento\nGauge', 'Rilevato\nMeasured', 'Esito\nResult']],
-      body: checks.map((c, i) => [i + 1, c.name || '', qcTolleranzaTesto(c), c.tool || '',
+      body: checks.map((c, i) => [i + 1, c.name || '', qcTolleranzaTesto(c), typeof qcStrumentoTesto === 'function' ? qcStrumentoTesto(c) : c.tool || '',
         c.kind === 'ok' ? (c.value === 'ok' ? 'sì / yes' : c.value === 'ko' ? 'no' : '') : String(c.value || '').replace('.', ','),
         ({ ok: 'OK', ko: 'NON OK / NOT OK' }[qcCheckEsito(c)] || '—') + (c.kind !== 'ok' && c.verdict && (qcCheckForzato(c) || !qcLimiti(c)) ? ' (manuale / manual)' : '')]) });
   }
