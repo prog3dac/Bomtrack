@@ -1009,7 +1009,7 @@ function migrateDB() {
     if (r.notesInternal == null) r.notesInternal = '';
     if (r.planId == null) r.planId = null;   // richiesta nata da un piano di fabbisogno
     if (r.jobId == null) r.jobId = null;    // e la commessa da cui quel piano discende
-    if (r.replyBy == null) r.replyBy = '';  // «rispondere entro il» (dalla 0.153.1)
+    if (r.replyBy == null) r.replyBy = '';  // «rispondere entro il» (dalla 0.154.0)
     (r.lines || []).forEach(l => {
       if (l.price == null) {
         const o = r.offers && r.supplierId && r.offers[r.supplierId];
@@ -1041,7 +1041,7 @@ function migrateDB() {
   if (!Array.isArray(db.receipts)) db.receipts = [];
   if (modoCondiviso) riallineaRicevuti(primoGiroRicevimenti);
   // Il riferimento all'offerta del fornitore e il DDT di invio al terzista
-  // (dalla 0.153.1): vuoti sui documenti di prima.
+  // (dalla 0.154.0): vuoti sui documenti di prima.
   (db.orders || []).forEach(o => { if (o.supplierQuote == null) o.supplierQuote = ''; });
   (db.workOrders || []).forEach(o => { if (o.shipDdt == null) o.shipDdt = ''; });
   [].concat(db.orders || [], db.workOrders || []).forEach(o => {

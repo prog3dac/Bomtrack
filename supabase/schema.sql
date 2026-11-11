@@ -363,7 +363,7 @@ create table if not exists public.rfqs (
   synced_at timestamptz not null default clock_timestamp()
 );
 
--- 0.153.1: entro quando il fornitore deve rispondere.
+-- 0.154.0: entro quando il fornitore deve rispondere.
 alter table public.rfqs add column if not exists reply_by date;
 
 create table if not exists public.rfq_lines (
@@ -410,7 +410,7 @@ create table if not exists public.orders (
   synced_at timestamptz not null default clock_timestamp()
 );
 
--- 0.153.1: il riferimento all'offerta del fornitore, stampato sull'ordine.
+-- 0.154.0: il riferimento all'offerta del fornitore, stampato sull'ordine.
 alter table public.orders add column if not exists supplier_quote text;
 
 -- Nessuna colonna `received`: è la somma di order_receipts (vista più sotto).
@@ -493,7 +493,7 @@ create table if not exists public.work_orders (
   synced_at timestamptz not null default clock_timestamp()
 );
 
--- 0.153.1: il DDT con cui il materiale parte in conto lavorazione.
+-- 0.154.0: il DDT con cui il materiale parte in conto lavorazione.
 alter table public.work_orders add column if not exists ship_ddt text;
 
 create table if not exists public.work_order_lines (

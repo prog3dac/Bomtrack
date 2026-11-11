@@ -35,7 +35,7 @@ function docLockBanner(mode, kind, docKind, id) {
   // su un id di ordine di lavoro non trova niente e torna in silenzio — il
   // pulsante c'era e non sbloccava nulla.
   const fn = { order: 'ordUnlock', odl: 'odlUnlock', odp: 'odpUnlock' }[docKind] || 'rfqUnlock';
-  // Dalla 0.153.1 sta nella barra a sinistra: la frase è più corta, quella
+  // Dalla 0.154.0 sta nella barra a sinistra: la frase è più corta, quella
   // intera resta nel suggerimento.
   return `<div class="doc-lock-banner" title="${esc(kind)} — i dati sono protetti dalle modifiche accidentali. ${esc(what)}; note e stato restano sempre modificabili.">
     <span>${ico('lock', 'tinted', '')} Protetto. ${esc(what)}; note e stato sempre.</span>
@@ -536,7 +536,7 @@ function docAddCatalogLines(k, id, ids) {
 function docPartyLines(e, bilingue) {
   if (!e) return [];
   const iva = bilingue ? 'P.IVA / VAT ' : 'P.IVA ';
-  // Codice fiscale, codice destinatario e PEC (dalla 0.153.1) li ha solo la
+  // Codice fiscale, codice destinatario e PEC (dalla 0.154.0) li ha solo la
   // nostra azienda: servono al fornitore per intestare la fattura elettronica.
   const fatt = [e.fiscalCode && e.fiscalCode !== e.vat ? 'C.F. ' + e.fiscalCode : '',
     e.sdi ? 'SDI ' + e.sdi : '', e.pec ? 'PEC ' + e.pec : ''].filter(Boolean).join(' · ');
@@ -611,7 +611,7 @@ function docLineActionsCell(pfx, id, l) {
 }
 // Chiudi, numero, stato, Salva e il menu «⋯».
 //   o = { chiudi, cosa, rec, stati, dirty, saveId, salva, menu }
-// ─── La pagina di un documento (dalla 0.153.1) ───
+// ─── La pagina di un documento (dalla 0.154.0) ───
 // Al centro, in alto, il numero; a sinistra una barra che resta ferma mentre si
 // scorre, con tutto ciò che agisce sul documento intero: Salva, il passo
 // successivo, lo stato, la protezione, i documenti da generare, i collegati.
@@ -637,7 +637,7 @@ function docRailHtml(o) {
   const passi = o.k ? docPassiHtml(o.k, r) : '';
   const links = o.k ? docLinksHtml(o.k, r) : '';
   const sez = (titolo, html) => html ? `<div class="doc-rail-sez">${titolo ? `<div class="doc-rail-t">${titolo}</div>` : ''}${html}</div>` : '';
-  // La tendina dello stato sta qui dalla 0.153.1, sopra i passi: chi guarda a
+  // La tendina dello stato sta qui dalla 0.154.0, sopra i passi: chi guarda a
   // che punto è il documento lo cambia nello stesso posto.
   const stato = o.stato ? `<select class="doc-rail-stato" aria-label="Stato" onchange="${o.stato.azione}">
         ${Object.entries(o.stato.stati).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
@@ -662,7 +662,7 @@ function docTestaHtml(o) {
   const r = o.rec, id = r.id;
   const campo = (k, v) => `onchange="${o.pfx}SetField('${id}','${k}',${v || 'this.value'})"`;
   const opzioni = arr => (arr || []).map(x => `<option value="${esc(x)}"></option>`).join('');
-  // Dalla 0.153.1 i campi scorrono in righe e ognuno è largo quanto serve
+  // Dalla 0.154.0 i campi scorrono in righe e ognuno è largo quanto serve
   // (style.css, .testa): una data non occupa più un terzo della scheda.
   return `<div class="rfq-head testa">
       <div class="modal-field campo-xl"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
@@ -701,7 +701,7 @@ function docNomeFile(rec, sup, ripiego, ext) {
 // La testata del PDF: titolo col numero, data, oggetto, e i due blocchi di chi
 // ordina e di chi riceve. Restituisce la y da cui parte la tabella delle righe.
 //   o = { titolo, rec, chi, controparte, vuota, xControparte, kind?, righe? }
-// `kind` (dalla 0.153.1) stampa la revisione accanto alla data; `righe` sono
+// `kind` (dalla 0.154.0) stampa la revisione accanto alla data; `righe` sono
 // altre voci di testata ([etichetta, valore]), una per riga, quelle vuote no.
 function docPdfTesta(doc, o) {
   const r = o.rec;
@@ -935,7 +935,7 @@ function lineOriginTag(l) {
   return ' <span class="rfq-manual-tag">manuale</span>';
 }
 function lineDescDoc(l) { return [l.description || '', l.note || '', ...lineExtraDoc(l)].filter(Boolean).join('\n'); }
-// ─── Disegno e certificato sulla riga (dalla 0.153.1) ───
+// ─── Disegno e certificato sulla riga (dalla 0.154.0) ───
 // Per una parte a disegno il riferimento con la revisione è *il* dato che
 // evita di ricevere il pezzo vecchio; il certificato del piano di controllo va
 // chiesto prima, non scoperto al ricevimento. L'articolo è quello della riga,

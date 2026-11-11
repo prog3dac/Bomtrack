@@ -1077,7 +1077,7 @@ function renderOdlEdit(id) {
     ${odlDirty ? '' : docEmessiHtml('workOrder', o)}` });
 }
 
-// ─── Il materiale che mandiamo al terzista (dalla 0.153.1) ───
+// ─── Il materiale che mandiamo al terzista (dalla 0.154.0) ───
 // Una voce per tratta: le fasi consecutive dallo stesso terzista lavorano lo
 // stesso pezzo, che parte una volta sola (clLineRole, views-stock.js). Le
 // righe scritte a mano non hanno una parte, e non mandano niente di noto.
@@ -1122,7 +1122,7 @@ function exportOdlPDF(id, modo) {
   const totVal = { content: fmtN(odlTotal(o)), styles: { fontStyle: 'bold' } };
   doc.autoTable({ startY, head: [head], body, foot: [['', '', '', '', totLabel, totVal, '', '']],
     styles: { fontSize: 8 }, headStyles: { fillColor: [46, 164, 121] }, footStyles: { fillColor: [235, 242, 238], textColor: 20 } });
-  // Il materiale che parte con l'ordine (dalla 0.153.1): il terzista sa che
+  // Il materiale che parte con l'ordine (dalla 0.154.0): il terzista sa che
   // cosa gli arriva e con quale DDT, e lo riporta sul DDT di reso.
   const mat = odlMaterialeInviato(o);
   if (mat.length) {

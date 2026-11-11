@@ -1,4 +1,4 @@
-// La pagina di un documento (dalla 0.153.1): numero in alto al centro, comandi
+// La pagina di un documento (dalla 0.154.0): numero in alto al centro, comandi
 // in una barra a sinistra che resta ferma, testata con i campi a misura.
 
 const assert = require('node:assert/strict');

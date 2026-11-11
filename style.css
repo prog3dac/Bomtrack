@@ -1796,7 +1796,7 @@ select.combo-nascosto{display:none!important}
 @media print{.cap-centro{break-inside:avoid}.cap-scorri{overflow:visible}}
 .load-ambito{margin:0;padding:8px 12px;font-size:13px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:10px;color:var(--text)}
 
-/* ─── La pagina di un documento (dalla 0.153.1) ───
+/* ─── La pagina di un documento (dalla 0.154.0) ───
    Il numero in alto al centro, a sinistra la barra dei comandi che resta ferma
    mentre si scorre (views-docs.js, docPaginaHtml). La pagina si allarga nei
    margini che prima restavano vuoti: la scheda resta larga come prima. */

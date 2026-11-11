@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.153.0**
+**Versione dell'app documentata: 0.154.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -282,7 +282,7 @@ poteva uscire a sinistra e lasciare fuori mezze voci.
 
 Richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione e commesse hanno
 (dalla 0.93.0) una **barra dei passi**: gli stati del documento in fila, con quelli superati
-spuntati e quello attuale acceso. Dalla 0.153.1 sta nella barra a sinistra del documento
+spuntati e quello attuale acceso. Dalla 0.154.0 sta nella barra a sinistra del documento
 (→ [La pagina di un documento](#la-pagina-di-un-documento)), in colonna.
 
 | Documento | Passi |
@@ -306,7 +306,7 @@ ordine di produzione.
 
 ### La pagina di un documento
 
-Dalla 0.153.1 richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione,
+Dalla 0.154.0 richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione,
 commesse e piani di fabbisogno hanno la stessa pagina:
 
 - **in alto al centro** il numero del documento;
@@ -4142,7 +4142,7 @@ Per richieste e ordini, quei pulsanti sono **disabilitati finché ci sono modifi
 alla generazione l'app propone di far passare lo stato da *Bozza* a *Inviata* / *Inviato*.
 Rifiutando, il file si scarica lo stesso e lo stato non cambia.
 
-### Che cosa c'è sul foglio per il fornitore (dalla 0.153.1)
+### Che cosa c'è sul foglio per il fornitore (dalla 0.154.0)
 
 Oltre a numero, data, oggetto, i due blocchi di chi ordina e di chi riceve, le righe e le
 condizioni, richieste, ordini e ordini di lavoro stampano:
