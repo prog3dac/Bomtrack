@@ -16,6 +16,11 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Il piano aggiunge solo i pezzi **non ancora lanciati**, con il loro attrezzaggio: le ore non si contano due volte.
 - Vale anche per la tavola del carico nella scheda del piano. I numeri del carico possono cambiare: sono quelli giusti.
 
+**Carico centri: i filtri.**
+- **Il filtro dei centri vale per tutta la pagina**: avviso di sovraccarico, grafici, tavola, coda a capacità finita e codici da produrre. Prima restringeva solo i codici da produrre. Si sceglie fra tutti i centri attivi.
+- **Il filtro dei piani dice anche gli ordini**: *Tutto* con il numero di piani e di ODP, un piano con i suoi ODP, oppure *Solo gli ODP senza piano*.
+- Una riga **Stai guardando** dice in parole che cosa entra nel conto; la stessa frase va negli export. **Togli i filtri** torna a tutto.
+
 Nessun cambio allo schema.
 
 ### 0.151.0 — 2026-11-10

@@ -3311,8 +3311,19 @@ La stessa tavola, ristretta a un solo piano, sta anche in fondo alla scheda di o
 
 **Comandi.** **Esporta Excel** · **Esporta PDF**.
 
-**Filtri.** **Tutti i piani aperti (N)** oppure un piano solo; **Tutti i centri** oppure un centro
-solo. Cliccando il nome di un centro, le letture si restringono a quello.
+**Filtri** (rivisti nella 0.152.0).
+- **Piani e ordini**: *Tutto* (i piani aperti e ogni ordine di produzione vivo, il numero di
+  ciascuno è scritto nella voce), **un piano** (i suoi pezzi non ancora lanciati e i suoi ODP,
+  con quanti sono) oppure **Solo gli ODP senza piano** (scritti a mano o di un piano chiuso).
+- **Centro**: tutti, oppure uno solo fra i centri attivi. Vale per **tutta la pagina**: avviso di
+  sovraccarico, grafici, tavola, coda a capacità finita e codici da produrre. Cliccando il nome di
+  un centro nella tavola si ottiene lo stesso.
+- Sotto i filtri una riga **Stai guardando** dice in parole che cosa entra nel conto, per esempio
+  «le fasi di 12 ordini di produzione (3 senza piano) e i pezzi non ancora lanciati di 2 piani
+  aperti, solo sul centro Tornitura CNC». La stessa frase va nell'intestazione degli export.
+  **Togli i filtri** torna a tutto.
+- Nella coda a capacità finita i filtri scelgono che cosa si vede, ma la fila resta quella di tutta
+  la fabbrica: un ordine aspetta anche dietro a quelli che il filtro nasconde.
 
 **Cosa si vede.**
 

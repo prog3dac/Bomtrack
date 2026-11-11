@@ -134,18 +134,28 @@ function capOdpHtml(o) {
   return `<div class="${x.ritardo ? 'rfq-warn' : 'empty-text'}" style="text-align:left">${ico('clock', 'tinted', '')} A capacità finita l'ordine finisce il <strong>${esc(fmtDateIt(x.fattibile))}</strong>${x.ritardo ? `: ${gg} ${gg === 1 ? 'giorno lavorativo' : 'giorni lavorativi'} dopo la data richiesta` : ', in tempo'}. Le fasi in fila sui centri per data di consegna, nelle ore che ogni centro lavora.</div>`;
 }
 // La fila di un centro, per il Carico centri.
-function capCodaHtml() {
+// `filtro` (dalla 0.152.0): i filtri della pagina — `odp(o)` dice se un ordine
+// è fra quelli scelti, `wc` restringe a un centro. La fila resta quella di
+// tutta la fabbrica: un ordine si mette in coda dietro a tutti gli altri, anche
+// a quelli che il filtro non mostra.
+function capFiltroPassa(filtro, o, f) {
+  if (!filtro) return true;
+  if (filtro.wc && f.workCenterId !== filtro.wc) return false;
+  return !filtro.odp || filtro.odp(o);
+}
+function capCodaHtml(filtro) {
   if (!moduloAttivo('capacita')) return '';
   const s = capSchedula();
   const perCentro = new Map();
   (db.prodOrders || []).filter(o => ODP_APERTI.includes(o.status)).forEach(o => (o.phases || []).forEach(f => {
+    if (!capFiltroPassa(filtro, o, f)) return;
     const x = s.fasi.get(f.id);
     if (!x || x.esterna || !(x.ore > 0)) return;
     const l = perCentro.get(f.workCenterId) || [];
     l.push({ o, f, x });
     perCentro.set(f.workCenterId, l);
   }));
-  if (!perCentro.size) return `<div class="mrp-section"><div class="cycle-section-head"><h3>${ico('clock', 'tinted', '')} Coda a capacità finita</h3></div><div class="empty-text">Nessuna fase interna da fare sugli ordini lanciati.</div></div>`;
+  if (!perCentro.size) return `<div class="mrp-section"><div class="cycle-section-head"><h3>${ico('clock', 'tinted', '')} Coda a capacità finita</h3></div><div class="empty-text">Nessuna fase interna da fare sugli ordini lanciati${filtro && (filtro.odp || filtro.wc) ? ' scelti dai filtri' : ''}.</div></div>`;
   const blocchi = Array.from(perCentro.entries()).map(([wcId, l]) => {
     const wc = getWorkCenter(wcId);
     l.sort((a, b) => a.x.start.localeCompare(b.x.start));
@@ -157,8 +167,8 @@ function capCodaHtml() {
       </tbody></table></div>`;
   }).join('');
   return `<div class="mrp-section"><div class="cycle-section-head"><h3>${ico('clock', 'tinted', '')} Coda a capacità finita</h3></div>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Gli ordini di produzione lanciati e in corso, in fila sui centri per data di consegna, da oggi in avanti: nei giorni lavorativi, nelle ore al giorno di ogni centro, fuori dai fermi di manutenzione. A sinistra della linea di oggi quello che è successo, a destra quello che succederà. In rosso gli ordini che finiscono dopo la data richiesta. Le date pianificate degli ordini non cambiano.</p>
-    ${capLineaHtml()}
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Gli ordini di produzione lanciati e in corso, in fila sui centri per data di consegna, da oggi in avanti: nei giorni lavorativi, nelle ore al giorno di ogni centro, fuori dai fermi di manutenzione. A sinistra della linea di oggi quello che è successo, a destra quello che succederà. In rosso gli ordini che finiscono dopo la data richiesta. Le date pianificate degli ordini non cambiano.${filtro && (filtro.odp || filtro.wc) ? ' Si vedono solo gli ordini e i centri scelti dai filtri, ma la fila tiene conto di tutti.' : ''}</p>
+    ${capLineaHtml(null, filtro)}
     <details class="cap-tabelle"><summary>Le fasi in tabella</summary>${blocchi}</details></div>`;
 }
 
@@ -201,11 +211,11 @@ function capRealeFase(o, f, oggi) {
   return { giorni, dal, al: chiusa ? al : (dal ? oggi : ''), chiusa };
 }
 
-function capLineaDati(oggi) {
+function capLineaDati(oggi, filtro) {
   const s = capSchedula(oggi);
   const perCentro = new Map();
   (db.prodOrders || []).filter(o => ODP_APERTI.includes(o.status)).forEach(o => (o.phases || []).forEach(f => {
-    if (f.supplierId || !f.workCenterId) return;
+    if (f.supplierId || !f.workCenterId || !capFiltroPassa(filtro, o, f)) return;
     const x = s.fasi.get(f.id);
     const prev = x && !x.esterna && x.ore > 0 ? x : null;
     const reale = capRealeFase(o, f, oggi);
@@ -233,10 +243,10 @@ function capLineaCorsie(voci) {
   return fine.length;
 }
 
-function capLineaHtml(oggi) {
+function capLineaHtml(oggi, filtro) {
   if (!moduloAttivo('capacita')) return '';
   const g = oggi || oggiISO();
-  const perCentro = capLineaDati(g);
+  const perCentro = capLineaDati(g, filtro);
   if (!perCentro.size) return '';
   const dal = calShift(g, -CAP_LINEA_PRIMA);
   let al = g;

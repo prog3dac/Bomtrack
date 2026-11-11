@@ -993,14 +993,21 @@ function mrpLoadEntries(plans) {
 // Le ore sono quelle che restano, come in capacita.js: i pezzi attesi dalla
 // fase meno i lavorati, più l'attrezzaggio se la fase non è partita. Stanno
 // nella settimana d'inizio pianificata della fase, o della consegna.
-// `piano`: 'tutti' per la vista globale (ogni ODP vivo), o l'id di un piano
-// (solo i suoi ODP).
+// `piano`: 'tutti' per la vista globale (ogni ODP vivo), 'senza-piano' per
+// quelli che nessun piano aperto conta, o l'id di un piano (solo i suoi ODP).
 const ODP_CARICANO = ['bozza', 'lanciato', 'corso'];
+// Un ODP legato a un piano aperto. Gli altri — scritti a mano, di un piano
+// chiuso o sparito — sono «senza piano» per il filtro del Carico centri.
+function odpHaPianoAperto(o) {
+  const p = o && o.planId ? getPlan(o.planId) : null;
+  return !!(p && p.active !== false);
+}
 function odpLoadEntries(piano) {
   const map = new Map();
   (db.prodOrders || []).forEach(o => {
     if (o.active === false || !ODP_CARICANO.includes(o.status)) return;
-    if (piano !== 'tutti' && (!piano || o.planId !== piano)) return;
+    if (piano === 'senza-piano') { if (odpHaPianoAperto(o)) return; }
+    else if (piano !== 'tutti' && (!piano || o.planId !== piano)) return;
     const it = getItem(o.itemId) || { id: o.itemId, code: o.code || '', name: o.name || '' };
     const sue = new Map();
     (o.phases || []).forEach(f => {
@@ -1101,29 +1108,78 @@ function settimanaLabel(wk) {
 // barra porta il suo numero e la tavola sotto resta la lettura esatta — perché
 // un disegno che sostituisse i numeri li renderebbe incontestabili, ed è la
 // stessa ragione per cui una cella si può aprire.
-let loadSoloPiano = '';   // '' = tutti i piani aperti
+// Il filtro dei piani (dalla 0.152.0 dice anche gli ordini): '' = tutto, cioè
+// i piani aperti e ogni ordine di produzione vivo; l'id di un piano = il suo
+// non lanciato e i suoi ODP; LOAD_SENZA_PIANO = solo gli ODP che nessun piano
+// aperto conta (scritti a mano, di un piano chiuso).
+const LOAD_SENZA_PIANO = 'senza-piano';
+let loadSoloPiano = '';
+// Il filtro dei centri vale per tutta la pagina (dalla 0.152.0; prima
+// restringeva solo i codici da produrre, e il resto non cambiava).
 let loadSoloCentro = '';  // '' = tutti i centri
 
 // I piani che entrano nel conto, e le loro ore già raccolte. Passano da qui
 // tutte e quattro le funzioni che disegnano o esportano: ricalcolarle ognuna a
 // modo suo era il modo di farle divergere.
+function loadPianiAperti() { return (db.plans || []).filter(p => p.active !== false); }
 function loadPiani() {
+  if (loadSoloPiano === LOAD_SENZA_PIANO) return [];
   const piano = loadSoloPiano ? getPlan(loadSoloPiano) : null;
-  return piano ? [piano] : (db.plans || []).filter(p => p.active !== false);
+  return piano ? [piano] : loadPianiAperti();
 }
 function loadEntries() {
-  const piani = loadPiani();
-  return mrpLoadUnisci(mrpLoadEntries(piani), odpLoadEntries(loadSoloPiano || 'tutti'));
+  return mrpLoadUnisci(mrpLoadEntries(loadPiani()), odpLoadEntries(loadSoloPiano || 'tutti'));
+}
+// Un ODP è fra quelli scelti dal filtro dei piani?
+function loadOdpScelto(o) {
+  if (!loadSoloPiano) return true;
+  if (loadSoloPiano === LOAD_SENZA_PIANO) return !odpHaPianoAperto(o);
+  return o.planId === loadSoloPiano;
+}
+// Gli ODP vivi che il filtro sceglie: quelli che caricano i centri.
+function loadOdpVivi(filtroPiano) {
+  return (db.prodOrders || []).filter(o => o.active !== false && ODP_CARICANO.includes(o.status)
+    && (!filtroPiano || filtroPiano(o)));
+}
+// La tavola ristretta al centro scelto.
+function loadTabCentro(tab) {
+  return loadSoloCentro ? Object.assign({}, tab, { righe: tab.righe.filter(r => r.workCenterId === loadSoloCentro) }) : tab;
+}
+// Che cosa si sta guardando, in parole: la stessa frase in pagina e negli export.
+function loadAmbitoTesto() {
+  const odp = loadOdpVivi(loadOdpScelto);
+  const n = odp.length;
+  const ordini = `${n} ${n === 1 ? 'ordine di produzione' : 'ordini di produzione'}`;
+  let t;
+  if (loadSoloPiano === LOAD_SENZA_PIANO) t = `le fasi di ${ordini} senza un piano aperto (scritti a mano o di un piano chiuso)`;
+  else if (loadSoloPiano) {
+    const p = getPlan(loadSoloPiano);
+    t = `il piano ${p ? p.number : ''}: i pezzi non ancora lanciati e le fasi dei suoi ${ordini}`;
+  } else {
+    const piani = loadPianiAperti().length, senza = odp.filter(o => !odpHaPianoAperto(o)).length;
+    t = `le fasi di ${ordini}${senza ? ` (${senza} senza piano)` : ''}`
+      + (piani ? ` e i pezzi non ancora lanciati di ${piani} ${piani === 1 ? 'piano aperto' : 'piani aperti'}` : ', nessun piano aperto');
+  }
+  const wc = loadSoloCentro ? getWorkCenter(loadSoloCentro) : null;
+  return t + (wc ? `, solo sul centro ${wc.name}` : ', su tutti i centri');
 }
 
 function renderLoad() {
   const host = document.getElementById('view-load'); if (!host) return;
   invalidateCaches();
-  if (loadSoloPiano && !getPlan(loadSoloPiano)) loadSoloPiano = '';
+  if (loadSoloPiano && loadSoloPiano !== LOAD_SENZA_PIANO && !getPlan(loadSoloPiano)) loadSoloPiano = '';
   const entries = loadEntries();
-  const tab = mrpLoadTable(entries);
-  if (loadSoloCentro && !tab.righe.some(r => r.workCenterId === loadSoloCentro)) loadSoloCentro = '';
-  const aperti = (db.plans || []).filter(p => p.active !== false);
+  const tutta = mrpLoadTable(entries);
+  // Un centro che col filtro dei piani non ha più ore resta scelto: la pagina
+  // lo dice vuoto, invece di tornare a tutti i centri senza avvisare.
+  const centri = (db.workCenters || []).filter(w => w.active !== false || w.id === loadSoloCentro)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  if (loadSoloCentro && !getWorkCenter(loadSoloCentro)) loadSoloCentro = '';
+  const tab = loadTabCentro(tutta);
+  const aperti = loadPianiAperti();
+  const viviTutti = loadOdpVivi();
+  const senzaPiano = viviTutti.filter(o => !odpHaPianoAperto(o)).length;
+  const odpDi = id => viviTutti.filter(o => o.planId === id).length;
   const senzaCap = tab.righe.filter(r => !(r.capacity > 0)).length;
   host.innerHTML = `<div class="manage-wrap">
     <div class="bom-toolbar">
@@ -1133,26 +1189,32 @@ function renderLoad() {
       <div class="bom-toolbar-right">${listExportButtons('loadExportSpec')}</div>
     </div>
     <div class="catalog-filters">
-      <select id="load-plan" onchange="loadSetPlan(this.value)" title="Quali piani entrano nel conto">
-        <option value="">Tutti i piani aperti (${aperti.length})</option>
-        ${aperti.map(p => `<option value="${esc(p.id)}" ${p.id === loadSoloPiano ? 'selected' : ''}>${esc(p.number)}${p.title ? ' — ' + esc(p.title) : ''}</option>`).join('')}
+      <select id="load-plan" onchange="loadSetPlan(this.value)" title="Quali piani e quali ordini di produzione entrano nel conto" aria-label="Piani e ordini">
+        <option value="">Tutto: ${aperti.length} ${aperti.length === 1 ? 'piano aperto' : 'piani aperti'} e ${viviTutti.length} ODP</option>
+        ${aperti.length ? `<optgroup label="Un piano: il non lanciato e i suoi ODP">
+          ${aperti.map(p => `<option value="${esc(p.id)}" ${p.id === loadSoloPiano ? 'selected' : ''}>${esc(p.number)}${p.title ? ' — ' + esc(p.title) : ''} (${odpDi(p.id)} ODP)</option>`).join('')}
+        </optgroup>` : ''}
+        ${senzaPiano || loadSoloPiano === LOAD_SENZA_PIANO ? `<option value="${LOAD_SENZA_PIANO}" ${loadSoloPiano === LOAD_SENZA_PIANO ? 'selected' : ''}>Solo gli ODP senza piano (${senzaPiano})</option>` : ''}
       </select>
-      <select id="load-wc" onchange="loadSetCentro(this.value)" title="Restringe i codici da produrre a un centro">
+      <select id="load-wc" onchange="loadSetCentro(this.value)" title="Restringe tutta la pagina a un centro" aria-label="Centro di lavoro">
         <option value="">Tutti i centri</option>
-        ${tab.righe.map(r => `<option value="${esc(r.workCenterId)}" ${r.workCenterId === loadSoloCentro ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+        ${centri.map(w => `<option value="${esc(w.id)}" ${w.id === loadSoloCentro ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}
       </select>
+      ${loadSoloPiano || loadSoloCentro ? `<button class="btn-outline" onclick="loadAzzeraFiltri()">Togli i filtri</button>` : ''}
     </div>
+    <p class="load-ambito"><strong>Stai guardando</strong> ${esc(loadAmbitoTesto())}.</p>
     <p class="empty-text" style="text-align:left;padding:0 0 8px">Le ore che gli ordini di produzione aperti chiedono a ciascun centro, fase per fase, più quelle che i piani chiedono per i pezzi non ancora lanciati, settimana per settimana, contro la capacità dichiarata in <em>Gestione → Centri di lavoro</em>. Le ore stanno nella settimana in cui <strong>la fase comincia</strong>, programmata a ritroso dalla consegna sul calendario di fabbrica (montaggi, fasi interne e tratte di conto lavoro in sequenza). La capacità è <strong>infinita</strong>: le date dicono quando ciascuna fase deve partire perché la consegna regga, il sovraccarico si vede ma non si sposta.</p>
     ${senzaCap ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} ${senzaCap} ${senzaCap === 1 ? 'centro non ha' : 'centri non hanno'} una capacità dichiarata: le ore si vedono, il sovraccarico no. Si imposta in <em>Gestione → Centri di lavoro</em>.</p>` : ''}
     ${loadOverloadHtml(tab)}
     ${loadChartHtml(tab)}
     ${loadTableHtml(tab)}
-    ${typeof capCodaHtml === 'function' ? capCodaHtml() : ''}
+    ${typeof capCodaHtml === 'function' ? capCodaHtml({ odp: loadSoloPiano ? loadOdpScelto : null, wc: loadSoloCentro }) : ''}
     ${loadItemsHtml(entries)}</div>`;
   if (typeof capLineaScorri === 'function') capLineaScorri(host);
 }
 function loadSetPlan(id) { loadSoloPiano = id || ''; renderLoad(); }
 function loadSetCentro(id) { loadSoloCentro = id || ''; renderLoad(); }
+function loadAzzeraFiltri() { loadSoloPiano = ''; loadSoloCentro = ''; renderLoad(); }
 function loadOverloadHtml(tab) {
   const ov = mrpLoadOverload(tab);
   if (!ov.length) return '';
@@ -1317,9 +1379,8 @@ function loadCellModal(wcId, week, planId) {
 // ha una riga per codice, fase e settimana, che è la forma in cui si somma per
 // reparto o per articolo senza rifare i conti a mano.
 function loadExportSpec() {
-  const piano = loadSoloPiano ? getPlan(loadSoloPiano) : null;
   const entries = loadEntries();
-  const tab = mrpLoadTable(entries);
+  const tab = loadTabCentro(mrpLoadTable(entries));
   const righe = [];
   tab.righe.forEach(r => tab.settimane.forEach(wk => {
     const c = r.celle.get(wk);
@@ -1336,8 +1397,10 @@ function loadExportSpec() {
   return {
     titolo: 'Carico dei centri di lavoro',
     slug: 'carico_centri',
-    filtri: [['Piani', piano ? piano.number + (piano.title ? ' — ' + piano.title : '') : 'Tutti i piani aperti'],
-      ['Centro', loadSoloCentro ? ((getWorkCenter(loadSoloCentro) || {}).name || '') : 'Tutti']],
+    filtri: [['Piani', loadSoloPiano === LOAD_SENZA_PIANO ? 'Solo gli ODP senza piano'
+        : loadSoloPiano ? (p => p ? p.number + (p.title ? ' — ' + p.title : '') : '')(getPlan(loadSoloPiano)) : 'Tutto: piani aperti e ODP'],
+      ['Centro', loadSoloCentro ? ((getWorkCenter(loadSoloCentro) || {}).name || '') : 'Tutti'],
+      ['Si vede', loadAmbitoTesto()]],
     sezioni: [{
       nome: 'Ore per centro e settimana',
       colonne: [

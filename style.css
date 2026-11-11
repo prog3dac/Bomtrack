@@ -1799,3 +1799,4 @@ select.combo-nascosto{display:none!important}
 .cap-fase:focus-visible .cap-etich{text-decoration:underline}
 .cap-tabelle > summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;color:var(--text-dim)}
 @media print{.cap-centro{break-inside:avoid}.cap-scorri{overflow:visible}}
+.load-ambito{margin:0;padding:8px 12px;font-size:13px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:10px;color:var(--text)}
