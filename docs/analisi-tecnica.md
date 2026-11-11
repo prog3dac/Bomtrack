@@ -1142,6 +1142,27 @@ ripresa; non sommarle lascia fuori i costi di una NC senza ODP (un reso, una
 rottamazione). Per chiuderla servirebbe distinguere nella NC il costo già
 coperto da un documento.
 
+### F. La taratura degli strumenti *(censite nella 0.153.0)*
+
+**F1 — `nonconformities.instrument_id`, `calibration_id` e
+`calibrations.nc_id` senza chiave esterna.** Come gli altri `nc_id`: le NC
+vengono prima di strumenti e tarature nell'ordine di `sync_tables`, e i due
+lati si puntano a vicenda. L'app tollera il record mancante (la NC dice
+«strumento eliminato»), ma il database non lo impedisce.
+
+**F2 — «da ricontrollare» non riapre niente.** La decisione su una misura
+dell'analisi d'impatto è scritta nella NC, ma non apre un collaudo di
+ricontrollo né trattiene i pezzi, che nel frattempo possono essere già stati
+montati o spediti. Il seguito resta alle azioni della NC.
+
+**F3 — l'impatto guarda solo i collaudi.** Le misure prese in reparto (le
+dichiarazioni di fase) non portano lo strumento, e un controllo di
+produzione fatto con uno strumento fuori non entra nell'analisi.
+
+**F4 — lasciati fuori dalla prima versione:** l'elenco PDF degli strumenti da
+mandare al laboratorio, la storia dello strumento nella scheda «Storia», il
+suggerimento dell'intervallo dalle tarature passate e gli studi R&R.
+
 ---
 
 ## Note in positivo

@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.153.0 — 2026-11-11
+
+**Taratura degli strumenti di misura: un modulo nuovo, agganciato alla Qualità.**
+- **Il registro.** *Qualità → Strumenti* elenca calibri, micrometri, tamponi e gli altri strumenti con cui si collauda: codice (`STR-0001`…), tipo, matricola, EMA, dove sta, di chi è (nostro, del cliente, del fornitore, personale), come si controlla e ogni quanti mesi. Lo stato si calcola dalla scadenza: valido, in scadenza, scaduto, da tarare, in taratura, fuori servizio, indicativo, dismesso. Ogni strumento ha la sua etichetta QR.
+- **Le tarature.** Esterne o interne, con laboratorio, certificato (il PDF va nella cartella d'archivio, `Tarature/<codice>/`), i punti misurati e l'errore massimo che ne viene, l'esito all'arrivo e dopo una regolazione. Conforme, la scadenza si sposta di tanti mesi quanti dice l'intervallo; non conforme, lo strumento va fuori servizio finché una taratura conforme non lo rimette in uso.
+- **Nel collaudo.** La caratteristica del piano sceglie il tipo di strumento; chi collauda sceglie quale fra quelli validi di quel tipo, e il collaudo ne tiene codice e scadenza del giorno, che il rapporto PDF stampa. **L'esito non si registra** se una misura non ha lo strumento chiesto o se lo strumento era scaduto: in *Gestione → Qualità* si può passare al solo avviso.
+- **Uno strumento trovato fuori** apre una non conformità di origine *strumento* con l'**analisi d'impatto**: le misure prese con lui dall'ultima taratura buona, ognuna valida se il margine dal limite supera l'errore trovato, da rivedere altrimenti. La NC non si chiude finché ogni misura non ha la sua decisione.
+- Riepilogo e Calendario scadenze avvisano degli strumenti scaduti e di quelli in scadenza (filtro *Tarature*).
+- Strumenti e tarature li scrivono l'ufficio e l'officina; intervallo, dismissione ed eliminazione l'amministratore. Il modulo si accende in *Gestione → Moduli* e richiede la Qualità.
+
+**Schema: cambia.** Nuove tabelle `instruments` e `calibrations`, nuove colonne `instrument_id`, `calibration_id` e `impact` su `nonconformities`, `schema_versione` 6. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+
 ### 0.152.0 — 2026-11-11
 
 **Carico centri: la linea temporale di ogni centro.**

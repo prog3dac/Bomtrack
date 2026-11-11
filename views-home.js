@@ -172,6 +172,16 @@ function homeSegnali() {
       agg(azioni.map(({ x, a }) => voce(`${x.number} · ${a.who || 'chi?'} · ${fmtDateIt(a.due)}`, `${a.who || 'chi?'} — ${a.text || '(azione senza testo)'} — entro ${fmtDateIt(a.due)}`,
         `ncApriDaAltrove('${x.id}')`)), 'azione di NC da fare entro 7 giorni', 'azioni di NC da fare entro 7 giorni', 'nc', 'media');
     }
+    // Gli strumenti (dalla 0.153.0): uno scaduto non fa registrare l'esito dei
+    // collaudi, quindi è un problema; uno che scade entro il preavviso è il
+    // momento di mandarlo in taratura.
+    if (typeof struAttivo === 'function' && struAttivo()) {
+      const av = struAvvisi();
+      agg(av.scaduti.map(({ s, testo }) => voce(s.code, testo, `struApriDaAltrove('${s.id}')`)),
+        'strumento scaduto o mai tarato', 'strumenti scaduti o mai tarati', 'strumenti', 'alta');
+      agg(av.vicini.map(({ s, testo }) => voce(s.code, testo, `struApriDaAltrove('${s.id}')`)),
+        'strumento da mandare in taratura', 'strumenti da mandare in taratura', 'strumenti', 'media');
+    }
     // Dalla 0.149.0 il collaudo lo decide il piano: gli articoli che avevano
     // una scelta scritta (sull'articolo o sulla famiglia) e ora si comportano
     // al contrario. L'avviso resta finché non si sistemano i piani o non si
@@ -578,6 +588,9 @@ function homeEventi() {
     });
   });
 
+  // Modulo Taratura strumenti (dalla 0.153.0): la prossima taratura di ognuno.
+  if (typeof struAttivo === 'function' && struAttivo()) struEventiCalendario(oggi).forEach(e => out.push(e));
+
   out.forEach(e => { delete e.numero; delete e.n; });
   return out.filter(calEventoAttivo).sort((a, b) => a.data.localeCompare(b.data) || CAL_GRAV_ORD[a.gravita] - CAL_GRAV_ORD[b.gravita]);
 }
@@ -598,6 +611,7 @@ const CAL_FILTRI = [
   { id: 'produzione', label: 'Fine produzione', tipi: ['produzione'], vista: 'odp' },
   { id: 'manutenzione', label: 'Manutenzione', tipi: ['manutenzione'], vista: 'manutenzione', modulo: 'officina' },
   { id: 'qualita', label: 'Non conformità', tipi: ['nc', 'ncazione'], vista: 'nc', modulo: 'qualita' },
+  { id: 'tarature', label: 'Tarature', tipi: ['taratura'], vista: 'strumenti', modulo: 'tarature' },
   { id: 'promemoria', label: 'Promemoria', tipi: ['promemoria'] },
 ];
 const CAL_FILTRI_KEY = 'bomtrack_cal_nascosti';

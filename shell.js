@@ -289,7 +289,9 @@ const NAV = [
     { id: 'collaudi', label: 'Collaudi', modulo: 'qualita' },
     { id: 'nc', label: 'Non conformità', modulo: 'qualita' },
     { id: 'pianiqc', label: 'Piani di controllo', modulo: 'qualita' },
-    { id: 'fornitoriqc', label: 'Valutazione fornitori', modulo: 'qualita' }] },
+    { id: 'fornitoriqc', label: 'Valutazione fornitori', modulo: 'qualita' },
+    // Dalla 0.153.0: gli strumenti con cui si collauda e le loro tarature.
+    { id: 'strumenti', label: 'Strumenti', modulo: 'tarature' }] },
   { id: 'manage', icon: 'settings', label: 'Gestione', views: [
     { id: 'manage', label: 'Gestione' }] },
 ];
@@ -477,6 +479,7 @@ function setView(v) {
   else if (v === 'stock') renderStock();
   else if (v === 'collaudi') renderCollaudi();
   else if (v === 'nc') renderNc();
+  else if (v === 'strumenti') renderStrumenti();
   else if (v === 'pianiqc') renderPianiQc();
   else if (v === 'fornitoriqc') renderFornitoriQc();
   else if (v === 'cycles') renderCycles();

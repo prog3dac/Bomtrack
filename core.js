@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.152.0';
+const APP_VERSION = '0.153.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -716,6 +716,14 @@ const MODULI = {
     descr: 'Il controllo della merce che arriva. Gli articoli (o le famiglie) che lo chiedono aprono un collaudo a ogni ricevimento e a ogni rientro dal terzista: fino all\'esito quella quantità è a scaffale ma non è libera, e il Magazzino la mostra nella colonna «In collaudo». I piani di controllo dicono che cosa misurare e su quanti pezzi (anche AQL e salto lotti); un respinto o una deroga aprono una non conformità con causa, azioni e rapporto PDF; la valutazione dei fornitori dà a ciascuno una classe A, B o C.',
     area: 'magazzino',
   },
+  // Dalla 0.152.0: gli strumenti di misura e le loro tarature (qualita-strumenti.js).
+  // Vive dentro Qualità: senza collaudi non c'è niente da misurare.
+  tarature: {
+    nome: 'Taratura strumenti',
+    descr: 'Gli strumenti con cui si collauda, in Qualità → Strumenti: codice, tipo, scadenza della taratura e stato (valido, in scadenza, scaduto, in taratura, fuori servizio). Il piano di controllo chiede un tipo di strumento, chi collauda sceglie quale fra quelli validi, e uno scaduto non fa registrare l\'esito. Una taratura trovata fuori apre una non conformità con i collaudi da rivedere. Funziona con il modulo Qualità acceso.',
+    area: 'magazzino',
+    richiede: 'qualita',
+  },
   // Dalla 0.126.0: le macchine dei centri, con tariffa e manutenzione proprie (macchine.js).
   macchine: {
     nome: 'Macchine utensili',
@@ -726,6 +734,9 @@ const MODULI = {
 function moduloAttivo(nome) {
   const m = db && db.settings && db.settings.modules;
   if (!(MODULI[nome] && m && m[nome] === true)) return false;
+  // Un modulo che si appoggia a un altro (le tarature ai collaudi) si spegne
+  // con lui, come con la sua area.
+  if (MODULI[nome].richiede && !moduloAttivo(MODULI[nome].richiede)) return false;
   // Un modulo che vive dentro un'area si spegne con lei, senza perdere il suo
   // interruttore: riaccendendo l'area torna com'era.
   return !MODULI[nome].area || areaAttiva(MODULI[nome].area);
@@ -749,7 +760,7 @@ const AREE = {
     nome: 'Magazzino',
     descr: 'Giacenze, movimenti, rettifiche, inventario, scorte minime ed etichette QR di magazzino. Spento, le giacenze non si vedono ma i ricevimenti restano sugli ordini: riaccendendo, il magazzino è già al suo posto.',
     // Il cruscotto è quasi tutto magazzino: valore, fermi, sotto scorta.
-    viste: ['stock', 'dash', 'collaudi', 'nc', 'pianiqc', 'fornitoriqc'],
+    viste: ['stock', 'dash', 'collaudi', 'nc', 'pianiqc', 'fornitoriqc', 'strumenti'],
   },
   pianificazione: {
     nome: 'Pianificazione',
@@ -813,10 +824,10 @@ function roleGuardRuolo(area) {
 // Area di scrittura corrispondente a ciascuna vista (per il banner di sola lettura)
 // `load` (Carico centri) è null come `report`: è un prospetto derivato, in sola
 // lettura, da cui non si scrive niente.
-const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, storia: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', collaudi: 'docs', nc: 'docs', pianiqc: 'docs', fornitoriqc: null, manage: 'manage' };
+const VIEW_AREA = { home: null, dash: null, bom: 'bom', buy: 'catalog', design: 'catalog', stock: 'catalog', cycles: 'catalog', varianti: 'bom', load: null, avz: null, storia: null, report: null, jobs: 'docs', mrp: 'docs', rfq: 'docs', orders: 'docs', odl: 'docs', odp: 'docs', reparto: 'docs', manutenzione: 'docs', pricelist: 'catalog', collaudi: 'docs', nc: 'docs', pianiqc: 'docs', fornitoriqc: null, strumenti: 'docs', manage: 'manage' };
 // Le viste in cui l'officina lavora pur senza l'area della vista: lì non va in
 // sola lettura, e le guardie dei singoli gesti fanno il resto.
-const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione', 'collaudi']);
+const SHOP_VIEWS = new Set(['stock', 'orders', 'odl', 'odp', 'reparto', 'manutenzione', 'collaudi', 'strumenti']);
 
 // Le due viste di anagrafica: ciò che si compra e ciò che si progetta.
 // Ogni vista ha i suoi filtri (prefisso degli id nella pagina) e la creazione

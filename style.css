@@ -1678,6 +1678,11 @@ select.combo-nascosto{display:none!important}
 .qc-conta{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:1px 8px;text-transform:none;letter-spacing:0}
 .qc-avviso{color:var(--red)}
 .qc-fail-msg{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--red-soft);color:var(--red);font-weight:600;line-height:1.45}
+/* Strumenti di misura (dalla 0.153.0): lo stato in grande in testa alla
+   scheda, e la scadenza sotto lo strumento scelto nel collaudo. */
+.stru-stato{margin:10px 0 0;font-size:18px;font-weight:700;line-height:1.3}
+.qc-str-cella{min-width:160px}
+.qc-str-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
 /* Le caratteristiche del piano (dalla 0.142.0): una scheda per riga, su due
    righe di campi, invece di una tabella da otto colonne. */
 .qc-card h3 .pq-codici-toggle{font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;min-height:32px}
