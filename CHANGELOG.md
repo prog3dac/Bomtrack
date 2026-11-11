@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.152.1 — 2026-11-11
+### 0.153.0 — 2026-11-11
 
 **Documenti: la barra dei comandi a sinistra e testate più compatte.**
 - Richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione, commesse e piani hanno la stessa pagina: il **numero in alto al centro** e, a sinistra, una **barra che resta ferma mentre si scorre** con Chiudi e ⋯, Salva, il passo successivo, Storia, gli stati in colonna, l'avviso di documento protetto con Sblocca, Genera PDF / Excel (o Esporta), i collegati e chi ha creato e aggiornato il documento. Prima stavano in quattro riquadri sopra la testata, e i pulsanti PDF/Excel in fondo alla pagina.

@@ -35,7 +35,7 @@ function docLockBanner(mode, kind, docKind, id) {
   // su un id di ordine di lavoro non trova niente e torna in silenzio — il
   // pulsante c'era e non sbloccava nulla.
   const fn = { order: 'ordUnlock', odl: 'odlUnlock', odp: 'odpUnlock' }[docKind] || 'rfqUnlock';
-  // Dalla 0.152.1 sta nella barra a sinistra: la frase è più corta, quella
+  // Dalla 0.153.0 sta nella barra a sinistra: la frase è più corta, quella
   // intera resta nel suggerimento.
   return `<div class="doc-lock-banner" title="${esc(kind)} — i dati sono protetti dalle modifiche accidentali. ${esc(what)}; note e stato restano sempre modificabili.">
     <span>${ico('lock', 'tinted', '')} Protetto. ${esc(what)}; note e stato sempre.</span>
@@ -606,7 +606,7 @@ function docLineActionsCell(pfx, id, l) {
 }
 // Chiudi, numero, stato, Salva e il menu «⋯».
 //   o = { chiudi, cosa, rec, stati, dirty, saveId, salva, menu }
-// ─── La pagina di un documento (dalla 0.152.1) ───
+// ─── La pagina di un documento (dalla 0.153.0) ───
 // Al centro, in alto, il numero; a sinistra una barra che resta ferma mentre si
 // scorre, con tutto ciò che agisce sul documento intero: Salva, il passo
 // successivo, lo stato, la protezione, i documenti da generare, i collegati.
@@ -652,7 +652,7 @@ function docTestaHtml(o) {
   const r = o.rec, id = r.id;
   const campo = (k, v) => `onchange="${o.pfx}SetField('${id}','${k}',${v || 'this.value'})"`;
   const opzioni = arr => (arr || []).map(x => `<option value="${esc(x)}"></option>`).join('');
-  // Dalla 0.152.1 i campi scorrono in righe e ognuno è largo quanto serve
+  // Dalla 0.153.0 i campi scorrono in righe e ognuno è largo quanto serve
   // (style.css, .testa): una data non occupa più un terzo della scheda.
   return `<div class="rfq-head testa">
       <div class="modal-field campo-xl"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
