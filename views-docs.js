@@ -198,7 +198,8 @@ const DOC_KINDS = {
     currentId: () => currentOdlId,
     saveBtnId: 'odl-save-btn', exportBtnClass: 'odl-export-btn',
     dirtyHint: "Salva l'ordine di lavoro prima di generare il documento",
-    opsFields: ['status', 'notes', 'notesInternal', 'supplierConfirmation'],
+    // Il DDT di invio si fa dopo l'ordine: si scrive anche a ordine protetto.
+    opsFields: ['status', 'notes', 'notesInternal', 'supplierConfirmation', 'shipDdt'],
     lineLock: field => (field === 'received' || field === 'confirmedDate') ? 'reception' : 'contract',
     numLineFields: ['qty', 'price', 'received'],
     newLineExtra: () => ({ received: 0, startDate: '', phaseKey: null, phaseKeys: null, odpId: null, odpPhaseId: null }),
@@ -535,7 +536,11 @@ function docAddCatalogLines(k, id, ids) {
 function docPartyLines(e, bilingue) {
   if (!e) return [];
   const iva = bilingue ? 'P.IVA / VAT ' : 'P.IVA ';
-  return [e.name, ...addressLines(e), e.vat ? iva + e.vat : '', e.referente, e.email, e.phone]
+  // Codice fiscale, codice destinatario e PEC (dalla 0.153.0) li ha solo la
+  // nostra azienda: servono al fornitore per intestare la fattura elettronica.
+  const fatt = [e.fiscalCode && e.fiscalCode !== e.vat ? 'C.F. ' + e.fiscalCode : '',
+    e.sdi ? 'SDI ' + e.sdi : '', e.pec ? 'PEC ' + e.pec : ''].filter(Boolean).join(' · ');
+  return [e.name, ...addressLines(e), e.vat ? iva + e.vat : '', fatt, e.referente, e.email, e.phone]
     .map(s => s || '').filter(Boolean);
 }
 // ─── La coda di un documento stampato: trasporto, pagamento, note ───
@@ -650,7 +655,7 @@ function docRailHtml(o) {
     </aside>`;
 }
 // Titolo, controparte, data, stato, condizioni e note.
-//   o = { pfx, rec, controparte, data, conferma?, note }
+//   o = { pfx, rec, controparte, data, conferma?, note, rispondere?, offerta?, ddt? }
 // `conferma` è l'etichetta del numero di conferma della controparte: la
 // richiesta d'offerta non ce l'ha.
 function docTestaHtml(o) {
@@ -663,7 +668,10 @@ function docTestaHtml(o) {
       <div class="modal-field campo-xl"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
       <div class="modal-field campo-l"><label>${o.controparte}</label><select class="lock-contract sel-cerca" onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
       <div class="modal-field campo-s"><label>${o.data}</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" ${campo('date')}></div>
+      ${o.rispondere ? `<div class="modal-field campo-s"><label>Rispondere entro</label><input type="date" class="lock-contract" value="${esc((r.replyBy || '').slice(0, 10))}" ${campo('replyBy')}></div>` : ''}
+      ${o.offerta ? `<div class="modal-field campo-m"><label>Vostra offerta n° / del</label><input class="lock-contract" value="${esc(r.supplierQuote || '')}" placeholder="es. 245 del 03/11/2026" ${campo('supplierQuote')}></div>` : ''}
       ${o.conferma ? `<div class="modal-field campo-m"><label>${o.conferma}</label><input value="${esc(r.supplierConfirmation || '')}" ${campo('supplierConfirmation')}></div>` : ''}
+      ${o.ddt ? `<div class="modal-field campo-m"><label>DDT di invio (conto lavorazione)</label><input value="${esc(r.shipDdt || '')}" placeholder="es. 87 del 12/11/2026" ${campo('shipDdt')}></div>` : ''}
       <div class="modal-field campo-m"><label>Trasporto / resa</label>
         <input list="${o.pfx}-transport-opts" class="lock-contract" value="${esc(r.transport || '')}" placeholder="es. Porto franco, EXW, DAP…" ${campo('transport')}>
         <datalist id="${o.pfx}-transport-opts">${opzioni(db.settings.transportOptions)}</datalist></div>
@@ -692,14 +700,21 @@ function docNomeFile(rec, sup, ripiego, ext) {
 }
 // La testata del PDF: titolo col numero, data, oggetto, e i due blocchi di chi
 // ordina e di chi riceve. Restituisce la y da cui parte la tabella delle righe.
-//   o = { titolo, rec, chi, controparte, vuota, xControparte }
+//   o = { titolo, rec, chi, controparte, vuota, xControparte, kind?, righe? }
+// `kind` (dalla 0.153.0) stampa la revisione accanto alla data; `righe` sono
+// altre voci di testata ([etichetta, valore]), una per riga, quelle vuote no.
 function docPdfTesta(doc, o) {
   const r = o.rec;
   doc.setFontSize(15); doc.setTextColor(30); doc.text(`${o.titolo} — ${r.number}`, 14, 16);
   doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`Data / Date: ${fmtDateIt(r.date) || fmtDateIt(nowISO())}`, 14, 22);
-  if (r.title) doc.text(`Oggetto / Subject: ${r.title}`, 14, 27);
-  const yTop = 36;
+  const rev = o.kind ? docRevisioneTesto(o.kind, r) : '';
+  doc.text(`Data / Date: ${fmtDateIt(r.date) || fmtDateIt(nowISO())}${rev ? '   ·   ' + rev : ''}`, 14, 22);
+  let y = 22;
+  if (r.title) doc.text(`Oggetto / Subject: ${r.title}`, 14, y += 5);
+  (o.righe || []).filter(x => x && x[1]).forEach(([etichetta, valore]) => {
+    doc.setTextColor(30); doc.text(`${etichetta}: ${valore}`, 14, y += 5); doc.setTextColor(90);
+  });
+  const yTop = Math.max(36, y + 9);
   const block = (x, title, rowsTxt) => {
     doc.setFontSize(8); doc.setTextColor(130); doc.text(title, x, yTop);
     doc.setFontSize(9); doc.setTextColor(40);
@@ -919,7 +934,29 @@ function lineOriginTag(l) {
   if (l.phaseKey) return ` <span class="rfq-clavoro-tag" title="Lavorazione in conto lavoro, non un articolo a magazzino: i pezzi rientrati portano l'ordine a evaso, mentre il magazzino lo muovono i movimenti di conto lavoro o, se la riga viene da un ordine di produzione, la dichiarazione su quell'ordine.">conto lavoro</span>`;
   return ' <span class="rfq-manual-tag">manuale</span>';
 }
-function lineDescDoc(l) { return l.note ? (l.description || '') + '\n' + l.note : (l.description || ''); }
+function lineDescDoc(l) { return [l.description || '', l.note || '', ...lineExtraDoc(l)].filter(Boolean).join('\n'); }
+// ─── Disegno e certificato sulla riga (dalla 0.153.0) ───
+// Per una parte a disegno il riferimento con la revisione è *il* dato che
+// evita di ricevere il pezzo vecchio; il certificato del piano di controllo va
+// chiesto prima, non scoperto al ricevimento. L'articolo è quello della riga,
+// o la parte che il terzista lavora su un ordine di lavoro.
+function lineArticoloDoc(l) {
+  if (!l) return null;
+  if (l.itemId) return getItem(l.itemId) || null;
+  const parte = l.phaseKey ? clPhaseItemId(l) : '';
+  return parte ? getItem(parte) || null : null;
+}
+function lineExtraDoc(l) {
+  const it = lineArticoloDoc(l);
+  if (!it) return [];
+  const out = [];
+  if (it.drawingRef) out.push(`Dis. / Drw. ${it.drawingRef} rev. ${itemRev(it)}`);
+  const piano = (typeof qcAttivo === 'function' && qcAttivo()) ? qcPianoPer(it) : null;
+  if (piano && piano.cert) out.push(`Certificato richiesto / Certificate required: ${piano.cert}`);
+  return out;
+}
+// La frase che fa abbinare il DDT e la fattura all'ordine senza telefonate.
+const DOC_RIF_DDT = 'Indicare il n° ordine e il n° di riga su DDT e fattura / Please quote our order no. and line no. on delivery note and invoice';
 
 // ═══════════════════════════════════════════════════════════
 //  A CHE PUNTO È, E DA DOVE VIENE (0.93.0)
@@ -1430,7 +1467,7 @@ function renderRfqEdit(id) {
     salva: { id: 'rfq-save-btn', azione: `rfqSave('${id}')`, dirty: rfqDirty }, comandi: storiaBtn('rfq', r.id), lock: lockBanner,
     esporta: docExportBtnsHtml({ cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta' }) },
   corpo: `${docCoWarnHtml()}
-    ${docTestaHtml({ pfx: 'rfq', rec: r, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore' })}
+    ${docTestaHtml({ pfx: 'rfq', rec: r, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore', rispondere: true })}
     <h3 class="rfq-subhead">Righe richiesta
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="rfqAddCatalogModal('${id}')">+ Da catalogo</button>
@@ -1478,7 +1515,8 @@ function exportRfqPDF(id, modo) {
   const hasSup = (r.lines || []).some(l => rfqLineSupInfo(r, l));
   const doc = new jsPDF(hasSup ? { orientation: 'landscape' } : undefined);
   // Documento bilingue IT / EN per fornitori esteri
-  const startY = docPdfTesta(doc, { titolo: 'Richiesta di offerta / Request for Quotation', rec: r,
+  const startY = docPdfTesta(doc, { titolo: 'Richiesta di offerta / Request for Quotation', rec: r, kind: 'rfq',
+    righe: [['Rispondere entro il / Please reply by', fmtDateIt(r.replyBy)]],
     chi: 'RICHIEDENTE / BUYER', controparte: 'FORNITORE / SUPPLIER', vuota: '(fornitore non selezionato / not selected)',
     xControparte: hasSup ? 160 : 110 });
   const head = hasSup
@@ -1509,19 +1547,21 @@ function exportRfqExcel(id) {
   const r = getRfq(id); if (!r) return;
   if (!(r.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const data = docXlsTesta({ titolo: 'Richiesta di offerta', rec: r, chi: 'RICHIEDENTE', controparte: 'FORNITORE', voci: [
+    ['Rispondere entro il / Please reply by', fmtDateIt(r.replyBy)],
     ['Trasporto / Shipping', r.transport], ['Pagamento / Payment', r.payment]] });
   const hasSup = (r.lines || []).some(l => rfqLineSupInfo(r, l));
   // Come nell'ordine: valuta in intestazione, unità nella colonna U.M.
   const hPrezzo = `Prezzo unitario (${cur()}/U.M.)`;
   data.push(hasSup
-    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota']
-    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota']);
+    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']
+    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']);
   (r.lines || []).forEach((l, i) => {
     const si = rfqLineSupInfo(r, l);
     const price = l.price === '' || l.price == null ? '' : l.price;
+    const extra = lineExtraDoc(l).join(' · ');
     data.push(hasSup
-      ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '']
-      : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '']);
+      ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]
+      : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]);
   });
   if (!docXlsSalva(data, r, 'RFQ', 'richiesta')) return;
   askMarkSent(r, `Excel generato.\nSegnare la richiesta ${r.number} come inviata?`, 'inviata', renderRfq);

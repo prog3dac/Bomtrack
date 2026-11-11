@@ -3638,8 +3638,11 @@ non apre l'app per più giorni di così rientra con la password.
 
 ### 🏢 Dati azienda
 
-Ragione sociale · Referente · Email · Telefono · P.IVA/C.F. · indirizzo.
-**Vengono stampati come intestazione su tutti i documenti** e su tutti gli export PDF.
+Ragione sociale · Referente · Email · Telefono · P.IVA · **Codice fiscale** (se diverso dalla
+P.IVA) · **Codice destinatario SDI** · **PEC** · indirizzo.
+**Vengono stampati come intestazione su tutti i documenti** e su tutti gli export PDF. Codice
+fiscale, SDI e PEC stanno su una riga del nostro blocco: sono i dati che il fornitore usa per
+intestare la fattura elettronica.
 
 ### 🏭 Fornitori
 
@@ -4067,6 +4070,30 @@ l'**ordine di lavoro**, il **piano di fabbisogno**, la **distinta esplosa**. Han
 Per richieste e ordini, quei pulsanti sono **disabilitati finché ci sono modifiche non salvate**, e
 alla generazione l'app propone di far passare lo stato da *Bozza* a *Inviata* / *Inviato*.
 Rifiutando, il file si scarica lo stesso e lo stato non cambia.
+
+### Che cosa c'è sul foglio per il fornitore (dalla 0.153.0)
+
+Oltre a numero, data, oggetto, i due blocchi di chi ordina e di chi riceve, le righe e le
+condizioni, richieste, ordini e ordini di lavoro stampano:
+
+- **sulla riga**, sotto la descrizione, il **disegno con la sua revisione** («Dis. 12-345 rev. C»)
+  se l'articolo ha un *Riferimento disegno*, e il **certificato richiesto** dal suo piano di
+  controllo (es. «3.1 EN 10204») se il modulo Qualità è attivo. Nell'Excel stanno nella colonna
+  *Disegno / certificato*;
+- **la revisione del documento** accanto alla data, quando ce n'è una copia in archivio e il
+  documento è cambiato: «Rev. 2 — sostituisce la rev. 1». Ristampato senza modifiche porta la
+  revisione che ha già. Senza archivio non si scrive niente;
+- **«Pagina 1 di 3»** in fondo a ogni foglio, con il numero del documento;
+- sull'ordine e sull'ordine di lavoro, in fondo, **«Indicare il n° ordine e il n° di riga su DDT
+  e fattura»**;
+- sulla **richiesta di offerta**, il campo **Rispondere entro** della testata, in evidenza sotto
+  l'oggetto;
+- sull'**ordine**, il campo **Vostra offerta n° / del** (es. «245 del 03/11/2026»): il riferimento
+  all'offerta del fornitore da cui l'ordine nasce;
+- sull'**ordine di lavoro**, una tabella **Materiale che vi inviamo** (una voce per ogni pezzo che
+  parte: le fasi consecutive dallo stesso terzista lavorano lo stesso pezzo, che parte una volta
+  sola) e la frase sul **DDT di invio** in conto lavorazione, con il numero se scritto nel campo
+  *DDT di invio* della testata. Quel campo si compila anche a ordine già inviato.
 
 ### Le copie in archivio (dalla 0.112.0)
 

@@ -363,6 +363,9 @@ create table if not exists public.rfqs (
   synced_at timestamptz not null default clock_timestamp()
 );
 
+-- 0.153.0: entro quando il fornitore deve rispondere.
+alter table public.rfqs add column if not exists reply_by date;
+
 create table if not exists public.rfq_lines (
   id uuid primary key,
   rfq_id uuid not null references public.rfqs(id) on delete cascade deferrable initially deferred,
@@ -406,6 +409,9 @@ create table if not exists public.orders (
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+
+-- 0.153.0: il riferimento all'offerta del fornitore, stampato sull'ordine.
+alter table public.orders add column if not exists supplier_quote text;
 
 -- Nessuna colonna `received`: è la somma di order_receipts (vista più sotto).
 create table if not exists public.order_lines (
@@ -486,6 +492,9 @@ create table if not exists public.work_orders (
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+
+-- 0.153.0: il DDT con cui il materiale parte in conto lavorazione.
+alter table public.work_orders add column if not exists ship_ddt text;
 
 create table if not exists public.work_order_lines (
   id uuid primary key,
@@ -1714,7 +1723,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 5)
+    'schema_versione', 6)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

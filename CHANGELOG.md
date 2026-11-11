@@ -15,7 +15,15 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Sotto i 1100 px la barra va sotto il numero e Salva con il passo successivo restano in una **fascia fissa in basso**.
 - La riga d'ordine con il fornitore, la ricerca e l'elenco dei documenti a destra non cambiano.
 
-Nessun cambio allo schema.
+**Documenti per i fornitori: i dati che mancavano sul foglio.**
+- Sulle righe di richieste, ordini e ordini di lavoro escono il **disegno con la revisione** dell'articolo e il **certificato** che chiede il suo piano di controllo (con il modulo Qualità attivo). Nell'Excel, colonna *Disegno / certificato*.
+- Accanto alla data, la **revisione del documento** quando è già in archivio ed è cambiato («Rev. 2 — sostituisce la rev. 1»), e in fondo a ogni foglio **«Pagina X di Y»**.
+- Ordini e ordini di lavoro chiedono di **indicare n° ordine e riga su DDT e fattura**.
+- Nei **Dati azienda**: codice fiscale, codice destinatario SDI e PEC, stampati nel nostro blocco.
+- Ordine: campo **Vostra offerta n° / del**. Richiesta di offerta: campo **Rispondere entro**. Tutti e due in testata e sul PDF.
+- Ordine di lavoro: tabella **Materiale che vi inviamo** e la frase sul **DDT di invio in conto lavorazione**, con il numero dal nuovo campo *DDT di invio*.
+
+**Schema: cambia.** Nuove colonne `rfqs.reply_by`, `orders.supplier_quote` e `work_orders.ship_ddt`, `schema_versione` 6. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
 
 ### 0.152.0 — 2026-11-11
 

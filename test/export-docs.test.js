@@ -27,7 +27,9 @@ const FINTI = `
     self.opts = opts || null;
     self.tabelle = []; self.testi = []; self.pagine = 1;
     self.lastAutoTable = { finalY: 40 };
-    self.internal = { pageSize: { getWidth: function () { return 210; }, getHeight: function () { return 297; } } };
+    self.internal = { pageSize: { getWidth: function () { return 210; }, getHeight: function () { return 297; } },
+      getNumberOfPages: function () { return self.pagine; } };
+    self.setPage = function () { return self; };
     self.setFontSize = function () { return self; };
     self.setTextColor = function () { return self; };
     self.splitTextToSize = function (t, w) {

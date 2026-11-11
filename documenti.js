@@ -115,11 +115,38 @@ function docEmessoArchivia(kind, rec, blob, nomeFile) {
   });
 }
 
+// ─── Revisione e pagine sul foglio (dalla 0.153.0) ───
+// Il fornitore deve capire dal foglio se ha in mano l'ultima versione. La
+// revisione è quella con cui il PDF finirà in archivio: un documento già
+// archiviato e poi cambiato esce come la revisione dopo, e dice quale
+// sostituisce; ristampato senza modifiche resta la sua. Senza copie in
+// archivio non c'è revisione da dire, e non si scrive niente.
+function docRevisioneTesto(kind, rec) {
+  const u = rec ? docEmessoUltimo(kind, rec.id) : null;
+  if (!u) return '';
+  const ultima = Number(u.seq) || 0;
+  if (!docEmessoDaProporre(kind, rec)) return ultima > 0 ? `Rev. ${ultima}` : '';
+  const prima = ultima > 0 ? `la rev. ${ultima} / supersedes rev. ${ultima}` : `l'emissione del ${fmtDateIt(u.sentAt || u.createdAt)} / supersedes previous issue`;
+  return `Rev. ${ultima + 1} — sostituisce ${prima}`;
+}
+// «ODA-2026-103 · Pagina 2 di 3» in fondo a ogni foglio, a destra.
+function docPdfPiede(doc, rec) {
+  const n = doc.internal.getNumberOfPages();
+  const pg = doc.internal.pageSize;
+  const w = pg.getWidth ? pg.getWidth() : pg.width, h = pg.getHeight ? pg.getHeight() : pg.height;
+  doc.setFontSize(8); doc.setTextColor(130);
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    doc.text(`${rec.number || ''} · Pagina ${i} di ${n} / Page ${i} of ${n}`, w - 14, h - 7, { align: 'right' });
+  }
+}
+
 // Il seguito comune di «Genera documento PDF» per i tre tipi.
 //   o = { ripiego, domanda, stato, rerender, modo }
 // `modo: 'archivia'` è il pulsante «Archivia» della scheda: niente download e
 // niente domanda, la copia va dritta in archivio.
 function docPdfEmetti(kind, rec, doc, o) {
+  docPdfPiede(doc, rec);
   const nome = docNomeFile(rec, rec.supplierId ? getSupplier(rec.supplierId) : null, o.ripiego, '.pdf');
   const archivia = () => docEmessoArchivia(kind, rec, doc.output('blob'), nome).then(r => { if (r) o.rerender(); return r; });
   if (o.modo === 'archivia') return archivia();

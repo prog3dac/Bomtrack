@@ -28,7 +28,9 @@ const FINTI = `
     const self = this;
     self.n = ++__generati;
     self.lastAutoTable = { finalY: 40 };
-    self.internal = { pageSize: { getWidth: function () { return 297; }, getHeight: function () { return 210; } } };
+    self.internal = { pageSize: { getWidth: function () { return 297; }, getHeight: function () { return 210; } },
+      getNumberOfPages: function () { return 1; } };
+    self.setPage = function () { return self; };
     self.setFontSize = self.setTextColor = function () { return self; };
     self.splitTextToSize = function (t) { return [String(t)]; };
     self.addPage = function () {};
