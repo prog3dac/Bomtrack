@@ -77,8 +77,22 @@ describe('La pagina di un documento', () => {
     a.eval('renderOrders(); openOrderEdit("o1")');
     const h = a.html('view-orders');
     assert.match(h, /class="modal-field campo-s"><label>Data ordine<\/label><input type="date"/);
-    assert.match(h, /class="modal-field campo-s"><label>Stato<\/label>/);
     assert.match(CSS, /\.testa > \.campo-s\{flex:0 0 150px\}/);
+  });
+
+  it('lo stato si sceglie nella barra a sinistra, non nella testata', () => {
+    const a = app();
+    for (const [apri, vista, azione] of [
+      ['renderOrders(); openOrderEdit("o1")', 'view-orders', "ordSetField('o1','status',this.value)"],
+      ['renderRfq(); openRfqEdit("r1")', 'view-rfq', "rfqSetField('r1','status',this.value)"],
+      ['renderJobs(); openJobEdit("j1")', 'view-jobs', "jobSetField('j1','status',this.value)"],
+    ]) {
+      a.eval(apri);
+      const h = a.html(vista);
+      const rail = h.slice(h.indexOf('class="doc-rail"'), h.indexOf('</aside>'));
+      assert.ok(rail.includes('class="doc-rail-stato"') && rail.includes(azione), vista + ': tendina nella barra');
+      assert.ok(!/<label>Stato<\/label>/.test(h), vista + ': niente più campo Stato nella testata');
+    }
   });
 
   it('una nota vuota occupa una riga, una lunga si vede intera fino a sei', () => {

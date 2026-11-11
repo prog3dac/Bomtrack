@@ -297,7 +297,7 @@ inviata/o*, *Crea ordine*, *Segna tutto ricevuto*, *Lancia*, *Chiudi l'ordine*, 
 produzione*, *Chiudi la commessa*. Il pulsante fa esattamente quello che farebbe il menu
 **Stato**, e salva subito. Quando invece il passo lo fa una persona (scrivere i prezzi
 dell'offerta, il numero di conferma del fornitore, i pezzi sulle fasi), la barra dice cosa manca.
-Un documento **annullato** è *fuori dal giro* e non propone niente. Il menu *Stato* resta dov'era.
+Un documento **annullato** è *fuori dal giro* e non propone niente. La tendina *Stato* sta in cima alla sezione, sopra i passi.
 
 La sezione **Collegati** elenca i documenti legati, ciascuno cliccabile: la commessa
 e il piano da cui viene, la richiesta da cui è nato un ordine, l'ordine di produzione di un ordine
@@ -311,13 +311,13 @@ commesse e piani di fabbisogno hanno la stessa pagina:
 
 - **in alto al centro** il numero del documento;
 - **a sinistra una barra che resta ferma mentre si scorre**, con tutto ciò che agisce sul
-  documento intero: *Chiudi* e **⋯**, **Salva**, il passo successivo, *Storia*, gli stati
-  (→ [A che punto è un documento](#a-che-punto-è-un-documento)), l'avviso di documento protetto
+  documento intero: *Chiudi* e **⋯**, **Salva**, il passo successivo, *Storia*, la tendina
+  dello **stato** con sotto i passi (→ [A che punto è un documento](#a-che-punto-è-un-documento)), l'avviso di documento protetto
   con *Sblocca per modifica*, **Genera PDF** e **Genera Excel** (o **Esporta ▾**), i documenti
   collegati e chi l'ha creato e aggiornato. In un ordine di quaranta righe si salva o si stampa
   senza tornare in cima;
 - **al centro** i dati. I campi della testata sono larghi quanto il loro contenuto (una data,
-  una quantità, lo stato) e scorrono in righe; le note occupano una riga e si allungano quando si
+  una quantità) e scorrono in righe; le note occupano una riga e si allungano quando si
   scrive di più. Gli indicatori (pezzi, importi, fasi) stanno in una striscia sola. Le spiegazioni
   lunghe, come quella sulle fasi dell'ordine di produzione, si aprono da **Come funziona**.
 - Nella **commessa** i documenti collegati sono tessere su più colonne, con il conteggio accanto

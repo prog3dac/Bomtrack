@@ -388,6 +388,7 @@ function renderJobEdit(id) {
     d.number, `<span class="doc-badge">${esc((tipo === 'rfq' ? RFQ_STATUS : ORDER_STATUS)[d.status] || d.status)}</span>`, supplierName(d.supplierId) || '—');
   return docPaginaHtml({ numero: j.number, icona: ico('clipboard', 'tinted pill', 'Commessa'),
     rail: { k: 'job', rec: j, chiudi: 'jobBackToList()', cosa: 'la commessa', comandi: storiaBtn('job', id),
+      stato: { stati: JOB_STATUS, azione: `jobSetField('${id}','status',this.value)` },
       menu: [{ label: 'Elimina la commessa', icon: 'trash', onclick: `delJob('${id}')`, danger: true }] },
     corpo: `<div class="modal-grid testa">
       <div class="modal-field campo-l"><label>Cliente</label>
@@ -397,10 +398,6 @@ function renderJobEdit(id) {
         <input value="${esc(j.title || '')}" onchange="jobSetField('${id}','title',this.value)"></div>
       <div class="modal-field campo-m"><label>Riferimento cliente</label>
         <input value="${esc(j.customerRef || '')}" placeholder="ordine cliente, offerta…" onchange="jobSetField('${id}','customerRef',this.value)"></div>
-      <div class="modal-field campo-s"><label>Stato</label>
-        <select onchange="jobSetField('${id}','status',this.value)">
-          ${Object.keys(JOB_STATUS).map(k => `<option value="${k}" ${j.status === k ? 'selected' : ''}>${esc(JOB_STATUS[k])}</option>`).join('')}
-        </select></div>
       <div class="modal-field campo-s"><label>Data apertura</label>
         <input type="date" value="${esc(j.date || '')}" onchange="jobSetField('${id}','date',this.value)"></div>
       <div class="modal-field campo-s"><label>Consegna al cliente</label>

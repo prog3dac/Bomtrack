@@ -632,11 +632,16 @@ function docRailHtml(o) {
   const passi = o.k ? docPassiHtml(o.k, r) : '';
   const links = o.k ? docLinksHtml(o.k, r) : '';
   const sez = (titolo, html) => html ? `<div class="doc-rail-sez">${titolo ? `<div class="doc-rail-t">${titolo}</div>` : ''}${html}</div>` : '';
+  // La tendina dello stato sta qui dalla 0.153.0, sopra i passi: chi guarda a
+  // che punto è il documento lo cambia nello stesso posto.
+  const stato = o.stato ? `<select class="doc-rail-stato" aria-label="Stato" onchange="${o.stato.azione}">
+        ${Object.entries(o.stato.stati).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select>` : '';
   return `<aside class="doc-rail" aria-label="Comandi ${esc(o.cosa)}">
       <div class="doc-rail-top">${worklistCloseBtn(o.chiudi, o.cosa)}${menuAltro(o.menu)}</div>
       ${salva || passo ? `<div class="doc-rail-azioni">${salva}${passo}</div>` : ''}
       ${sez('', o.comandi)}
-      ${sez('Stato', passi)}
+      ${sez('Stato', stato + passi)}
       ${o.lock || ''}
       ${sez('Documento', o.esporta)}
       ${(o.sezioni || []).map(x => sez(x.titolo, x.html)).join('')}
@@ -645,7 +650,7 @@ function docRailHtml(o) {
     </aside>`;
 }
 // Titolo, controparte, data, stato, condizioni e note.
-//   o = { pfx, rec, stati, controparte, data, conferma?, note }
+//   o = { pfx, rec, controparte, data, conferma?, note }
 // `conferma` è l'etichetta del numero di conferma della controparte: la
 // richiesta d'offerta non ce l'ha.
 function docTestaHtml(o) {
@@ -656,9 +661,6 @@ function docTestaHtml(o) {
   // (style.css, .testa): una data non occupa più un terzo della scheda.
   return `<div class="rfq-head testa">
       <div class="modal-field campo-xl"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
-      <div class="modal-field campo-s"><label>Stato</label><select ${campo('status')}>
-        ${Object.entries(o.stati).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-      </select></div>
       <div class="modal-field campo-l"><label>${o.controparte}</label><select class="lock-contract sel-cerca" onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
       <div class="modal-field campo-s"><label>${o.data}</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" ${campo('date')}></div>
       ${o.conferma ? `<div class="modal-field campo-m"><label>${o.conferma}</label><input value="${esc(r.supplierConfirmation || '')}" ${campo('supplierConfirmation')}></div>` : ''}
@@ -1420,6 +1422,7 @@ function renderRfqEdit(id) {
   const mode = rfqMode(r);
   const lockBanner = docLockBanner(mode, 'Richiesta ' + (RFQ_STATUS[r.status] || r.status).toLowerCase(), 'rfq', id);
   return docPaginaHtml({ numero: r.number, rail: { k: 'rfq', rec: r, chiudi: 'rfqBackToList()', cosa: 'la richiesta',
+    stato: { stati: RFQ_STATUS, azione: `rfqSetField('${id}','status',this.value)` },
     menu: [
       { label: 'Crea ordine da questa richiesta', icon: 'receipt', onclick: `orderFromRfq('${id}')` },
       { label: 'Elimina la richiesta', icon: 'trash', onclick: `delRfq('${id}')`, danger: true },
@@ -1427,7 +1430,7 @@ function renderRfqEdit(id) {
     salva: { id: 'rfq-save-btn', azione: `rfqSave('${id}')`, dirty: rfqDirty }, comandi: storiaBtn('rfq', r.id), lock: lockBanner,
     esporta: docExportBtnsHtml({ cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta' }) },
   corpo: `${docCoWarnHtml()}
-    ${docTestaHtml({ pfx: 'rfq', rec: r, stati: RFQ_STATUS, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore' })}
+    ${docTestaHtml({ pfx: 'rfq', rec: r, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore' })}
     <h3 class="rfq-subhead">Righe richiesta
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="rfqAddCatalogModal('${id}')">+ Da catalogo</button>

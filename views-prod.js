@@ -1004,6 +1004,7 @@ function renderOdpEdit(id) {
   const esterno = fasi.reduce((s, f) => s + (f.supplierId ? (f.costMode === 'orario' ? f.hours * f.rate : f.cost) * (Number(o.qty) || 0) : 0), 0);
   const lockBanner = docLockBanner(mode, 'Ordine di produzione ' + (ODP_STATUS[o.status] || o.status).toLowerCase(), 'odp', id);
   return docPaginaHtml({ numero: o.number, rail: { k: 'odp', rec: o, chiudi: 'odpBackToList()', cosa: "l'ordine di produzione",
+    stato: { stati: ODP_STATUS, azione: `odpCambiaStato('${id}',this.value)` },
     menu: [
       o.status !== 'annullato' ? { label: "Annulla l'ordine", icon: 'close', onclick: `odpAnnulla('${id}')` } : null,
       { label: "Elimina l'ordine di produzione", icon: 'trash', onclick: `delOdp('${id}')`, danger: true },
@@ -1023,10 +1024,6 @@ function renderOdpEdit(id) {
         <input type="date" class="lock-contract" value="${esc((o.dueDate || '').slice(0, 10))}" onchange="odpSetField('${id}','dueDate',this.value)"></div>
       <div class="modal-field campo-l"><label>Commessa</label>
         <select class="lock-contract" onchange="odpSetField('${id}','jobId',this.value)">${jobOptions(o.jobId || '')}</select></div>
-      <div class="modal-field campo-s"><label>Stato</label>
-        <select onchange="odpCambiaStato('${id}',this.value)">
-          ${Object.entries(ODP_STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-        </select></div>
       <div class="modal-field campo-nota"><label>Note</label>
         <input class="lock-contract" value="${esc(o.notes || '')}" onchange="odpSetField('${id}','notes',this.value)"></div>
       <div class="modal-field campo-nota"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label>

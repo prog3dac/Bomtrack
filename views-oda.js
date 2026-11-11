@@ -300,11 +300,12 @@ function renderOrderEdit(id) {
   const mode = ordMode(o);
   const lockBanner = docLockBanner(mode, 'Ordine ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'order', id);
   return docPaginaHtml({ numero: o.number, rail: { k: 'order', rec: o, chiudi: 'orderBackToList()', cosa: "l'ordine",
+    stato: { stati: ORDER_STATUS, azione: `ordSetField('${id}','status',this.value)` },
     menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }],
     salva: { id: 'order-save-btn', azione: `ordSave('${id}')`, dirty: orderDirty }, comandi: storiaBtn('order', o.id), lock: lockBanner,
     esporta: docExportBtnsHtml({ cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine" }) },
   corpo: `${docCoWarnHtml()}
-    ${docTestaHtml({ pfx: 'ord', rec: o, stati: ORDER_STATUS, controparte: 'Fornitore', data: 'Data ordine', conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
+    ${docTestaHtml({ pfx: 'ord', rec: o, controparte: 'Fornitore', data: 'Data ordine', conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
     <h3 class="rfq-subhead">Righe ordine
       <span class="rfq-head-actions">
@@ -1041,11 +1042,12 @@ function renderOdlEdit(id) {
   const ritardo = orderWorstDelay(o);
   const lockBanner = docLockBanner(odlMode(o), 'Ordine di lavoro ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'odl', id);
   return docPaginaHtml({ numero: o.number, rail: { k: 'odl', rec: o, chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro",
+    stato: { stati: ORDER_STATUS, azione: `odlSetField('${id}','status',this.value)` },
     menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }],
     salva: { id: 'odl-save-btn', azione: `odlSave('${id}')`, dirty: odlDirty }, comandi: storiaBtn('odl', o.id), lock: lockBanner,
     esporta: docExportBtnsHtml({ cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro" }) },
   corpo: `${docCoWarnHtml()}${odlOdpRef(o)}
-    ${docTestaHtml({ pfx: 'odl', rec: o, stati: ORDER_STATUS, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', note: 'Note' })}
+    ${docTestaHtml({ pfx: 'odl', rec: o, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta.</div>` : ''}
     <details class="doc-info"><summary>${ico('book', 'tinted', '')} Come funziona</summary><p>Ogni lavorazione si <strong>avvia</strong> quando il materiale parte e si <strong>dichiara</strong> quando i pezzi tornano, buoni e scarti: come sull'ordine di produzione. Il magazzino si muove ai due estremi del <strong>ciclo</strong> — il materiale esce all'avvio della prima tratta, il codice della parte si carica al rientro dell'ultima — e in mezzo i pezzi passano e basta. Se la lavorazione viene da un <strong>ordine di produzione</strong>, avvia e dichiara scrivono sulle sue fasi: il gesto è uno, in qualunque dei due documenti lo si faccia.</p></details>
     <h3 class="rfq-subhead">Lavorazioni

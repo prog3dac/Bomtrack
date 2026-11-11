@@ -6,8 +6,9 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 **Documenti: la barra dei comandi a sinistra e testate più compatte.**
 - Richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione, commesse e piani hanno la stessa pagina: il **numero in alto al centro** e, a sinistra, una **barra che resta ferma mentre si scorre** con Chiudi e ⋯, Salva, il passo successivo, Storia, gli stati in colonna, l'avviso di documento protetto con Sblocca, Genera PDF / Excel (o Esporta), i collegati e chi ha creato e aggiornato il documento. Prima stavano in quattro riquadri sopra la testata, e i pulsanti PDF/Excel in fondo alla pagina.
+- **Lo stato si cambia dalla barra**: la tendina sta in cima alla sezione Stato, sopra i passi, e non più fra i campi della testata.
 - La pagina si allarga nei margini che restavano vuoti (fino a 1440 px): la scheda resta larga come prima.
-- **I campi della testata sono larghi quanto il loro contenuto**: date, quantità e stato non occupano più un terzo o metà della scheda. Note e note interne stanno affiancate su una riga e si allungano quando si scrive di più.
+- **I campi della testata sono larghi quanto il loro contenuto**: date e quantità non occupano più un terzo o metà della scheda. Note e note interne stanno affiancate su una riga e si allungano quando si scrive di più.
 - Gli indicatori (ordinato, ricevuto, pezzi, fasi…) stanno in **una striscia sola** invece che in schede grandi che andavano a capo.
 - Nella commessa i documenti collegati sono **tessere su più colonne**, con il conteggio accanto al titolo; un clic sulla tessera apre il documento.
 - Le spiegazioni lunghe (fasi dell'ODP, lavorazioni dell'ODL) si aprono da **Come funziona**.
