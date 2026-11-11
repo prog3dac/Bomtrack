@@ -295,7 +295,7 @@ function qcRegistraEsito(id, dati) {
   if (esito === 'accettato' && qcCertificatoRichiesto(insp) && insp.cert !== 'ok') {
     showToast('Manca il certificato: si può accettare solo in deroga', 'error'); return false;
   }
-  // Gli strumenti (dalla 0.152.0, qualita-strumenti.js): ogni misura presa
+  // Gli strumenti (dalla 0.153.0, qualita-strumenti.js): ogni misura presa
   // con uno strumento valido, o — con la regola «avviso» — almeno detta.
   if (typeof struConsenteEsito === 'function' && !struConsenteEsito(insp)) return false;
   const ammessi = qcDestiniDi(insp.source);

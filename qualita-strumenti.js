@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-//  BOMTRACK — qualita-strumenti.js  (modulo Taratura strumenti, dalla 0.152.0)
+//  BOMTRACK — qualita-strumenti.js  (modulo Taratura strumenti, dalla 0.153.0)
 // ═══════════════════════════════════════════════════════════
 // Gli strumenti con cui si collauda, le loro tarature, e il legame con il
 // collaudo che li usa.

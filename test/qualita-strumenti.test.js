@@ -1,4 +1,4 @@
-// Taratura degli strumenti di misura (0.152.0): il registro, le tarature, il
+// Taratura degli strumenti di misura (0.153.0): il registro, le tarature, il
 // blocco del collaudo con uno strumento scaduto e l'analisi d'impatto.
 //
 // Le domande:

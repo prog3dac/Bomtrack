@@ -290,7 +290,7 @@ const NAV = [
     { id: 'nc', label: 'Non conformità', modulo: 'qualita' },
     { id: 'pianiqc', label: 'Piani di controllo', modulo: 'qualita' },
     { id: 'fornitoriqc', label: 'Valutazione fornitori', modulo: 'qualita' },
-    // Dalla 0.152.0: gli strumenti con cui si collauda e le loro tarature.
+    // Dalla 0.153.0: gli strumenti con cui si collauda e le loro tarature.
     { id: 'strumenti', label: 'Strumenti', modulo: 'tarature' }] },
   { id: 'manage', icon: 'settings', label: 'Gestione', views: [
     { id: 'manage', label: 'Gestione' }] },

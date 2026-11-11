@@ -71,7 +71,7 @@ const ICONS = {
   upload: '<path d="M12 15.4V3.6"/><path d="m7.4 8.2 4.6-4.6 4.6 4.6"/><path d="M4.4 18.4v1.2a1.2 1.2 0 0 0 1.2 1.2h12.8a1.2 1.2 0 0 0 1.2-1.2v-1.2"/>',
   users: '<circle cx="9.4" cy="8.4" r="3.4"/><path d="M3.4 20c.6-3.6 3-5.6 6-5.6s5.4 2 6 5.6"/><path d="M16 5.4a3.4 3.4 0 0 1 0 6.6"/><path d="M17.4 14.8c2 .7 3.3 2.5 3.7 5.2"/>',
   ruler: '<path d="M4.2 14.4 14.4 4.2a1.4 1.4 0 0 1 2 0l3.4 3.4a1.4 1.4 0 0 1 0 2L9.6 19.8a1.4 1.4 0 0 1-2 0l-3.4-3.4a1.4 1.4 0 0 1 0-2z"/><path d="m8.4 10.2 2.2 2.2M11.4 7.2l2.2 2.2M14.4 4.2l2.2 2.2M5.4 13.2l2.2 2.2"/>',
-  // Dalla 0.152.0: lo strumento di misura, un quadrante con la lancetta.
+  // Dalla 0.153.0: lo strumento di misura, un quadrante con la lancetta.
   gauge: '<path d="M3.6 16.4a8.6 8.6 0 1 1 16.8 0"/><path d="M12 15.2 15.6 9"/><circle cx="12" cy="15.6" r="1.4"/><path d="M6.4 12.6l1.2.6M12 7.2v1.4M17.6 12.6l-1.2.6"/><path d="M4.4 19.8h15.2"/>',
 
   // Header

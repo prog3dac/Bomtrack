@@ -730,7 +730,7 @@ alter table public.inspections add column if not exists qty_held numeric;
 alter table public.nonconformities add column if not exists production_order_id uuid;
 alter table public.nonconformities add column if not exists resp_phase text;
 alter table public.nonconformities add column if not exists scrap_decls jsonb;
--- 0.152.0, modulo Taratura strumenti: gli strumenti con cui si collauda. Lo
+-- 0.153.0, modulo Taratura strumenti: gli strumenti con cui si collauda. Lo
 -- stato «scaduto» non c'è: si legge da `next_due`. `type_id` è testo, come
 -- `concept_id`: i tipi vivono nelle impostazioni con id leggibili.
 create table if not exists public.instruments (

@@ -172,7 +172,7 @@ function homeSegnali() {
       agg(azioni.map(({ x, a }) => voce(`${x.number} · ${a.who || 'chi?'} · ${fmtDateIt(a.due)}`, `${a.who || 'chi?'} — ${a.text || '(azione senza testo)'} — entro ${fmtDateIt(a.due)}`,
         `ncApriDaAltrove('${x.id}')`)), 'azione di NC da fare entro 7 giorni', 'azioni di NC da fare entro 7 giorni', 'nc', 'media');
     }
-    // Gli strumenti (dalla 0.152.0): uno scaduto non fa registrare l'esito dei
+    // Gli strumenti (dalla 0.153.0): uno scaduto non fa registrare l'esito dei
     // collaudi, quindi è un problema; uno che scade entro il preavviso è il
     // momento di mandarlo in taratura.
     if (typeof struAttivo === 'function' && struAttivo()) {
@@ -588,7 +588,7 @@ function homeEventi() {
     });
   });
 
-  // Modulo Taratura strumenti (dalla 0.152.0): la prossima taratura di ognuno.
+  // Modulo Taratura strumenti (dalla 0.153.0): la prossima taratura di ognuno.
   if (typeof struAttivo === 'function' && struAttivo()) struEventiCalendario(oggi).forEach(e => out.push(e));
 
   out.forEach(e => { delete e.numero; delete e.n; });

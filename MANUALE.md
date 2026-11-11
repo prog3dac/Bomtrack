@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.152.0**
+**Versione dell'app documentata: 0.153.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -2085,7 +2085,7 @@ quota di arrivi in tempo. Se una delle due non ha dati vale l'altra; senza nessu
 e 70) e compare anche accanto al nome nel **listino fornitori** e in *Gestione → Fornitori*.
 L'elenco si esporta in **Excel** e **PDF**.
 
-### La taratura degli strumenti di misura (modulo, dalla 0.152.0)
+### La taratura degli strumenti di misura (modulo, dalla 0.153.0)
 
 **A cosa serve.** A sapere che ogni misura scritta in un collaudo è stata presa con uno strumento
 tarato, come chiede la ISO 9001 al punto 7.1.5.2, e a capire che cosa rivedere quando uno strumento
@@ -3381,8 +3381,19 @@ La stessa tavola, ristretta a un solo piano, sta anche in fondo alla scheda di o
 
 **Comandi.** **Esporta Excel** · **Esporta PDF**.
 
-**Filtri.** **Tutti i piani aperti (N)** oppure un piano solo; **Tutti i centri** oppure un centro
-solo. Cliccando il nome di un centro, le letture si restringono a quello.
+**Filtri** (rivisti nella 0.152.0).
+- **Piani e ordini**: *Tutto* (i piani aperti e ogni ordine di produzione vivo, il numero di
+  ciascuno è scritto nella voce), **un piano** (i suoi pezzi non ancora lanciati e i suoi ODP,
+  con quanti sono) oppure **Solo gli ODP senza piano** (scritti a mano o di un piano chiuso).
+- **Centro**: tutti, oppure uno solo fra i centri attivi. Vale per **tutta la pagina**: avviso di
+  sovraccarico, grafici, tavola, coda a capacità finita e codici da produrre. Cliccando il nome di
+  un centro nella tavola si ottiene lo stesso.
+- Sotto i filtri una riga **Stai guardando** dice in parole che cosa entra nel conto, per esempio
+  «le fasi di 12 ordini di produzione (3 senza piano) e i pezzi non ancora lanciati di 2 piani
+  aperti, solo sul centro Tornitura CNC». La stessa frase va nell'intestazione degli export.
+  **Togli i filtri** torna a tutto.
+- Nella coda a capacità finita i filtri scelgono che cosa si vede, ma la fila resta quella di tutta
+  la fabbrica: un ordine aspetta anche dietro a quelli che il filtro nasconde.
 
 **Cosa si vede.**
 
@@ -3404,13 +3415,20 @@ solo. Cliccando il nome di un centro, le letture si restringono a quello.
 **Il dettaglio di cella.** Cliccando una cella si apre **chi** ha portato quelle ore: parte, fase,
 piano.
 
-**Gli ordini di produzione che nessun piano conta** (dalla 0.133.0): un ODP scritto a mano, legato
-a un piano chiuso, o su una parte che in anagrafica si acquista porta nel carico le ore delle sue
-fasi interne ancora da fare (i pezzi attesi meno i lavorati, più l'attrezzaggio se la fase non è
-partita), nella settimana d'inizio pianificata della fase. Nel dettaglio di cella, al posto del
-piano, si legge il numero dell'ODP. Un ODP generato dal piano non si somma: le sue ore sono già
-quelle del piano. Con un piano solo nel filtro compaiono soltanto i suoi ODP che il piano non
-esplode. Bozze, lanciati e in corso caricano; completati, chiusi e annullati no.
+**Gli ordini di produzione caricano con le loro fasi** (dalla 0.152.0). Ogni ODP vivo — bozza,
+lanciato o in corso — porta nel carico le ore delle sue fasi interne ancora da fare (i pezzi
+attesi meno i lavorati, fase per fase, più l'attrezzaggio se la fase non è partita), nella
+settimana d'inizio pianificata della fase. Vale per tutti: quelli generati da un piano aperto,
+quelli scritti a mano, quelli di un piano chiuso e quelli su una parte che in anagrafica si
+acquista. Il piano aggiunge solo i pezzi **non ancora lanciati**, con il ciclo dell'anagrafica e
+le date del fabbisogno: così le ore non si contano due volte. Una fase a metà conta solo i pezzi
+che restano, una data ripianificata sposta le ore, e un ODP lanciato per più pezzi del piano
+carica tutti i suoi. Nel dettaglio di cella, al posto del piano, si legge il numero dell'ODP. Con
+un piano solo nel filtro, e nella scheda del piano, contano il suo non lanciato e i suoi ODP.
+Completati, chiusi e annullati non caricano.
+
+> Prima della 0.152.0 un ODP generato da un piano aperto non caricava con le sue fasi: ne prendeva
+> il posto l'esplosione del piano, che toglieva solo i pezzi già versati a magazzino.
 
 **Da sapere — quattro avvertimenti**, perché il prospetto non prometta più di quel che dà:
 
@@ -3445,8 +3463,27 @@ finita**: il conto fatto in avanti, da oggi.
   se non è ancora partita. Una fase esterna non occupa centri: dura i suoi giorni dal terzista più
   il trasporto (una volta per tratta).
 
-Per ogni centro la coda dice ordine, fase, ore, dal / al e la data in cui l'ordine serve; in
-rosso le fasi di un ordine che finisce dopo. Nella scheda dell'ODP una riga sopra le fasi dice
+**La linea temporale dei centri** (dalla 0.152.0). Per ogni centro una striscia di giorni, con i
+sabati, le domeniche, le chiusure e i fermi in grigio e una linea rossa su **oggi**. Ogni fase che
+impegna il centro è una barra con sopra `ODP · fase`; un clic la apre.
+
+| Pezzo | Colore | Che cos'è |
+|---|---|---|
+| **Attrezzaggio** | arancio | le prime ore della fase. Nel reale è quello **previsto** della fase: le timbrature non lo distinguono dal lavoro |
+| **Lavoro** | blu | le ore che la capacità finita mette in quel giorno |
+| **Attraversamento** | azzurro tratteggiato, o un trattino sottile | i giorni di coda davanti al centro, e i giorni in cui la fase aspetta perché il centro lavora altre fasi |
+| **Reale** | verde | prima di oggi: i giorni timbrati sulla fase (modulo Officina) o, senza timbrature, dall'avvio all'ultima dichiarazione (verde più tenue) |
+| **Pianificato** | riga grigia sotto la barra | le date pianificate dell'ODP: lo scarto dalla barra è il ritardo |
+| **Serve il** | rombo, rosso se l'ordine è in ritardo | la data richiesta dell'ODP |
+
+A sinistra di oggi si legge com'è andata, a destra come andrà. Passando sopra un giorno si leggono
+le ore. Le fasi che non si sovrappongono stanno sulla stessa corsia: il riquadro si allarga solo
+quando il centro lavora più fasi insieme. La linea comincia due settimane prima di oggi e si
+ferma 120 giorni dopo; al telefono scorre di lato e si apre con oggi a sinistra. I grafici della
+saturazione, sopra, restano quelli di prima.
+
+Sotto la linea, chiusa in *Le fasi in tabella*, c'è la coda in tabella: per ogni centro ordine,
+fase, ore, dal / al e la data in cui l'ordine serve; in rosso le fasi di un ordine che finisce dopo. Nella scheda dell'ODP una riga sopra le fasi dice
 la **data fattibile** a capacità finita, e nel Riepilogo c'è il segnale *ordini di produzione in
 ritardo a capacità finita*.
 

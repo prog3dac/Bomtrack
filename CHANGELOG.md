@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.152.0 — 2026-11-11
+### 0.153.0 — 2026-11-11
 
 **Taratura degli strumenti di misura: un modulo nuovo, agganciato alla Qualità.**
 - **Il registro.** *Qualità → Strumenti* elenca calibri, micrometri, tamponi e gli altri strumenti con cui si collauda: codice (`STR-0001`…), tipo, matricola, EMA, dove sta, di chi è (nostro, del cliente, del fornitore, personale), come si controlla e ogni quanti mesi. Lo stato si calcola dalla scadenza: valido, in scadenza, scaduto, da tarare, in taratura, fuori servizio, indicativo, dismesso. Ogni strumento ha la sua etichetta QR.
@@ -13,6 +13,27 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Strumenti e tarature li scrivono l'ufficio e l'officina; intervallo, dismissione ed eliminazione l'amministratore. Il modulo si accende in *Gestione → Moduli* e richiede la Qualità.
 
 **Schema: cambia.** Nuove tabelle `instruments` e `calibrations`, nuove colonne `instrument_id`, `calibration_id` e `impact` su `nonconformities`, `schema_versione` 6. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+
+### 0.152.0 — 2026-11-11
+
+**Carico centri: la linea temporale di ogni centro.**
+- Nella coda a capacità finita ogni centro ha una striscia di giorni, con la linea di oggi, e ogni fase che lo impegna è una barra con il numero dell'ODP e della fase. Un clic apre l'ordine.
+- Dentro la barra si distinguono l'**attrezzaggio** (arancio), il **lavoro** (blu) e l'**attraversamento** (la coda davanti al centro e i giorni in cui la fase aspetta che il centro si liberi).
+- Prima di oggi c'è il **reale**: i giorni timbrati o, senza timbrature, dall'avvio all'ultima dichiarazione, con all'inizio l'attrezzaggio previsto della fase. Una riga grigia sotto la barra mostra il **pianificato** dell'ODP, e un rombo la data in cui serve, rosso se l'ordine è in ritardo.
+- Le fasi che non si toccano stanno sulla stessa corsia. Al telefono la linea scorre di lato e si apre con oggi a sinistra.
+- I grafici della saturazione restano com'erano; la coda in tabella è ancora lì, chiusa sotto «Le fasi in tabella».
+
+**Carico centri: gli ordini di produzione con le loro fasi.**
+- Ogni ODP vivo (bozza, lanciato, in corso) carica i centri con le ore che restano **fase per fase**, nella settimana d'inizio della sua fase. Prima un ODP generato da un piano aperto non contava: al suo posto il carico rifaceva il conto dal piano, con il ciclo dell'anagrafica e le date del fabbisogno, e toglieva solo i pezzi già versati. Una fase a metà, una data ripianificata o un ODP lanciato per più pezzi non si vedevano.
+- Il piano aggiunge solo i pezzi **non ancora lanciati**, con il loro attrezzaggio: le ore non si contano due volte.
+- Vale anche per la tavola del carico nella scheda del piano. I numeri del carico possono cambiare: sono quelli giusti.
+
+**Carico centri: i filtri.**
+- **Il filtro dei centri vale per tutta la pagina**: avviso di sovraccarico, grafici, tavola, coda a capacità finita e codici da produrre. Prima restringeva solo i codici da produrre. Si sceglie fra tutti i centri attivi.
+- **Il filtro dei piani dice anche gli ordini**: *Tutto* con il numero di piani e di ODP, un piano con i suoi ODP, oppure *Solo gli ODP senza piano*.
+- Una riga **Stai guardando** dice in parole che cosa entra nel conto; la stessa frase va negli export. **Togli i filtri** torna a tutto.
+
+Nessun cambio allo schema.
 
 ### 0.151.0 — 2026-11-10
 

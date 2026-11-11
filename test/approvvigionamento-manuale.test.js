@@ -118,12 +118,49 @@ describe('Parte prodotta in anagrafica, comprata con un ODA', () => {
 });
 
 describe('Un ODP del piano non conta due volte nel carico', () => {
-  it('le sue ore sono quelle del piano, non si sommano', () => {
+  it('le sue ore prendono il posto di quelle del piano, non si sommano', () => {
     const app = conDb('make', [{ id: 'pl1', number: 'FAB-2026-001', title: '', date: '2026-11-01', notes: '',
       lines: [{ id: 'l1', itemId: 'perno', qty: 10, dueDate: '2026-12-15' }], active: true }]);
     const prima = oreCentro(app, 'mrpLoadAll()', 'tor');
     assert.ok(prima > 0);
     nuovoOdp(app, 10, { planId: 'pl1' });
     approx(oreCentro(app, 'mrpLoadAll()', 'tor'), prima);
+  });
+});
+
+// Dalla 0.152.0 un ODP del piano carica i centri con le sue fasi, e il piano
+// solo con quello che resta da lanciare.
+describe('Carico: gli ODP del piano con le loro fasi', () => {
+  const piano = () => [{ id: 'pl1', number: 'FAB-2026-001', title: '', date: '2026-11-01', notes: '',
+    lines: [{ id: 'l1', itemId: 'perno', qty: 10, dueDate: '2026-12-15' }], active: true }];
+  it('una fase a metà conta solo i pezzi che restano', () => {
+    const app = conDb('make', piano());
+    const id = nuovoOdp(app, 10, { planId: 'pl1' });
+    app.eval(`opLancia(${JSON.stringify(id)})`);
+    app.eval(`opAvvia(${JSON.stringify(id)}, ${JSON.stringify(fase(app, id, 0))})`);
+    app.eval(`opDichiara(${JSON.stringify(id)}, ${JSON.stringify(fase(app, id, 0))}, { qty: 6 })`);
+    approx(oreCentro(app, 'mrpLoadAll()', 'tor'), 4 * 0.5, 'quattro pezzi, attrezzaggio già fatto');
+  });
+  it('lanciato per meno pezzi: l\'ODP carica i suoi, il piano il resto con il suo attrezzaggio', () => {
+    const app = conDb('make', piano());
+    nuovoOdp(app, 4, { planId: 'pl1' });
+    approx(oreCentro(app, 'mrpLoadAll()', 'tor'), (4 * 0.5 + 2) + (6 * 0.5 + 2));
+  });
+  it('lanciato per più pezzi: contano quelli dell\'ODP', () => {
+    const app = conDb('make', piano());
+    nuovoOdp(app, 14, { planId: 'pl1' });
+    approx(oreCentro(app, 'mrpLoadAll()', 'tor'), 14 * 0.5 + 2);
+  });
+  it('le ore stanno nella settimana in cui la fase dell\'ODP comincia', () => {
+    const app = conDb('make', piano());
+    const id = nuovoOdp(app, 10, { planId: 'pl1' });
+    app.eval(`getOdp(${JSON.stringify(id)}).phases[0].plannedStart = '2026-11-16'; invalidateCaches();`);
+    const sett = JSON.parse(app.eval(`JSON.stringify(mrpLoadAll().righe.find(r => r.workCenterId === 'tor').celle.keys().next().value)`));
+    assert.equal(sett, '2026-W47');
+  });
+  it('anche la tavola dentro la scheda del piano vede i suoi ODP', () => {
+    const app = conDb('make', piano());
+    nuovoOdp(app, 14, { planId: 'pl1' });
+    approx(oreCentro(app, "mrpLoad(getPlan('pl1'))", 'tor'), 14 * 0.5 + 2);
   });
 });

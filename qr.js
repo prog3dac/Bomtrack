@@ -35,7 +35,7 @@ const QR_TIPI = {
   col: 'Collaudo',
   nc: 'Non conformità',
   pc: 'Piano di controllo',
-  // Dalla 0.152.0, modulo Taratura strumenti: l'etichetta sullo strumento.
+  // Dalla 0.153.0, modulo Taratura strumenti: l'etichetta sullo strumento.
   str: 'Strumento di misura',
 };
 

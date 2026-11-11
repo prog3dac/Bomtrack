@@ -251,7 +251,7 @@ const CLOUD_TYPES = (() => {
   ['acceptNo', 'rejectNo', 'skipAfter', 'skipEvery'].forEach(k => { t[k] = 'int'; });
   t.skipLot = 'bool';
   ['characteristics', 'checks', 'actions', 'itemIds', 'scrapDecls'].forEach(k => { t[k] = 'jsonb'; });
-  // Modulo Taratura strumenti (0.152.0).
+  // Modulo Taratura strumenti (0.153.0).
   ['resolution', 'ema', 'errMax'].forEach(k => { t[k] = 'numeric'; });
   t.intervalMonths = 'int';
   ['lastCal', 'nextDue', 'sentOn'].forEach(k => { t[k] = 'date'; });
@@ -267,7 +267,7 @@ const CLOUD_TYPES = (() => {
 })();
 // Campi che finiscono in `Id` ma non puntano a un record con chiave uuid: i
 // concetti vivono nelle impostazioni, con id leggibili ('cn-albero'), e così i
-// tipi di strumento ('tt-calibro', dalla 0.152.0).
+// tipi di strumento ('tt-calibro', dalla 0.153.0).
 const COLONNE_TESTO_ID = ['conceptId', 'typeId'];
 function cloudType(table, campo) {
   const def = CLOUD_TABLES[table] || {};

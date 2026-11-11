@@ -242,7 +242,7 @@ function qcApplicaPiano(rec, it) {
   rec.checks = (p.characteristics || []).map(x => ({
     id: x.id, name: x.name || '', kind: x.kind === 'ok' ? 'ok' : 'misura',
     nominal: x.nominal, tolMin: x.tolMin, tolMax: x.tolMax, isoClass: x.isoClass || '', uom: x.uom || '', tool: x.tool || '', value: '',
-    // Il tipo di strumento (dalla 0.152.0): chi collauda sceglie quale.
+    // Il tipo di strumento (dalla 0.153.0): chi collauda sceglie quale.
     toolTypeId: typeof qcCarTipoId === 'function' ? qcCarTipoId(x) : '',
   }));
   return rec;

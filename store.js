@@ -400,7 +400,7 @@ const SCHEMA = {
   // sempre col piano) e le non conformità, con le loro azioni.
   qualityPlans: { table: 'quality_plans' },
   nonconformities: { table: 'nonconformities' },
-  // Modulo Taratura strumenti (0.152.0): gli strumenti e le loro tarature, due
+  // Modulo Taratura strumenti (0.153.0): gli strumenti e le loro tarature, due
   // collezioni radice. Le tarature dopo gli strumenti: al primo caricamento
   // sul server si citano, e un lotto non può citare una riga che arriva dopo.
   instruments: { table: 'instruments' },

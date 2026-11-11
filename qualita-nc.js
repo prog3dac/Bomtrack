@@ -34,7 +34,7 @@ const NC_ORIGINI = {
   produzione: 'Produzione',
   cliente: 'Reclamo cliente',
   interna: 'Interna',
-  // Dalla 0.152.0: uno strumento trovato fuori alla taratura (qualita-strumenti.js).
+  // Dalla 0.153.0: uno strumento trovato fuori alla taratura (qualita-strumenti.js).
   // Non si apre a mano: nasce dalla taratura, con le misure da rivedere.
   strumento: 'Strumento di misura',
 };
@@ -111,7 +111,7 @@ function ncCrea(dati) {
       // dichiarazioni di scarto che la NC raccoglie.
       productionOrderId: d.productionOrderId || null, respPhase: String(d.respPhase || ''),
       scrapDecls: Array.isArray(d.scrapDecls) ? d.scrapDecls : [],
-      // Da uno strumento trovato fuori (dalla 0.152.0): lo strumento, la
+      // Da uno strumento trovato fuori (dalla 0.153.0): lo strumento, la
       // taratura e le misure da rivedere, ognuna con la sua decisione.
       instrumentId: d.instrumentId || null, calibrationId: d.calibrationId || null,
       impact: Array.isArray(d.impact) ? d.impact : [],

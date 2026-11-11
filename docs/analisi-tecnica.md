@@ -1142,7 +1142,7 @@ ripresa; non sommarle lascia fuori i costi di una NC senza ODP (un reso, una
 rottamazione). Per chiuderla servirebbe distinguere nella NC il costo già
 coperto da un documento.
 
-### F. La taratura degli strumenti *(censite nella 0.152.0)*
+### F. La taratura degli strumenti *(censite nella 0.153.0)*
 
 **F1 — `nonconformities.instrument_id`, `calibration_id` e
 `calibrations.nc_id` senza chiave esterna.** Come gli altri `nc_id`: le NC
