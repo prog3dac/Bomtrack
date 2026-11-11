@@ -3679,7 +3679,7 @@ L'ordine è solo quello a video: una voce nuova va al suo posto nell'elenco.
 | Gruppo | Schede |
 |---|---|
 | **Azienda** | Dati azienda · Utenti e accesso |
-| **Anagrafiche** | Fornitori · Clienti · Condizioni offerta |
+| **Anagrafiche** | Fornitori · Clienti · Condizioni offerta · Testi per i documenti |
 | **Classificazione articoli** | Famiglie commerciali · Famiglie materie prime · Famiglie parti · Concetti · Unità di misura |
 | **Pianificazione e produzione** | Calendario di fabbrica · Centri di lavoro · Macchine utensili (con il modulo) |
 | **Configurazione** | Aree e moduli · Costi e margini · Codifica articoli · Etichette QR |
@@ -3747,6 +3747,22 @@ gli altri restano com'erano.
 
 Due elenchi: **Tipi di trasporto / resa** e **Tipi di pagamento**, ciascuno con una ★ predefinita.
 Sono i valori proposti nei campi omonimi di richieste, ordini e ordini di lavoro; la ★ precompila i documenti nuovi quando il fornitore non ha un suo predefinito.
+
+### 📄 Testi per i documenti
+
+Le frasi che tornano su molti documenti (istruzioni di imballo, certificati da allegare,
+condizioni generali d'acquisto) si scrivono qui una volta. Ogni testo ha un **titolo**, il
+**testo** (anche su più righe), **i documenti** su cui vale (richiesta di offerta, ordine a
+fornitore, ordine di lavoro) e **quando esce**:
+
+- **a scelta**: nella pagina del documento, accanto all'etichetta delle note, c'è **＋ Testo** con
+  i titoli. Un clic aggiunge il testo in fondo alle note, dove si può ancora correggere per quel
+  documento. Lo stesso testo non si aggiunge due volte;
+- **sempre**: esce in fondo a ogni PDF ed Excel di quel tipo, con il titolo come etichetta, senza
+  toccare le note.
+
+Ogni campo si salva uscendo. Eliminare un testo non lo toglie dai documenti dove è già stato
+inserito.
 
 ### 🛒 Famiglie commerciali · 📦 Famiglie materie prime · 🔧 Famiglie parti
 

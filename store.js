@@ -928,6 +928,7 @@ function migrateDB() {
   if (!db.settings.codePrefixParte) db.settings.codePrefixParte = 'PRT';
   // Voci precompilabili per trasporto/pagamento nelle richieste di offerta (+ predefinita)
   if (!db.settings.transportOptions) db.settings.transportOptions = ['Porto franco', 'Porto assegnato', 'EXW', 'FCA', 'DAP', 'CIF'];
+  if (!Array.isArray(db.settings.docTexts)) db.settings.docTexts = [];   // testi per i documenti (dalla 0.154.1)
   if (!db.settings.paymentOptions) db.settings.paymentOptions = ['Bonifico anticipato', 'Bonifico 30gg', 'Bonifico 60gg', 'RiBa 30gg', 'RiBa 60gg'];
   if (db.settings.transportDefault == null) db.settings.transportDefault = '';
   if (db.settings.paymentDefault == null) db.settings.paymentDefault = '';

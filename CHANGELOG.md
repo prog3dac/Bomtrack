@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.154.1 — 2026-11-11
+
+**Testi per i documenti.**
+- Nuova scheda *Gestione → Testi per i documenti*: frasi con titolo e testo, i documenti su cui valgono (richiesta di offerta, ordine, ordine di lavoro) e quando escono.
+- I testi **a scelta** si inseriscono nelle note del documento con **＋ Testo**, accanto all'etichetta, e lì si possono ancora correggere.
+- I testi **sempre** escono in fondo a ogni PDF ed Excel di quel tipo, come le condizioni generali d'acquisto.
+
+Nessun cambio allo schema: i testi stanno nelle impostazioni.
+
 ### 0.154.0 — 2026-11-11
 
 **Documenti: la barra dei comandi a sinistra e testate più compatte.**
