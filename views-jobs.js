@@ -373,54 +373,44 @@ function renderJobEdit(id) {
   const { rfqs, orders, workOrders } = jobDocs(id);
   const t = jobTotals(id);
   const cov = jobCoverage(id);
-  const elenco = (titolo, righe, vuoto) => `<div class="mrp-section">
-    <div class="cycle-section-head"><h3>${titolo}</h3></div>
-    ${righe || `<div class="empty-text">${vuoto}</div>`}</div>`;
-  const rigaPiano = p => `<div class="mgmt-item">
-      <span style="font-family:var(--mono);width:150px">${esc(p.number)}</span>
-      <span style="flex:1">${esc(p.title || '')}</span>
-      <span class="empty-text" style="padding:0">${p.dueDate ? esc(fmtDateIt(p.dueDate)) : ''}</span>
-      <button class="btn-ghost" onclick="apriPianoDaCommessa('${p.id}')">Apri →</button></div>`;
-  const rigaDoc = (d, tipo) => `<div class="mgmt-item">
-      <span style="font-family:var(--mono);width:150px">${esc(d.number)}</span>
-      <span class="doc-badge">${esc((tipo === 'rfq' ? RFQ_STATUS : ORDER_STATUS)[d.status] || d.status)}</span>
-      <span style="flex:1">${esc(supplierName(d.supplierId) || '—')}</span>
-      <button class="btn-ghost" onclick="${{ rfq: `apriRfqDaCommessa('${d.id}')`, order: `apriOrdineDaCommessa('${d.id}')`, odl: `apriOdlDaCommessa('${d.id}')` }[tipo]}">Apri →</button></div>`;
-  return `<div class="manage-wrap">
-    <div class="bom-toolbar">
-      <div class="bom-toolbar-left">
-        ${worklistCloseBtn('jobBackToList()', 'la commessa')}
-        <h2 class="section-title" style="margin:0">${ico('clipboard', 'tinted pill', 'Commessa')} ${esc(j.number)}</h2>
-        ${storiaBtn('job', id)}
-      </div>
-      <div class="bom-toolbar-right">
-        ${menuAltro([{ label: 'Elimina la commessa', icon: 'trash', onclick: `delJob('${id}')`, danger: true }])}
-      </div>
-    </div>
-    ${docStepperHtml('job', j)}
-    <div class="modal-grid">
-      <div class="modal-field"><label>Cliente</label>
+  // I documenti della commessa in tessere su più colonne (dalla 0.152.1):
+  // una riga intera con «Apri →» per ognuno faceva una pagina di trenta righe.
+  // La tessera è tutta cliccabile; il conteggio sta accanto al titolo.
+  const elenco = (titolo, voci, vuoto) => `<div class="mrp-section">
+    <div class="cycle-section-head"><h3>${titolo}${voci.length ? ` <span class="conta-pill">${voci.length}</span>` : ''}</h3></div>
+    ${voci.length ? `<div class="doc-tessere">${voci.join('')}</div>` : `<div class="empty-text">${vuoto}</div>`}</div>`;
+  const tessera = (azione, numero, badge, testo, extra) => `<div class="doc-tessera" ${clickAttrs(azione, 'Apri ' + numero)}>
+      <span class="doc-tessera-num">${esc(numero)}</span>${badge}
+      <span class="doc-tessera-testo">${esc(testo)}</span>${extra || ''}</div>`;
+  const rigaPiano = p => tessera(`apriPianoDaCommessa('${p.id}')`, p.number, '', p.title || '',
+    p.dueDate ? `<span class="doc-tessera-meta">${esc(fmtDateIt(p.dueDate))}</span>` : '');
+  const rigaDoc = (d, tipo) => tessera({ rfq: `apriRfqDaCommessa('${d.id}')`, order: `apriOrdineDaCommessa('${d.id}')`, odl: `apriOdlDaCommessa('${d.id}')` }[tipo],
+    d.number, `<span class="doc-badge">${esc((tipo === 'rfq' ? RFQ_STATUS : ORDER_STATUS)[d.status] || d.status)}</span>`, supplierName(d.supplierId) || '—');
+  return docPaginaHtml({ numero: j.number, icona: ico('clipboard', 'tinted pill', 'Commessa'),
+    rail: { k: 'job', rec: j, chiudi: 'jobBackToList()', cosa: 'la commessa', comandi: storiaBtn('job', id),
+      menu: [{ label: 'Elimina la commessa', icon: 'trash', onclick: `delJob('${id}')`, danger: true }] },
+    corpo: `<div class="modal-grid testa">
+      <div class="modal-field campo-l"><label>Cliente</label>
         <input list="job-customer-opts" value="${esc(j.customer || '')}" onchange="jobSetField('${id}','customer',this.value)">
         ${customerDatalist('job-customer-opts')}</div>
-      <div class="modal-field"><label>Descrizione</label>
+      <div class="modal-field campo-xl"><label>Descrizione</label>
         <input value="${esc(j.title || '')}" onchange="jobSetField('${id}','title',this.value)"></div>
-      <div class="modal-field"><label>Riferimento cliente</label>
+      <div class="modal-field campo-m"><label>Riferimento cliente</label>
         <input value="${esc(j.customerRef || '')}" placeholder="ordine cliente, offerta…" onchange="jobSetField('${id}','customerRef',this.value)"></div>
-      <div class="modal-field"><label>Stato</label>
+      <div class="modal-field campo-s"><label>Stato</label>
         <select onchange="jobSetField('${id}','status',this.value)">
           ${Object.keys(JOB_STATUS).map(k => `<option value="${k}" ${j.status === k ? 'selected' : ''}>${esc(JOB_STATUS[k])}</option>`).join('')}
         </select></div>
-      <div class="modal-field"><label>Data apertura</label>
+      <div class="modal-field campo-s"><label>Data apertura</label>
         <input type="date" value="${esc(j.date || '')}" onchange="jobSetField('${id}','date',this.value)"></div>
-      <div class="modal-field"><label>Consegna al cliente</label>
+      <div class="modal-field campo-s"><label>Consegna al cliente</label>
         <input type="date" value="${esc(j.dueDate || '')}" onchange="jobSetField('${id}','dueDate',this.value)"></div>
-      <div class="modal-field" style="grid-column:1/-1"><label>Note</label>
+      <div class="modal-field campo-nota"><label>Note</label>
         <input value="${esc(j.notes || '')}" onchange="jobSetField('${id}','notes',this.value)"></div>
     </div>
     ${jobLate(j) ? `<div class="empty-text" style="text-align:left;color:var(--red)">${ico('warning', 'tinted', '')} La consegna al cliente era il ${esc(fmtDateIt(j.dueDate))} e la commessa è ancora ${esc((JOB_STATUS[j.status] || '').toLowerCase())}.</div>` : ''}
-    ${stampLine(j)}
 
-    <div class="cost-summary">
+    <div class="cost-summary striscia">
       ${kpi('Ordinato', fmtN(t.ordinato), 'accent')}
       ${kpi('Già ricevuto', fmtN(t.ricevuto), 'green')}
       ${kpi('Ancora atteso', fmtN(t.ordinato - t.ricevuto), t.ordinato - t.ricevuto > 0 ? 'orange' : '')}
@@ -429,13 +419,13 @@ function renderJobEdit(id) {
     </div>
 
     ${moduloAttivo('costiReali') ? consuntivoHtml(id) : ''}
-    ${elenco(ico('package', 'tinted', '') + ' Copertura materiale', jobCoverageHtml(cov),
-      'Nessun piano di fabbisogno aperto: la copertura del materiale non è calcolabile.')}
-    ${elenco(ico('list', 'tinted', '') + ' Fabbisogni', piani.map(rigaPiano).join(''), 'Nessun piano collegato. Si aggancia dalla testata di un piano, nel campo Commessa.')}
-    ${elenco(ico('mail', 'tinted', '') + ' Richieste di offerta', rfqs.map(d => rigaDoc(d, 'rfq')).join(''), 'Nessuna richiesta.')}
-    ${elenco(ico('receipt', 'tinted', '') + ' Ordini a fornitore', orders.map(d => rigaDoc(d, 'order')).join(''), 'Nessun ordine.')}
-    ${elenco(ico('wrench', 'tinted', '') + ' Ordini di lavoro', workOrders.map(d => rigaDoc(d, 'odl')).join(''), 'Nessuna lavorazione affidata a terzi per questa commessa.')}
-    </div>`;
+    <div class="mrp-section">
+      <div class="cycle-section-head"><h3>${ico('package', 'tinted', '')} Copertura materiale</h3></div>
+      ${jobCoverageHtml(cov) || '<div class="empty-text">Nessun piano di fabbisogno aperto: la copertura del materiale non è calcolabile.</div>'}</div>
+    ${elenco(ico('list', 'tinted', '') + ' Fabbisogni', piani.map(rigaPiano), 'Nessun piano collegato. Si aggancia dalla testata di un piano, nel campo Commessa.')}
+    ${elenco(ico('mail', 'tinted', '') + ' Richieste di offerta', rfqs.map(d => rigaDoc(d, 'rfq')), 'Nessuna richiesta.')}
+    ${elenco(ico('receipt', 'tinted', '') + ' Ordini a fornitore', orders.map(d => rigaDoc(d, 'order')), 'Nessun ordine.')}
+    ${elenco(ico('wrench', 'tinted', '') + ' Ordini di lavoro', workOrders.map(d => rigaDoc(d, 'odl')), 'Nessuna lavorazione affidata a terzi per questa commessa.')}` });
 }
 
 // ─── Navigazione fra le viste ───

@@ -299,11 +299,11 @@ function renderOrderEdit(id) {
   const ritardo = orderWorstDelay(o);
   const mode = ordMode(o);
   const lockBanner = docLockBanner(mode, 'Ordine ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'order', id);
-  return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'orderBackToList()', cosa: "l'ordine", rec: o, storia: storiaBtn('order', o.id), stati: ORDER_STATUS, dirty: orderDirty,
-      saveId: 'order-save-btn', salva: `ordSave('${id}')`, menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }] })}
-    ${docStepperHtml('order', o)}${docLinksHtml('order', o)}
-    ${docCoWarnHtml()}${lockBanner}${stampLine(o)}
+  return docPaginaHtml({ numero: o.number, rail: { k: 'order', rec: o, chiudi: 'orderBackToList()', cosa: "l'ordine",
+    menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }],
+    salva: { id: 'order-save-btn', azione: `ordSave('${id}')`, dirty: orderDirty }, comandi: storiaBtn('order', o.id), lock: lockBanner,
+    esporta: docExportBtnsHtml({ cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine" }) },
+  corpo: `${docCoWarnHtml()}
     ${docTestaHtml({ pfx: 'ord', rec: o, stati: ORDER_STATUS, controparte: 'Fornitore', data: 'Data ordine', conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
     <h3 class="rfq-subhead">Righe ordine
@@ -324,8 +324,7 @@ function renderOrderEdit(id) {
       <tbody>${lines}</tbody>
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
     </table></div>
-    ${docExportBarHtml({ etichetta: "Documento d'ordine:", cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine", kind: 'order', rec: o })}
-  </div>`;
+    ${orderDirty ? '' : docEmessiHtml('order', o)}` });
 }
 
 function exportOrderPDF(id, modo) {
@@ -1041,14 +1040,14 @@ function renderOdlEdit(id) {
   const total = odlTotal(o);
   const ritardo = orderWorstDelay(o);
   const lockBanner = docLockBanner(odlMode(o), 'Ordine di lavoro ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'odl', id);
-  return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro", rec: o, storia: storiaBtn('odl', o.id), stati: ORDER_STATUS, dirty: odlDirty,
-      saveId: 'odl-save-btn', salva: `odlSave('${id}')`, menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }] })}
-    ${docStepperHtml('odl', o)}${docLinksHtml('odl', o)}
-    ${docCoWarnHtml()}${odlOdpRef(o)}${lockBanner}${stampLine(o)}
+  return docPaginaHtml({ numero: o.number, rail: { k: 'odl', rec: o, chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro",
+    menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }],
+    salva: { id: 'odl-save-btn', azione: `odlSave('${id}')`, dirty: odlDirty }, comandi: storiaBtn('odl', o.id), lock: lockBanner,
+    esporta: docExportBtnsHtml({ cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro" }) },
+  corpo: `${docCoWarnHtml()}${odlOdpRef(o)}
     ${docTestaHtml({ pfx: 'odl', rec: o, stati: ORDER_STATUS, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta.</div>` : ''}
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Ogni lavorazione si <strong>avvia</strong> quando il materiale parte e si <strong>dichiara</strong> quando i pezzi tornano, buoni e scarti: come sull'ordine di produzione. Il magazzino si muove ai due estremi del <strong>ciclo</strong> — il materiale esce all'avvio della prima tratta, il codice della parte si carica al rientro dell'ultima — e in mezzo i pezzi passano e basta. Se la lavorazione viene da un <strong>ordine di produzione</strong>, avvia e dichiara scrivono sulle sue fasi: il gesto è uno, in qualunque dei due documenti lo si faccia.</p>
+    <details class="doc-info"><summary>${ico('book', 'tinted', '')} Come funziona</summary><p>Ogni lavorazione si <strong>avvia</strong> quando il materiale parte e si <strong>dichiara</strong> quando i pezzi tornano, buoni e scarti: come sull'ordine di produzione. Il magazzino si muove ai due estremi del <strong>ciclo</strong> — il materiale esce all'avvio della prima tratta, il codice della parte si carica al rientro dell'ultima — e in mezzo i pezzi passano e basta. Se la lavorazione viene da un <strong>ordine di produzione</strong>, avvia e dichiara scrivono sulle sue fasi: il gesto è uno, in qualunque dei due documenti lo si faccia.</p></details>
     <h3 class="rfq-subhead">Lavorazioni
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="odlAddPhaseModal('${id}')" title="Scegli una parte col suo ciclo e le fasi da commissionare">+ Lavorazione da ciclo</button>
@@ -1069,8 +1068,7 @@ function renderOdlEdit(id) {
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="4"></td></tr></tfoot>
     </table></div>
     ${odlDeclBlock(o)}
-    ${docExportBarHtml({ etichetta: "Documento d'ordine di lavoro:", cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro", kind: 'workOrder', rec: o })}
-  </div>`;
+    ${odlDirty ? '' : docEmessiHtml('workOrder', o)}` });
 }
 
 // ─── Documento dell'ordine di lavoro ───

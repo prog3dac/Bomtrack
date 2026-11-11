@@ -21,8 +21,8 @@ function app() {
   a.asRole('admin');
   return a;
 }
-// La testata del documento, fino alla fine della sua toolbar.
-const testata = h => h.slice(h.indexOf('bom-toolbar'), h.indexOf('</div>\n    </div>', h.indexOf('bom-toolbar-right')));
+// I comandi del documento: dalla 0.152.0 stanno nella barra a sinistra.
+const testata = h => { const i = h.indexOf('class="doc-rail"'); assert.ok(i >= 0, 'la barra dei comandi c\'è'); return h.slice(i, h.indexOf('</aside>', i)); };
 const fuoriDaiMenu = h => h.replace(/<details class="dd[\s\S]*?<\/details>/g, '');
 
 describe('tendina', () => {
