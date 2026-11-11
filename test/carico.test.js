@@ -453,3 +453,65 @@ describe('Carico dentro la scheda di un piano: gli stessi numeri della tavola', 
     assert.ok(html.includes("loadSetCentro('mon')"));
   });
 });
+
+// Dalla 0.152.0 il filtro dei centri vale per tutta la pagina, e il filtro dei
+// piani dice anche gli ordini di produzione che entrano nel conto.
+describe('Carico centri: i filtri valgono per tutta la pagina', () => {
+  const pagina = app => app.eval("document.getElementById('view-load').innerHTML");
+  // Un ODP scritto a mano, senza piano, sul perno.
+  const conOdpSenzaPiano = () => {
+    const app = conDb();
+    app.eval(`(function () {
+      const o = odpNew(getItem('perno'), 4, '2026-10-02', {});
+      db.prodOrders.push(o); invalidateCaches();
+    })()`);
+    return app;
+  };
+  it('scelto un centro, grafici e tavola mostrano solo quello', () => {
+    const app = conDb();
+    app.eval("setView('load'); loadSetCentro('tor');");
+    const h = pagina(app);
+    assert.ok(h.includes('CDL tor'));
+    assert.ok(!h.includes('<figcaption>CDL mon'), 'il grafico del montaggio non c’è');
+    assert.ok(!/<td><span[^>]*>CDL mon<\/span><\/td>/.test(h), 'la riga del montaggio non c’è');
+    assert.ok(h.includes('solo sul centro CDL tor'));
+  });
+  it('il centro si sceglie fra tutti i centri attivi, anche senza ore', () => {
+    const app = conDb();
+    app.eval("setView('load');");
+    assert.ok(pagina(app).includes('>CDL zin</option>'));
+  });
+  it('la frase dice che cosa entra nel conto', () => {
+    const app = conOdpSenzaPiano();
+    app.eval("setView('load');");
+    assert.ok(pagina(app).includes('le fasi di 1 ordine di produzione (1 senza piano) e i pezzi non ancora lanciati di 1 piano aperto, su tutti i centri'));
+  });
+  it('«Solo gli ODP senza piano» toglie il piano e lascia l’ordine scritto a mano', () => {
+    const app = conOdpSenzaPiano();
+    app.eval("setView('load'); loadSetPlan(LOAD_SENZA_PIANO);");
+    const t = tavola(app, 'mrpLoadTable(loadEntries())');
+    assert.deepEqual(t.righe.map(r => r.wc).sort(), ['fre', 'tor'], 'niente montaggio: è solo del piano');
+    approx(t.righe.find(r => r.wc === 'tor').totale, 4 * 0.5);
+    assert.ok(pagina(app).includes('senza un piano aperto'));
+  });
+  it('un piano scelto: il suo non lanciato, e l’ordine senza piano resta fuori', () => {
+    const app = conOdpSenzaPiano();
+    app.eval("setView('load'); loadSetPlan('pl1');");
+    approx(tavola(app, 'mrpLoadTable(loadEntries())').righe.find(r => r.wc === 'tor').totale, 6 * 0.5);
+  });
+  it('«Togli i filtri» torna a tutto', () => {
+    const app = conDb();
+    app.eval("setView('load'); loadSetCentro('tor'); loadSetPlan('pl1'); loadAzzeraFiltri();");
+    assert.equal(app.eval('loadSoloPiano + "|" + loadSoloCentro'), '|');
+  });
+  it('la coda a capacità finita segue i filtri', () => {
+    const app = conDb();
+    const passa = app.eval(`[
+      capFiltroPassa({ wc: 'tor' }, {}, { workCenterId: 'tor' }),
+      capFiltroPassa({ wc: 'tor' }, {}, { workCenterId: 'mon' }),
+      capFiltroPassa({ odp: o => o.planId === 'pl1' }, { planId: 'x' }, { workCenterId: 'tor' }),
+      capFiltroPassa(null, {}, {}),
+    ]`);
+    assert.deepEqual(Array.from(passa), [true, false, false, true]);
+  });
+});
