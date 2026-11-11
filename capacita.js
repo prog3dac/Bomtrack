@@ -260,7 +260,7 @@ function capLineaHtml(oggi) {
 function capLineaLegenda() {
   const voce = (cls, testo) => `<span class="cap-leg"><i class="${cls}"></i>${esc(testo)}</span>`;
   return `<div class="cap-legenda" aria-hidden="true">
-    ${voce('cap-sw-att', 'Attrezzaggio')}${voce('cap-sw-lav', 'Lavoro')}${voce('cap-sw-coda', 'Attraversamento: coda e attesa del centro')}
+    ${voce('cap-sw-att', 'Attrezzaggio (nel reale, quello previsto)')}${voce('cap-sw-lav', 'Lavoro')}${voce('cap-sw-coda', 'Attraversamento: coda e attesa del centro')}
     ${voce('cap-sw-reale', 'Reale: timbrato o dichiarato')}${voce('cap-sw-pian', 'Pianificato nell’ODP')}
     ${voce('cap-sw-serve', 'Serve il')}${voce('cap-sw-oggi', 'Oggi')}</div>`;
 }
@@ -317,15 +317,30 @@ function capLineaFase(v, wc, xDi, primo, ultimo, y, DW) {
     const x1 = xDi(f.plannedStart), x2 = xDi(f.plannedEnd) + DW;
     parti.push(`<rect x="${x1 + 1}" y="${yb + hb + 4}" width="${Math.max(2, x2 - x1 - 2)}" height="3" rx="1.5" class="cap-pian"><title>${esc(`Pianificata dal ${fmtDateIt(f.plannedStart)} al ${fmtDateIt(f.plannedEnd)}`)}</title></rect>`);
   }
-  // Il reale.
+  // Il reale. L'attrezzaggio non si timbra a parte: si mostra quello
+  // previsto della fase, sulle prime ore lavorate, perché la barra reale si
+  // legga come quella prevista.
+  const setupReale = reale.dal ? faseAttrezzaggio(f) : 0;
   if (reale.giorni.size) {
-    reale.giorni.forEach((ore, d) => {
+    let setup = setupReale;
+    Array.from(reale.giorni.entries()).sort((x, y) => x[0].localeCompare(y[0])).forEach(([d, ore]) => {
+      const att = Math.min(setup, ore); setup -= att;
       if (!dentro(d)) return;
-      parti.push(`<rect x="${xDi(d) + 1}" y="${yb}" width="${DW - 2}" height="${hb}" rx="2" class="cap-reale"><title>${esc(`${fmtDateIt(d)}: ${fmtOre(ore)} timbrate`)}</title></rect>`);
+      const x = xDi(d) + 1, w = DW - 2, wa = ore > 0 ? w * att / ore : 0;
+      const tit = `${fmtDateIt(d)}: ${fmtOre(ore)} timbrate${att > 0 ? ` (attrezzaggio previsto ${fmtOre(att)})` : ''}`;
+      if (wa > 0) parti.push(`<rect x="${x}" y="${yb}" width="${wa.toFixed(1)}" height="${hb}" rx="2" class="cap-att"><title>${esc(tit)}</title></rect>`);
+      if (w - wa > 0.5) parti.push(`<rect x="${(x + wa).toFixed(1)}" y="${yb}" width="${(w - wa).toFixed(1)}" height="${hb}" rx="2" class="cap-reale"><title>${esc(tit)}</title></rect>`);
     });
   } else if (reale.dal && reale.al >= primo && reale.dal <= ultimo) {
     const x1 = xDi(reale.dal), x2 = xDi(reale.al) + DW;
-    parti.push(`<rect x="${x1 + 1}" y="${yb}" width="${Math.max(2, x2 - x1 - 2)}" height="${hb}" rx="2" class="cap-reale cap-reale-dich"><title>${esc(`Avviata il ${fmtDateIt(reale.dal)}${reale.chiusa ? ', chiusa il ' + fmtDateIt(reale.al) : ', in corso'}`)}</title></rect>`);
+    const w = Math.max(2, x2 - x1 - 2);
+    // Senza timbrature l'attrezzaggio occupa i giorni che la fase ci mette a
+    // farlo, con le ore al giorno dei suoi operatori.
+    const wa = Math.min(w, setupReale / faseOreGiorno(wc, f.operators) * DW);
+    const tit = `Avviata il ${fmtDateIt(reale.dal)}${reale.chiusa ? ', chiusa il ' + fmtDateIt(reale.al) : ', in corso'}${setupReale > 0 ? ` — attrezzaggio previsto ${fmtOre(setupReale)}` : ''}`;
+    if (reale.dal >= primo && wa > 0.5) parti.push(`<rect x="${x1 + 1}" y="${yb}" width="${wa.toFixed(1)}" height="${hb}" rx="2" class="cap-att"><title>${esc(tit)}</title></rect>`);
+    const da = reale.dal >= primo ? wa : 0;
+    if (w - da > 0.5) parti.push(`<rect x="${(x1 + 1 + da).toFixed(1)}" y="${yb}" width="${(w - da).toFixed(1)}" height="${hb}" rx="2" class="cap-reale cap-reale-dich"><title>${esc(tit)}</title></rect>`);
   }
   // Il previsto: coda, attesa, attrezzaggio e lavoro, giorno per giorno.
   if (prev) {
