@@ -678,9 +678,39 @@ function docTestaHtml(o) {
       <div class="modal-field campo-m"><label>Pagamento</label>
         <input list="${o.pfx}-payment-opts" class="lock-contract" value="${esc(r.payment || '')}" placeholder="es. Bonifico 30gg, RiBa 60gg…" ${campo('payment')}>
         <datalist id="${o.pfx}-payment-opts">${opzioni(db.settings.paymentOptions)}</datalist></div>
-      <div class="modal-field campo-nota"><label>${o.note}</label><textarea rows="${righeNota(r.notes)}" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
+      <div class="modal-field campo-nota"><div class="label-con-azione"><label>${o.note}</label>${docTestiMenuHtml(o.pfx, id)}</div><textarea rows="${righeNota(r.notes)}" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
       <div class="modal-field campo-nota"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label><textarea rows="${righeNota(r.notesInternal)}" class="notes-internal" ${campo('notesInternal')}>${esc(r.notesInternal || '')}</textarea></div>
     </div>`;
+}
+// ─── Testi predefiniti (dalla 0.155.0) ───
+// Frasi che tornano su molti documenti (imballo, certificati, condizioni
+// generali) scritte una volta in Gestione → Testi per i documenti. Ognuna dice
+// su quali documenti vale e se va **sempre** in fondo al PDF o si inserisce
+// **a scelta** nelle note, dove si può ancora correggere per quel documento.
+//   db.settings.docTexts = [{ id, title, text, docs: ['rfq','order','odl'], always }]
+const DOC_TESTI_TIPI = { rfq: 'Richiesta di offerta', order: 'Ordine a fornitore', odl: 'Ordine di lavoro' };
+const DOC_TESTI_PFX = { rfq: 'rfq', ord: 'order', odl: 'odl' };
+function docTesti(kind, sempre) {
+  return (db.settings.docTexts || []).filter(t => t && t.text && (t.docs || []).includes(kind) && !!t.always === !!sempre);
+}
+// Le voci della coda del PDF (e del foglio Excel) per i testi «sempre».
+function docTestiSempre(kind) {
+  return kind ? docTesti(kind, true).map(t => ({ etichetta: t.title || 'Condizioni', testo: t.text })) : [];
+}
+// «＋ Testo» accanto all'etichetta delle note: solo se c'è qualcosa da inserire.
+function docTestiMenuHtml(pfx, id) {
+  const voci = docTesti(DOC_TESTI_PFX[pfx], false).map(t => ({ label: t.title || t.text.slice(0, 40), onclick: `docInserisciTesto('${pfx}','${id}','${t.id}')` }));
+  return voci.length ? tendina('＋ Testo', voci, { cls: 'dd-testi', title: 'Inserisci un testo predefinito nelle note' }) : '';
+}
+function docInserisciTesto(pfx, id, testoId) {
+  const k = DOC_TESTI_PFX[pfx];
+  const t = (db.settings.docTexts || []).find(x => x.id === testoId);
+  const doc = k && docKind(k).get(id);
+  if (!t || !doc) return;
+  const prima = String(doc.notes || '').replace(/\s+$/, '');
+  if (prima.includes(t.text)) { showToast('Il testo è già nelle note'); return; }
+  docSetField(k, id, 'notes', prima ? prima + '\n' + t.text : t.text);
+  docKind(k).render();
 }
 // Una nota vuota occupa una riga; una scritta su più righe si mostra intera,
 // fino a sei.
@@ -745,8 +775,10 @@ function docXlsTesta(o) {
 }
 // Le note per la controparte in fondo al foglio, e il file. Solo rec.notes: le
 // note interne (notesInternal) non escono mai sul documento.
-function docXlsSalva(data, rec, foglio, ripiego) {
+function docXlsSalva(data, rec, foglio, ripiego, kind) {
   if (rec.notes) { data.push([]); data.push(['Note', rec.notes]); }
+  const sempre = docTestiSempre(kind);
+  if (sempre.length) { data.push([]); sempre.forEach(v => data.push([v.etichetta, v.testo])); }
   if (!requireXlsx()) return false;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), foglio);
@@ -1538,6 +1570,7 @@ function exportRfqPDF(id, modo) {
     { etichetta: 'Trasporto / Shipping', testo: r.transport },
     { etichetta: 'Pagamento / Payment', testo: r.payment },
     { etichetta: 'Note / Notes', testo: r.notes },
+    ...docTestiSempre('rfq'),
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('rfq', r, doc, { ripiego: 'richiesta', modo, stato: 'inviata', rerender: renderRfq,
     domanda: `PDF generato.\nSegnare la richiesta ${r.number} come inviata?` });
@@ -1563,7 +1596,7 @@ function exportRfqExcel(id) {
       ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]
       : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]);
   });
-  if (!docXlsSalva(data, r, 'RFQ', 'richiesta')) return;
+  if (!docXlsSalva(data, r, 'RFQ', 'richiesta', 'rfq')) return;
   askMarkSent(r, `Excel generato.\nSegnare la richiesta ${r.number} come inviata?`, 'inviata', renderRfq);
 }
 

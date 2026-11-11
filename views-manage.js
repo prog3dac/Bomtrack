@@ -20,6 +20,7 @@ const MGMT_TABS = [
   { id: 'suppliers', gruppo: 'Anagrafiche', label: ico('factory', 'tinted', '') + ' Fornitori' },
   { id: 'customers', gruppo: 'Anagrafiche', label: ico('contacts', 'tinted', '') + ' Clienti' },
   { id: 'terms', gruppo: 'Anagrafiche', label: ico('truck', 'tinted', '') + ' Condizioni offerta' },
+  { id: 'testi', gruppo: 'Anagrafiche', label: ico('file', 'tinted', '') + ' Testi per i documenti' },
   { id: 'fam-acquistato', gruppo: 'Classificazione articoli', label: ico('cart', 'tinted', '') + ' Famiglie commerciali' },
   { id: 'fam-materiale', gruppo: 'Classificazione articoli', label: ico('package', 'tinted', '') + ' Famiglie materie prime' },
   { id: 'fam-parte', gruppo: 'Classificazione articoli', label: ico('wrench', 'tinted', '') + ' Famiglie parti' },
@@ -56,6 +57,7 @@ function renderManage() {
   if (mgmtTab === 'users') c.innerHTML = renderUsers() + renderAccessSettings();
   else if (mgmtTab === 'company') c.innerHTML = renderCompany();
   else if (mgmtTab === 'terms') c.innerHTML = renderTerms();
+  else if (mgmtTab === 'testi') c.innerHTML = renderDocTexts();
   else if (mgmtTab === 'suppliers') c.innerHTML = renderSuppliers();
   else if (mgmtTab === 'customers') c.innerHTML = renderCustomers();
   else if (mgmtTab === 'fam-acquistato') c.innerHTML = renderFamilies('acquistato');
@@ -316,6 +318,65 @@ function termsSetDefault(kind, i) {
   const v = arr[i]; if (v == null) return;
   db.settings[kind + 'Default'] = (db.settings[kind + 'Default'] === v) ? '' : v;
   saveDB(); renderManage();
+}
+
+// ─── Testi per i documenti (dalla 0.155.0) ───
+// Le frasi da inserire nelle note di richieste, ordini e ordini di lavoro, o da
+// stampare sempre in fondo (views-docs.js, docTesti). Ogni campo si salva da
+// sé quando si esce, come le righe di un documento.
+function renderDocTexts() {
+  const ro = canWrite('manage') ? '' : 'disabled';
+  const righe = (db.settings.docTexts || []).map(t => {
+    const set = f => `onchange="docTestoSet('${t.id}','${f}',this.value)"`;
+    const tipi = Object.entries(DOC_TESTI_TIPI).map(([k, v]) => `<label class="chk-inline"><input type="checkbox" ${ro} ${(t.docs || []).includes(k) ? 'checked' : ''}
+        onchange="docTestoDoc('${t.id}','${k}',this.checked)"> ${v}</label>`).join('');
+    return `<div class="doc-testo">
+      <div class="doc-testo-testa">
+        <input class="doc-testo-titolo" ${ro} value="${esc(t.title || '')}" placeholder="Titolo (es. Imballo, Certificati, Condizioni generali)" ${set('title')}>
+        <select ${ro} onchange="docTestoSet('${t.id}','always',this.value === '1')" title="Quando esce sul documento">
+          <option value="0" ${t.always ? '' : 'selected'}>A scelta, con «＋ Testo» nelle note</option>
+          <option value="1" ${t.always ? 'selected' : ''}>Sempre, in fondo al PDF</option></select>
+        <button class="mini-btn danger" ${ro} onclick="docTestoDel('${t.id}')" title="Elimina">${ico('trash', 'tinted', 'Elimina')}</button>
+      </div>
+      <textarea rows="${Math.min(8, Math.max(2, String(t.text || '').split('\n').length))}" ${ro} placeholder="Il testo come deve uscire sul documento" ${set('text')}>${esc(t.text || '')}</textarea>
+      <div class="doc-testo-tipi">${tipi}</div>
+    </div>`;
+  }).join('') || '<div class="empty-text">Nessun testo. Aggiungine uno: per esempio le istruzioni di imballo o le condizioni generali d\'acquisto.</div>';
+  return `<div class="mgmt-panel">
+    <h3 class="settings-group-title">${ico('file', 'tinted', '')} Testi per i documenti</h3>
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Frasi da usare su richieste di offerta, ordini e ordini di lavoro. Quelle <strong>a scelta</strong> si inseriscono nelle note del documento con <strong>＋ Testo</strong>, e lì si possono ancora correggere; quelle <strong>sempre</strong> escono in fondo a ogni PDF ed Excel del tipo scelto.</p>
+    <div class="doc-testi">${righe}</div>
+    ${ro ? '' : '<button class="add-btn-sm" onclick="docTestoNuovo()">+ Nuovo testo</button>'}</div>`;
+}
+function docTestoGet(id) { return (db.settings.docTexts || []).find(t => t.id === id); }
+function docTestoNuovo() {
+  if (!roleGuard('manage')) return;
+  db.settings.docTexts = db.settings.docTexts || [];
+  db.settings.docTexts.push({ id: newId(), title: '', text: '', docs: ['rfq', 'order', 'odl'], always: false });
+  saveDB(); renderManage();
+}
+function docTestoSet(id, campo, valore) {
+  if (!roleGuard('manage')) return;
+  const t = docTestoGet(id); if (!t) return;
+  t[campo] = campo === 'always' ? !!valore : String(valore || '').replace(/\s+$/, '').replace(/^\s*\n/, '');
+  saveDB();
+  if (campo === 'always') renderManage();
+}
+function docTestoDoc(id, kind, on) {
+  if (!roleGuard('manage')) return;
+  const t = docTestoGet(id); if (!t) return;
+  const l = (t.docs || []).filter(k => k !== kind);
+  if (on) l.push(kind);
+  t.docs = Object.keys(DOC_TESTI_TIPI).filter(k => l.includes(k));
+  saveDB();
+}
+function docTestoDel(id) {
+  if (!roleGuard('manage')) return;
+  const t = docTestoGet(id); if (!t) return;
+  askConfirm(`Eliminare il testo «${t.title || 'senza titolo'}»? I documenti dove è già stato inserito lo tengono nelle note.`, () => {
+    db.settings.docTexts = (db.settings.docTexts || []).filter(x => x.id !== id);
+    saveDB(); renderManage(); savedToast('Eliminato');
+  });
 }
 
 function renderCompany() {

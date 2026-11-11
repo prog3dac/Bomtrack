@@ -1894,3 +1894,16 @@ html[data-densita="compatta"] .striscia .kpi-card{padding:6px 12px}
 .doc-tessera-testo{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .doc-tessera-meta{color:var(--text-dim);white-space:nowrap}
 .conta-pill{font-size:11px;font-weight:600;color:var(--text-dim);background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:0 7px;margin-left:4px}
+
+/* ─── Testi per i documenti (dalla 0.155.0) ─── */
+.label-con-azione{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}
+.dd-testi > summary{padding:2px 10px;font-size:12px;min-height:24px}
+.dd-testi .dd-menu{min-width:220px}
+.doc-testi{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.doc-testo{display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.doc-testo-testa{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.doc-testo-titolo{flex:1 1 220px;font-weight:600}
+.doc-testo input,.doc-testo select,.doc-testo textarea{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;min-width:0}
+.doc-testo textarea{width:100%;resize:vertical;font-family:inherit}
+.doc-testo-tipi{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-dim)}
+.chk-inline{display:inline-flex;align-items:center;gap:6px;cursor:pointer}

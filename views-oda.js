@@ -363,6 +363,7 @@ function exportOrderPDF(id, modo) {
     { etichetta: 'Conferma fornitore / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
     { etichetta: 'Importante / Important', testo: DOC_RIF_DDT },
+    ...docTestiSempre('order'),
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('order', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOrders,
     domanda: `PDF generato.\nSegnare l'ordine ${o.number} come inviato?` });
@@ -394,7 +395,7 @@ function exportOrderExcel(id) {
   });
   data.push([]);
   data.push(['', 'TOTALE IMPONIBILE / TOTAL', orderTotal(o)]);
-  if (!docXlsSalva(data, o, 'Ordine', 'ordine')) return;
+  if (!docXlsSalva(data, o, 'Ordine', 'ordine', 'order')) return;
   askMarkSent(o, `Excel generato.\nSegnare l'ordine ${o.number} come inviato?`, 'inviato', renderOrders);
 }
 
@@ -1140,6 +1141,7 @@ function exportOdlPDF(id, modo) {
     { etichetta: 'Conferma terzista / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
     { etichetta: 'Importante / Important', testo: DOC_RIF_DDT },
+    ...docTestiSempre('odl'),
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('workOrder', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOdl,
     domanda: `PDF generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?` });
@@ -1168,7 +1170,7 @@ function exportOdlExcel(id) {
     data.push(['', 'Materiale che vi inviamo', 'Descrizione', 'Pezzi', 'U.M.', 'Invio', 'Disegno']);
     mat.forEach(m => data.push(['', m.code, m.name, m.qty, m.uom || '', fmtDateIt(m.startDate), m.disegno]));
   }
-  if (!docXlsSalva(data, o, 'Ordine di lavoro', 'ordine')) return;
+  if (!docXlsSalva(data, o, 'Ordine di lavoro', 'ordine', 'odl')) return;
   askMarkSent(o, `Excel generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?`, 'inviato', renderOdl);
 }
 
