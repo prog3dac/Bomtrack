@@ -700,37 +700,29 @@ function renderPlanEdit(id) {
       <td class="line-actions"><button class="mini-btn danger" onclick="planDelLine('${id}','${l.id}')" title="Togli dal piano">${ico('trash', 'tinted', 'Togli dal piano')}</button></td></tr>`;
   }).join('') || `<tr><td colspan="8" class="empty-text">Nessun articolo a piano. Usa "+ Aggiungi al piano".</td></tr>`;
 
-  return `<div class="manage-wrap">
-    <div class="bom-toolbar">
-      <div class="bom-toolbar-left">
-        ${worklistCloseBtn('planBackToList()', 'il piano')}
-        <h2 class="section-title" style="margin:0">${ico('list', 'tinted pill', 'Piano di fabbisogno')} ${esc(p.number)}</h2>
-        ${storiaBtn('plan', id)}
+  return docPaginaHtml({ numero: p.number, icona: ico('list', 'tinted pill', 'Piano di fabbisogno'),
+    rail: { rec: p, chiudi: 'planBackToList()', cosa: 'il piano',
+      menu: [
+        { label: 'Duplica il piano', icon: 'copy', onclick: `duplicatePlan('${id}')` },
+        { label: 'Elimina il piano', icon: 'trash', onclick: `delPlan('${id}')`, danger: true },
+      ],
+      comandi: `${storiaBtn('plan', id)}
         <button class="btn-outline" onclick="planToggleActive('${id}')" title="${p.active === false
           ? 'Chiuso: non impegna materiale. Riaprendolo tornerà a riservarsi quello che gli serve.'
-          : 'Aperto: impegna a magazzino il materiale che gli serve, e gli altri piani non se lo contano. Chiudendolo quella quota torna libera.'}">${p.active === false ? ico('unlock', 'tinted', '') + ' Chiuso — riapri' : ico('lock', 'tinted', '') + ' Aperto — chiudi'}</button>
-      </div>
-      <div class="bom-toolbar-right">
-        ${menuEsporta(`exportMrpExcel('${id}')`, `exportMrpPDF('${id}')`)}
-        ${menuAltro([
-          { label: 'Duplica il piano', icon: 'copy', onclick: `duplicatePlan('${id}')` },
-          { label: 'Elimina il piano', icon: 'trash', onclick: `delPlan('${id}')`, danger: true },
-        ])}
-      </div>
-    </div>
-    <div class="modal-grid">
-      <div class="modal-field"><label>Titolo</label>
+          : 'Aperto: impegna a magazzino il materiale che gli serve, e gli altri piani non se lo contano. Chiudendolo quella quota torna libera.'}">${p.active === false ? ico('unlock', 'tinted', '') + ' Chiuso — riapri' : ico('lock', 'tinted', '') + ' Aperto — chiudi'}</button>`,
+      esporta: menuEsporta(`exportMrpExcel('${id}')`, `exportMrpPDF('${id}')`) },
+    corpo: `<div class="modal-grid testa">
+      <div class="modal-field campo-xl"><label>Titolo</label>
         <input id="plan-title" value="${esc(p.title || '')}" placeholder="es. Lotto settembre" onchange="planSetField('${id}','title',this.value)"></div>
-      <div class="modal-field"><label>Data</label>
+      <div class="modal-field campo-s"><label>Data</label>
         <input type="date" id="plan-date" value="${esc(p.date || '')}" onchange="planSetField('${id}','date',this.value)"></div>
-      <div class="modal-field"><label>Consegna richiesta</label>
+      <div class="modal-field campo-s"><label>Consegna richiesta</label>
         <input type="date" id="plan-due" value="${esc(p.dueDate || '')}" title="Proposta alle righe nuove: si può cambiare riga per riga" onchange="planSetField('${id}','dueDate',this.value)"></div>
-      <div class="modal-field"><label>Commessa</label>
+      <div class="modal-field campo-l"><label>Commessa</label>
         <select id="plan-job" onchange="planSetField('${id}','jobId',this.value)">${jobOptions(p.jobId || '')}</select></div>
-      <div class="modal-field" style="grid-column:1/-1"><label>Note</label>
+      <div class="modal-field campo-nota"><label>Note</label>
         <input id="plan-notes" value="${esc(p.notes || '')}" onchange="planSetField('${id}','notes',this.value)"></div>
     </div>
-    ${stampLine(p)}
 
     <div class="mrp-section">
       <div class="cycle-section-head">
@@ -745,7 +737,7 @@ function renderPlanEdit(id) {
         <tbody>${planRows}</tbody></table></div>
     </div>
 
-    <div class="cost-summary">
+    <div class="cost-summary striscia">
       ${kpi('Totale acquisti', fmtN(totale), 'accent')}
       ${kpi('Articoli da comprare', String(buy.length), 'orange')}
       ${kpi('Fornitori coinvolti', String(fornitori), '')}
@@ -816,7 +808,7 @@ function renderPlanEdit(id) {
       { id: 'docs', label: 'Documenti', n: planDocsTotale(id), html: planDocsList(id) || '<p class="empty-text">Nessun documento generato da questo piano: si creano dai pulsanti «Genera» delle altre schede.</p>' },
     // Senza Produzione interna non c'è niente da fabbricare né da far lavorare
     // fuori, e nessun centro da caricare: restano acquisti e montaggio.
-    ].filter(t => prodInterna || !PLAN_TAB_PRODUZIONE.includes(t.id)))}</div>`;
+    ].filter(t => prodInterna || !PLAN_TAB_PRODUZIONE.includes(t.id)))}` });
 }
 // ─── Le schede del piano ───
 // Fino alla 0.91 le sezioni stavano una sotto l'altra — acquisti, conto

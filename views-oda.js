@@ -299,12 +299,13 @@ function renderOrderEdit(id) {
   const ritardo = orderWorstDelay(o);
   const mode = ordMode(o);
   const lockBanner = docLockBanner(mode, 'Ordine ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'order', id);
-  return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'orderBackToList()', cosa: "l'ordine", rec: o, storia: storiaBtn('order', o.id), stati: ORDER_STATUS, dirty: orderDirty,
-      saveId: 'order-save-btn', salva: `ordSave('${id}')`, menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }] })}
-    ${docStepperHtml('order', o)}${docLinksHtml('order', o)}
-    ${docCoWarnHtml()}${lockBanner}${stampLine(o)}
-    ${docTestaHtml({ pfx: 'ord', rec: o, stati: ORDER_STATUS, controparte: 'Fornitore', data: 'Data ordine', conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
+  return docPaginaHtml({ numero: o.number, rail: { k: 'order', rec: o, chiudi: 'orderBackToList()', cosa: "l'ordine",
+    stato: { stati: ORDER_STATUS, azione: `ordSetField('${id}','status',this.value)` },
+    menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }],
+    salva: { id: 'order-save-btn', azione: `ordSave('${id}')`, dirty: orderDirty }, comandi: storiaBtn('order', o.id), lock: lockBanner,
+    esporta: docExportBtnsHtml({ cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine" }) },
+  corpo: `${docCoWarnHtml()}
+    ${docTestaHtml({ pfx: 'ord', rec: o, controparte: 'Fornitore', data: 'Data ordine', offerta: true, conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
     <h3 class="rfq-subhead">Righe ordine
       <span class="rfq-head-actions">
@@ -324,8 +325,7 @@ function renderOrderEdit(id) {
       <tbody>${lines}</tbody>
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
     </table></div>
-    ${docExportBarHtml({ etichetta: "Documento d'ordine:", cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine", kind: 'order', rec: o })}
-  </div>`;
+    ${orderDirty ? '' : docEmessiHtml('order', o)}` });
 }
 
 function exportOrderPDF(id, modo) {
@@ -337,7 +337,8 @@ function exportOrderPDF(id, modo) {
   // Il QR in alto a destra apre la scheda rapida dell'ordine (qr.js): chi riceve
   // la merce inquadra la copia stampata e registra il ricevimento da lì.
   if (o.number) qrPdfDraw(doc, qrLink('oda', o.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
-  const startY = docPdfTesta(doc, { titolo: 'Ordine di acquisto / Purchase Order', rec: o,
+  const startY = docPdfTesta(doc, { titolo: 'Ordine di acquisto / Purchase Order', rec: o, kind: 'order',
+    righe: [['Vostra offerta / Your quotation', o.supplierQuote]],
     chi: 'RICHIEDENTE / BUYER', controparte: 'FORNITORE / SUPPLIER', vuota: '(fornitore non selezionato / not selected)' });
   const head = hasSup
     ? ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Cod. forn.\nSuppl. code', 'Descr. forn.\nSuppl. desc.', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Importo\nAmount', 'Data consegna\nDelivery date']
@@ -361,6 +362,7 @@ function exportOrderPDF(id, modo) {
     { etichetta: 'Pagamento / Payment', testo: o.payment },
     { etichetta: 'Conferma fornitore / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
+    { etichetta: 'Importante / Important', testo: DOC_RIF_DDT },
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('order', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOrders,
     domanda: `PDF generato.\nSegnare l'ordine ${o.number} come inviato?` });
@@ -371,22 +373,24 @@ function exportOrderExcel(id) {
   if (!(o.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const data = docXlsTesta({ titolo: 'Ordine di acquisto / Purchase Order', rec: o, chi: 'RICHIEDENTE', controparte: 'FORNITORE', voci: [
     ['Da richiesta', o.rfqId && getRfq(o.rfqId) ? getRfq(o.rfqId).number : ''],
+    ['Vostra offerta / Your quotation', o.supplierQuote],
     ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
-    ['Conferma fornitore / Order confirmation', o.supplierConfirmation]] });
+    ['Conferma fornitore / Order confirmation', o.supplierConfirmation],
+    ['Importante / Important', DOC_RIF_DDT]] });
   const hasSup = (o.lines || []).some(l => lineSupInfo(o.supplierId, l));
   // Nel foglio i numeri restano numeri: la valuta si dichiara in intestazione,
   // l'unità sta nella sua colonna e vale per q.tà, ricevuto e residuo.
   const hPrezzo = `Prezzo unitario (${cur()}/U.M.)`, hImporto = `Importo (${cur()})`;
   data.push(hasSup
-    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota']
-    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota']);
+    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota', 'Disegno / certificato']
+    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota', 'Disegno / certificato']);
   (o.lines || []).forEach((l, i) => {
     const si = lineSupInfo(o.supplierId, l);
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? '' : Number(l.price);
     const amount = price === '' ? '' : importoRiga(l);
     const rec = Number(l.received) || 0;
     const supCols = hasSup ? [si ? si.code : '', si ? si.desc : ''] : [];
-    data.push([i + 1, l.code || '', l.description, ...supCols, qty, l.uom || '', price, amount, fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '']);
+    data.push([i + 1, l.code || '', l.description, ...supCols, qty, l.uom || '', price, amount, fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '', lineExtraDoc(l).join(' · ')]);
   });
   data.push([]);
   data.push(['', 'TOTALE IMPONIBILE / TOTAL', orderTotal(o)]);
@@ -1041,14 +1045,15 @@ function renderOdlEdit(id) {
   const total = odlTotal(o);
   const ritardo = orderWorstDelay(o);
   const lockBanner = docLockBanner(odlMode(o), 'Ordine di lavoro ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'odl', id);
-  return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro", rec: o, storia: storiaBtn('odl', o.id), stati: ORDER_STATUS, dirty: odlDirty,
-      saveId: 'odl-save-btn', salva: `odlSave('${id}')`, menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }] })}
-    ${docStepperHtml('odl', o)}${docLinksHtml('odl', o)}
-    ${docCoWarnHtml()}${odlOdpRef(o)}${lockBanner}${stampLine(o)}
-    ${docTestaHtml({ pfx: 'odl', rec: o, stati: ORDER_STATUS, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', note: 'Note' })}
+  return docPaginaHtml({ numero: o.number, rail: { k: 'odl', rec: o, chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro",
+    stato: { stati: ORDER_STATUS, azione: `odlSetField('${id}','status',this.value)` },
+    menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }],
+    salva: { id: 'odl-save-btn', azione: `odlSave('${id}')`, dirty: odlDirty }, comandi: storiaBtn('odl', o.id), lock: lockBanner,
+    esporta: docExportBtnsHtml({ cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro" }) },
+  corpo: `${docCoWarnHtml()}${odlOdpRef(o)}
+    ${docTestaHtml({ pfx: 'odl', rec: o, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', ddt: true, note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta.</div>` : ''}
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Ogni lavorazione si <strong>avvia</strong> quando il materiale parte e si <strong>dichiara</strong> quando i pezzi tornano, buoni e scarti: come sull'ordine di produzione. Il magazzino si muove ai due estremi del <strong>ciclo</strong> — il materiale esce all'avvio della prima tratta, il codice della parte si carica al rientro dell'ultima — e in mezzo i pezzi passano e basta. Se la lavorazione viene da un <strong>ordine di produzione</strong>, avvia e dichiara scrivono sulle sue fasi: il gesto è uno, in qualunque dei due documenti lo si faccia.</p>
+    <details class="doc-info"><summary>${ico('book', 'tinted', '')} Come funziona</summary><p>Ogni lavorazione si <strong>avvia</strong> quando il materiale parte e si <strong>dichiara</strong> quando i pezzi tornano, buoni e scarti: come sull'ordine di produzione. Il magazzino si muove ai due estremi del <strong>ciclo</strong> — il materiale esce all'avvio della prima tratta, il codice della parte si carica al rientro dell'ultima — e in mezzo i pezzi passano e basta. Se la lavorazione viene da un <strong>ordine di produzione</strong>, avvia e dichiara scrivono sulle sue fasi: il gesto è uno, in qualunque dei due documenti lo si faccia.</p></details>
     <h3 class="rfq-subhead">Lavorazioni
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="odlAddPhaseModal('${id}')" title="Scegli una parte col suo ciclo e le fasi da commissionare">+ Lavorazione da ciclo</button>
@@ -1069,8 +1074,27 @@ function renderOdlEdit(id) {
       <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="4"></td></tr></tfoot>
     </table></div>
     ${odlDeclBlock(o)}
-    ${docExportBarHtml({ etichetta: "Documento d'ordine di lavoro:", cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro", kind: 'workOrder', rec: o })}
-  </div>`;
+    ${odlDirty ? '' : docEmessiHtml('workOrder', o)}` });
+}
+
+// ─── Il materiale che mandiamo al terzista (dalla 0.154.0) ───
+// Una voce per tratta: le fasi consecutive dallo stesso terzista lavorano lo
+// stesso pezzo, che parte una volta sola (clLineRole, views-stock.js). Le
+// righe scritte a mano non hanno una parte, e non mandano niente di noto.
+function odlMaterialeInviato(o) {
+  return (o.lines || []).filter(l => l.phaseKey && clLineRole(o, l).prima === l).map(l => {
+    const it = getItem(clPhaseItemId(l));
+    return { code: l.code || (it && it.code) || '', name: it ? it.name || '' : '',
+      qty: Number(l.qty) || 0, uom: l.uom || '', startDate: l.startDate || '',
+      disegno: it && it.drawingRef ? `Dis. ${it.drawingRef} rev. ${itemRev(it)}` : '' };
+  });
+}
+// La merce in conto lavorazione viaggia con il nostro DDT, causale «conto
+// lavorazione», e torna con un DDT del terzista che lo cita.
+function odlTestoDdt(o) {
+  const ddt = o.shipDdt ? `n° ${o.shipDdt}` : '';
+  return `Il materiale viaggia con nostro DDT ${ddt ? ddt + ' ' : ''}causale «conto lavorazione»: riportarne il riferimento sul DDT di reso / `
+    + `Material is shipped with our delivery note ${ddt ? ddt + ' ' : ''}for processing: please quote it on your return delivery note`;
 }
 
 // ─── Documento dell'ordine di lavoro ───
@@ -1084,7 +1108,7 @@ function exportOdlPDF(id, modo) {
   const doc = new jsPDF({ orientation: 'landscape' });
   // Come sull'ordine d'acquisto: il QR apre la scheda rapida dell'ODL.
   if (o.number) qrPdfDraw(doc, qrLink('odl', o.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
-  const startY = docPdfTesta(doc, { titolo: 'Ordine di lavoro / Subcontract Order', rec: o,
+  const startY = docPdfTesta(doc, { titolo: 'Ordine di lavoro / Subcontract Order', rec: o, kind: 'workOrder',
     chi: 'COMMITTENTE / PRINCIPAL', controparte: 'TERZISTA / SUBCONTRACTOR', vuota: '(terzista non selezionato / not selected)' });
   const head = ['#', 'Parte\nPart', 'Lavorazione\nOperation', 'Pezzi\nQty', 'Tariffa\nUnit rate', 'Importo\nAmount',
     'Inizio lavoro\nWork start', 'Data consegna\nDelivery date'];
@@ -1098,13 +1122,24 @@ function exportOdlPDF(id, modo) {
   const totVal = { content: fmtN(odlTotal(o)), styles: { fontStyle: 'bold' } };
   doc.autoTable({ startY, head: [head], body, foot: [['', '', '', '', totLabel, totVal, '', '']],
     styles: { fontSize: 8 }, headStyles: { fillColor: [46, 164, 121] }, footStyles: { fillColor: [235, 242, 238], textColor: 20 } });
+  // Il materiale che parte con l'ordine (dalla 0.154.0): il terzista sa che
+  // cosa gli arriva e con quale DDT, e lo riporta sul DDT di reso.
+  const mat = odlMaterialeInviato(o);
+  if (mat.length) {
+    doc.autoTable({ startY: doc.lastAutoTable.finalY + 6,
+      head: [['Materiale che vi inviamo / Material sent for processing', 'Pezzi\nQty', 'Invio\nShipping date']],
+      body: mat.map(m => [[m.code, m.name, m.disegno].filter(Boolean).join(' — '), (fmtQtyIt(m.qty) + ' ' + (m.uom || '')).trim(), fmtDateIt(m.startDate)]),
+      styles: { fontSize: 8 }, headStyles: { fillColor: [120, 130, 140] } });
+  }
   doc.setTextColor(80); doc.setFontSize(9);
   // Solo o.notes: le note interne (notesInternal) non escono mai sul documento.
   docCoda(doc, [
+    { etichetta: 'DDT di invio / Delivery note', testo: odlTestoDdt(o) },
     { etichetta: 'Trasporto / Shipping', testo: o.transport },
     { etichetta: 'Pagamento / Payment', testo: o.payment },
     { etichetta: 'Conferma terzista / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
+    { etichetta: 'Importante / Important', testo: DOC_RIF_DDT },
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('workOrder', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOdl,
     domanda: `PDF generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?` });
@@ -1115,7 +1150,9 @@ function exportOdlExcel(id) {
   const data = docXlsTesta({ titolo: 'Ordine di lavoro / Subcontract Order', rec: o, chi: 'COMMITTENTE', controparte: 'TERZISTA', voci: [
     ['Da richiesta', o.rfqId && getRfq(o.rfqId) ? getRfq(o.rfqId).number : ''],
     ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
-    ['Conferma terzista / Order confirmation', o.supplierConfirmation]] });
+    ['Conferma terzista / Order confirmation', o.supplierConfirmation],
+    ['DDT di invio / Delivery note', odlTestoDdt(o)],
+    ['Importante / Important', DOC_RIF_DDT]] });
   data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', `Tariffa (${cur()}/pz)`, `Importo (${cur()})`, 'Inizio lavoro', 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
   (o.lines || []).forEach((l, i) => {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? '' : Number(l.price);
@@ -1125,6 +1162,12 @@ function exportOdlExcel(id) {
   });
   data.push([]);
   data.push(['', 'TOTALE IMPONIBILE / TOTAL', odlTotal(o)]);
+  const mat = odlMaterialeInviato(o);
+  if (mat.length) {
+    data.push([]);
+    data.push(['', 'Materiale che vi inviamo', 'Descrizione', 'Pezzi', 'U.M.', 'Invio', 'Disegno']);
+    mat.forEach(m => data.push(['', m.code, m.name, m.qty, m.uom || '', fmtDateIt(m.startDate), m.disegno]));
+  }
   if (!docXlsSalva(data, o, 'Ordine di lavoro', 'ordine')) return;
   askMarkSent(o, `Excel generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?`, 'inviato', renderOdl);
 }

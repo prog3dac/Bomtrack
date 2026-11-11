@@ -2,6 +2,29 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.154.0 — 2026-11-11
+
+**Documenti: la barra dei comandi a sinistra e testate più compatte.**
+- Richieste di offerta, ordini a fornitore, ordini di lavoro, ordini di produzione, commesse e piani hanno la stessa pagina: il **numero in alto al centro** e, a sinistra, una **barra che resta ferma mentre si scorre** con Chiudi e ⋯, Salva, il passo successivo, Storia, gli stati in colonna, l'avviso di documento protetto con Sblocca, Genera PDF / Excel (o Esporta), i collegati e chi ha creato e aggiornato il documento. Prima stavano in quattro riquadri sopra la testata, e i pulsanti PDF/Excel in fondo alla pagina.
+- **Lo stato si cambia dalla barra**: la tendina sta in cima alla sezione Stato, sopra i passi, e non più fra i campi della testata.
+- La pagina si allarga nei margini che restavano vuoti (fino a 1440 px): la scheda resta larga come prima.
+- **I campi della testata sono larghi quanto il loro contenuto**: date e quantità non occupano più un terzo o metà della scheda. Note e note interne stanno affiancate su una riga e si allungano quando si scrive di più.
+- Gli indicatori (ordinato, ricevuto, pezzi, fasi…) stanno in **una striscia sola** invece che in schede grandi che andavano a capo.
+- Nella commessa i documenti collegati sono **tessere su più colonne**, con il conteggio accanto al titolo; un clic sulla tessera apre il documento.
+- Le spiegazioni lunghe (fasi dell'ODP, lavorazioni dell'ODL) si aprono da **Come funziona**.
+- Sotto i 1100 px la barra va sotto il numero e Salva con il passo successivo restano in una **fascia fissa in basso**.
+- La riga d'ordine con il fornitore, la ricerca e l'elenco dei documenti a destra non cambiano.
+
+**Documenti per i fornitori: i dati che mancavano sul foglio.**
+- Sulle righe di richieste, ordini e ordini di lavoro escono il **disegno con la revisione** dell'articolo e il **certificato** che chiede il suo piano di controllo (con il modulo Qualità attivo). Nell'Excel, colonna *Disegno / certificato*.
+- Accanto alla data, la **revisione del documento** quando è già in archivio ed è cambiato («Rev. 2 — sostituisce la rev. 1»), e in fondo a ogni foglio **«Pagina X di Y»**.
+- Ordini e ordini di lavoro chiedono di **indicare n° ordine e riga su DDT e fattura**.
+- Nei **Dati azienda**: codice fiscale, codice destinatario SDI e PEC, stampati nel nostro blocco.
+- Ordine: campo **Vostra offerta n° / del**. Richiesta di offerta: campo **Rispondere entro**. Tutti e due in testata e sul PDF.
+- Ordine di lavoro: tabella **Materiale che vi inviamo** e la frase sul **DDT di invio in conto lavorazione**, con il numero dal nuovo campo *DDT di invio*.
+
+**Schema: cambia.** Nuove colonne `rfqs.reply_by`, `orders.supplier_quote` e `work_orders.ship_ddt`, `schema_versione` 7. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+
 ### 0.153.0 — 2026-11-11
 
 **Taratura degli strumenti di misura: un modulo nuovo, agganciato alla Qualità.**

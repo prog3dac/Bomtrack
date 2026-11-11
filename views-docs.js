@@ -35,8 +35,10 @@ function docLockBanner(mode, kind, docKind, id) {
   // su un id di ordine di lavoro non trova niente e torna in silenzio — il
   // pulsante c'era e non sbloccava nulla.
   const fn = { order: 'ordUnlock', odl: 'odlUnlock', odp: 'odpUnlock' }[docKind] || 'rfqUnlock';
-  return `<div class="doc-lock-banner">
-    <span>${ico('lock', 'tinted', '')} ${esc(kind)} — i dati sono protetti dalle modifiche accidentali. ${what}; note e stato restano sempre modificabili.</span>
+  // Dalla 0.154.0 sta nella barra a sinistra: la frase è più corta, quella
+  // intera resta nel suggerimento.
+  return `<div class="doc-lock-banner" title="${esc(kind)} — i dati sono protetti dalle modifiche accidentali. ${esc(what)}; note e stato restano sempre modificabili.">
+    <span>${ico('lock', 'tinted', '')} Protetto. ${esc(what)}; note e stato sempre.</span>
     <button class="btn-outline" onclick="${fn}('${esc(id)}')">${ico('unlock', 'tinted', '')} Sblocca per modifica</button></div>`;
 }
 // Disabilita in un passaggio gli input marcati, invece di condizionare ogni template.
@@ -196,7 +198,8 @@ const DOC_KINDS = {
     currentId: () => currentOdlId,
     saveBtnId: 'odl-save-btn', exportBtnClass: 'odl-export-btn',
     dirtyHint: "Salva l'ordine di lavoro prima di generare il documento",
-    opsFields: ['status', 'notes', 'notesInternal', 'supplierConfirmation'],
+    // Il DDT di invio si fa dopo l'ordine: si scrive anche a ordine protetto.
+    opsFields: ['status', 'notes', 'notesInternal', 'supplierConfirmation', 'shipDdt'],
     lineLock: field => (field === 'received' || field === 'confirmedDate') ? 'reception' : 'contract',
     numLineFields: ['qty', 'price', 'received'],
     newLineExtra: () => ({ received: 0, startDate: '', phaseKey: null, phaseKeys: null, odpId: null, odpPhaseId: null }),
@@ -533,7 +536,11 @@ function docAddCatalogLines(k, id, ids) {
 function docPartyLines(e, bilingue) {
   if (!e) return [];
   const iva = bilingue ? 'P.IVA / VAT ' : 'P.IVA ';
-  return [e.name, ...addressLines(e), e.vat ? iva + e.vat : '', e.referente, e.email, e.phone]
+  // Codice fiscale, codice destinatario e PEC (dalla 0.154.0) li ha solo la
+  // nostra azienda: servono al fornitore per intestare la fattura elettronica.
+  const fatt = [e.fiscalCode && e.fiscalCode !== e.vat ? 'C.F. ' + e.fiscalCode : '',
+    e.sdi ? 'SDI ' + e.sdi : '', e.pec ? 'PEC ' + e.pec : ''].filter(Boolean).join(' · ');
+  return [e.name, ...addressLines(e), e.vat ? iva + e.vat : '', fatt, e.referente, e.email, e.phone]
     .map(s => s || '').filter(Boolean);
 }
 // ─── La coda di un documento stampato: trasporto, pagamento, note ───
@@ -604,64 +611,88 @@ function docLineActionsCell(pfx, id, l) {
 }
 // Chiudi, numero, stato, Salva e il menu «⋯».
 //   o = { chiudi, cosa, rec, stati, dirty, saveId, salva, menu }
-function docToolbarHtml(o) {
-  return `<div class="bom-toolbar">
-      <div class="bom-toolbar-left">
-        ${worklistCloseBtn(o.chiudi, o.cosa)}
-        <h2 class="section-title" style="font-family:var(--mono)">${esc(o.rec.number)}</h2>
-        ${statusBadge(o.stati, o.rec.status)}
-        ${o.storia || ''}
-        <button class="add-btn-sm rfq-save-btn ${o.dirty ? 'dirty' : ''}" id="${o.saveId}" onclick="${o.salva}">${ico('save', 'tinted', '')} Salva</button>
-      </div>
-      <div class="bom-toolbar-right">
-        ${menuAltro(o.menu)}
-      </div>
-    </div>`;
+// ─── La pagina di un documento (dalla 0.154.0) ───
+// Al centro, in alto, il numero; a sinistra una barra che resta ferma mentre si
+// scorre, con tutto ciò che agisce sul documento intero: Salva, il passo
+// successivo, lo stato, la protezione, i documenti da generare, i collegati.
+// Prima stavano in quattro riquadri sopra la testata, e in un ordine di
+// quaranta righe per salvare o stampare bisognava tornare in cima o scendere
+// in fondo. Sotto i 1100 px la barra scorre con la pagina e Salva col passo
+// successivo restano in una fascia fissa in basso.
+//   o = { numero, icona, rail, corpo } — rail come in docRailHtml
+function docPaginaHtml(o) {
+  return `<div class="doc-page">
+    <div class="doc-head"><h2 class="doc-head-num">${o.icona || ''}<span>${esc(o.numero || '')}</span></h2></div>
+    ${docRailHtml(o.rail)}
+    <div class="manage-wrap">${o.corpo}</div>
+  </div>`;
+}
+//   o = { k, rec, chiudi, cosa, menu, salva: { id, azione, dirty }, comandi,
+//         lock, esporta, sezioni: [{ titolo, html }] }
+// `k` è la chiave di DOC_FLOW: senza (il piano) la sezione Stato non c'è.
+function docRailHtml(o) {
+  const r = o.rec;
+  const salva = o.salva ? `<button class="add-btn-sm rfq-save-btn ${o.salva.dirty ? 'dirty' : ''}" id="${o.salva.id}" onclick="${o.salva.azione}">${ico('save', 'tinted', '')} Salva</button>` : '';
+  const passo = o.k ? docProssimoHtml(o.k, r) : '';
+  const passi = o.k ? docPassiHtml(o.k, r) : '';
+  const links = o.k ? docLinksHtml(o.k, r) : '';
+  const sez = (titolo, html) => html ? `<div class="doc-rail-sez">${titolo ? `<div class="doc-rail-t">${titolo}</div>` : ''}${html}</div>` : '';
+  // La tendina dello stato sta qui dalla 0.154.0, sopra i passi: chi guarda a
+  // che punto è il documento lo cambia nello stesso posto.
+  const stato = o.stato ? `<select class="doc-rail-stato" aria-label="Stato" onchange="${o.stato.azione}">
+        ${Object.entries(o.stato.stati).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+      </select>` : '';
+  return `<aside class="doc-rail" aria-label="Comandi ${esc(o.cosa)}">
+      <div class="doc-rail-top">${worklistCloseBtn(o.chiudi, o.cosa)}${menuAltro(o.menu)}</div>
+      ${salva || passo ? `<div class="doc-rail-azioni">${salva}${passo}</div>` : ''}
+      ${sez('', o.comandi)}
+      ${sez('Stato', stato + passi)}
+      ${o.lock || ''}
+      ${sez('Documento', o.esporta)}
+      ${(o.sezioni || []).map(x => sez(x.titolo, x.html)).join('')}
+      ${sez('Collegati', links)}
+      ${stampLine(r)}
+    </aside>`;
 }
 // Titolo, controparte, data, stato, condizioni e note.
-//   o = { pfx, rec, stati, controparte, data, conferma?, note }
+//   o = { pfx, rec, controparte, data, conferma?, note, rispondere?, offerta?, ddt? }
 // `conferma` è l'etichetta del numero di conferma della controparte: la
 // richiesta d'offerta non ce l'ha.
 function docTestaHtml(o) {
   const r = o.rec, id = r.id;
   const campo = (k, v) => `onchange="${o.pfx}SetField('${id}','${k}',${v || 'this.value'})"`;
   const opzioni = arr => (arr || []).map(x => `<option value="${esc(x)}"></option>`).join('');
-  return `<div class="rfq-head">
-      <div class="modal-field"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>${o.controparte}</label><select class="lock-contract sel-cerca" onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
-        <div class="modal-field"><label>${o.data}</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" ${campo('date')}></div>
-        <div class="modal-field"><label>Stato</label><select ${campo('status')}>
-          ${Object.entries(o.stati).map(([k, v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-        </select></div>
-      </div>
-      <div class="rfq-head-row">
-        <div class="modal-field"><label>Tipo di trasporto / resa</label>
-          <input list="${o.pfx}-transport-opts" class="lock-contract" value="${esc(r.transport || '')}" placeholder="es. Porto franco, EXW, DAP…" ${campo('transport')}>
-          <datalist id="${o.pfx}-transport-opts">${opzioni(db.settings.transportOptions)}</datalist></div>
-        <div class="modal-field"><label>Tipo di pagamento</label>
-          <input list="${o.pfx}-payment-opts" class="lock-contract" value="${esc(r.payment || '')}" placeholder="es. Bonifico 30gg, RiBa 60gg…" ${campo('payment')}>
-          <datalist id="${o.pfx}-payment-opts">${opzioni(db.settings.paymentOptions)}</datalist></div>
-      </div>
-      ${o.conferma ? `<div class="rfq-head-row">
-        <div class="modal-field"><label>${o.conferma}</label><input value="${esc(r.supplierConfirmation || '')}" ${campo('supplierConfirmation')}></div>
-      </div>` : ''}
-      <div class="modal-field"><label>${o.note}</label><textarea rows="2" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
-      <div class="modal-field"><label>${ico('lock', 'tinted', '')} Note interne (non stampate sui documenti)</label><textarea rows="2" class="notes-internal" ${campo('notesInternal')}>${esc(r.notesInternal || '')}</textarea></div>
+  // Dalla 0.154.0 i campi scorrono in righe e ognuno è largo quanto serve
+  // (style.css, .testa): una data non occupa più un terzo della scheda.
+  return `<div class="rfq-head testa">
+      <div class="modal-field campo-xl"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
+      <div class="modal-field campo-l"><label>${o.controparte}</label><select class="lock-contract sel-cerca" onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
+      <div class="modal-field campo-s"><label>${o.data}</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" ${campo('date')}></div>
+      ${o.rispondere ? `<div class="modal-field campo-s"><label>Rispondere entro</label><input type="date" class="lock-contract" value="${esc((r.replyBy || '').slice(0, 10))}" ${campo('replyBy')}></div>` : ''}
+      ${o.offerta ? `<div class="modal-field campo-m"><label>Vostra offerta n° / del</label><input class="lock-contract" value="${esc(r.supplierQuote || '')}" placeholder="es. 245 del 03/11/2026" ${campo('supplierQuote')}></div>` : ''}
+      ${o.conferma ? `<div class="modal-field campo-m"><label>${o.conferma}</label><input value="${esc(r.supplierConfirmation || '')}" ${campo('supplierConfirmation')}></div>` : ''}
+      ${o.ddt ? `<div class="modal-field campo-m"><label>DDT di invio (conto lavorazione)</label><input value="${esc(r.shipDdt || '')}" placeholder="es. 87 del 12/11/2026" ${campo('shipDdt')}></div>` : ''}
+      <div class="modal-field campo-m"><label>Trasporto / resa</label>
+        <input list="${o.pfx}-transport-opts" class="lock-contract" value="${esc(r.transport || '')}" placeholder="es. Porto franco, EXW, DAP…" ${campo('transport')}>
+        <datalist id="${o.pfx}-transport-opts">${opzioni(db.settings.transportOptions)}</datalist></div>
+      <div class="modal-field campo-m"><label>Pagamento</label>
+        <input list="${o.pfx}-payment-opts" class="lock-contract" value="${esc(r.payment || '')}" placeholder="es. Bonifico 30gg, RiBa 60gg…" ${campo('payment')}>
+        <datalist id="${o.pfx}-payment-opts">${opzioni(db.settings.paymentOptions)}</datalist></div>
+      <div class="modal-field campo-nota"><label>${o.note}</label><textarea rows="${righeNota(r.notes)}" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
+      <div class="modal-field campo-nota"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label><textarea rows="${righeNota(r.notesInternal)}" class="notes-internal" ${campo('notesInternal')}>${esc(r.notesInternal || '')}</textarea></div>
     </div>`;
 }
-// «Genera documento PDF / Excel», spenti finché il documento non è salvato.
-// Sotto, le copie già in archivio (documenti.js).
-//   o = { etichetta, cls, pdf, xls, dirty, cosa, kind, rec }
-function docExportBarHtml(o) {
+// Una nota vuota occupa una riga; una scritta su più righe si mostra intera,
+// fino a sei.
+function righeNota(t) { return Math.min(6, Math.max(1, String(t || '').split('\n').length)); }
+// «PDF» ed «Excel» nella barra a sinistra, spenti finché il documento non è
+// salvato. Le copie già in archivio restano in fondo alla pagina (documenti.js).
+//   o = { cls, pdf, xls, dirty, cosa }
+function docExportBtnsHtml(o) {
   const dis = o.dirty ? `disabled title="Salva ${o.cosa} prima di generare il documento"` : '';
-  return `<div class="rfq-export-bar">
-      <label>${o.etichetta}</label>
-      <button class="export-btn-pdf ${o.cls}" onclick="${o.pdf}" ${dis}>${ico('file', 'tinted', '')} Genera documento PDF</button>
-      <button class="export-btn-xls ${o.cls}" onclick="${o.xls}" ${dis}>${ico('sheet', 'tinted', '')} Genera documento Excel</button>
-      ${o.dirty ? '<span class="rfq-dirty-hint">Salva per abilitare la generazione del documento</span>' : ''}
-    </div>
-    ${o.kind && !o.dirty ? docEmessiHtml(o.kind, o.rec) : ''}`;
+  return `<button class="export-btn-pdf ${o.cls}" onclick="${o.pdf}" ${dis}>${ico('file', 'tinted', '')} Genera PDF</button>
+      <button class="export-btn-xls ${o.cls}" onclick="${o.xls}" ${dis}>${ico('sheet', 'tinted', '')} Genera Excel</button>
+      ${o.dirty ? '<span class="rfq-dirty-hint">Salva per generare il documento</span>' : ''}`;
 }
 // Il nome del file: numero e controparte, senza i caratteri che un disco rifiuta.
 function docNomeFile(rec, sup, ripiego, ext) {
@@ -669,14 +700,21 @@ function docNomeFile(rec, sup, ripiego, ext) {
 }
 // La testata del PDF: titolo col numero, data, oggetto, e i due blocchi di chi
 // ordina e di chi riceve. Restituisce la y da cui parte la tabella delle righe.
-//   o = { titolo, rec, chi, controparte, vuota, xControparte }
+//   o = { titolo, rec, chi, controparte, vuota, xControparte, kind?, righe? }
+// `kind` (dalla 0.154.0) stampa la revisione accanto alla data; `righe` sono
+// altre voci di testata ([etichetta, valore]), una per riga, quelle vuote no.
 function docPdfTesta(doc, o) {
   const r = o.rec;
   doc.setFontSize(15); doc.setTextColor(30); doc.text(`${o.titolo} — ${r.number}`, 14, 16);
   doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`Data / Date: ${fmtDateIt(r.date) || fmtDateIt(nowISO())}`, 14, 22);
-  if (r.title) doc.text(`Oggetto / Subject: ${r.title}`, 14, 27);
-  const yTop = 36;
+  const rev = o.kind ? docRevisioneTesto(o.kind, r) : '';
+  doc.text(`Data / Date: ${fmtDateIt(r.date) || fmtDateIt(nowISO())}${rev ? '   ·   ' + rev : ''}`, 14, 22);
+  let y = 22;
+  if (r.title) doc.text(`Oggetto / Subject: ${r.title}`, 14, y += 5);
+  (o.righe || []).filter(x => x && x[1]).forEach(([etichetta, valore]) => {
+    doc.setTextColor(30); doc.text(`${etichetta}: ${valore}`, 14, y += 5); doc.setTextColor(90);
+  });
+  const yTop = Math.max(36, y + 9);
   const block = (x, title, rowsTxt) => {
     doc.setFontSize(8); doc.setTextColor(130); doc.text(title, x, yTop);
     doc.setFontSize(9); doc.setTextColor(40);
@@ -896,7 +934,29 @@ function lineOriginTag(l) {
   if (l.phaseKey) return ` <span class="rfq-clavoro-tag" title="Lavorazione in conto lavoro, non un articolo a magazzino: i pezzi rientrati portano l'ordine a evaso, mentre il magazzino lo muovono i movimenti di conto lavoro o, se la riga viene da un ordine di produzione, la dichiarazione su quell'ordine.">conto lavoro</span>`;
   return ' <span class="rfq-manual-tag">manuale</span>';
 }
-function lineDescDoc(l) { return l.note ? (l.description || '') + '\n' + l.note : (l.description || ''); }
+function lineDescDoc(l) { return [l.description || '', l.note || '', ...lineExtraDoc(l)].filter(Boolean).join('\n'); }
+// ─── Disegno e certificato sulla riga (dalla 0.154.0) ───
+// Per una parte a disegno il riferimento con la revisione è *il* dato che
+// evita di ricevere il pezzo vecchio; il certificato del piano di controllo va
+// chiesto prima, non scoperto al ricevimento. L'articolo è quello della riga,
+// o la parte che il terzista lavora su un ordine di lavoro.
+function lineArticoloDoc(l) {
+  if (!l) return null;
+  if (l.itemId) return getItem(l.itemId) || null;
+  const parte = l.phaseKey ? clPhaseItemId(l) : '';
+  return parte ? getItem(parte) || null : null;
+}
+function lineExtraDoc(l) {
+  const it = lineArticoloDoc(l);
+  if (!it) return [];
+  const out = [];
+  if (it.drawingRef) out.push(`Dis. / Drw. ${it.drawingRef} rev. ${itemRev(it)}`);
+  const piano = (typeof qcAttivo === 'function' && qcAttivo()) ? qcPianoPer(it) : null;
+  if (piano && piano.cert) out.push(`Certificato richiesto / Certificate required: ${piano.cert}`);
+  return out;
+}
+// La frase che fa abbinare il DDT e la fattura all'ordine senza telefonate.
+const DOC_RIF_DDT = 'Indicare il n° ordine e il n° di riga su DDT e fattura / Please quote our order no. and line no. on delivery note and invoice';
 
 // ═══════════════════════════════════════════════════════════
 //  A CHE PUNTO È, E DA DOVE VIENE (0.93.0)
@@ -967,7 +1027,9 @@ function docAdvance(k, id, status) {
   docSetField(k, id, 'status', status);
   if (d.status !== prima) docSave(k, id);
 }
-function docStepperHtml(k, d) {
+// I passi in colonna, quello attuale acceso. Un documento fuori dal giro
+// (annullato) li mostra spenti e lo dice.
+function docPassiHtml(k, d) {
   const flow = DOC_FLOW[k]; if (!flow || !d) return '';
   const map = docFlowStatusMap(k);
   const fuori = flow.fuori.includes(d.status);
@@ -976,13 +1038,17 @@ function docStepperHtml(k, d) {
     const cls = fuori ? 'off' : (i < at ? 'done' : (i === at ? 'now' : ''));
     return `<li class="doc-step ${cls}"${i === at && !fuori ? ' aria-current="step"' : ''}><span class="doc-step-dot" aria-hidden="true">${i < at && !fuori ? '✓' : i + 1}</span>${esc(map[s] || s)}</li>`;
   }).join('');
-  const next = fuori ? null : docNextStep(k, d);
-  const coda = fuori
-    ? `<span class="doc-step-note">${ico('blocked', 'tinted', '')} ${esc(map[d.status] || d.status)}: fuori dal giro.</span>`
-    : !next ? `<span class="doc-step-note">${ico('check', 'tinted', '')} Giro completato.</span>`
-      : next.azione ? `<button class="add-btn-sm doc-step-next" onclick="${next.azione}">${ico(next.icona || 'check', 'tinted', '')} ${esc(next.etichetta)}</button>`
-        : `<span class="doc-step-note">${esc(next.suggerimento)}</span>`;
-  return `<div class="doc-flow"><ol class="doc-steps" aria-label="Avanzamento">${passi}</ol><div class="doc-step-next-wrap">${coda}</div></div>`;
+  return `<ol class="doc-steps" aria-label="Avanzamento">${passi}</ol>${fuori
+    ? `<span class="doc-step-note">${ico('blocked', 'tinted', '')} ${esc(map[d.status] || d.status)}: fuori dal giro.</span>` : ''}`;
+}
+// Il passo successivo: un pulsante quando l'app sa farlo da sé, altrimenti una
+// riga che dice cosa manca.
+function docProssimoHtml(k, d) {
+  const flow = DOC_FLOW[k]; if (!flow || !d || flow.fuori.includes(d.status)) return '';
+  const next = docNextStep(k, d);
+  return `<div class="doc-step-next-wrap">${!next ? `<span class="doc-step-note">${ico('check', 'tinted', '')} Giro completato.</span>`
+    : next.azione ? `<button class="add-btn-sm doc-step-next" onclick="${next.azione}">${ico(next.icona || 'check', 'tinted', '')} ${esc(next.etichetta)}</button>`
+      : `<span class="doc-step-note">${esc(next.suggerimento)}</span>`}</div>`;
 }
 // ─── I documenti collegati ───
 // Una voce = { tipo, id, numero, ruolo }. Il tipo è quello di homeApri, che sa
@@ -1008,7 +1074,7 @@ function docLinksHtml(k, d) {
   const v = docLinks(k, d).filter(x => !HOME_APRI_VISTA[x.tipo] || vistaAttiva(HOME_APRI_VISTA[x.tipo]));
   if (!v.length) return '';
   const icona = { job: 'clipboard', plan: 'list', rfq: 'mail', order: 'receipt', odl: 'wrench', odp: 'factory' };
-  return `<div class="doc-links"><span class="doc-links-label">Collegati</span>${v.map(x =>
+  return `<div class="doc-links">${v.map(x =>
     `<button type="button" class="doc-link" onclick="homeApri('${x.tipo}','${x.id}')" title="Apri ${esc(x.ruolo)} ${esc(x.numero)}">${ico(icona[x.tipo] || 'file', 'tinted', '')} <span class="doc-link-role">${esc(x.ruolo)}</span> <span class="doc-link-num">${esc(x.numero)}</span></button>`).join('')}</div>`;
 }
 
@@ -1392,15 +1458,16 @@ function renderRfqEdit(id) {
     || `<tr><td colspan="6" class="empty-text">Nessuna riga. Aggiungi articoli dal catalogo o manualmente.</td></tr>`;
   const mode = rfqMode(r);
   const lockBanner = docLockBanner(mode, 'Richiesta ' + (RFQ_STATUS[r.status] || r.status).toLowerCase(), 'rfq', id);
-  return `<div class="manage-wrap">
-    ${docToolbarHtml({ chiudi: 'rfqBackToList()', cosa: 'la richiesta', rec: r, storia: storiaBtn('rfq', r.id), stati: RFQ_STATUS, dirty: rfqDirty,
-      saveId: 'rfq-save-btn', salva: `rfqSave('${id}')`, menu: [
-        { label: 'Crea ordine da questa richiesta', icon: 'receipt', onclick: `orderFromRfq('${id}')` },
-        { label: 'Elimina la richiesta', icon: 'trash', onclick: `delRfq('${id}')`, danger: true },
-      ] })}
-    ${docStepperHtml('rfq', r)}${docLinksHtml('rfq', r)}
-    ${docCoWarnHtml()}${lockBanner}${stampLine(r)}
-    ${docTestaHtml({ pfx: 'rfq', rec: r, stati: RFQ_STATUS, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore' })}
+  return docPaginaHtml({ numero: r.number, rail: { k: 'rfq', rec: r, chiudi: 'rfqBackToList()', cosa: 'la richiesta',
+    stato: { stati: RFQ_STATUS, azione: `rfqSetField('${id}','status',this.value)` },
+    menu: [
+      { label: 'Crea ordine da questa richiesta', icon: 'receipt', onclick: `orderFromRfq('${id}')` },
+      { label: 'Elimina la richiesta', icon: 'trash', onclick: `delRfq('${id}')`, danger: true },
+    ],
+    salva: { id: 'rfq-save-btn', azione: `rfqSave('${id}')`, dirty: rfqDirty }, comandi: storiaBtn('rfq', r.id), lock: lockBanner,
+    esporta: docExportBtnsHtml({ cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta' }) },
+  corpo: `${docCoWarnHtml()}
+    ${docTestaHtml({ pfx: 'rfq', rec: r, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore', rispondere: true })}
     <h3 class="rfq-subhead">Righe richiesta
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="rfqAddCatalogModal('${id}')">+ Da catalogo</button>
@@ -1416,9 +1483,8 @@ function renderRfqEdit(id) {
         ${th2('Data consegna', '')}
         <th scope="col"></th></tr></thead>
       <tbody>${lines}</tbody></table></div>
-    ${docExportBarHtml({ etichetta: 'Documento di richiesta:', cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta', kind: 'rfq', rec: r })}
     ${rfqPriceBar(r)}
-  </div>`;
+    ${rfqDirty ? '' : docEmessiHtml('rfq', r)}` });
 }
 // I prezzi tornati con l'offerta valgono oltre questa richiesta: da qui
 // diventano quotazioni a listino, riutilizzabili e confrontabili nel tempo.
@@ -1449,7 +1515,8 @@ function exportRfqPDF(id, modo) {
   const hasSup = (r.lines || []).some(l => rfqLineSupInfo(r, l));
   const doc = new jsPDF(hasSup ? { orientation: 'landscape' } : undefined);
   // Documento bilingue IT / EN per fornitori esteri
-  const startY = docPdfTesta(doc, { titolo: 'Richiesta di offerta / Request for Quotation', rec: r,
+  const startY = docPdfTesta(doc, { titolo: 'Richiesta di offerta / Request for Quotation', rec: r, kind: 'rfq',
+    righe: [['Rispondere entro il / Please reply by', fmtDateIt(r.replyBy)]],
     chi: 'RICHIEDENTE / BUYER', controparte: 'FORNITORE / SUPPLIER', vuota: '(fornitore non selezionato / not selected)',
     xControparte: hasSup ? 160 : 110 });
   const head = hasSup
@@ -1480,19 +1547,21 @@ function exportRfqExcel(id) {
   const r = getRfq(id); if (!r) return;
   if (!(r.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const data = docXlsTesta({ titolo: 'Richiesta di offerta', rec: r, chi: 'RICHIEDENTE', controparte: 'FORNITORE', voci: [
+    ['Rispondere entro il / Please reply by', fmtDateIt(r.replyBy)],
     ['Trasporto / Shipping', r.transport], ['Pagamento / Payment', r.payment]] });
   const hasSup = (r.lines || []).some(l => rfqLineSupInfo(r, l));
   // Come nell'ordine: valuta in intestazione, unità nella colonna U.M.
   const hPrezzo = `Prezzo unitario (${cur()}/U.M.)`;
   data.push(hasSup
-    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota']
-    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota']);
+    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']
+    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']);
   (r.lines || []).forEach((l, i) => {
     const si = rfqLineSupInfo(r, l);
     const price = l.price === '' || l.price == null ? '' : l.price;
+    const extra = lineExtraDoc(l).join(' · ');
     data.push(hasSup
-      ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '']
-      : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '']);
+      ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]
+      : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]);
   });
   if (!docXlsSalva(data, r, 'RFQ', 'richiesta')) return;
   askMarkSent(r, `Excel generato.\nSegnare la richiesta ${r.number} come inviata?`, 'inviata', renderRfq);

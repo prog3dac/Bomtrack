@@ -1003,49 +1003,33 @@ function renderOdpEdit(id) {
   const scarti = fasi.reduce((s, f) => s + opScarti(o, f), 0);
   const esterno = fasi.reduce((s, f) => s + (f.supplierId ? (f.costMode === 'orario' ? f.hours * f.rate : f.cost) * (Number(o.qty) || 0) : 0), 0);
   const lockBanner = docLockBanner(mode, 'Ordine di produzione ' + (ODP_STATUS[o.status] || o.status).toLowerCase(), 'odp', id);
-  return `<div class="manage-wrap">
-    <div class="bom-toolbar">
-      <div class="bom-toolbar-left">
-        ${worklistCloseBtn('odpBackToList()', "l'ordine di produzione")}
-        <h2 class="section-title" style="font-family:var(--mono)">${esc(o.number)}</h2>
-        ${statusBadge(ODP_STATUS, o.status)}
-        ${storiaBtn('odp', id)}
-        ${ODP_APERTI.includes(o.status) || o.status === 'completato'
-    ? `<button class="btn-outline" onclick="odpChiudi('${id}')" title="Chiude l'ordine: non si dichiara più niente">${ico('lock', 'tinted', '')} Chiudi</button>` : ''}
-      </div>
-      <div class="bom-toolbar-right">
-        ${menuEsporta(`exportOdpExcel('${id}')`, `exportOdpPDF('${id}')`)}
-        ${menuAltro([
-          o.status !== 'annullato' ? { label: "Annulla l'ordine", icon: 'close', onclick: `odpAnnulla('${id}')` } : null,
-          { label: "Elimina l'ordine di produzione", icon: 'trash', onclick: `delOdp('${id}')`, danger: true },
-        ])}
-      </div>
-    </div>
-    ${docStepperHtml('odp', o)}${docLinksHtml('odp', o)}
-    ${typeof odpRipresaHtml === 'function' ? odpRipresaHtml(o) : ''}
-    ${lockBanner}
-    <div class="modal-grid">
-      <div class="modal-field"><label>${part && isAssembly(part.type) ? esc(typeLabel(part.type)) : 'Parte'}</label>
+  return docPaginaHtml({ numero: o.number, rail: { k: 'odp', rec: o, chiudi: 'odpBackToList()', cosa: "l'ordine di produzione",
+    stato: { stati: ODP_STATUS, azione: `odpCambiaStato('${id}',this.value)` },
+    menu: [
+      o.status !== 'annullato' ? { label: "Annulla l'ordine", icon: 'close', onclick: `odpAnnulla('${id}')` } : null,
+      { label: "Elimina l'ordine di produzione", icon: 'trash', onclick: `delOdp('${id}')`, danger: true },
+    ],
+    comandi: `${storiaBtn('odp', id)}${o.status !== 'completato' && ODP_APERTI.includes(o.status)
+      ? `<button class="btn-outline" onclick="odpChiudi('${id}')" title="Chiude l'ordine: non si dichiara più niente">${ico('lock', 'tinted', '')} Chiudi l'ordine</button>` : ''}`,
+    lock: lockBanner, esporta: menuEsporta(`exportOdpExcel('${id}')`, `exportOdpPDF('${id}')`) },
+  corpo: `${typeof odpRipresaHtml === 'function' ? odpRipresaHtml(o) : ''}
+    <div class="modal-grid testa">
+      <div class="modal-field campo-l"><label>${part && isAssembly(part.type) ? esc(typeLabel(part.type)) : 'Parte'}</label>
         <div class="odp-part">${part ? codeLink(part.id, part.code) : esc(o.code || '')} ${esc(o.name || '')}</div></div>
-      <div class="modal-field"><label>Pezzi da produrre</label>
+      <div class="modal-field campo-xs"><label>Pezzi</label>
         <input type="number" class="num lock-contract" min="0" step="any" value="${esc(String(o.qty || 0))}" onchange="odpSetField('${id}','qty',this.value)"></div>
-      <div class="modal-field"><label>Data</label>
+      <div class="modal-field campo-s"><label>Data</label>
         <input type="date" class="lock-contract" value="${esc((o.date || '').slice(0, 10))}" onchange="odpSetField('${id}','date',this.value)"></div>
-      <div class="modal-field"><label>Serve per</label>
+      <div class="modal-field campo-s"><label>Serve per</label>
         <input type="date" class="lock-contract" value="${esc((o.dueDate || '').slice(0, 10))}" onchange="odpSetField('${id}','dueDate',this.value)"></div>
-      <div class="modal-field"><label>Commessa</label>
+      <div class="modal-field campo-l"><label>Commessa</label>
         <select class="lock-contract" onchange="odpSetField('${id}','jobId',this.value)">${jobOptions(o.jobId || '')}</select></div>
-      <div class="modal-field"><label>Stato</label>
-        <select onchange="odpCambiaStato('${id}',this.value)">
-          ${Object.entries(ODP_STATUS).map(([k, v]) => `<option value="${k}" ${o.status === k ? 'selected' : ''}>${v}</option>`).join('')}
-        </select></div>
-      <div class="modal-field" style="grid-column:1/-1"><label>Note</label>
+      <div class="modal-field campo-nota"><label>Note</label>
         <input class="lock-contract" value="${esc(o.notes || '')}" onchange="odpSetField('${id}','notes',this.value)"></div>
-      <div class="modal-field" style="grid-column:1/-1"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label>
+      <div class="modal-field campo-nota"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label>
         <input class="notes-internal" value="${esc(o.notesInternal || '')}" onchange="odpSetField('${id}','notesInternal',this.value)"></div>
     </div>
-    ${stampLine(o)}
-    <div class="cost-summary">
+    <div class="cost-summary striscia">
       ${kpi('Pezzi lanciati', fmtQtyIt(o.qty), 'accent')}
       ${kpi('Buoni all\'ultima fase', fmtQtyIt(buoni), 'green')}
       ${kpi('Scarti', fmtQtyIt(scarti), scarti > 0 ? 'orange' : '')}
@@ -1057,7 +1041,7 @@ function renderOdpEdit(id) {
     <div class="mrp-section">
       <div class="cycle-section-head"><h3>${ico('wrench', 'tinted pill', '')} Le fasi, in successione</h3>
         ${o.status !== 'bozza' && o.dueDate ? `<button class="btn-outline" onclick="odpReplanAsk('${id}')" title="Ricalcola inizio e fine pianificati delle fasi non chiuse, a ritroso dalla data in cui l'ordine serve">${ico('refresh', 'tinted', '')} Ripianifica</button>` : ''}</div>
-      <p class="empty-text" style="text-align:left;padding:0 0 8px">Una fase non si avvia finché la precedente non è chiusa, e <strong>solo i pezzi buoni proseguono</strong>: uno scarto alla prima fase restringe tutte quelle che seguono. Il magazzino si muove in <strong>due punti soli</strong> — escono i codici del ciclo all'avvio della prima fase, entra il codice della parte sull'ultima. In mezzo non si scrive niente: i pezzi non sono più il materiale e non sono ancora la parte, e <em>dove sono</em> lo dice questa tabella.</p>
+      <details class="doc-info"><summary>${ico('book', 'tinted', '')} Come funziona</summary><p>Una fase non si avvia finché la precedente non è chiusa, e <strong>solo i pezzi buoni proseguono</strong>: uno scarto alla prima fase restringe tutte quelle che seguono. Il magazzino si muove in <strong>due punti soli</strong> — escono i codici del ciclo all'avvio della prima fase, entra il codice della parte sull'ultima. In mezzo non si scrive niente: i pezzi non sono più il materiale e non sono ancora la parte, e <em>dove sono</em> lo dice questa tabella.</p></details>
       <div class="table-wrap"><table>
         <thead><tr>
           <th scope="col" style="width:60px">Fase</th>
@@ -1074,8 +1058,7 @@ function renderOdpEdit(id) {
     ${odpMaterialBlock(o)}
     ${consTempiOdpHtml(o)}
     ${odpDeclBlock(o)}
-    ${odpMovBlock(o)}
-  </div>`;
+    ${odpMovBlock(o)}` });
 }
 function odpPhaseRows(o) {
   const id = o.id;

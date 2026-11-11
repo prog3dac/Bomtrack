@@ -896,8 +896,6 @@ textarea.notes-internal{border-style:dashed}
 
 /* Richieste di offerta (RFQ) */
 .rfq-head{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:0;display:flex;flex-direction:column;gap:10px}
-.rfq-head-row{display:flex;gap:12px;flex-wrap:wrap}
-.rfq-head-row .modal-field{flex:1;min-width:140px}
 /* `modal-field` nasce per le schede modali, dove è lui a distanziare i campi.
    Qui a distanziarli è il gap della colonna: sommati facevano 24px fra una
    riga e l'altra, e la testata occupava mezzo schermo per otto campi. */
@@ -972,7 +970,6 @@ button:disabled{opacity:.4;cursor:not-allowed}
 /* Ordini */
 .ord-ref{font-size:13px;color:var(--text-dim);margin:10px 0}
 /* A che punto è il documento, e cosa gli è legato (0.93.0) */
-.doc-flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin:12px 0;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--card)}
 .doc-steps{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;list-style:none;margin:0;padding:0;flex:1 1 auto}
 .doc-step{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-dim);white-space:nowrap}
 .doc-step + .doc-step::before{content:'';display:inline-block;width:22px;height:1px;background:var(--border);margin:0 8px}
@@ -985,7 +982,6 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .doc-step-next-wrap{flex:0 1 auto;display:flex;align-items:center}
 .doc-step-note{font-size:12.5px;color:var(--text-dim)}
 .doc-links{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px}
-.doc-links-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-right:4px}
 .doc-link{display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12.5px;color:var(--text);cursor:pointer;min-height:28px}
 .doc-link:hover{border-color:var(--accent);color:var(--accent)}
 .doc-link-role{color:var(--text-dim)}
@@ -1021,12 +1017,6 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .rfq-export-bar label{font-size:12px;color:var(--text-dim);font-weight:600}
 .doc-emessi{margin-top:12px}
 .doc-emessi > label{display:block;font-size:12px;color:var(--text-dim);font-weight:600;margin-bottom:6px}
-/* I due generatori di documento (PDF/Excel) sono il gesto che chiude una
-   richiesta, un ordine o un ordine di lavoro: più grandi degli altri pulsanti
-   della barra, per essere il primo bersaglio dell'occhio. */
-.rfq-export-bar .export-btn-pdf,.rfq-export-bar .export-btn-xls{padding:14px 26px;font-size:15px;gap:8px;border-radius:10px;border-width:2px}
-.rfq-export-bar .export-btn-pdf{border-color:var(--red)}
-.rfq-export-bar .export-btn-xls{border-color:var(--green)}
 .rfq-export-bar select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none}
 .rfq-pick-filters{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .rfq-pick-filters .search{flex:1 1 160px;min-width:140px}
@@ -1805,3 +1795,102 @@ select.combo-nascosto{display:none!important}
 .cap-tabelle > summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;color:var(--text-dim)}
 @media print{.cap-centro{break-inside:avoid}.cap-scorri{overflow:visible}}
 .load-ambito{margin:0;padding:8px 12px;font-size:13px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:10px;color:var(--text)}
+
+/* ─── La pagina di un documento (dalla 0.154.0) ───
+   Il numero in alto al centro, a sinistra la barra dei comandi che resta ferma
+   mentre si scorre (views-docs.js, docPaginaHtml). La pagina si allarga nei
+   margini che prima restavano vuoti: la scheda resta larga come prima. */
+body:has([id^="view-"].active .doc-page) #app-main{max-width:1440px}
+@media(min-width:1101px){.wl:has(.doc-page){grid-template-columns:minmax(0,1fr) 340px}}
+.doc-page{display:grid;grid-template-columns:200px minmax(0,1fr);grid-template-areas:"rail head" "rail body";gap:12px 16px;align-items:start}
+.doc-head{grid-area:head;display:flex;justify-content:center;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 16px}
+.doc-head-num{margin:0;font-family:var(--mono);font-size:20px;font-weight:700;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
+.doc-page > .manage-wrap{grid-area:body;min-width:0}
+.doc-rail{grid-area:rail;position:sticky;top:calc(70px + var(--subnav-h,0px));background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:12px;display:flex;flex-direction:column;gap:12px;font-size:12.5px;min-width:0}
+.doc-rail-top{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.doc-rail-azioni,.doc-rail-sez{display:flex;flex-direction:column;gap:6px;min-width:0}
+.doc-rail-sez{border-top:1px solid var(--border);padding-top:10px}
+.doc-rail-t{font-size:10.5px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+.doc-rail-stato{width:100%;min-height:34px;margin:4px 0 6px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:13px;font-weight:600;outline:none}
+.doc-rail-stato:focus{border-color:var(--accent)}
+.doc-rail-azioni button,.doc-rail-sez > button,.doc-rail-sez > .dd > summary{width:100%;justify-content:center;padding:8px 10px;font-size:12.5px;min-height:34px}
+.doc-rail-sez > .dd{display:block}
+.doc-rail .doc-step-next-wrap{display:block}
+.doc-rail .doc-step-note{font-size:12px;line-height:1.45}
+.doc-rail .doc-steps{flex-direction:column;align-items:flex-start;gap:6px}
+.doc-rail .doc-step + .doc-step::before{display:none}
+.doc-rail .doc-links{flex-direction:column;align-items:stretch;gap:4px;margin:0}
+.doc-rail .doc-link{justify-content:flex-start;font-size:11.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%}
+.doc-rail .doc-lock-banner{margin:0;flex-direction:column;align-items:stretch;gap:8px;font-size:12px;padding:8px 10px;flex-wrap:nowrap}
+.doc-rail .doc-lock-banner button{width:100%;justify-content:center;padding:6px 10px;font-size:12px;min-height:34px}
+.doc-rail .stamp-line{margin:0;padding-top:8px;font-size:10.5px;line-height:1.5}
+.doc-rail .rfq-dirty-hint{font-size:11px;color:var(--text-dim)}
+@media(min-width:1101px) and (max-width:1360px){.wl:has(.doc-page){grid-template-columns:minmax(0,1fr) 300px}}
+@media(max-width:1360px){
+  .doc-page{grid-template-columns:176px minmax(0,1fr)}
+}
+/* Sotto i 1100 px la barra scorre con la pagina, sotto il numero, e Salva col
+   passo successivo stanno in una fascia fissa in basso. */
+@media(max-width:1100px){
+  .doc-page{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "rail" "body"}
+  .doc-rail{position:static;flex-direction:row;flex-wrap:wrap;align-items:flex-start;gap:10px 18px}
+  .doc-rail-top{flex:1 1 100%}
+  .doc-rail-sez{border-top:0;padding-top:0;flex:1 1 200px}
+  .doc-rail .stamp-line{flex:1 1 100%}
+  .doc-rail .doc-steps{flex-direction:row;flex-wrap:wrap;gap:4px 12px}
+  .doc-rail .doc-links{flex-direction:row;flex-wrap:wrap}
+  .doc-rail{gap:8px 14px;padding:10px 12px}
+  .doc-rail-sez{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 8px}
+  .doc-rail-sez > .doc-rail-t{flex:1 1 100%}
+  .doc-rail-sez > button,.doc-rail-sez > .dd > summary{width:auto;flex:1 1 auto}
+  .doc-rail .doc-lock-banner{flex-direction:row;flex-wrap:wrap;align-items:center;flex:1 1 100%}
+  .doc-rail .doc-lock-banner span{flex:1 1 200px}
+  .doc-rail .doc-lock-banner button{width:auto}
+  .doc-rail-azioni:has(button){position:fixed;left:0;right:0;bottom:0;z-index:45;flex-direction:row;align-items:center;gap:8px;
+    background:var(--card);border-top:1px solid var(--border);padding:8px 12px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -4px 16px var(--shadow-soft)}
+  .doc-rail-azioni:has(button) > *{flex:1 1 0;min-width:0}
+  .doc-rail-azioni:has(button) .doc-step-note{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body:has([id^="view-"].active .doc-rail-azioni button) #app-main{padding-bottom:84px}
+}
+@media print{.doc-page{display:block}.doc-rail{display:none!important}.doc-head{border:none;padding:0 0 8px}}
+
+/* La testata: i campi scorrono in righe, ognuno largo quanto il suo dato. */
+.testa{display:flex;flex-wrap:wrap;gap:10px 14px}
+.rfq-head.testa,.manage-wrap > .modal-grid.testa{display:flex;flex-direction:row;padding:12px 14px}
+.testa > .modal-field{margin:0;min-width:0;flex:1 1 220px;gap:3px}
+.testa > .campo-xs{flex:0 0 96px}
+.testa > .campo-s{flex:0 0 150px}
+.testa > .campo-m{flex:1 1 190px;max-width:300px}
+.testa > .campo-l{flex:1 1 260px;max-width:400px}
+.testa > .campo-xl{flex:2 1 340px}
+.testa > .campo-nota{flex:1 1 calc(50% - 7px);min-width:240px}
+.testa .modal-field input,.testa .modal-field select,.testa .modal-field textarea{padding:7px 10px}
+.testa .modal-field textarea{min-height:34px;resize:vertical}
+.testa .odp-part{padding:7px 0}
+@media(max-width:520px){
+  .testa > .campo-xl,.testa > .campo-l,.testa > .campo-nota{flex:1 1 100%;max-width:none;min-width:0}
+  .testa > .campo-m{flex:1 1 140px;max-width:none}
+  .testa > .campo-s{flex:1 1 130px}
+}
+/* Gli indicatori in una striscia sola, cifra e nome sulla stessa riga. */
+.cost-summary.striscia{display:flex;flex-wrap:wrap;gap:0;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.striscia .kpi-card{border:0;border-radius:0;border-right:1px solid var(--border);display:flex;align-items:baseline;gap:6px;padding:8px 14px;
+  flex:1 1 auto;text-align:left;animation:none;container-type:normal}
+.striscia .kpi-card:last-child{border-right:0}
+.striscia .kpi-value{font-size:16px}
+.striscia .kpi-label{margin:0;font-size:12px}
+html[data-densita="compatta"] .striscia .kpi-card{padding:6px 12px}
+/* Le spiegazioni lunghe si aprono a richiesta. */
+.doc-info{font-size:12.5px;color:var(--text-dim);margin:0 0 8px}
+.doc-info summary{cursor:pointer;color:var(--accent);font-weight:600;display:inline-flex;align-items:center;gap:5px}
+.doc-info p{margin:6px 0 0;line-height:1.6}
+/* I documenti di una commessa: tessere su più colonne, tutta la tessera apre. */
+.doc-tessere{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px}
+.doc-tessera{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;font-size:12.5px;min-width:0;min-height:34px}
+.doc-tessera:hover{border-color:var(--accent)}
+.doc-tessera:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.doc-tessera-num{font-family:var(--mono);white-space:nowrap}
+.doc-tessera-testo{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-tessera-meta{color:var(--text-dim);white-space:nowrap}
+.conta-pill{font-size:11px;font-weight:600;color:var(--text-dim);background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:0 7px;margin-left:4px}

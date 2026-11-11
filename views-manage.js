@@ -328,7 +328,10 @@ function renderCompany() {
       <div class="modal-field"><label>Referente</label><input id="co-ref" value="${esc(co.referente || '')}"></div>
       <div class="modal-field"><label>Email</label><input id="co-email" value="${esc(co.email || '')}"></div>
       <div class="modal-field"><label>Telefono</label><input id="co-phone" value="${esc(co.phone || '')}"></div>
-      <div class="modal-field"><label>P.IVA / C.F.</label><input id="co-vat" value="${esc(co.vat || '')}"></div>
+      <div class="modal-field"><label>P.IVA</label><input id="co-vat" value="${esc(co.vat || '')}"></div>
+      <div class="modal-field"><label>Codice fiscale</label><input id="co-cf" value="${esc(co.fiscalCode || '')}" placeholder="se diverso dalla P.IVA"></div>
+      <div class="modal-field"><label>Codice destinatario SDI</label><input id="co-sdi" value="${esc(co.sdi || '')}" maxlength="7"></div>
+      <div class="modal-field"><label>PEC</label><input id="co-pec" value="${esc(co.pec || '')}"></div>
       ${addressFieldsHtml('co', co)}
     </div>
     <button class="add-btn-sm" onclick="saveCompany()">Salva dati azienda</button></div>`;
@@ -338,6 +341,7 @@ function saveCompany() {
   db.settings.company = Object.assign({
     name: val('co-name'), referente: val('co-ref'), email: val('co-email'),
     phone: val('co-phone'), vat: val('co-vat'),
+    fiscalCode: val('co-cf'), sdi: val('co-sdi').toUpperCase(), pec: val('co-pec'),
   }, readAddressFields('co'));
   saveDB(); renderManage(); savedToast('Dati azienda salvati');
 }

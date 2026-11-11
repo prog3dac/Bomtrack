@@ -58,11 +58,12 @@ describe('Dati azienda', () => {
     scrivi(a, {
       'co-name': 'Officine Rossi srl', 'co-ref': 'Mario', 'co-email': 'm@rossi.it', 'co-phone': '059 1',
       'co-vat': 'IT0123', 'co-street': 'Via Emilia', 'co-num': '12', 'co-zip': '41100', 'co-city': 'Modena',
-      'co-prov': 'mo', 'co-country': 'Italia',
+      'co-prov': 'mo', 'co-country': 'Italia', 'co-cf': 'RSSMRA80A01F257X', 'co-sdi': 'abc1234', 'co-pec': 'rossi@pec.it',
     });
     a.eval('saveCompany()');
     assert.deepEqual(leggi(a, 'db.settings.company'), {
       name: 'Officine Rossi srl', referente: 'Mario', email: 'm@rossi.it', phone: '059 1', vat: 'IT0123',
+      fiscalCode: 'RSSMRA80A01F257X', sdi: 'ABC1234', pec: 'rossi@pec.it',
       street: 'Via Emilia', streetNumber: '12', zip: '41100', city: 'Modena', province: 'MO', country: 'Italia',
     });
   });
