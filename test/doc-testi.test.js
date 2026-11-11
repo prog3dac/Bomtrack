@@ -1,4 +1,4 @@
-// Testi per i documenti (dalla 0.154.1): scritti una volta in Gestione, si
+// Testi per i documenti (dalla 0.155.0): scritti una volta in Gestione, si
 // inseriscono nelle note con «＋ Testo» o escono sempre in fondo al PDF.
 
 const assert = require('node:assert/strict');

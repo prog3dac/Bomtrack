@@ -1163,7 +1163,7 @@ produzione fatto con uno strumento fuori non entra nell'analisi.
 mandare al laboratorio, la storia dello strumento nella scheda «Storia», il
 suggerimento dell'intervallo dalle tarature passate e gli studi R&R.
 
-### G. I testi per i documenti *(censite nella 0.154.1)*
+### G. I testi per i documenti *(censite nella 0.155.0)*
 
 **G1 — non passano dal foglio Excel di Gestione.** `settings.docTexts` viaggia
 con il backup e con l'archivio condiviso (sta nelle impostazioni), ma

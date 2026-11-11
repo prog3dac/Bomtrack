@@ -320,7 +320,7 @@ function termsSetDefault(kind, i) {
   saveDB(); renderManage();
 }
 
-// ─── Testi per i documenti (dalla 0.154.1) ───
+// ─── Testi per i documenti (dalla 0.155.0) ───
 // Le frasi da inserire nelle note di richieste, ordini e ordini di lavoro, o da
 // stampare sempre in fondo (views-docs.js, docTesti). Ogni campo si salva da
 // sé quando si esce, come le righe di un documento.

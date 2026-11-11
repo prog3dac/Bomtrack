@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.154.1 — 2026-11-11
+### 0.155.0 — 2026-11-11
 
 **Testi per i documenti.**
 - Nuova scheda *Gestione → Testi per i documenti*: frasi con titolo e testo, i documenti su cui valgono (richiesta di offerta, ordine, ordine di lavoro) e quando escono.
