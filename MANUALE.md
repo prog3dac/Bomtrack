@@ -3375,8 +3375,27 @@ finita**: il conto fatto in avanti, da oggi.
   se non è ancora partita. Una fase esterna non occupa centri: dura i suoi giorni dal terzista più
   il trasporto (una volta per tratta).
 
-Per ogni centro la coda dice ordine, fase, ore, dal / al e la data in cui l'ordine serve; in
-rosso le fasi di un ordine che finisce dopo. Nella scheda dell'ODP una riga sopra le fasi dice
+**La linea temporale dei centri** (dalla 0.152.0). Per ogni centro una striscia di giorni, con i
+sabati, le domeniche, le chiusure e i fermi in grigio e una linea rossa su **oggi**. Ogni fase che
+impegna il centro è una barra con sopra `ODP · fase`; un clic la apre.
+
+| Pezzo | Colore | Che cos'è |
+|---|---|---|
+| **Attrezzaggio** | arancio | le prime ore della fase. Nel reale è quello **previsto** della fase: le timbrature non lo distinguono dal lavoro |
+| **Lavoro** | blu | le ore che la capacità finita mette in quel giorno |
+| **Attraversamento** | azzurro tratteggiato, o un trattino sottile | i giorni di coda davanti al centro, e i giorni in cui la fase aspetta perché il centro lavora altre fasi |
+| **Reale** | verde | prima di oggi: i giorni timbrati sulla fase (modulo Officina) o, senza timbrature, dall'avvio all'ultima dichiarazione (verde più tenue) |
+| **Pianificato** | riga grigia sotto la barra | le date pianificate dell'ODP: lo scarto dalla barra è il ritardo |
+| **Serve il** | rombo, rosso se l'ordine è in ritardo | la data richiesta dell'ODP |
+
+A sinistra di oggi si legge com'è andata, a destra come andrà. Passando sopra un giorno si leggono
+le ore. Le fasi che non si sovrappongono stanno sulla stessa corsia: il riquadro si allarga solo
+quando il centro lavora più fasi insieme. La linea comincia due settimane prima di oggi e si
+ferma 120 giorni dopo; al telefono scorre di lato e si apre con oggi a sinistra. I grafici della
+saturazione, sopra, restano quelli di prima.
+
+Sotto la linea, chiusa in *Le fasi in tabella*, c'è la coda in tabella: per ogni centro ordine,
+fase, ore, dal / al e la data in cui l'ordine serve; in rosso le fasi di un ordine che finisce dopo. Nella scheda dell'ODP una riga sopra le fasi dice
 la **data fattibile** a capacità finita, e nel Riepilogo c'è il segnale *ordini di produzione in
 ritardo a capacità finita*.
 

@@ -2,6 +2,17 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.152.0 — 2026-11-11
+
+**Carico centri: la linea temporale di ogni centro.**
+- Nella coda a capacità finita ogni centro ha una striscia di giorni, con la linea di oggi, e ogni fase che lo impegna è una barra con il numero dell'ODP e della fase. Un clic apre l'ordine.
+- Dentro la barra si distinguono l'**attrezzaggio** (arancio), il **lavoro** (blu) e l'**attraversamento** (la coda davanti al centro e i giorni in cui la fase aspetta che il centro si liberi).
+- Prima di oggi c'è il **reale**: i giorni timbrati o, senza timbrature, dall'avvio all'ultima dichiarazione, con all'inizio l'attrezzaggio previsto della fase. Una riga grigia sotto la barra mostra il **pianificato** dell'ODP, e un rombo la data in cui serve, rosso se l'ordine è in ritardo.
+- Le fasi che non si toccano stanno sulla stessa corsia. Al telefono la linea scorre di lato e si apre con oggi a sinistra.
+- I grafici della saturazione restano com'erano; la coda in tabella è ancora lì, chiusa sotto «Le fasi in tabella».
+
+Nessun cambio allo schema.
+
 ### 0.151.0 — 2026-11-10
 
 **Correggi le timbrature: l'ora da un solo elenco.**
