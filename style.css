@@ -1759,3 +1759,43 @@ select.combo-nascosto{display:none!important}
 .storia-dato>span:last-child{text-align:right}
 .storia-mono{font-family:var(--mono)}
 @media print{.storia-cerca,.storia-seg{display:none}.storia-tela{max-height:none;overflow:visible}}
+
+/* ─── La linea temporale dei centri (capacita.js, dalla 0.152.0) ─── */
+.cap-linea{display:flex;flex-direction:column;gap:12px;margin:4px 0 12px}
+.cap-legenda{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--text-dim)}
+.cap-leg{display:inline-flex;align-items:center;gap:6px}
+.cap-leg i{display:inline-block;width:18px;height:10px;border-radius:2px}
+.cap-sw-att{background:var(--orange)}
+.cap-sw-lav{background:var(--accent)}
+.cap-sw-coda{background:repeating-linear-gradient(135deg,var(--accent-line) 0 3px,transparent 3px 6px);border:1px solid var(--accent-line)}
+.cap-sw-reale{background:var(--green)}
+.cap-sw-pian{height:3px!important;background:var(--text-dim)}
+.cap-sw-serve{width:10px!important;height:10px!important;background:var(--text);transform:rotate(45deg);border-radius:1px!important}
+.cap-sw-oggi{width:2px!important;height:14px!important;background:var(--red)}
+.cap-centro{margin:0;padding:10px 12px 8px;background:var(--card);border:1px solid var(--border);border-radius:12px;min-width:0}
+.cap-centro figcaption{font-size:13px;margin:0 0 6px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.cap-scorri{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.cap-scorri svg{display:block}
+.cap-chiuso{fill:var(--card-hover)}
+.cap-sett{stroke:var(--border);stroke-width:1}
+.cap-oggi{stroke:var(--red);stroke-width:2}
+.cap-ax{font-size:9.5px;fill:var(--text-dim);font-family:var(--mono)}
+.cap-ax-lun{font-size:10.5px;fill:var(--text);font-weight:600}
+.cap-ax-chiuso{opacity:.5}
+.cap-pian{fill:var(--text-dim)}
+.cap-ambito{fill:var(--accent-soft)}
+.cap-reale{fill:var(--green)}
+.cap-reale-dich{fill:color-mix(in srgb,var(--green) 55%,transparent)}
+.cap-att{fill:var(--orange)}
+.cap-lav{fill:var(--accent)}
+.cap-coda{fill:var(--accent-soft-hi);stroke:var(--accent-line);stroke-width:1;stroke-dasharray:3 2}
+.cap-attesa{fill:var(--accent-line)}
+.cap-serve{fill:var(--text);stroke:var(--card);stroke-width:1.5}
+.cap-serve-rit{fill:var(--red)}
+.cap-etich{font-size:10.5px;font-weight:600;fill:var(--text);font-family:var(--mono);pointer-events:none}
+.cap-etich-rit{fill:var(--red)}
+.cap-fase{cursor:pointer;outline:none}
+.cap-fase:hover rect,.cap-fase:focus rect{filter:brightness(1.15)}
+.cap-fase:focus-visible .cap-etich{text-decoration:underline}
+.cap-tabelle > summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0;color:var(--text-dim)}
+@media print{.cap-centro{break-inside:avoid}.cap-scorri{overflow:visible}}

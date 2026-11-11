@@ -1143,6 +1143,7 @@ function renderLoad() {
     ${loadTableHtml(tab)}
     ${typeof capCodaHtml === 'function' ? capCodaHtml() : ''}
     ${loadItemsHtml(entries)}</div>`;
+  if (typeof capLineaScorri === 'function') capLineaScorri(host);
 }
 function loadSetPlan(id) { loadSoloPiano = id || ''; renderLoad(); }
 function loadSetCentro(id) { loadSoloCentro = id || ''; renderLoad(); }
