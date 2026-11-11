@@ -1762,7 +1762,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 6)
+    'schema_versione', 7)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

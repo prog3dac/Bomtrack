@@ -23,7 +23,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Ordine: campo **Vostra offerta n° / del**. Richiesta di offerta: campo **Rispondere entro**. Tutti e due in testata e sul PDF.
 - Ordine di lavoro: tabella **Materiale che vi inviamo** e la frase sul **DDT di invio in conto lavorazione**, con il numero dal nuovo campo *DDT di invio*.
 
-**Schema: cambia.** Nuove colonne `rfqs.reply_by`, `orders.supplier_quote` e `work_orders.ship_ddt`, `schema_versione` 6. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+**Schema: cambia.** Nuove colonne `rfqs.reply_by`, `orders.supplier_quote` e `work_orders.ship_ddt`, `schema_versione` 7. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
 
 ### 0.153.0 — 2026-11-11
 
