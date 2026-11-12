@@ -111,8 +111,10 @@ describe('Export documenti — il totale torna con le righe', () => {
     const righe = data.slice(iIntest + 1).filter(r => typeof r[0] === 'number');
     assert.equal(righe.length, 3, 'tre righe di dettaglio');
     const somma = righe.reduce((s, r) => s + (Number(r[iImporto]) || 0), 0);
-    const tot = data.find(r => r[1] === 'TOTALE IMPONIBILE / TOTAL');
-    assert.equal(+somma.toFixed(2), +Number(tot[2]).toFixed(2),
+    // Il totale sta sotto la colonna degli importi, con l'etichetta accanto (dalla 0.157.2).
+    const tot = data.find(r => r[iImporto - 1] === 'TOTALE IMPONIBILE / TOTAL');
+    assert.ok(tot, 'il totale sta sotto gli importi');
+    assert.equal(+somma.toFixed(2), +Number(tot[iImporto]).toFixed(2),
       'in Excel la colonna si somma per davvero: se non torna, si vede subito');
   });
 

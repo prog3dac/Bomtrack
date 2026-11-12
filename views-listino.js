@@ -240,7 +240,9 @@ function priceListRefresh() {
   if (host && window.__priceItemId) host.innerHTML = priceListBody(window.__priceItemId);
 }
 function priceListScontiVisibili(it) {
-  return moduloAttivo('listini') || priceRows(it).some(r => r.discount || r.validTo);
+  // Anche gli scaglioni (dalla 0.157.2): a modulo spento muovono ancora il
+  // costo, e un costo che non si sa spiegare dal listino non si deve vedere.
+  return moduloAttivo('listini') || priceRows(it).some(r => r.discount || r.validTo || (Array.isArray(r.breaks) && r.breaks.length));
 }
 // Sotto il prezzo di listino: lo sconto della quotazione e quello che si paga,
 // nell'unità di gestione, con lo sconto del fornitore se ne ha uno.

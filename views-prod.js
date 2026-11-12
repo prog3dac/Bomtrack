@@ -900,7 +900,7 @@ function odpListRows() {
     });
   }).join('') || `<div class="empty-text">${tutti.length ? 'Nessun ordine di produzione con questi filtri.' : 'Nessun ordine di produzione. Si generano dal Fabbisogno, dalle parti da fabbricare, oppure si scrivono a mano con «+ Nuovo ordine di produzione».'}</div>`;
 }
-function openOdpEdit(id) { if (!vistaAttiva('odp')) return; currentOdpId = id; odpView = 'edit'; odpUnlockedId = null; renderOdp(); }
+function openOdpEdit(id) { if (!vistaAttiva('odp')) return; currentOdpId = id; odpView = 'edit'; odpUnlockedId = null; renderOdp(); docPortaInVista(); }
 function odpBackToList() { odpView = 'list'; currentOdpId = null; odpUnlockedId = null; renderOdp(); }
 function odpUnlock(id) {
   const o = getOdp(id); if (!o) return;

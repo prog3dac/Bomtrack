@@ -134,6 +134,12 @@ describe('Nell\'app vera, a sette larghezze', () => {
   it('nessun errore JavaScript', () => {
     assert.deepEqual(menu.flatMap(m => m.errori), []);
   });
+  it('sotto i 1100 px il documento aperto dall\'elenco si porta in vista', () => {
+    const male = menu.filter(m => m.inVista && !(m.inVista.top >= 0 && m.inVista.top <= m.inVista.alto * 0.4))
+      .map(m => `${m.larghezza}: scheda a ${m.inVista.top}px su ${m.inVista.alto}`);
+    assert.ok(menu.some(m => m.inVista), 'almeno una larghezza sotto i 1100 px');
+    assert.deepEqual(male, []);
+  });
 });
 
 describe('Telefono: menu «Esporta» e schede lunghe dentro lo schermo (dalla 0.105.6)', () => {

@@ -100,12 +100,28 @@ function leggiFile(file, estrai, cb) {
   reader.onload = () => {
     try {
       const bytes = new Uint8Array(reader.result);
-      cb(estrai(XLSX.read(bytes, opzioniLettura(file, bytes))));
+      cb(estrai(foglioPercentuali(XLSX.read(bytes, opzioniLettura(file, bytes)))));
     } catch (e) { console.error(e); showToast('File non valido', 'error'); }
   };
   // Un file illeggibile (disco rimosso, permessi) non deve restare in silenzio
   reader.onerror = () => { console.error(reader.error); showToast('Impossibile leggere il file', 'error'); };
   reader.readAsArrayBuffer(file);
+}
+// Una cella che in Excel si legge «10%» vale 0,1: il foglio tiene la frazione e
+// mostra la percentuale. In Bomtrack ogni percentuale (sconti, scarto, ricarico)
+// si scrive in punti, e uno sconto di 0,1% al posto del 10% passava senza un
+// avviso (dalla 0.157.2). Le celle in formato percentuale tornano in punti
+// prima di diventare righe; le altre non si toccano.
+function foglioPercentuali(wb) {
+  ((wb && wb.SheetNames) || []).forEach(n => {
+    const ws = wb.Sheets && wb.Sheets[n]; if (!ws) return;
+    Object.keys(ws).forEach(k => {
+      if (k[0] === '!') return;
+      const c = ws[k];
+      if (c && c.t === 'n' && typeof c.v === 'number' && typeof c.w === 'string' && /%\s*$/.test(c.w)) c.v = +(c.v * 100).toFixed(6);
+    });
+  });
+  return wb;
 }
 // Il primo foglio, come array di righe.
 function readSheet(file, cb) {

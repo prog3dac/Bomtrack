@@ -1801,7 +1801,7 @@ function delPlan(id) {
     removeConUndo('plans', id, `Piano ${p.number} eliminato`, renderMrp);
   }));
 }
-function openPlanEdit(id) { if (!vistaAttiva('mrp')) return; currentPlanId = id; mrpView = 'edit'; renderMrp(); }
+function openPlanEdit(id) { if (!vistaAttiva('mrp')) return; currentPlanId = id; mrpView = 'edit'; renderMrp(); docPortaInVista(); }
 // Aperto / chiuso. È l'unico stato che un piano ha, ed esiste per una ragione
 // sola: un piano aperto **impegna** materiale a magazzino, uno chiuso no.
 // Senza questo interruttore ogni piano mai creato continuerebbe a promettere

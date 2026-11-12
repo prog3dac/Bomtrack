@@ -2,6 +2,23 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.157.2 — 2026-11-12
+
+**Correzioni dal controllo dopo listini e sconti.**
+- **Un documento inviato non cambia fornitore**, nemmeno con *Sblocca per modifica*: lo stesso documento non va a due fornitori. Prima, su un ordine parziale sbloccato, il cambio azzerava anche il prezzo delle righe già ricevute, e quella merce usciva dal costo medio e dal consuntivo. In bozza il cambio riscrive tutto come prima.
+- **Al telefono e sul tablet il documento aperto si vede**: toccato nell'elenco, la pagina scorre fino al suo numero. Prima si apriva sotto l'elenco e sembrava che il tocco non avesse fatto niente.
+- **Il Reparto risponde subito**: i QR delle fasi non si ricalcolano a ogni Inizia o Pausa (quasi un secondo a tocco sull'archivio di prova).
+- **Le percentuali da Excel**: una cella in formato percentuale (`10%`) vale 10 in ogni import. Uno sconto arrivava 0,1%.
+- Gli **scaglioni** si vedono nel listino anche a modulo spento: continuano a contare nel costo.
+- Uno sconto documento col meno si chiama **Maggiorazione** e si somma, a schermo, sul PDF e nell'Excel.
+- **Confronta offerte** usa i prezzi netti dello sconto del fornitore e dice sotto il nome sconto e offerta scaduta.
+- Excel di ordini e ordini di lavoro: la colonna del netto si chiama *Prezzo netto*, e i totali stanno sotto gli importi.
+- Tema scuro: l'icona del calendario nei campi data si vede di nuovo.
+- Al telefono la ▾ del filtro fornitori sta dentro il campo.
+- Cambiando terzista su un ordine di lavoro, un avviso dice che le lavorazioni tengono la tariffa di prima.
+
+Nessun cambio allo schema.
+
 ### 0.157.1 — 2026-11-12
 
 **Manuale allineato alle ultime versioni.** Nessun cambio all'app.

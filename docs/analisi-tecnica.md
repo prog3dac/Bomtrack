@@ -988,6 +988,40 @@ Chiude E1–E6, trovate con la §69, e quattro difetti trovati rileggendo
   veniva dalla lorda, l'attrezzaggio dalla netta (al netto delle parti a
   scaffale): due misure in un numero. Ora tutto viene dalla lorda.
 
+## Risolto nella 0.157.2 — il controllo dopo listini e sconti
+
+Un giro sull'app intera dopo la 0.157.0: suite completa con Postgres e
+Chromium, l'archivio di prova in 21 viste a 1440 e 390 px, chiaro e scuro, e
+un ordine con sconti, scaglioni e cambio fornitore fino al PDF e all'Excel.
+
+### 71. Il cambio fornitore su un ordine sbloccato azzerava il ricevuto
+Sbloccato un ordine parziale, cambiare fornitore riscriveva anche le righe già
+ricevute: senza listino restavano senza prezzo, e quella merce usciva dal
+costo medio e dal consuntivo. Ora un documento inviato non cambia fornitore,
+nemmeno sbloccato (`docFornitoreFisso`): lo stesso documento non va a due
+fornitori. In bozza il cambio riscrive tutto, com'era.
+
+### 72. Il documento aperto al telefono restava fuori schermo
+Sotto i 1100 px l'elenco sta sopra la scheda: il documento si apriva 800 px
+più in basso con la pagina ferma. `docPortaInVista` lo porta in vista.
+
+### 73. Il Reparto rifaceva tutti i QR a ogni tocco
+800–900 ms per ridisegno sull'archivio di prova, il 90% in `qrcode.js`.
+`qrSvg` tiene i disegni già fatti.
+
+### 74. Uno sconto «10%» da Excel arrivava 0,1%
+Le celle in formato percentuale tornano in punti prima dell'import
+(`foglioPercentuali`), per tutti i fogli.
+
+### 75. Altro, in breve
+Scaglioni visibili anche a modulo spento (muovono il costo); la maggiorazione
+del documento si chiama così; il confronto delle offerte toglie lo sconto del
+fornitore e segnala le offerte scadute; nell'Excel il netto si chiama «Prezzo
+netto» e i totali stanno sotto gli importi; l'icona del calendario nel tema
+scuro era invertita due volte; la ▾ del filtro fornitori al telefono stava
+fuori dal campo; cambiando terzista un avviso dice che le lavorazioni tengono
+la tariffa di prima.
+
 ## Aperto
 
 > **Lettura per la situazione attuale (0.107.0).** L'archivio condiviso su
@@ -1051,6 +1085,9 @@ la virgola — chiusi nella 0.107.0, §56–57.)*
 *Aggiornamento 0.141.0.* I tre più lunghi sono divisi (§66); restano sopra le
 2.000 righe `store.js`, `core.js` e `cloud.js`, sotto il limite di 3.000 che ora
 un test fa valere.
+
+*Aggiornamento 0.157.2.* `store.js` 2.697 righe, `core.js` 2.430, `cloud.js`
+2.072, `views-docs.js` 1.931: `store.js` è il primo che toccherà il limite.
 
 **C4 — file lunghi con scope globale piatto:** `views-docs.js` ~1990 righe,
 `views-catalog.js` ~1970, `views-mrp.js` ~1880, `core.js` ~1430, `store.js` ~1240,
@@ -1162,6 +1199,20 @@ produzione fatto con uno strumento fuori non entra nell'analisi.
 **F4 — lasciati fuori dalla prima versione:** l'elenco PDF degli strumenti da
 mandare al laboratorio, la storia dello strumento nella scheda «Storia», il
 suggerimento dell'intervallo dalle tarature passate e gli studi R&R.
+
+### H. Listini e sconti *(censite nella 0.157.2)*
+
+**H1 — gli scaglioni non guardano la quantità minima.** Sotto la Q.tà min del
+fornitore vale il primo scaglione come se si potesse ordinare: l'ordine non
+avvisa che la quantità è sotto il minimo della quotazione.
+
+**H2 — il cambio fornitore in bozza non si annulla.** È una scelta: il
+documento prende tutto del nuovo fornitore, e i prezzi scritti a mano non
+tornano rimettendo quello di prima.
+
+**H3 — la tariffa delle lavorazioni non sa di chi è.** Una riga di conto
+lavoro non porta il fornitore da cui viene la sua tariffa: cambiando terzista
+lo si dice con un avviso, ma la riga non lo ricorda.
 
 ### G. I testi per i documenti *(censite nella 0.155.0)*
 

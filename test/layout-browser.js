@@ -86,7 +86,17 @@ const LARGHEZZE = [1920, 1440, 1366, 1280, 1024, 820, 390];
       return { aperto: h.classList.contains('menu-nav'), voci, totale };
     });
     if (menu) { await page.keyboard.press('Escape'); menu.chiusoConEsc = !(await page.evaluate(() => document.getElementById('app-header').classList.contains('menu-nav'))); }
-    esito.push({ larghezza: w, menu, errori });
+    // Sotto i 1100 px l'elenco sta sopra la scheda: aperto un documento, la
+    // pagina deve portarlo in vista (dalla 0.157.2).
+    const inVista = w > 1100 ? null : await page.evaluate(() => {
+      try { closeModal(); } catch (e) {}
+      setView('orders'); docBackToList('order'); window.scrollTo(0, 0);
+      openOrderEdit(db.orders[0].id);
+      const pag = document.querySelector('[id^="view-"].active .doc-page');
+      const top = pag ? pag.getBoundingClientRect().top : -1;
+      return { top: Math.round(top), alto: innerHeight };
+    });
+    esito.push({ larghezza: w, menu, errori, inVista });
     await page.close();
   }
   await browser.close();

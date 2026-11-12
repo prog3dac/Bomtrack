@@ -160,12 +160,22 @@ function qrCorse(m) {
   });
   return out;
 }
+// Lo stesso testo dà sempre lo stesso disegno: si tiene quello già fatto
+// (dalla 0.157.2). Il Reparto ha un QR per fase e si ridisegna a ogni Inizia o
+// Pausa: ricalcolarli tutti costava quasi un secondo a tocco. Al più 500 voci,
+// poi si ricomincia: i link delle fasi aperte sono molti meno.
+const _qrSvgFatti = new Map();
 function qrSvg(testo, px) {
+  const chiave = String(testo) + '|' + (px || 160);
+  if (_qrSvgFatti.has(chiave)) return _qrSvgFatti.get(chiave);
   const m = qrMatrice(testo);
   if (!m) return '';
   const n = m.length, bordo = 4, lato = n + bordo * 2;
   const d = qrCorse(m).map(([r, c, l]) => `M${c + bordo} ${r + bordo}h${l}v1h-${l}z`).join('');
-  return `<svg class="qr-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lato} ${lato}" width="${px || 160}" height="${px || 160}" shape-rendering="crispEdges" role="img" aria-label="Codice QR"><rect width="${lato}" height="${lato}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  if (_qrSvgFatti.size >= 500) _qrSvgFatti.clear();
+  const svg = `<svg class="qr-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lato} ${lato}" width="${px || 160}" height="${px || 160}" shape-rendering="crispEdges" role="img" aria-label="Codice QR"><rect width="${lato}" height="${lato}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  _qrSvgFatti.set(chiave, svg);
+  return svg;
 }
 // Il QR dentro un PDF jsPDF, in millimetri. `lato` comprende già il margine
 // bianco (due moduli: sulla carta bianca basta, e il codice resta grande).

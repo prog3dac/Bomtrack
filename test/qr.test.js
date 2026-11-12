@@ -139,6 +139,15 @@ describe('QR — il disegno', () => {
     assert.match(svg, /^<svg[^>]*viewBox="0 0 \d+ \d+"/);
     assert.match(svg, /fill="#fff"/);
   });
+  it('lo stesso testo non si ricalcola: il Reparto ne disegna uno per fase a ogni tocco', () => {
+    const a = app();
+    const prima = a.eval('qrSvg("#/q/fase/X1", 96)');
+    a.eval('window.__giri = 0; const _orig = qrMatrice; qrMatrice = t => { window.__giri++; return _orig(t); }');
+    assert.equal(a.eval('qrSvg("#/q/fase/X1", 96)'), prima);
+    assert.equal(a.eval('window.__giri'), 0);
+    a.eval('qrSvg("#/q/fase/X1", 120)');
+    assert.equal(a.eval('window.__giri'), 1, 'un\'altra misura è un altro disegno');
+  });
 });
 
 describe('QR — le etichette', () => {
