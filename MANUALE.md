@@ -90,7 +90,10 @@ in un'officina meccanica:
 - il ciclo acquisti completo: **richieste di offerta**, **ordini a fornitore**,
   **ordini di lavoro** al terzista, ricevimenti e **conto lavoro**;
 - la **qualità**, per chi la accende: il collaudo della merce in entrata con i piani di controllo,
-  le non conformità e la valutazione dei fornitori (→ [cap. 17](#17-magazzino)).
+  le non conformità, la valutazione dei fornitori e la **taratura degli strumenti di misura**
+  (→ [cap. 17](#17-magazzino));
+- i **listini con gli sconti**, per chi li accende: sconti a cascata sulle righe e sul documento,
+  validità delle quotazioni e prezzi per scaglioni di quantità (→ [cap. 10](#10-listino-fornitori)).
 
 È pensata per chi progetta, chi compra e chi manda in produzione, e tiene queste tre viste sullo
 stesso archivio: la parte che il progettista disegna è la stessa che l'ufficio acquisti ordina ed
@@ -104,7 +107,9 @@ Vale la pena dirlo subito, perché evita di cercare funzioni che non ci sono.
   consegna risale montaggi, fasi interne e tratte dal terzista sul **calendario di fabbrica**, e
   dice quando ordinare, quando spedire, quando lanciare (→ [cap. 19](#19-fabbisogno-materiali)).
   La capacità resta però **infinita**: il *Carico centri* mostra il sovraccarico nella settimana
-  in cui la fase comincia, ma non lo risolve spostando le date.
+  in cui la fase comincia, ma non lo risolve spostando le date. Con il modulo *Capacità finita*
+  la coda e la linea temporale dei centri dicono quando un ordine finirà davvero, ma **non
+  riscrivono** le date (→ [cap. 24](#24-carico-dei-centri-di-lavoro)).
 - **Non schedula.** L'avanzamento c'è, e da due strade che rispondono a due domande diverse.
   Nella tabella *Da fabbricare* di un piano si dichiara **quanti pezzi sono stati fatti** (dalla
   0.77.0): è una dichiarazione per **parte finita**, non per fase superata — un pezzo fermo a metà
@@ -243,7 +248,7 @@ scegliendo una voce.
 
 ### La navigazione a due livelli
 
-La barra dei comandi ha **sette gruppi**, ordinati come il lavoro scorre: dall'ufficio tecnico
+La barra dei comandi ha fino a **otto gruppi**, ordinati come il lavoro scorre: dall'ufficio tecnico
 alla pianificazione, agli acquisti, all'officina, al magazzino. Cliccando un gruppo, le sue voci
 compaiono su una seconda riga; il gruppo con una voce sola non mostra la seconda riga. Dalla 0.127.0
 la seconda riga **resta ferma in alto** sotto la barra dei gruppi anche quando si scorre la pagina
@@ -253,12 +258,16 @@ ricorda l'ultima voce usata**: tornando su *Acquisti* si riapre dove si era rima
 | Gruppo | Voci |
 |---|---|
 | 🏠 **Riepilogo** | Riepilogo · Cruscotto · Storia documenti |
-| 🌳 **Tecnico** | Articoli di progetto · Articoli d'acquisto · Gestione DB · Visualizza DB · Cicli di lavorazione |
+| 🌳 **Tecnico** | Articoli di progetto · Articoli d'acquisto · Gestione DB · Visualizza DB · Cicli di lavorazione · Varianti *(modulo)* |
 | 📋 **Pianificazione** | Commesse · Fabbisogno · Carico centri · Avanzamento |
 | 🛒 **Acquisti** | Richieste offerta · Ordini fornitore · Listino fornitori |
-| 🏭 **Produzione** | Ordini di produzione · Ordini di lavoro |
+| 🏭 **Produzione** | Ordini di produzione · Ordini di lavoro · Reparto e Manutenzione *(modulo Officina)* |
 | 📦 **Magazzino** | *(voce unica)* |
+| 🛡 **Qualità** *(modulo)* | Collaudi · Non conformità · Piani di controllo · Valutazione fornitori · Strumenti *(modulo Taratura strumenti)* |
 | ⚙️ **Gestione** | *(voce unica — solo amministratori)* |
+
+Le voci dei moduli e delle aree spente non compaiono, e un gruppo rimasto senza voci sparisce
+(→ [cap. 25](#25-gestione), *Aree e moduli*).
 
 Fino alla 0.90 i gruppi erano divisi per tipo di dato (*Anagrafica*, *Cicli di lavorazione*,
 *Distinta base*, *Documenti*): le schermate sono le stesse, cambia solo il gruppo in cui stanno.
@@ -564,7 +573,7 @@ includere; ne esce **un documento per fornitore**.
 5. Con più richieste sullo stesso materiale, **Confronta offerte** le mette a fianco.
 6. **Crea ordine** converte la richiesta in ordine. La richiesta passa a *Chiusa*.
 
-**Il percorso corto — quando il prezzo c'è già:** dal piano, **Genera ordini** direttamente. Le righe prendono il prezzo che il listino **di quel fornitore** dà oggi; un articolo che il fornitore non ha a listino nasce senza prezzo, da scrivere nell'ordine.
+**Il percorso corto — quando il prezzo c'è già:** dal piano, **Genera ordini** direttamente. Le righe prendono il prezzo che il listino **di quel fornitore** dà alla data del documento; un articolo che il fornitore non ha a listino nasce senza prezzo, da scrivere nell'ordine. Con il modulo *Listini e sconti* la riga porta prezzo di listino, sconto e lo scaglione della quantità, e la testata lo sconto del fornitore (→ [cap. 10](#10-listino-fornitori)).
 
 **Poi, quando la merce arriva:** si apre l'ordine e si scrive quanto è arrivato nella colonna
 **Ricevuto** (o si usa **✓ Segna tutto ricevuto**). Il ricevimento **carica il magazzino da solo**:
@@ -586,20 +595,25 @@ loro documento: l'**ordine di lavoro** (`ODL-2026-001`).
    fra le due il pezzo torna da noi).
 2. Ogni riga è una **tratta**: le fasi *consecutive* dello stesso terzista stanno insieme
    («fasi 20-30»), col prezzo e i giorni sommati.
-3. **Si spedisce il materiale** — dalla riga dell'ODL, il comando di uscita a conto lavoro. Esce
-   il materiale scritto nel ciclo della parte, con le quantità proposte in automatico
-   (*q.tà del ciclo × pezzi dell'ordine*). Il magazzino **scarica**.
-4. **Fra due terzisti** — se il pezzo passa da Beta a Gamma, si registra un **passaggio di
-   lavorazione**: cambia il luogo, **la giacenza non si muove**.
-5. **Rientrano i pezzi** — all'ultima fase, il rientro da conto lavoro **carica** il pezzo finito.
+3. **Si genera il PDF** e lo si manda: porta la tabella **Materiale che vi inviamo** e il
+   riferimento al DDT di invio (→ [cap. 28](#28-export-di-elenchi-e-documenti)). Emettere l'ODL
+   non è ancora spedire.
+4. **Avvia** sulla riga quando il materiale parte. Esce il materiale scritto nel ciclo della
+   parte, con le quantità proposte in automatico (*q.tà del ciclo × pezzi dell'ordine*): il
+   magazzino **scarica**. Se il pezzo passa da Beta a Gamma, la tratta dopo parte con i pezzi
+   stessi: cambia il luogo, **la giacenza non si muove**.
+5. **Dichiara** quando i pezzi tornano, buoni e scarti: all'ultima fase i buoni **caricano** il
+   pezzo finito. Una riga che viene da un ordine di produzione si avvia e si dichiara sulle fasi
+   dell'ODP.
 
 **Il magazzino si muove in due punti soli**, e sono i due estremi del *ciclo*, non quelli del
 documento: esce il materiale alla prima fase esterna, entra il pezzo finito all'ultima. Ogni altro
 estremo è un passaggio. Senza questa distinzione, una parte lavorata due volte dallo stesso
 terzista farebbe uscire il materiale due volte e caricare il pezzo due volte.
 
-Il campo **Rientrati** sull'ODL significa *pezzi tornati*: porta l'ordine a evaso, **non carica il
-magazzino** — quello lo fanno i movimenti di conto lavoro.
+Il campo **Rientrati** sull'ODL significa *pezzi tornati*: porta l'ordine a evaso. Non si scrive a
+mano: lo scrive **Dichiara**, che nello stesso gesto carica il magazzino quando tocca
+(→ [cap. 23](#23-ordini-di-lavoro-odl-e-conto-lavoro)).
 
 In ogni momento, il pulsante **Presso terzi** in Magazzino dice cosa sta fuori e da chi.
 
@@ -660,6 +674,15 @@ Ogni segnale **nomina i codici e i numeri che lo riguardano** (fino a otto, poi 
 | 13 | Spazio del browser occupato (dal 70%; 🔴 dal 90%) — *solo amministratori*. Con l'archivio in IndexedDB conta lo spazio di tutto il sito, allegati compresi | 🟠 media | a Gestione → Backup |
 | 14 | Distinte che usano un articolo fuori produzione con un sostitutivo — *solo con il modulo Alternativi acceso* (→ [cap. 19](#19-fabbisogno-materiali)) | 🟠 media | alla distinta o al ciclo |
 | 15 | Macchine generate da un modello che è cambiato dopo la generazione — *solo con il modulo Varianti acceso* (→ [cap. 13](#13-tecnico--gestione-db)) | 🟠 media | alla distinta |
+| 16 | Collaudi da fare — *modulo Qualità* | 🟠 media | al collaudo |
+| 17 | Non conformità scadute — *modulo Qualità* | 🔴 alta | alla NC |
+| 18 | Non conformità aperte, non ancora scadute — *modulo Qualità* | 🔵 info | alla NC |
+| 19 | Azioni di NC da fare entro 7 giorni — *modulo Qualità* | 🟠 media | alla NC |
+| 20 | Articoli che cambiano comportamento al collaudo (non più in un piano, o entrati in un piano) — *modulo Qualità* | 🟠 media / 🔵 info | all'elenco, con **Va bene così** |
+| 21 | Strumenti scaduti o mai tarati — *modulo Taratura strumenti* | 🔴 alta | allo strumento |
+| 22 | Strumenti da mandare in taratura (in scadenza) — *modulo Taratura strumenti* | 🟠 media | allo strumento |
+| 23 | Manutenzioni scadute — *modulo Officina* | 🟠 media | a Manutenzione |
+| 24 | Ordini di produzione in ritardo a capacità finita — *modulo Capacità finita* | 🟠 media | all'ODP |
 
 **Tre precisazioni** (dalla 0.105.6):
 
@@ -700,7 +723,9 @@ grandi in proporzione; oltre otto articoli, il pulsante in fondo porta agli *Art
 Gli articoli obsoleti non compaiono. Non cambia niente da solo: **clicca la riga** per aprire il
 listino dell'articolo e scegliere con *Usa* il prezzo da usare; chiuso il listino, il riquadro si
 aggiorna. Nel *Fabbisogno* lo stesso confronto è pesato sulle quantità da ordinare (→
-[cap. 19](#19-fabbisogno-materiali)).
+[cap. 19](#19-fabbisogno-materiali)). Con il modulo *Listini e sconti* il confronto è sul prezzo
+che si paga: listino meno lo sconto della quotazione e quello del fornitore, allo scaglione del
+lotto di riordino (→ [cap. 10](#10-listino-fornitori)).
 
 **Da sapere.** Il Riepilogo è **derivato**: non c'è niente da compilare e niente da spuntare. Un
 segnale sparisce quando sparisce la sua causa.
@@ -720,7 +745,8 @@ e non è stata avviata finisce fra le **scadute**; appena la si avvia, la voce s
 
 **I filtri.** Sopra il calendario una fila di pulsanti, uno per tipo di scadenza, ciascuno con il
 suo numero: *Commesse* · *Piani e programma* · *Da ordinare* · *Consegne e rientri* · *Richieste* ·
-*Avvio fasi ODP* · *Fine produzione* · *Promemoria*. Un clic nasconde quel tipo, un altro lo
+*Avvio fasi ODP* · *Fine produzione* · *Manutenzione* (modulo Officina) · *Non conformità*
+(modulo Qualità) · *Tarature* (modulo Taratura strumenti) · *Promemoria*. Un clic nasconde quel tipo, un altro lo
 rimostra; i filtri valgono per tutto il calendario (scadute, griglia, giorno scelto e prossimi 14
 giorni), e una riga dice quante scadenze sono nascoste. **Mostra tutto** riaccende tutto. La scelta
 resta in questo browser, per chi la fa: non cambia niente per i colleghi.
@@ -1198,6 +1224,8 @@ quantità**.
 - **Nel fabbisogno** il documento prende lo scaglione della quantità da ordinare; se lo scaglione
   dopo è entro il 20% in più, la riga lo dice («da 50 pz costa 11,34»). La quantità non cambia da
   sola.
+- **Il riordino sotto scorta** (→ [cap. 17](#17-magazzino)) prende lo scaglione della quantità che
+  riordina.
 - Nella vista d'insieme la colonna del prezzo dice quanti scaglioni ci sono; l'export li elenca.
 
 **Da sapere.**
@@ -2181,7 +2209,7 @@ i dismessi.
 esterno o interna), il laboratorio fra i fornitori, il numero di certificato e i **punti** misurati
 (il valore di riferimento e quello letto). Dai punti l'app calcola l'**errore massimo** e, se lo
 strumento ha l'EMA, propone l'esito **all'arrivo** (*conforme* se l'errore resta entro l'EMA), che si può cambiare a
-mano. Se lo
+mano: l'esito scelto resta quello anche se poi si correggono i punti (dalla 0.156.1). Se lo
 strumento è stato **regolato** o riparato si dice anche com'è **dopo**. Conforme, lo strumento torna
 in uso e la prossima scadenza è la data della taratura più i mesi dell'intervallo: cambiando la data, la
 scadenza la segue finché non la si corregge a mano. Non conforme, lo strumento
@@ -2381,12 +2409,12 @@ apertura (*dal … al …*, aperto anche da un lato solo); il contatore.
 | **Cliente** | Con i suggerimenti dall'anagrafica di *Gestione → Clienti*: due commesse dello stesso cliente non si chiamano più «Rossi Srl» e «Rossi S.r.l.» |
 | **Descrizione** | Che lavoro è |
 | **Riferimento cliente** | Il numero d'ordine del cliente |
-| **Stato** | I quattro qui sotto |
 | **Data apertura** | Quando è entrata |
 | **Consegna al cliente** | La data che conta |
 | **Note** | Testo libero |
 
-**I quattro stati.**
+**I quattro stati.** Si cambiano dalla tendina *Stato* nella barra a sinistra, o con il passo
+successivo in cima alla barra (→ [La pagina di un documento](#la-pagina-di-un-documento)).
 
 | Stato | Significato |
 |---|---|
@@ -2400,8 +2428,8 @@ consegna**. Avvisa, non blocca: la decisione resta a chi la prende.
 
 **Cosa si vede nella scheda.**
 
-- I **KPI**: Ordinato · Già ricevuto · Ancora atteso · Piani di fabbisogno · l'indicatore di
-  copertura.
+- I **KPI**, in una striscia sola: Ordinato · Già ricevuto · Ancora atteso · Piani di
+  fabbisogno · l'indicatore di copertura.
 - **Copertura materiale** — la sezione che risponde a «il materiale c'è?», divisa in tre:
   cosa è ancora **da ordinare**, cosa sta in un documento **non ancora inviato**, cosa
   **arriva dopo la data in cui serve**. *Documento non ancora inviato* (dalla 0.105.6) vuol dire
@@ -2409,8 +2437,10 @@ consegna**. Avvisa, non blocca: la decisione resta a chi la prende.
   copre quello che manca. Un ordine già inviato è merce in arrivo e sta già nel conto; se copriva
   40 pezzi su 100, gli altri 60 restano **da ordinare**. Prima bastava un documento qualsiasi
   sull'articolo, e quei 60 risultavano in attesa di un invio che non li riguardava.
-- **Fabbisogni**, **Richieste di offerta**, **Ordini a fornitore**, **Ordini di lavoro** — le
-  quattro liste di quello che pende sotto la commessa, ogni riga con **Apri →**.
+- **Fabbisogni**, **Richieste di offerta**, **Ordini a fornitore**, **Ordini di lavoro** — quello
+  che pende sotto la commessa, in **tessere** su più colonne con il conteggio accanto al titolo:
+  numero, stato e fornitore (o titolo e consegna del piano). Un clic sulla tessera apre il
+  documento.
 
 **Da sapere.** I piani della stessa commessa **si sommano prima di guardare il magazzino**: due
 piani della stessa commessa non si contendono la stessa merce. Se non ci sono piani aperti, la
@@ -2490,14 +2520,13 @@ I badge di riga dicono `aperto` o `chiuso`.
 
 **Filtri.** Ricerca «Numero o titolo…»; periodo; contatore.
 
-**La toolbar del piano.**
+**La barra del piano.** Il numero sta in alto al centro e, nella barra a sinistra
+(→ [La pagina di un documento](#la-pagina-di-un-documento)): *Chiudi* e **⋯** (Duplica,
+Elimina), *Storia*, **Aperto — chiudi** / **Chiuso — riapri**, **Esporta ▾** (Excel, PDF) e chi
+ha creato e aggiornato il piano. Il piano non ha stati in fila: è aperto o chiuso.
 
-| A sinistra | A destra |
-|---|---|
-| chiudi · numero del piano · **Aperto — chiudi** / **Chiuso — riapri** | **Esporta ▾** (Excel, PDF) · **⋯** (Duplica, Elimina) |
-
-I pulsanti **Genera…** non stanno più nella toolbar (dalla 0.92.0): ciascuno sta nella scheda
-delle righe su cui agisce, vedi sotto.
+I pulsanti **Genera…** non stanno nella barra (dalla 0.92.0): ciascuno sta nella scheda delle
+righe su cui agisce, vedi sotto.
 
 **I campi di testata.** Titolo · Data · **Consegna richiesta** · **Commessa** · Note.
 
@@ -2969,11 +2998,11 @@ non ha listino né fornitore).
 documento); **Tutti gli stati**; **Tutti i fornitori** (con la voce «senza fornitore»); **periodo**;
 contatore; **✕ Azzera filtri**, che compare solo quando c'è un filtro attivo.
 
-**La toolbar del documento.**
-
-| A sinistra | A destra |
-|---|---|
-| chiudi · numero · badge di stato · **Salva** · **Elimina** | **Crea ordine** |
+**La barra del documento.** A sinistra, ferma mentre si scorre (→ [La pagina di un
+documento](#la-pagina-di-un-documento)): *Chiudi* e **⋯** (*Crea ordine da questa richiesta*,
+*Elimina la richiesta*), **Salva** con il passo successivo (*Segna come inviata*, *Crea
+ordine*), *Storia*, la tendina dello **stato** (Bozza · Inviata · Offerta ricevuta · Chiusa) con i
+passi, **Genera PDF** / **Genera Excel**, **Testi sul PDF** e i collegati.
 
 **I campi di testata.**
 
@@ -2982,7 +3011,8 @@ contatore; **✕ Azzera filtri**, che compare solo quando c'è un filtro attivo.
 | **Titolo / oggetto** | Di cosa si tratta |
 | **Fornitore** | A chi si chiede |
 | **Data** | Del documento |
-| **Stato** | Bozza · Inviata · Offerta ricevuta · Chiusa |
+| **Rispondere entro** | Entro quando vogliamo l'offerta (dalla 0.154.0): esce in evidenza sul PDF, sotto l'oggetto |
+| **Offerta valida fino al** | *Modulo Listini e sconti.* La scadenza che dà il fornitore: diventa la *Valida al* delle quotazioni registrate a listino |
 | **Tipo di trasporto / resa** | Con i suggerimenti da *Gestione → Condizioni offerta*; si precompila con quello predefinito del fornitore |
 | **Tipo di pagamento** | Idem |
 | **Note per il fornitore** | Escono sul documento |
@@ -2996,13 +3026,14 @@ Codice/Descrizione · Q.tà/U.M. · Prezzo unit./Importo · Data consegna · Mod
 Dodici colonne su una riga sola costringerebbero a scorrere in orizzontale, e il codice uscirebbe
 di vista; così le due metà si leggono insieme. **Una riga di documento resta un solo rigo.**
 
-**Il documento.** La barra **Documento di richiesta** ha **Genera documento PDF** e
-**Genera documento Excel**. Sono **disabilitati finché ci sono modifiche non salvate**: non si
-manda a un fornitore un documento diverso da quello che si ha in archivio. Il **PDF è bilingue
-italiano/inglese**.
+**Il documento.** Nella barra a sinistra, sezione *Documento*, **Genera PDF** e **Genera Excel**.
+Sono **disabilitati finché ci sono modifiche non salvate**: non si manda a un fornitore un
+documento diverso da quello che si ha in archivio. Il **PDF è bilingue italiano/inglese**. Sotto,
+**Testi sul PDF** sceglie le frasi che escono in fondo (→ [cap. 25](#25-gestione), *Testi per i
+documenti*). Che cosa c'è sul foglio è nel [cap. 28](#28-export-di-elenchi-e-documenti).
 
-**I prezzi di ritorno.** Quando arriva l'offerta si scrivono i prezzi nelle righe. La barra
-**Prezzi d'offerta** ha il pulsante **Registra a listino (N)**, che trasforma quei prezzi in
+**I prezzi di ritorno.** Quando arriva l'offerta si scrivono i prezzi nelle righe. Sotto la
+tabella, la riga **Prezzi d'offerta** ha il pulsante **Registra a listino (N)**, che trasforma quei prezzi in
 quotazioni negli articoli (→ [cap. 10](#10-listino-fornitori)). Se le righe sono più di una si apre
 l'elenco dei prezzi da registrare, tutti spuntati: togli la spunta a quelli che non vuoi a listino.
 Una riga lasciata fuori resta da registrare e la puoi aggiungere più tardi. La data della quotazione
@@ -3039,13 +3070,19 @@ lavorazioni.
 **Comandi dell'elenco.** **+ Nuovo ordine** · **Esporta Excel** · **Esporta PDF**.
 Stessi filtri delle richieste.
 
-**La toolbar del documento.** chiudi · numero · badge di stato · **Salva** · **Elimina**.
+**La barra del documento.** Come la richiesta: *Chiudi* e **⋯** (*Elimina l'ordine*), **Salva**
+con il passo successivo (*Segna come inviato*, *Segna tutto ricevuto*), *Storia*, lo **stato** con
+i passi, l'avviso di ordine protetto con *Sblocca*, **Genera PDF** / **Genera Excel**, **Testi sul
+PDF**, i collegati.
 
-**I campi di testata.** Come la richiesta, più:
+**I campi di testata.** Titolo, fornitore, data, trasporto, pagamento e note come la richiesta
+(senza *Rispondere entro*), più:
 
 | Campo | Note |
 |---|---|
+| **Vostra offerta n° / del** | Il riferimento all'offerta del fornitore da cui l'ordine nasce (es. «245 del 03/11/2026»), dalla 0.154.0. Esce sul PDF |
 | **N° conferma d'ordine fornitore** | Il numero che il fornitore restituisce. **Compilandolo, lo stato passa a *Confermato*.** |
+| **Sconto documento %** | *Modulo Listini e sconti.* Lo sconto sul totale delle righe, anche a cascata; lo propone il fornitore (vedi *Sconti* più sotto) |
 
 **Le righe.** **+ Da catalogo** · **+ Riga manuale** · **✓ Segna tutto ricevuto**.
 Tabella a due piani: # · Codice/Descrizione · Q.tà/U.M. · Prezzo unit./Importo (con il modulo
@@ -3054,8 +3091,8 @@ Tabella a due piani: # · Codice/Descrizione · Q.tà/U.M. · Prezzo unit./Impor
 In fondo il **Totale imponibile**, e sopra, se il documento ha uno sconto, il totale delle righe e
 lo sconto.
 
-**Il documento.** La barra **Documento d'ordine**: **Genera documento PDF** /
-**Genera documento Excel**.
+**Il documento.** Nella barra a sinistra **Genera PDF** / **Genera Excel**, disabilitati finché
+ci sono modifiche non salvate, e **Testi sul PDF**.
 
 **Da sapere.**
 
@@ -3354,14 +3391,23 @@ La riga porta il **codice della parte** (è il pezzo che il terzista riceve e ri
 
 ### I campi
 
-**Testata**: Titolo/oggetto · **Terzista** · Data ordine · Stato · Trasporto · Pagamento ·
-**N° conferma del terzista** · Note · 🔒 Note interne.
+**Testata**: Titolo/oggetto · **Terzista** · Data ordine · **N° conferma del terzista** ·
+**DDT di invio (conto lavorazione)** · Trasporto · Pagamento · *Sconto documento %* (modulo
+*Listini e sconti*) · Note · 🔒 Note interne. Lo **stato** si cambia dalla barra a sinistra, come
+negli ordini (→ [La pagina di un documento](#la-pagina-di-un-documento)); lì stanno anche
+**Genera PDF** / **Genera Excel** e **Testi sul PDF**.
+
+Il **DDT di invio** è il numero del documento di trasporto con cui il materiale parte (es. «87 del
+12/11/2026»): il PDF lo cita nella frase sul conto lavorazione, sotto la tabella **Materiale che
+vi inviamo** (→ [cap. 28](#28-export-di-elenchi-e-documenti)). Il DDT si fa dopo l'ordine, e il
+campo si scrive anche a ordine inviato e protetto.
 
 **Righe — «Lavorazioni»**: **+ Lavorazione da ciclo** · **+ Riga manuale** ·
 **✓ Dichiara tutto rientrato** (il residuo di ogni riga avviata, come pezzi buoni).
 Sotto ogni riga i suoi comandi, **avvia** e **dichiara**; sotto la tabella lo storico **Avvii e
 rientri**, dove un gesto sbagliato si annulla.
-Tabella a due piani: # · **Parte/Lavorazione** · **Pezzi/U.M.** · **Tariffa (€/pz)/Importo** ·
+Tabella a due piani: # · **Parte/Lavorazione** · **Pezzi/U.M.** · **Tariffa (€/pz)/Importo**
+(con il modulo *Listini e sconti*: Listino · Sconto / Netto · Importo, come sull'ordine) ·
 **Inizio lavoro/Stato** · **Richiesta/Confermata** · **Rientrati/Ancora fuori**.
 
 ### Emettere l'ODL non è inviare
@@ -3757,7 +3803,7 @@ L'ordine è solo quello a video: una voce nuova va al suo posto nell'elenco.
 | **Anagrafiche** | Fornitori · Clienti · Condizioni offerta · Testi per i documenti |
 | **Classificazione articoli** | Famiglie commerciali · Famiglie materie prime · Famiglie parti · Concetti · Unità di misura |
 | **Pianificazione e produzione** | Calendario di fabbrica · Centri di lavoro · Macchine utensili (con il modulo) |
-| **Configurazione** | Aree e moduli · Costi e margini · Codifica articoli · Etichette QR |
+| **Configurazione** | Aree e moduli · Costi e margini · Codifica articoli · Etichette QR · Qualità (con il modulo) |
 | **Dati** | Import · Backup |
 
 Fino alla 0.126 *Impostazioni* era una pagina sola con costi, codifica, sessione, aree e moduli,
@@ -3792,8 +3838,14 @@ intestare la fattura elettronica.
 ### 🏭 Fornitori
 
 Nome · Referente · Email · Telefono · P.IVA/C.F. · **Pagamento predefinito** ·
-**Trasporto predefinito** · indirizzo · **Contatti** · **Trasporto conto lavoro (gg)**.
+**Sconto fornitore %** (modulo *Listini e sconti*) · **Trasporto predefinito** · indirizzo ·
+**Contatti** · **Trasporto conto lavoro (gg)**.
 I due predefiniti si riproporranno su ogni richiesta e ogni ordine a quel fornitore.
+Lo **sconto fornitore** (anche a cascata, `3` o `10+5`) si propone come *sconto documento* sui suoi
+ordini e ordini di lavoro nuovi e quando lo si sceglie su un documento, ed entra nel costo in uso
+degli articoli che usano il suo listino: cambiandolo, quei costi si ricalcolano
+(→ [cap. 10](#10-listino-fornitori)). Nel foglio Excel dei fornitori è la colonna *Sconto
+fornitore %*.
 I giorni di trasporto, andata più ritorno, si **propongono** alle fasi di conto lavoro affidate a
 quel terzista, che li possono cambiare; è il trasporto della fase a sommarsi all'attraversamento
 (→ [cap. 19](#19-fabbisogno-materiali)). Cambiandolo, la scheda offre di aggiornare anche le fasi
@@ -3945,7 +3997,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Qualità: collaudo in entrata, piani di controllo, non conformità, valutazione fornitori (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
 | Taratura strumenti: registro, tarature e blocco del collaudo (→ [cap. 17](#17-magazzino)), solo con la Qualità | spento |
-| Listini e sconti: sconti a cascata su righe e documenti, sconto del fornitore, sconto e validità delle quotazioni (→ [cap. 10](#10-listino-fornitori), [cap. 21](#21-ordini-a-fornitore-oda)) | spento |
+| Listini e sconti: sconti a cascata su righe e documenti, sconto del fornitore, sconto e validità delle quotazioni, scaglioni di quantità (→ [cap. 10](#10-listino-fornitori), [cap. 21](#21-ordini-a-fornitore-oda)) | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità
@@ -4012,6 +4064,22 @@ fabbisogno e del Riepilogo è di **5 giorni lavorativi**. Il santo patrono si sc
 | Formato etichette | Foglio A4 · 3×8 (70×37 mm) |
 
 L'indirizzo deve iniziare con `http://` o `https://` (→ [cap. 17](#17-magazzino), *Le etichette QR*).
+
+### 🛡 Qualità (modulo)
+
+C'è solo con il modulo *Qualità* acceso, e raccoglie le regole dei suoi archivi
+(→ [cap. 17](#17-magazzino)):
+
+- **Collaudi**: *Proponi il cartellino da stampare quando si riceve merce da collaudare*. Il
+  cartellino si stampa comunque dalla scheda del collaudo.
+- **Strumenti di misura** (con il modulo *Taratura strumenti*): i **tipi di strumento**, uno per
+  riga come `nome | mesi fra due tarature`; quanti **giorni prima** della scadenza avvisare (di
+  serie 30); che cosa fare nel collaudo con uno strumento scaduto o non scelto: **Blocca l'esito**
+  (di serie) o **Avvisa e registra lo stesso**.
+- **Non conformità**: le **causali**, una per riga, e i **giorni per chiudere** una NC. Una
+  causale tolta resta sulle NC che già la portano.
+- **Valutazione fornitori**: il peso della **qualità** e della **puntualità** e le soglie delle
+  classi **A** e **B**; sotto la B il fornitore è in classe C.
 
 ### ⬆️ Import · 💾 Backup
 
@@ -4137,6 +4205,8 @@ Pulsanti: *Scarica template Distinte* · *Carica file Distinte*.
 Un foglio per scheda: `Azienda` · `Utenti` · `Fornitori` · `Clienti` · `Condizioni offerta` ·
 `Famiglie commerciali` · `Famiglie materie prime` · `Famiglie parti` · `Concetti` ·
 `Centri di lavoro` · `Unità di misura` · `Impostazioni`.
+Nel foglio `Fornitori` la colonna *Sconto fornitore %* (dalla 0.157.0) porta lo sconto del
+fornitore; un file di prima, senza la colonna, lo lascia com'è.
 **Le password non sono nel file.** Con l'archivio condiviso il foglio `Utenti` aggiorna solo i
 colleghi che esistono già: uno nuovo si invita da *Gestione → Utenti* (dalla 0.105.5).
 
@@ -4244,8 +4314,9 @@ nella posta. La data è sempre quella del PC, non quella di Greenwich.
 ### Gli export di documento
 
 Sono i documenti veri e propri: la **richiesta di offerta** (PDF bilingue IT/EN), l'**ordine**,
-l'**ordine di lavoro**, il **piano di fabbisogno**, la **distinta esplosa**. Hanno il pulsante
-**Genera documento PDF** / **Genera documento Excel** nella loro barra dedicata.
+l'**ordine di lavoro**, il **piano di fabbisogno**, la **distinta esplosa**. Richieste, ordini e
+ordini di lavoro hanno **Genera PDF** / **Genera Excel** nella barra a sinistra del documento,
+sezione *Documento*; il piano ha **Esporta ▾** nello stesso posto.
 
 Per richieste e ordini, quei pulsanti sono **disabilitati finché ci sono modifiche non salvate**, e
 alla generazione l'app propone di far passare lo stato da *Bozza* a *Inviata* / *Inviato*.
@@ -4273,7 +4344,11 @@ condizioni, richieste, ordini e ordini di lavoro stampano:
 - sull'**ordine di lavoro**, una tabella **Materiale che vi inviamo** (una voce per ogni pezzo che
   parte: le fasi consecutive dallo stesso terzista lavorano lo stesso pezzo, che parte una volta
   sola) e la frase sul **DDT di invio** in conto lavorazione, con il numero se scritto nel campo
-  *DDT di invio* della testata. Quel campo si compila anche a ordine già inviato.
+  *DDT di invio* della testata. Quel campo si compila anche a ordine già inviato;
+- con il modulo *Listini e sconti* (dalla 0.157.0), le colonne **Prezzo listino**, **Sconto %** e
+  **Prezzo netto** quando almeno una riga ha uno sconto, e nel piede *Totale righe*, *Sconto
+  documento* e *Totale imponibile* quando c'è lo sconto documento. Sulla richiesta, se scritta,
+  la data **Offerta valida fino al**.
 
 ### Le copie in archivio (dalla 0.112.0)
 
@@ -4854,6 +4929,7 @@ PC (o da chi ti ha aiutato a mettere in piedi Supabase):
 |---|---|
 | **Richiesta di offerta** | Bozza · Inviata · Offerta ricevuta · Chiusa |
 | **Ordine** (ODA) e **Ordine di lavoro** (ODL) | Bozza · Inviato · Confermato · Parziale · Evaso · Annullato |
+| **Ordine di produzione** (ODP) | Bozza · Lanciato · In corso · Completato · Chiuso · Annullato |
 | **Commessa** | Aperta · In produzione · Chiusa · Annullata |
 | **Piano di fabbisogno** | Aperto · Chiuso |
 
@@ -4862,14 +4938,15 @@ PC (o da chi ti ha aiutato a mettere in piedi Supabase):
 | Documento | Stato | Modificabile |
 |---|---|---|
 | RFQ | **Bozza** | tutto |
-| RFQ | **Inviata** · **Offerta ricevuta** | prezzo unitario e data di consegna |
+| RFQ | **Inviata** · **Offerta ricevuta** | prezzo unitario e data di consegna; con il modulo *Listini e sconti* anche listino, sconto e *Offerta valida fino al* |
 | RFQ | **Chiusa** | nulla |
 | ODA / ODL | **Bozza** | tutto |
-| ODA / ODL | **Inviato** · **Confermato** · **Parziale** · **Evaso** | la colonna Ricevuto (Rientrati) |
+| ODA / ODL | **Inviato** · **Confermato** · **Parziale** · **Evaso** | la data confermata e la colonna Ricevuto (Rientrati); il n° di conferma e, sull'ODL, il DDT di invio |
 | ODA / ODL | **Annullato** | nulla |
 
 **In ogni stato** restano sempre modificabili: le note del documento, le 🔒 note interne, le note
-di riga, e **lo stato stesso**.
+di riga, e **lo stato stesso**, dalla tendina nella barra a sinistra. I **testi sul PDF** scelti
+seguono le altre condizioni: su un documento protetto si cambiano dopo *Sblocca*.
 
 **🔓 Sblocca per modifica** riapre un documento bloccato. Lo sblocco vale **finché si resta
 dentro**: uscendo e rientrando, il documento torna bloccato.
@@ -4907,6 +4984,12 @@ dentro**: uscendo e rientrando, il documento torna bloccato.
 | **Sigla** | L'abbreviazione di una macchina o di un gruppo, che entra nei codici |
 | **Approvvigionamento** | Come si ottiene una parte: *Produzione interna* o *Acquisto da fornitore* |
 | **Quotazione** | Un prezzo offerto da un fornitore per un articolo. Più quotazioni per articolo; una sola è quella in uso |
+| **Sconto a cascata** | Più sconti applicati uno dopo l'altro: `10+5` è il 10% e poi il 5% su quello che resta (14,5% in tutto); un meno è una maggiorazione (modulo *Listini e sconti*) |
+| **Sconto documento** | Lo sconto sul totale delle righe di un ordine o di un ordine di lavoro; lo propone lo sconto del fornitore |
+| **Prezzo netto** | Il prezzo di listino meno lo sconto di riga: quello che si paga, prima dello sconto documento |
+| **Scaglione** | Un prezzo che vale da una certa quantità in su; quello raggiunto vale per tutta la quantità |
+| **Taratura** | Il confronto di uno strumento di misura con un riferimento, con un esito e una scadenza (modulo *Taratura strumenti*) |
+| **EMA** | Errore massimo ammesso di uno strumento: oltre, la taratura non è conforme |
 | **Scarto %** | La quota di materiale che si perde: 10 pezzi con 5% di scarto consumano materiale per 10,5 |
 | **Overhead / spese generali** | La percentuale che si aggiunge al costo per coprire i costi non diretti |
 | **Margine / markup** | La percentuale che si aggiunge al costo totale per ottenere il prezzo di vendita |
@@ -4941,7 +5024,8 @@ archivi e nei documenti che le citano, ma spariscono dai menu.
 
 **Non riesco a modificare una riga di un ordine.**
 Dipende dallo **stato** (→ [cap. 33](#33-stati-dei-documenti)). Un ordine *Inviato* lascia
-modificare solo la colonna Ricevuto. Se serve davvero, **🔓 Sblocca per modifica**.
+modificare solo le date confermate e la colonna Ricevuto. Se serve davvero, **🔓 Sblocca per
+modifica**, nella barra a sinistra del documento.
 
 **Il costo di una parte è zero.**
 Tre possibilità: (a) è a *Acquisto da fornitore* e non ha nessuna quotazione a listino →
@@ -4978,7 +5062,9 @@ parte. Il piano che non serve più va **chiuso**: la sua quota torna libera.
 
 **Il Carico centri dice che sono in sovraccarico. Cosa faccio?**
 Bomtrack te lo dice, non lo risolve: **non c'è schedulazione**. La decisione — anticipare, mandare
-fuori una fase, spostare una consegna — resta a chi la prende.
+fuori una fase, spostare una consegna — resta a chi la prende. Con il modulo *Capacità finita* la
+linea temporale dei centri mostra dove le fasi si accodano e quali ordini finiranno in ritardo, e
+il filtro *Centro* restringe tutta la pagina a quello che ti preoccupa.
 
 **Un centro non mostra mai il sovraccarico.**
 Ha la **capacità a 0**, che significa «non dichiarata». *Gestione → Centri di lavoro*.
@@ -5028,8 +5114,8 @@ toccano la stessa cosa, sta nel [cap. 31](#31-larchivio-condiviso-supabase). Sen
 la sua copia, e ci si allinea passandosi il **backup JSON**.
 
 **L'app non genera il PDF.**
-I pulsanti **Genera documento** sono **disabilitati finché ci sono modifiche non salvate**: premi
-**Salva** prima. Se invece non succede proprio niente, guarda *Gestione → Backup → Registro errori*.
+I pulsanti **Genera PDF** / **Genera Excel**, nella barra a sinistra del documento, sono
+**disabilitati finché ci sono modifiche non salvate**: premi **Salva** prima. Se invece non succede proprio niente, guarda *Gestione → Backup → Registro errori*.
 
 ---
 
