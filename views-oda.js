@@ -213,7 +213,7 @@ function orderFromRfqFatto(r) {
   const nomi = creati.map(c => (c.kind === 'odl' ? 'ordine di lavoro ' : 'ordine ') + c.doc.number).join(' e ');
   showToast(`Creat${creati.length > 1 ? 'i' : 'o'} ${nomi} dalla richiesta${closed ? ' · ' + r.number + ' chiusa' : ''}`);
 }
-function openOrderEdit(id) { docLeave('order'); currentOrderId = id; orderView = 'edit'; renderOrders(); }
+function openOrderEdit(id) { docLeave('order'); currentOrderId = id; orderView = 'edit'; renderOrders(); docPortaInVista(); }
 function orderBackToList() { docBackToList('order'); }
 function orderMarkDirty() { docMarkDirty('order'); }
 function ordSave(id) { docSave('order', id); }
@@ -242,11 +242,12 @@ function ordAddCatalogModal(id) { if (!ordGuard(id, 'contract')) return; catalog
 function ordAddCatalogLines(id, ids) { docAddCatalogLines('order', id, ids); }
 
 // ─── La riga porta ancora il listino di un altro? ───
-// Le righe si compilano e *poi* si sceglie il fornitore, o lo si cambia a
-// documento avviato. I prezzi non si riscrivono da soli — in quest'app nessun
-// prezzo cambia da sé, è la regola su cui poggia tutto il resto — ma una riga
-// che porta la quotazione di Rossi su un ordine passato a Bianchi va detta,
-// altrimenti resta un numero sbagliato dall'aria giusta fino alla fattura.
+// Dalla 0.157.0 il cambio di fornitore (solo in bozza, dalla 0.157.1) rimette
+// il listino del nuovo su ogni riga di articolo (docApplicaFornitore). Restano
+// i casi in cui la riga e il listino non coincidono: un prezzo scritto a mano,
+// uno scaglione cambiato con la quantità, una quotazione corretta dopo. Una
+// riga che dice altro dal listino del fornitore attuale va detta, altrimenti
+// resta un numero sbagliato dall'aria giusta fino alla fattura.
 //
 // Si confronta con la quotazione più recente del fornitore attuale, nel
 // **costo convertito** nell'unità di gestione — che è quella in cui la riga
@@ -417,7 +418,8 @@ function exportOrderExcel(id) {
   // Nel foglio i numeri restano numeri: la valuta si dichiara in intestazione,
   // l'unità sta nella sua colonna e vale per q.tà, ricevuto e residuo.
   const hPrezzo = `Prezzo unitario (${cur()}/U.M.)`, hImporto = `Importo (${cur()})`;
-  data.push(['#', 'Codice', 'Descrizione', ...(hasSup ? ['Codice fornitore', 'Descrizione fornitore'] : []), 'Q.tà', 'U.M.', ...docXlsPrezzoHead(o, hPrezzo), hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota', 'Disegno / certificato']);
+  const testaRighe = ['#', 'Codice', 'Descrizione', ...(hasSup ? ['Codice fornitore', 'Descrizione fornitore'] : []), 'Q.tà', 'U.M.', ...docXlsPrezzoHead(o, hPrezzo), hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota', 'Disegno / certificato'];
+  data.push(testaRighe);
   (o.lines || []).forEach((l, i) => {
     const si = lineSupInfo(o.supplierId, l);
     const qty = Number(l.qty) || 0;
@@ -427,7 +429,7 @@ function exportOrderExcel(id) {
     data.push([i + 1, l.code || '', l.description, ...supCols, qty, l.uom || '', ...docXlsPrezzoCelle(o, l), amount, fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '', lineExtraDoc(l).join(' · ')]);
   });
   data.push([]);
-  docXlsFoot(o).forEach(r => data.push(r));
+  docXlsFoot(o, testaRighe.indexOf(hImporto)).forEach(r => data.push(r));
   if (!docXlsSalva(data, o, 'Ordine', 'ordine', 'order')) return;
   askMarkSent(o, `Excel generato.\nSegnare l'ordine ${o.number} come inviato?`, 'inviato', renderOrders);
 }
@@ -504,7 +506,7 @@ function newOdl() {
     docLeave('odl'); currentOdlId = o.id; odlView = 'edit'; renderOdl();
   });
 }
-function openOdlEdit(id) { if (!vistaAttiva('odl')) return; docLeave('odl'); currentOdlId = id; odlView = 'edit'; renderOdl(); }
+function openOdlEdit(id) { if (!vistaAttiva('odl')) return; docLeave('odl'); currentOdlId = id; odlView = 'edit'; renderOdl(); docPortaInVista(); }
 function odlBackToList() { docBackToList('odl'); }
 function odlMarkDirty() { docMarkDirty('odl'); }
 function odlSave(id) { docSave('odl', id); }
@@ -1180,7 +1182,8 @@ function exportOdlExcel(id) {
     ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
     ['Conferma terzista / Order confirmation', o.supplierConfirmation],
     ['DDT di invio / Delivery note', odlTestoDdt(o)]] });
-  data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', ...docXlsPrezzoHead(o, `Tariffa (${cur()}/pz)`), `Importo (${cur()})`, 'Inizio lavoro', 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
+  const testaRighe = ['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', ...docXlsPrezzoHead(o, `Tariffa (${cur()}/pz)`), `Importo (${cur()})`, 'Inizio lavoro', 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota'];
+  data.push(testaRighe);
   (o.lines || []).forEach((l, i) => {
     const qty = Number(l.qty) || 0;
     const amount = (l.price === '' || l.price == null) ? '' : importoRiga(l);
@@ -1188,7 +1191,7 @@ function exportOdlExcel(id) {
     data.push([i + 1, l.code || '', l.description, qty, l.uom || '', ...docXlsPrezzoCelle(o, l), amount, fmtDateIt(l.startDate), fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '']);
   });
   data.push([]);
-  docXlsFoot(o).forEach(r => data.push(r));
+  docXlsFoot(o, testaRighe.indexOf(`Importo (${cur()})`)).forEach(r => data.push(r));
   const mat = odlMaterialeInviato(o);
   if (mat.length) {
     data.push([]);

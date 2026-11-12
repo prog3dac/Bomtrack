@@ -1179,7 +1179,8 @@ quotazione si modifica** e si mette in uso.
   *⚠ scaduta il …* e l'ordine *⚠ listino scaduto*: è il momento di chiedere conferma al fornitore.
   Nella vista d'insieme il filtro **Scadute o in scadenza (30 giorni)** dà l'elenco dei prezzi da
   farsi riconfermare.
-- Nel foglio Excel del catalogo ci sono le colonne **Sconto %** e **Valida al**.
+- Nel foglio Excel del catalogo ci sono le colonne **Sconto %** e **Valida al**. Uno sconto in una
+  cella in formato percentuale (`10%`) vale 10, come scritto a mano (dalla 0.157.1): prima arrivava 0,1%.
 
 **Scaglioni di quantità** (dalla 0.157.0, modulo *Listini e sconti*). Sotto il fornitore,
 **+ scaglioni** apre sotto la quotazione la tabella dei prezzi per quantità: «da 50 pz 12,60 −10»,
@@ -3019,6 +3020,9 @@ e sconto delle righe.
 materiale. Il totale più basso, in verde, si cerca **solo fra le offerte complete** (dalla
 0.105.6): un fornitore che quota una riga su tre ha per forza il totale più basso, e prima finiva
 in verde. Ora il suo totale dice **incompleta (1/3)** — quante righe ha quotato su quante.
+I prezzi sono **netti** (dalla 0.157.1): lo sconto di riga e lo sconto del fornitore, che l'ordine
+nato dall'offerta prende in testata, sono già tolti, come nel confronto del listino. Sotto il nome
+del fornitore si leggono il suo sconto e, se l'offerta è scaduta, **⚠ scaduta il …**.
 
 **Da sapere.** Una richiesta può contenere **insieme materiale e lavorazioni** dello stesso
 fornitore — chiedere quanto costa il pezzo e quanto costa lavorarlo è una domanda sola.
@@ -3076,7 +3080,7 @@ lo sconto.
 
   Un avviso dice quante righe sono cambiate e quante sono rimaste senza prezzo. Non c'è un
   «annulla»: per tornare indietro si rimette il fornitore di prima, che riapplica il suo listino
-  (i prezzi scritti a mano non tornano). A ordine inviato il fornitore non si cambia. Sulla
+  (i prezzi scritti a mano non tornano). **A documento inviato il fornitore non si cambia**, nemmeno con *Sblocca per modifica* (dalla 0.157.1): lo stesso documento non va a due fornitori, e per un altro fornitore se ne crea uno nuovo. Sull'ordine di lavoro le lavorazioni tengono la tariffa del terzista di prima, e l'avviso lo dice. Sulla
   richiesta d'offerta cambiano condizioni e codici del fornitore, non i prezzi: lì il prezzo è la
   sua risposta.
 - **Sconti** (dalla 0.157.0, modulo *Listini e sconti*). Con il modulo acceso la colonna del
@@ -3089,7 +3093,8 @@ lo sconto.
   documento* e *Totale imponibile*. Lo propone il fornitore (*Gestione → Fornitori*, *Sconto
   fornitore %*) su ogni documento nuovo e quando lo si sceglie. Sul PDF e nell'Excel le colonne
   *Prezzo listino*, *Sconto %* e *Prezzo netto* compaiono solo se almeno una riga ha uno sconto,
-  e il piede porta lo sconto documento se c'è. Il costo medio d'acquisto, il consuntivo e
+  e il piede porta lo sconto documento se c'è. Uno sconto documento col meno (`-3`) è una
+  **maggiorazione**: si chiama così e si somma al totale. Il costo medio d'acquisto, il consuntivo e
   l'impegno di commessa contano il prezzo **pagato**, cioè il netto di riga meno lo sconto del
   documento. Spento il modulo, i campi spariscono, ma un documento che ha già degli sconti li
   mostra e li conta.
@@ -3945,7 +3950,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Qualità: collaudo in entrata, piani di controllo, non conformità, valutazione fornitori (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
 | Taratura strumenti: registro, tarature e blocco del collaudo (→ [cap. 17](#17-magazzino)), solo con la Qualità | spento |
-| Listini e sconti: sconti a cascata su righe e documenti, sconto del fornitore, sconto e validità delle quotazioni (→ [cap. 10](#10-listino-fornitori), [cap. 21](#21-ordini-a-fornitore-oda)) | spento |
+| Listini e sconti: sconti a cascata su righe e documenti, sconto del fornitore, sconto, validità e scaglioni di quantità delle quotazioni (→ [cap. 10](#10-listino-fornitori), [cap. 21](#21-ordini-a-fornitore-oda)) | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità

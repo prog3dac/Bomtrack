@@ -310,12 +310,14 @@ describe('I campi data sono tutti vestiti', () => {
   });
 
   it('l-icona del calendario segue il tema, in tutti e tre gli stati', () => {
-    // Su fondo scuro l-icona di serie è nera e sparisce: si inverte. Sul chiaro
-    // no. I tre stati sono scuro (:root), «come il sistema» (media query) e
-    // chiaro esplicito, e devono dirlo tutti e tre.
-    assert.match(CSS, /:root[^{]*\{[\s\S]*?\}|input\[type=date\]::-webkit-calendar-picker-indicator[^}]*\{filter:invert/);
-    assert.match(CSS, /:root:not\(\[data-theme=dark\]\) input\[type=date\]::-webkit-calendar-picker-indicator/);
-    assert.match(CSS, /:root\[data-theme=light\] input\[type=date\]::-webkit-calendar-picker-indicator/);
+    // La colora `color-scheme`, che i tre stati dichiarano: scuro (:root),
+    // «come il sistema» (media query) e chiaro esplicito. Un filtro in più la
+    // invertiva una seconda volta: fino alla 0.157.0, sul tema scuro l-icona
+    // usciva grigio scuro su fondo scuro.
+    assert.match(CSS, /:root\{[^}]*color-scheme:dark/);
+    assert.match(CSS, /:root:not\(\[data-theme=dark\]\)\{[^}]*color-scheme:light/);
+    assert.match(CSS, /:root\[data-theme=light\]\{[^}]*color-scheme:light/);
+    assert.doesNotMatch(CSS, /calendar-picker-indicator[^{]*\{[^}]*filter:invert/);
   });
 });
 

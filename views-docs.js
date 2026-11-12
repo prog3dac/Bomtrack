@@ -338,10 +338,18 @@ function docSetField(k, id, field, value) {
 // Codice e descrizione presso il fornitore seguono già da soli (lineSupInfo).
 // Sulla richiesta d'offerta cambiano le condizioni, non i prezzi: lì il
 // prezzo è la risposta del fornitore.
+// Un documento inviato non cambia fornitore (dalla 0.157.1): non si manda lo
+// stesso documento a due fornitori, nemmeno sbloccandolo. Fuori dalla bozza la
+// tendina resta chiusa; per un altro fornitore serve un documento nuovo.
+function docFornitoreFisso(doc) { return !!doc && !!doc.status && doc.status !== 'bozza'; }
 function docSetSupplier(k, id, sid) {
   const K = docKind(k);
   if (!docGuard(k, id, 'contract')) { K.render(); return; }
   const doc = K.get(id); if (!doc) return;
+  if (docFornitoreFisso(doc) && (sid || null) !== (doc.supplierId || null)) {
+    showToast(`${K.nome} ${docStatusLabel(K, doc)}: il fornitore non si cambia. Per un altro fornitore crea un documento nuovo`, 'error');
+    K.render(); return;
+  }
   const prima = doc.supplierId || null;
   doc.supplierId = sid || null;
   if (doc.supplierId === prima) { K.render(); return; }
@@ -352,12 +360,16 @@ function docSetSupplier(k, id, sid) {
   if (K.hasLinePrice) doc.discount = (sup && sup.discount) || '';
   if (esito && K.autoStatus) K.autoStatus(doc);
   touch(doc); docMarkDirty(k); K.render();
+  // Le lavorazioni di conto lavoro non vengono da un listino e restano: la loro
+  // tariffa è quella del terzista di prima, e va detto (dalla 0.157.1).
+  const lavorazioni = sup && prima ? (doc.lines || []).filter(l => l.phaseKey && l.price !== '' && l.price != null).length : 0;
+  const fasi = lavorazioni ? ` ${lavorazioni === 1 ? 'Una lavorazione tiene' : lavorazioni + ' lavorazioni tengono'} la tariffa del fornitore di prima: verificala.` : '';
   if (esito && esito.aggiornate) {
     const righe = n => n === 1 ? '1 riga' : n + ' righe';
     showToast(`Fornitore cambiato: ${righe(esito.aggiornate)} aggiornat${esito.aggiornate === 1 ? 'a' : 'e'}`
-      + (esito.senzaPrezzo ? `, ${esito.senzaPrezzo} senza prezzo (${sup.name || 'il fornitore'} non le ha a listino)` : ''),
-      esito.senzaPrezzo ? 'error' : 'success');
-  }
+      + (esito.senzaPrezzo ? `, ${esito.senzaPrezzo} senza prezzo (${sup.name || 'il fornitore'} non le ha a listino)` : '') + (fasi ? '.' + fasi : ''),
+      esito.senzaPrezzo || fasi ? 'error' : 'success');
+  } else if (fasi) showToast('Fornitore cambiato.' + fasi, 'error');
 }
 // Il listino del fornitore del documento su ogni riga di articolo. Il prezzo
 // passa da rowUnitGross(), la stessa porta di docLineFromItem: già convertito
@@ -704,9 +716,12 @@ function docPrezzoCell(pfx, doc, l, titolo, blocco) {
 function docTotaliFootHtml(doc, prima, dopo) {
   const t = totaliDocumento(doc);
   const riga = (cls, etichetta, valore) => `<tr class="${cls}"><td colspan="${prima}" style="text-align:right">${etichetta}</td><td>${valore}</td><td colspan="${dopo}"></td></tr>`;
+  // Un «-3» è una maggiorazione (dalla 0.157.1): si chiama così e si somma,
+  // invece di «Sconto documento -3% − € -291,36».
+  const magg = t.sconto < 0;
   const sconto = doc.discount && t.sconto
     ? riga('doc-subtot', 'Totale righe', fmtN(t.righe))
-      + riga('doc-subtot', `Sconto documento ${esc(doc.discount)}%${scontoPassi(doc.discount).length > 1 ? ` (${esc(scontoEquivalente(doc.discount))})` : ''}`, '− ' + fmtN(t.sconto))
+      + riga('doc-subtot', `${magg ? 'Maggiorazione' : 'Sconto'} documento ${esc(doc.discount)}%${scontoPassi(doc.discount).length > 1 ? ` (${esc(scontoEquivalente(doc.discount))})` : ''}`, (magg ? '+ ' : '− ') + fmtN(Math.abs(t.sconto)))
     : '';
   return `<tfoot>${sconto}${riga('rfq-cmp-total', 'Totale imponibile', fmtN(t.imponibile))}</tfoot>`;
 }
@@ -718,8 +733,11 @@ function docRigheConSconto(doc) { return (doc.lines || []).some(l => l.discount)
 function docStampaPrezzoHead(doc, testa) {
   return docRigheConSconto(doc) ? ['Prezzo listino\nList price', 'Sconto %\nDiscount %', 'Prezzo netto\nNet price'] : [testa];
 }
+// Con lo sconto la terza colonna è il netto, e si chiama così come sul PDF
+// (dalla 0.157.1): «Prezzo unitario» accanto a «Prezzo listino» non diceva quale.
 function docXlsPrezzoHead(doc, testa) {
-  return docRigheConSconto(doc) ? [`Prezzo listino (${cur()})`, 'Sconto %', testa] : [testa];
+  const unita = (String(testa).match(/\([^)]*\)\s*$/) || [`(${cur()})`])[0];
+  return docRigheConSconto(doc) ? [`Prezzo listino ${unita}`, 'Sconto %', `Prezzo netto ${unita}`] : [testa];
 }
 function docPdfPrezzoCelle(doc, l) {
   const u = l.uom ? '/' + l.uom : '';
@@ -744,15 +762,23 @@ function docPdfFoot(doc, nCol, iImporto) {
     return r;
   });
 }
-function docXlsFoot(doc) {
-  return docTotaliStampa(doc).map(([etichetta, v], i, voci) => ['', i === voci.length - 1 ? 'TOTALE IMPONIBILE / TOTAL' : etichetta, v]);
+// `iImporto` è la colonna degli importi: i totali stanno sotto di lei, con
+// l'etichetta a sinistra (dalla 0.157.1; prima finivano nella colonna B).
+function docXlsFoot(doc, iImporto) {
+  const col = Math.max(1, Number(iImporto) || 2);
+  return docTotaliStampa(doc).map(([etichetta, v], i, voci) => {
+    const r = new Array(col + 1).fill('');
+    r[col - 1] = i === voci.length - 1 ? 'TOTALE IMPONIBILE / TOTAL' : etichetta;
+    r[col] = v;
+    return r;
+  });
 }
 // Le righe del piede su PDF ed Excel: [etichetta, importo].
 function docTotaliStampa(doc) {
   const t = totaliDocumento(doc);
   if (!(doc.discount && t.sconto)) return [['Totale / Total', t.imponibile]];
   return [['Totale righe / Lines total', t.righe],
-    [`Sconto / Discount ${doc.discount}%`, -t.sconto],
+    [t.sconto < 0 ? `Maggiorazione / Surcharge ${doc.discount}%` : `Sconto / Discount ${doc.discount}%`, -t.sconto],
     ['Totale / Total', t.imponibile]];
 }
 
@@ -773,6 +799,18 @@ function docPaginaHtml(o) {
     ${docRailHtml(o.rail)}
     <div class="manage-wrap">${o.corpo}</div>
   </div>`;
+}
+// Al telefono e sul tablet (sotto i 1100 px) l'elenco sta sopra la scheda: il
+// documento aperto con un tocco compariva centinaia di pixel più in basso, e la
+// pagina restava ferma sull'elenco come se il tocco non avesse fatto niente
+// (dalla 0.157.1). Si porta in vista il numero, solo se non si vede già.
+function docPortaInVista() {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || typeof window.matchMedia !== 'function') return;
+  if (!window.matchMedia('(max-width: 1100px)').matches) return;
+  const pag = document.querySelector('[id^="view-"].active .doc-page');
+  if (!pag || typeof pag.scrollIntoView !== 'function') return;
+  const top = pag.getBoundingClientRect().top;
+  if (top < 0 || top > window.innerHeight * 0.4) pag.scrollIntoView({ block: 'start' });
 }
 //   o = { k, rec, chiudi, cosa, menu, salva: { id, azione, dirty }, comandi,
 //         lock, esporta, sezioni: [{ titolo, html }] }
@@ -813,7 +851,7 @@ function docTestaHtml(o) {
   // (style.css, .testa): una data non occupa più un terzo della scheda.
   return `<div class="rfq-head testa">
       <div class="modal-field campo-xl"><label>Titolo / oggetto</label><input class="lock-contract" value="${esc(r.title || '')}" ${campo('title')}></div>
-      <div class="modal-field campo-l"><label>${o.controparte}</label><select class="lock-contract sel-cerca" onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
+      <div class="modal-field campo-l"><label>${o.controparte}</label><select class="${docFornitoreFisso(r) ? '' : 'lock-contract '}sel-cerca" ${docFornitoreFisso(r) ? 'disabled title="Documento già inviato: il fornitore non si cambia. Per un altro fornitore crea un documento nuovo"' : ''} onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
       <div class="modal-field campo-s"><label>${o.data}</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" ${campo('date')}></div>
       ${o.rispondere ? `<div class="modal-field campo-s"><label>Rispondere entro</label><input type="date" class="lock-contract" value="${esc((r.replyBy || '').slice(0, 10))}" ${campo('replyBy')}></div>` : ''}
       ${o.validaFino && (moduloAttivo('listini') || r.offerValidTo) ? `<div class="modal-field campo-s"><label>Offerta valida fino al</label><input type="date" class="lock-offer" value="${esc((r.offerValidTo || '').slice(0, 10))}" title="Lo dice il fornitore nell'offerta: diventa la scadenza delle quotazioni registrate a listino" ${campo('offerValidTo')}></div>` : ''}
@@ -1501,7 +1539,7 @@ function newRfq() {
 // Aprire un documento chiude quello di prima: `docLeave` salva cio' che era in
 // sospeso, come faceva l'uscita verso l'elenco. Senza, saltare da una riga
 // all'altra perderebbe le modifiche non salvate senza dire niente.
-function openRfqEdit(id) { docLeave('rfq'); currentRfqId = id; rfqView = 'edit'; renderRfq(); }
+function openRfqEdit(id) { docLeave('rfq'); currentRfqId = id; rfqView = 'edit'; renderRfq(); docPortaInVista(); }
 function openRfqCompare() { rfqView = 'compare'; renderRfq(); }
 function rfqBackToList() { docBackToList('rfq'); }
 function rfqSave(id) { docSave('rfq', id); }
@@ -1835,9 +1873,13 @@ function renderRfqCompare() {
     // cerca solo fra le offerte complete; le altre dicono quante ne mancano.
     const quotate = sel.map(() => 0);
     const bodyRows = keys.map(k => {
+      // Il prezzo che si pagherebbe (dalla 0.157.1): quello della riga, già
+      // netto del suo sconto, meno lo sconto del fornitore che l'ordine nato
+      // dall'offerta prende in testata. È lo stesso confronto del listino.
       const cellsData = sel.map(r => {
         const l = (r.lines || []).find(x => rfqLineKey(x) === k);
-        return (l && l.price !== '' && l.price != null) ? { price: Number(l.price), qty: Number(l.qty) || 0, uom: l.uom || '', del: l.deliveryDate } : null;
+        const sup = r.supplierId ? getSupplier(r.supplierId) : null;
+        return (l && l.price !== '' && l.price != null) ? { price: +(Number(l.price) * scontoFattore(sup && sup.discount)).toFixed(6), qty: Number(l.qty) || 0, uom: l.uom || '', del: l.deliveryDate } : null;
       });
       const valid = cellsData.filter(p => p && p.price > 0).map(p => p.price);
       const min = valid.length ? Math.min(...valid) : null;
@@ -1860,10 +1902,18 @@ function renderRfqCompare() {
     const totalRow = `<tr class="rfq-cmp-total"><td>Totale offerta</td>${totals.map((t, ci) => completa(ci)
       ? `<td class="${minTot != null && t === minTot ? 'rfq-min' : ''}">${fmtN(t)}</td>`
       : `<td title="Il totale somma solo le righe quotate: non si confronta con le offerte complete">${fmtN(t)}<span class="rfq-line-tot">incompleta (${quotate[ci]}/${keys.length})</span></td>`).join('')}</tr>`;
-    const header = `<tr><th scope="col">Articolo</th>${sel.map(r => `<th scope="col">${esc(r.supplierId ? supplierName(r.supplierId) : r.number)}<div class="rfq-cmp-sub">${esc(r.number)}</div></th>`).join('')}</tr>`;
+    // Lo sconto del fornitore e un'offerta scaduta si dicono sotto il nome.
+    const testaSub = r => {
+      const sup = r.supplierId ? getSupplier(r.supplierId) : null;
+      const parti = [esc(r.number)];
+      if (sup && sup.discount) parti.push(`sconto fornitore ${esc(sup.discount)}%`);
+      if (r.offerValidTo && r.offerValidTo < oggiISO()) parti.push(`<span class="mrp-warn" title="L'offerta valeva fino al ${esc(fmtDateIt(r.offerValidTo))}: chiedi conferma prima di ordinare">⚠ scaduta il ${esc(fmtDateIt(r.offerValidTo))}</span>`);
+      return parti.join(' · ');
+    };
+    const header = `<tr><th scope="col">Articolo</th>${sel.map(r => `<th scope="col">${esc(r.supplierId ? supplierName(r.supplierId) : r.number)}<div class="rfq-cmp-sub">${testaSub(r)}</div></th>`).join('')}</tr>`;
     matrix = `<div class="table-wrap"><table class="rfq-table rfq-cmp-table">
       <thead>${header}</thead><tbody>${bodyRows}${totalRow}</tbody></table></div>
-      <p class="empty-text" style="text-align:left">Prezzo minimo per riga e totale offerta più basso evidenziati in verde. I totali usano la quantità indicata in ciascuna richiesta; un'offerta che non quota tutte le righe si dice incompleta e non entra nel confronto dei totali.</p>`;
+      <p class="empty-text" style="text-align:left">Prezzi netti: lo sconto di riga e quello del fornitore sono già tolti. Prezzo minimo per riga e totale offerta più basso evidenziati in verde. I totali usano la quantità indicata in ciascuna richiesta; un'offerta che non quota tutte le righe si dice incompleta e non entra nel confronto dei totali.</p>`;
   }
   return `<div class="manage-wrap">${head}
     <h3 class="rfq-subhead">Richieste da confrontare</h3>

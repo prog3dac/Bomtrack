@@ -821,7 +821,7 @@ const MODULI = {
   // ma gli sconti già scritti continuano a contare nei totali.
   listini: {
     nome: 'Listini e sconti',
-    descr: 'Gli sconti come li danno i fornitori, anche a cascata (10+5 è il 10% e poi il 5%; il meno è una maggiorazione): sulle righe degli ordini a fornitore e degli ordini di lavoro accanto al prezzo di listino, sul documento sotto il totale delle righe, e uno sconto predefinito per fornitore che si propone sui documenti nuovi. PDF ed Excel stampano prezzo di listino, sconto e netto.',
+    descr: 'Gli sconti come li danno i fornitori, anche a cascata (10+5 è il 10% e poi il 5%; il meno è una maggiorazione): sulle righe degli ordini a fornitore e degli ordini di lavoro accanto al prezzo di listino, sul documento sotto il totale delle righe, e uno sconto predefinito per fornitore che si propone sui documenti nuovi. Nel listino fornitori, sconto e validità di ogni quotazione e i prezzi per scaglioni di quantità. PDF ed Excel stampano prezzo di listino, sconto e netto.',
   },
   // Dalla 0.126.0: le macchine dei centri, con tariffa e manutenzione proprie (macchine.js).
   macchine: {
