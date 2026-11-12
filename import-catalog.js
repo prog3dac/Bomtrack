@@ -50,6 +50,8 @@ const CAT_ALIAS = {
   'Fornitore': ['Supplier'],
   'Prezzo': ['PrezzoAcquisto', 'Price'],
   'UM prezzo': ['UMPrezzo'],
+  'Sconto %': ['Sconto', 'Discount'],
+  'Valida al': ['Valido al', 'ValidaAl', 'Scadenza prezzo'],
   'Q.tà min': ['QtaMin', 'Quantità minima', 'MinQty'],
   'GG consegna': ['GiorniConsegna', 'LeadDays', 'Consegna'],
   'Codice fornitore': ['CodiceFornitore', 'SupplierCode'],
@@ -167,11 +169,14 @@ const CAT_COL_PRICE = [
   ['Fornitore', (it, q) => q ? catSupplierName(q.supplierId) : ''],
   ['Prezzo', (it, q) => q ? catNumOut(q.price) : ''],
   ['UM prezzo', (it, q) => q ? (q.priceUom || '') : ''],
+  // Sconto della quotazione e fino a quando vale (dalla 0.157.0).
+  ['Sconto %', (it, q) => q ? (q.discount || '') : ''],
   ['Q.tà min', (it, q) => q ? catNumOut(q.minQty) : ''],
   ['GG consegna', (it, q) => q ? catNumOut(q.leadDays) : ''],
   ['Codice fornitore', (it, q) => q ? (q.code || '') : ''],
   ['Descrizione fornitore', (it, q) => q ? (q.desc || '') : ''],
   ['Data prezzo', (it, q) => q ? (q.date || '') : ''],
+  ['Valida al', (it, q) => q ? (q.validTo || '') : ''],
   // La nota della quotazione. Si chiama «Note prezzo» e non «Note» perché nello
   // stesso foglio c'è già la nota dell'articolo: un articolo con una sola
   // quotazione si esporta in linea, e senza questa colonna la sua nota non
@@ -491,6 +496,7 @@ function catInfoAoa(scope) {
     ['Prezzi', ''],
     ['', 'Prezzo e fornitore sulla riga articolo creano una QUOTAZIONE nel listino e diventano il prezzo in uso.'],
     ['', 'Il prezzo è per una unità: nell\'UM prezzo se valorizzata, altrimenti nell\'UM dell\'articolo.'],
+    ['', 'Sconto % è lo sconto della quotazione, anche a cascata (10+5); Valida al è la scadenza del prezzo, vuota se non c\'è.'],
     ['', 'Sulla riga c\'è una quotazione sola: quella in uso. Le altre restano nell\'app (Listino fornitori) e l\'import non le tocca.'],
     ['', 'Per lo stesso fornitore entra solo una Data prezzo PIÙ RECENTE di quelle già a listino: una data più vecchia non entra (avviso nel report).'],
     ['', 'Stessa data e stesso fornitore = la stessa quotazione: se è uguale non succede niente, se è diversa non viene sovrascritta (avviso). Un prezzo nuovo vuole una data nuova.'],
@@ -986,7 +992,8 @@ function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
   const chi = sid ? `di ${esc(catSupplierName(sid))}` : 'senza fornitore';
 
   // La quotazione come la vuole la riga, su una copia.
-  const r = { supplierId: sid, price: prezzo, priceUom: undefined, minQty: '', leadDays: '', code: '', desc: '', note: '' };
+  const r = { supplierId: sid, price: prezzo, priceUom: undefined, minQty: '', leadDays: '', code: '', desc: '', note: '',
+    discount: '', validTo: '' };
   const pu = catCell(row, 'UM prezzo');
   if (pu) {
     // Solo l'unità di acquisto dell'articolo converte davvero (priceUomOf):
@@ -1004,6 +1011,20 @@ function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
   const sd = catCell(row, 'Descrizione fornitore'); if (sd !== null) r.desc = sd;
   // «Note» è già la nota dell'articolo: quella della quotazione è «Note prezzo».
   const nt = catCell(row, 'Note prezzo'); if (nt !== null) r.note = nt;
+  // Sconto e scadenza: scritti male non si indovinano, si lasciano vuoti e lo si dice.
+  const scRaw = catCell(row, 'Sconto %');
+  if (scRaw !== null && scRaw !== '') {
+    const norm = scontoNorm(typeof scRaw === 'number' ? String(scRaw) : scRaw);
+    if (norm == null) avviso(`sconto "${esc(String(scRaw))}" non valido (si scrive come 10+5): ignorato`);
+    else r.discount = norm;
+  }
+  const vtRaw = catCell(row, 'Valida al');
+  if (vtRaw !== null && vtRaw !== '') {
+    const vt = catDate(row, 'Valida al');
+    if (!vt) avviso(`"Valida al" "${esc(String(vtRaw))}" non riconosciuta: ignorata`);
+    else if (vt < data) avviso(`"Valida al" ${vt} viene prima della data del prezzo: ignorata`);
+    else r.validTo = vt;
+  }
 
   const stessa = suoi.find(x => (x.date || '') === data);
   if (stessa) {
@@ -1011,7 +1032,8 @@ function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
     const uguale = Number(stessa.price) === Number(prezzo) && n(stessa.priceUom) === n(r.priceUom) &&
       n(stessa.minQty) === n(r.minQty) && n(stessa.leadDays) === n(r.leadDays) &&
       (sc === null || n(stessa.code) === n(r.code)) && (sd === null || n(stessa.desc) === n(r.desc)) &&
-      (nt === null || n(stessa.note) === n(r.note));
+      (nt === null || n(stessa.note) === n(r.note)) &&
+      (scRaw === null || n(stessa.discount) === n(r.discount)) && (vtRaw === null || n(stessa.validTo) === n(r.validTo));
     if (!uguale) avviso(`${esc(it.code)}: c'è già una quotazione ${chi} del ${data}, diversa: non aggiornata. Per un prezzo nuovo serve una data più recente.`);
     return stessa;
   }
@@ -1020,8 +1042,8 @@ function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
     avviso(`${esc(it.code)}: quotazione ${chi} del ${data} non importata, a listino ce n'è una più recente (${ultima})`);
     return null;
   }
-  const nuova = stampNew({ id: gid(), supplierId: sid, price: prezzo, minQty: r.minQty, leadDays: r.leadDays,
-    code: r.code, desc: r.desc, date: data, rfqId: null, note: r.note });
+  const nuova = stampNew({ id: gid(), supplierId: sid, price: prezzo, discount: r.discount, minQty: r.minQty, leadDays: r.leadDays,
+    code: r.code, desc: r.desc, date: data, validTo: r.validTo, breaks: [], rfqId: null, note: r.note });
   if (r.priceUom) nuova.priceUom = r.priceUom;
   it.priceList.push(nuova);
   return nuova;

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.156.1**
+**Versione dell'app documentata: 0.157.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1158,7 +1158,47 @@ quotazione si modifica** e si mette in uso.
 | **U.M. del prezzo** | A che unità si riferisce |
 | **Q.tà minima** | Sotto la quale il prezzo non vale |
 | **Giorni di consegna** | Il lead time dichiarato, in giorni lavorativi (o di calendario, se così impostato nel calendario di fabbrica) |
-| **Data** | Quando la quotazione è stata raccolta |
+| **Data** | Quando la quotazione è stata raccolta, e il giorno **da cui vale** (dalla 0.157.0) |
+| **Sconto %** | *Modulo Listini e sconti.* Lo sconto del fornitore su quel prezzo, anche a cascata (`10+5`); sotto si legge il **netto** che si paga |
+| **Valida al** | *Modulo Listini e sconti.* Fino a quando il fornitore tiene il prezzo; vuoto se non l'ha detto |
+
+**Sconto e validità** (dalla 0.157.0, modulo *Listini e sconti*).
+
+- **Il costo in uso è quello che si paga**: prezzo di listino, meno lo sconto della quotazione,
+  meno lo sconto del fornitore (*Gestione → Fornitori*). 10 € al 40% costano meno di 7 € netti, e
+  ↓ e il risparmio del Riepilogo confrontano i fornitori su questo. Cambiando lo sconto di un
+  fornitore, il costo degli articoli che usano il suo listino si ricalcola subito.
+- **Ordini e ordini di lavoro** prendono dalla quotazione il **prezzo di listino e lo sconto** sulla
+  riga; lo sconto del fornitore va in testata come sconto documento. Lo stesso per i documenti
+  nati dal fabbisogno e dal riordino. Se la riga dice un prezzo o uno sconto diverso dal listino,
+  l'ordine lo segnala.
+- **Un listino annunciato** (con la data di domani o più avanti) non sostituisce quello di oggi e
+  non manda niente nello storico: sotto la data si legge *valida dal …*. Il documento prende la
+  quotazione valida **alla sua data**.
+- **Una quotazione scaduta si usa lo stesso**, perché non c'è niente di meglio, ma il listino dice
+  *⚠ scaduta il …* e l'ordine *⚠ listino scaduto*: è il momento di chiedere conferma al fornitore.
+  Nella vista d'insieme il filtro **Scadute o in scadenza (30 giorni)** dà l'elenco dei prezzi da
+  farsi riconfermare.
+- Nel foglio Excel del catalogo ci sono le colonne **Sconto %** e **Valida al**.
+
+**Scaglioni di quantità** (dalla 0.157.0, modulo *Listini e sconti*). Sotto il fornitore,
+**+ scaglioni** apre sotto la quotazione la tabella dei prezzi per quantità: «da 50 pz 12,60 −10»,
+«da 200 pz 11,80 −10». Il primo scaglione è il prezzo della quotazione, da Q.tà min in su; le
+soglie sono nell'unità della quotazione. Il prezzo dello scaglione raggiunto vale **per tutta la
+quantità**.
+
+- **Il costo in uso** è il netto per il **lotto di riordino** dell'articolo (senza lotto, il primo
+  scaglione), e i fornitori si confrontano a quella stessa quantità. In testa al listino si legge
+  per quale quantità è calcolato.
+- **Sugli ordini** lo scaglione si conta sulla **somma delle righe** dello stesso articolo: due
+  consegne da 30 pz sono un ordine da 60. Una riga che porta ancora il prezzo del listino passa
+  da sola allo scaglione giusto quando cambia la quantità, anche togliendo o aggiungendo righe.
+  Una riga scritta a mano non cambia: mostra il prezzo di listino e il pulsante **Applica**. Sotto
+  la descrizione una pillola dice lo scaglione raggiunto e quanto costa il prossimo.
+- **Nel fabbisogno** il documento prende lo scaglione della quantità da ordinare; se lo scaglione
+  dopo è entro il 20% in più, la riga lo dice («da 50 pz costa 11,34»). La quantità non cambia da
+  sola.
+- Nella vista d'insieme la colonna del prezzo dice quanti scaglioni ci sono; l'export li elenca.
 
 **Da sapere.**
 
@@ -2968,6 +3008,13 @@ l'elenco dei prezzi da registrare, tutti spuntati: togli la spunta a quelli che 
 Una riga lasciata fuori resta da registrare e la puoi aggiungere più tardi. La data della quotazione
 è quella di registrazione, non quella della richiesta.
 
+**Sconti e validità dell'offerta** (dalla 0.157.0, modulo *Listini e sconti*). Come sull'ordine, la
+colonna del prezzo ha **listino e sconto** sopra, **netto e importo** sotto, e restano scrivibili a
+richiesta inviata. In testata, **Offerta valida fino al** è la scadenza che dà il fornitore.
+*Registra a listino* porta nella quotazione listino, sconto e scadenza; se poi ne cambia uno, il
+pulsante torna attivo e la quotazione si aggiorna. L'ordine creato dalla richiesta tiene listino
+e sconto delle righe.
+
 **Confronta offerte.** Sotto-vista che mette a fianco i prezzi di più richieste sullo stesso
 materiale. Il totale più basso, in verde, si cerca **solo fra le offerte complete** (dalla
 0.105.6): un fornitore che quota una riga su tre ha per forza il totale più basso, e prima finiva
@@ -3001,9 +3048,11 @@ Stessi filtri delle richieste.
 | **N° conferma d'ordine fornitore** | Il numero che il fornitore restituisce. **Compilandolo, lo stato passa a *Confermato*.** |
 
 **Le righe.** **+ Da catalogo** · **+ Riga manuale** · **✓ Segna tutto ricevuto**.
-Tabella a due piani: # · Codice/Descrizione · Q.tà/U.M. · Prezzo unit./Importo ·
+Tabella a due piani: # · Codice/Descrizione · Q.tà/U.M. · Prezzo unit./Importo (con il modulo
+*Listini e sconti*: Listino · Sconto / Netto · Importo) ·
 **Richiesta/Confermata** (le due date) · **Ricevuto/Residuo** · azioni.
-In fondo il **Totale imponibile**.
+In fondo il **Totale imponibile**, e sopra, se il documento ha uno sconto, il totale delle righe e
+lo sconto.
 
 **Il documento.** La barra **Documento d'ordine**: **Genera documento PDF** /
 **Genera documento Excel**.
@@ -3015,13 +3064,35 @@ In fondo il **Totale imponibile**.
 - **Il ricevimento carica il magazzino.** Non serve registrare anche un movimento; anzi, farlo
   raddoppierebbe la merce.
 - Lo stato passa da solo a **Parziale** e poi a **Evaso** man mano che si registrano i ricevimenti.
-- **Il listino del fornitore si propone** (dalla 0.105.6). Scelto o cambiato il fornitore di un
-  ordine — o il terzista di un ordine di lavoro — l'app guarda le sue quotazioni e, se ha a listino
-  articoli dell'ordine, chiede «**Applicare il listino di …?**». Di serie il prezzo va solo alle
-  righe **senza prezzo**; a quelle che ne hanno già uno diverso solo spuntandolo, perché quel numero
-  può essere un prezzo concordato. Rifiutando, nessun prezzo cambia: è la regola di sempre, il
-  prezzo non si sostituisce da sé. La richiesta d'offerta resta fuori: lì il prezzo è la risposta
-  del fornitore, non un listino da applicare.
+- **Cambiare il fornitore aggiorna tutto** (dalla 0.157.0; prima si proponeva il listino con una
+  domanda). Scelto o cambiato il fornitore di un ordine — o il terzista di un ordine di lavoro —
+  il documento prende **tutto** del nuovo, senza chiedere:
+  - **trasporto, pagamento e sconto documento** sono i suoi; se non ne ha, valgono quelli di
+    *Gestione* (lo sconto resta vuoto);
+  - **ogni riga di articolo** prende il prezzo del suo listino, anche se prima c'era un prezzo
+    scritto a mano; le righe che **non ha a listino restano senza prezzo**, perché il prezzo di un
+    altro fornitore non deve restare sull'ordine;
+  - le **righe manuali** e quelle di **conto lavoro** non vengono da un listino e non cambiano.
+
+  Un avviso dice quante righe sono cambiate e quante sono rimaste senza prezzo. Non c'è un
+  «annulla»: per tornare indietro si rimette il fornitore di prima, che riapplica il suo listino
+  (i prezzi scritti a mano non tornano). A ordine inviato il fornitore non si cambia. Sulla
+  richiesta d'offerta cambiano condizioni e codici del fornitore, non i prezzi: lì il prezzo è la
+  sua risposta.
+- **Sconti** (dalla 0.157.0, modulo *Listini e sconti*). Con il modulo acceso la colonna del
+  prezzo si apre in due: sopra il **prezzo di listino** e lo **sconto**, sotto il **netto** e
+  l'importo. Lo sconto si scrive come lo scrivono i fornitori: `10+5` è il 10% e poi il 5% su
+  quello che resta (14,5% in tutto), `10+5-2` aggiunge alla fine una **maggiorazione** del 2%; al
+  più quattro passaggi, ognuno fino a 100. Scrivere il prezzo netto a mano (dalla finestra della
+  riga, o a modulo spento) toglie lo sconto: è un prezzo concordato. In testata lo **sconto
+  documento %** si applica al totale delle righe: in fondo compaiono *Totale righe*, *Sconto
+  documento* e *Totale imponibile*. Lo propone il fornitore (*Gestione → Fornitori*, *Sconto
+  fornitore %*) su ogni documento nuovo e quando lo si sceglie. Sul PDF e nell'Excel le colonne
+  *Prezzo listino*, *Sconto %* e *Prezzo netto* compaiono solo se almeno una riga ha uno sconto,
+  e il piede porta lo sconto documento se c'è. Il costo medio d'acquisto, il consuntivo e
+  l'impegno di commessa contano il prezzo **pagato**, cioè il netto di riga meno lo sconto del
+  documento. Spento il modulo, i campi spariscono, ma un documento che ha già degli sconti li
+  mostra e li conta.
 - **«Salva» a vuoto non tocca il documento** (dalla 0.105.6). Premuto su una richiesta, un ordine
   o un ordine di lavoro senza modifiche, lo segnava come modificato anche per chi non può scriverlo,
   e con l'archivio condiviso il server respingeva l'invio. Ora, se non è cambiato niente, non si
@@ -3874,6 +3945,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Qualità: collaudo in entrata, piani di controllo, non conformità, valutazione fornitori (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
 | Taratura strumenti: registro, tarature e blocco del collaudo (→ [cap. 17](#17-magazzino)), solo con la Qualità | spento |
+| Listini e sconti: sconti a cascata su righe e documenti, sconto del fornitore, sconto e validità delle quotazioni (→ [cap. 10](#10-listino-fornitori), [cap. 21](#21-ordini-a-fornitore-oda)) | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità

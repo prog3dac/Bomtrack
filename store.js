@@ -996,6 +996,7 @@ function migrateDB() {
     if (s.vat == null) s.vat = '';
     if (s.defaultTransport == null) s.defaultTransport = '';
     if (s.defaultPayment == null) s.defaultPayment = '';
+    if (s.discount == null) s.discount = '';   // sconto del fornitore (dalla 0.157.0)
     // Giorni di trasporto verso e dal terzista, andata più ritorno: si sommano
     // all'attraversamento di ogni tratta di conto lavoro affidata a lui.
     if (s.transitDays == null) s.transitDays = 0;
@@ -1021,7 +1022,10 @@ function migrateDB() {
     if (r.planId == null) r.planId = null;   // richiesta nata da un piano di fabbisogno
     if (r.jobId == null) r.jobId = null;    // e la commessa da cui quel piano discende
     if (r.replyBy == null) r.replyBy = '';  // «rispondere entro il» (dalla 0.154.0)
+    if (r.offerValidTo == null) r.offerValidTo = '';   // «offerta valida fino al» (dalla 0.157.0)
     (r.lines || []).forEach(l => {
+      if (l.listPrice == null) l.listPrice = '';   // listino e sconto dell'offerta (dalla 0.157.0)
+      if (l.discount == null) l.discount = '';
       if (l.price == null) {
         const o = r.offers && r.supplierId && r.offers[r.supplierId];
         l.price = (o && o.lines && o.lines[l.id] != null) ? o.lines[l.id] : '';
@@ -1069,8 +1073,13 @@ function migrateDB() {
     // colonna: è l'incoerenza che tutte le righe qui sopra esistono per evitare.
     if (o.supplierConfirmation == null) o.supplierConfirmation = '';
     if (o.notesInternal == null) o.notesInternal = '';
+    // Sconto del documento e, sulle righe, prezzo di listino e sconto (dalla
+    // 0.157.0). `price` resta il netto: i documenti di prima non cambiano.
+    if (o.discount == null) o.discount = '';
     (o.lines || []).forEach(l => {
       if (l.price == null) l.price = '';
+      if (l.listPrice == null) l.listPrice = '';
+      if (l.discount == null) l.discount = '';
       if (l.deliveryDate == null) l.deliveryDate = '';
       if (l.received == null) l.received = 0;
       if (l.note == null) l.note = '';
@@ -1254,6 +1263,12 @@ function migrateDB() {
         it.priceListSeeded = true;
       }
       if (modoCondiviso) togliQuotazioniDoppie(it);
+      // Sconto e scadenza della quotazione (dalla 0.157.0).
+      it.priceList.forEach(r => {
+        if (r.discount == null) r.discount = '';
+        if (r.validTo == null) r.validTo = '';
+        if (!Array.isArray(r.breaks)) r.breaks = [];   // scaglioni di quantità
+      });
     }
     // Approvvigionamento della parte: si produce in casa o si compra. Ha preso il
     // posto del vecchio modo di calcolo (costMode), che rispondeva alla stessa

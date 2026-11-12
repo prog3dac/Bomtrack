@@ -52,7 +52,7 @@ function orderWorstDelay(o) {
   });
   return peggiore;
 }
-function orderTotal(o) { return totaleRighe(o.lines); }
+function orderTotal(o) { return totaliDocumento(o).imponibile; }
 function orderReception(o) {
   let ordered = 0, received = 0;
   (o.lines || []).forEach(l => { ordered += Number(l.qty) || 0; received += Number(l.received) || 0; });
@@ -115,7 +115,7 @@ function newOrder() {
   if (!roleGuard('docs')) return;
   return conNumeri({ ODA: 1 }, () => {
     const o = Store.insert('orders', { id: gid(), number: nextOrderNumber(), title: '', date: oggiISO(),
-      status: 'bozza', supplierId: null, transport: db.settings.transportDefault || '', payment: db.settings.paymentDefault || '',
+      status: 'bozza', supplierId: null, transport: db.settings.transportDefault || '', payment: db.settings.paymentDefault || '', discount: '',
       rfqId: null, planId: null, supplierConfirmation: '', notes: '', notesInternal: '', lines: [], active: true });
     docLeave('order'); currentOrderId = o.id; orderView = 'edit'; renderOrders();
   });
@@ -155,6 +155,7 @@ function orderFromRfqFatto(r) {
     supplierId: r.supplierId || null,
     transport: r.transport || (sup && sup.defaultTransport) || db.settings.transportDefault || '',
     payment: r.payment || (sup && sup.defaultPayment) || db.settings.paymentDefault || '',
+    discount: (sup && sup.discount) || '',   // lo sconto del fornitore (dalla 0.157.0)
     rfqId: r.id, planId: r.planId || null, supplierConfirmation: '', notes: r.notes || '', notesInternal: r.notesInternal || '',
     lines: [], active: true });
   // Una richiesta può contenere insieme merce e lavorazioni dello stesso
@@ -164,6 +165,8 @@ function orderFromRfqFatto(r) {
   // ordine d'acquisto. Mescolarle sarebbe il contrario della separazione.
   const copia = l => ({ id: gid(), itemId: l.itemId || null, code: l.code || '', description: l.description || '',
     uom: l.uom || defaultUom(), qty: Number(l.qty) || 0, price: (l.price === '' || l.price == null) ? '' : Number(l.price),
+    // Lordo e sconto dell'offerta passano all'ordine così come sono (0.157.0).
+    listPrice: l.discount && l.listPrice !== '' && l.listPrice != null ? Number(l.listPrice) : '', discount: l.discount || '',
     deliveryDate: l.deliveryDate || '', received: 0, note: l.note || '',
     phaseKey: l.phaseKey || null, phaseKeys: l.phaseKeys || l.phaseKey || null });
   const merce = (r.lines || []).filter(l => !l.phaseKey);
@@ -252,19 +255,60 @@ function ordAddCatalogLines(id, ids) { docAddCatalogLines('order', id, ids); }
 // su una riga senza prezzo (l'assenza si vede già da sé).
 function ordLineListinoWarn(o, l) {
   if (!l.itemId || !o.supplierId) return '';
-  const prezzo = (l.price === '' || l.price == null) ? null : Number(l.price);
+  // Si confronta il prezzo **prima dello sconto di riga** (dalla 0.157.0): lo
+  // sconto è un accordo sulla riga, non un listino diverso.
+  const lordo = rigaPrezzoLordo(l);
+  const prezzo = (lordo === '' || lordo == null) ? null : Number(lordo);
   if (prezzo == null) return '';
   const it = getItem(l.itemId);
-  const row = supplierPriceRow(it, o.supplierId);
+  const row = supplierPriceRow(it, o.supplierId, o.date);
   const sup = supplierName(o.supplierId) || 'questo fornitore';
   if (!row || row.price === '' || row.price == null) {
     return `<span class="mrp-warn" title="${esc(sup)} non ha questo articolo a listino: il prezzo in riga viene da un'altra parte. Verificalo prima di mandare l'ordine.">⚠ non a listino</span>`;
   }
-  const cost = rowUnitCost(it, row) || 0;
-  if (Math.abs(cost - prezzo) < 0.00005) return '';
+  // Una quotazione scaduta si usa lo stesso, ma lo si dice: il fornitore
+  // potrebbe non tenerla più (dalla 0.157.0).
+  const scaduta = priceRowScaduta(row, o.date)
+    ? `<span class="mrp-warn" title="La quotazione di ${esc(sup)} valeva fino al ${esc(fmtDateIt(row.validTo))}: chiedi conferma del prezzo prima di mandare l'ordine.">⚠ listino scaduto il ${esc(fmtDateIt(row.validTo))}</span>`
+    : '';
+  // Lo scaglione è quello della quantità di tutto l'ordine per l'articolo.
+  const q = docQtaArticolo(o, l.itemId);
+  const cost = rowUnitGross(it, row, q) || 0;
+  const scontoRiga = scontoNorm(l.discount) || '';
+  const scontoListino = scontoNorm(rowUnitDiscount(it, row, q)) || '';
+  const scaglione = ordLineScaglioneHtml(it, row, q);
+  if (Math.abs(cost - prezzo) < 0.00005 && scontoRiga === scontoListino) return [scaglione, scaduta].filter(Boolean).join(' ');
   const uom = priceUomOf(it, row);
-  const grezzo = uom !== (it.uom || '') ? ` (a listino ${fmtPer(row.price, uom)})` : '';
-  return `<span class="mrp-warn" title="A listino ${esc(sup)} quota ${fmtPer(cost, itemUom(it))}${grezzo}. La riga dice altro: può essere un prezzo concordato, o il listino di un fornitore diverso rimasto da prima.">⚠ ${fmtPer(cost, itemUom(it))} a listino</span>`;
+  const grezzo = uom !== (it.uom || '') ? ` (a listino ${fmtPer(cost / (uomFactor(it, uom) || 1), uom)})` : '';
+  const conSconto = scontoListino ? ` −${scontoListino}%` : '';
+  return `<span class="mrp-warn" title="A listino ${esc(sup)} quota ${fmtPer(cost, itemUom(it))}${grezzo}${scontoListino ? ', sconto ' + esc(scontoListino) + '%' : ''} per ${esc(fmtQtyIt(q))} ${esc(itemUom(it))}. La riga dice altro: può essere un prezzo concordato, o il listino di un fornitore diverso rimasto da prima.">⚠ ${fmtPer(cost, itemUom(it))}${esc(conSconto)} a listino</span>`
+    + ` <button class="mini-btn lock-contract" title="Riporta la riga al prezzo di listino per questa quantità" onclick="ordApplicaListinoRiga('${o.id}','${l.id}')">Applica</button>`
+    + (scaglione ? ' ' + scaglione : '') + (scaduta ? ' ' + scaduta : '');
+}
+// Lo scaglione raggiunto e, se c'è, il prossimo con il suo netto: «da 25 pz ·
+// da 50 pz costa 11,34». Solo per le quotazioni con più di uno scaglione.
+function ordLineScaglioneHtml(it, row, q) {
+  const scaglioni = priceRowTiers(row);
+  if (scaglioni.length < 2) return '';
+  const u = priceUomOf(it, row);
+  const t = priceRowTier(it, row, q);
+  const dopo = priceRowNextTier(it, row, q);
+  const da = x => `da ${fmtQtyIt(x.fromQty)} ${u}`;
+  const netto = x => fmtPrezzo(x.price * uomFactor(it, u) * scontoFattore(x.discount));
+  const testo = (t.base && !t.fromQty ? 'primo scaglione' : 'scaglione ' + da(t)) + (dopo ? ` · ${da(dopo)} costa ${netto(dopo)}` : '');
+  return `<span class="ln-scaglione" title="Il prezzo dello scaglione vale per tutta la quantità dell'articolo nell'ordine (${esc(fmtQtyIt(q))} ${esc(itemUom(it))})">${esc(testo)}</span>`;
+}
+// «Applica»: la riga torna al listino del fornitore per la quantità dell'ordine.
+function ordApplicaListinoRiga(oid, lineId) {
+  if (!docGuard('order', oid, 'contract')) { renderOrders(); return; }
+  const o = getOrder(oid); if (!o) return;
+  const l = (o.lines || []).find(x => x.id === lineId); if (!l || !l.itemId) return;
+  const it = getItem(l.itemId);
+  const row = supplierPriceRow(it, o.supplierId, o.date);
+  if (!priceRowQuoted(row)) return;
+  const q = docQtaArticolo(o, l.itemId);
+  rigaImpostaPrezzo(l, rowUnitGross(it, row, q) || 0, rowUnitDiscount(it, row, q));
+  ordAutoStatus(o); touch(o); docMarkDirty('order'); renderOrders();
 }
 
 function renderOrderEdit(id) {
@@ -274,8 +318,7 @@ function renderOrderEdit(id) {
     const siSub = docSupInfoSub(si);
     const warn = ordLineListinoWarn(o, l);
     const lotWarn = lineLotWarn(l);
-    const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
-    const amount = price != null ? importoRiga(l) : null;
+    const qty = Number(l.qty) || 0;
     const rec = Number(l.received) || 0, residual = qty - rec;
     return `<tr>
       ${cell2(i + 1, '', 'ln-idx')}
@@ -283,8 +326,7 @@ function renderOrderEdit(id) {
     `${esc(l.description)}${lineOriginTag(l)}${warn ? ' ' + warn : ''}${lotWarn ? ' ' + lotWarn : ''}${siSub}${docLineNoteSub(l)}${ordClLineActions(o, l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-contract" value="${l.qty}" min="0" step="any" title="Quantità ordinata" onchange="ordSetLine('${id}','${l.id}','qty',this.value)">`,
     esc(l.uom || ''))}
-      ${cell2(`<input type="number" class="rfq-price-input lock-contract" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="Prezzo unitario" onchange="ordSetLine('${id}','${l.id}','price',this.value)">`,
-    `<span class="ln-amount">${amount != null ? fmtN(amount) : '—'}</span>`)}
+      ${docPrezzoCell('ord', o, l, 'Prezzo unitario')}
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="ordSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
     `<input type="date" class="rfq-date-input lock-reception" value="${esc(l.confirmedDate || '')}" title="Data che il fornitore ha confermato" onchange="ordSetLine('${id}','${l.id}','confirmedDate',this.value)">${ordLineDelayHtml(l)}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-reception" value="${rec}" min="0" step="any" title="${l.phaseKey ? 'Pezzi rientrati dal terzista: portano questo ordine a parziale o evaso, ma non caricano il magazzino. Il rientro si registra come movimento.' : 'Quantità ricevuta'}" onchange="ordSetLine('${id}','${l.id}','received',this.value)">`,
@@ -292,7 +334,6 @@ function renderOrderEdit(id) {
       ${docLineActionsCell('ord', id, l)}
     </tr>`;
   }).join('') || `<tr><td colspan="7" class="empty-text">Nessuna riga. Aggiungi articoli dal catalogo o manualmente.</td></tr>`;
-  const total = orderTotal(o);
   // Se il fornitore ha confermato più tardi di quanto chiesto, si dice subito e
   // in testata: è l'informazione che fa decidere se la commessa slitta, e non
   // deve stare nascosta in una colonna in fondo.
@@ -305,7 +346,7 @@ function renderOrderEdit(id) {
     salva: { id: 'order-save-btn', azione: `ordSave('${id}')`, dirty: orderDirty }, comandi: storiaBtn('order', o.id), lock: lockBanner,
     esporta: docExportBtnsHtml({ cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine", testi: { k: 'order', rec: o } }) },
   corpo: `${docCoWarnHtml()}
-    ${docTestaHtml({ pfx: 'ord', rec: o, controparte: 'Fornitore', data: 'Data ordine', offerta: true, conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
+    ${docTestaHtml({ pfx: 'ord', rec: o, controparte: 'Fornitore', data: 'Data ordine', offerta: true, conferma: "N° conferma d'ordine fornitore", note: 'Note', sconto: true })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
     <h3 class="rfq-subhead">Righe ordine
       <span class="rfq-head-actions">
@@ -318,12 +359,12 @@ function renderOrderEdit(id) {
         <th scope="col" class="ln-idx">#</th>
         ${th2('Codice', 'Descrizione')}
         ${th2('Q.tà', 'U.M.')}
-        ${th2(`Prezzo unit. (${esc(cur())}/U.M.)`, `Importo (${esc(cur())})`, 'Prezzo di una unità, nella U.M. della riga; sotto, quanto fa per la quantità di riga')}
+        ${docPrezzoTh(o, [`Prezzo unit. (${esc(cur())}/U.M.)`, 'Prezzo di una unità, nella U.M. della riga; sotto, quanto fa per la quantità di riga'])}
         ${th2('Richiesta', 'Confermata', 'Sopra la data che abbiamo chiesto, sotto quella che il fornitore ha confermato')}
         ${th2('Ricevuto', 'Residuo', 'Sopra quanto è arrivato, sotto quanto manca')}
         <th scope="col"></th></tr></thead>
       <tbody>${lines}</tbody>
-      <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="3"></td></tr></tfoot>
+      ${docTotaliFootHtml(o, 3, 3)}
     </table></div>
     ${orderDirty ? '' : docEmessiHtml('order', o)}` });
 }
@@ -340,20 +381,16 @@ function exportOrderPDF(id, modo) {
   const startY = docPdfTesta(doc, { titolo: 'Ordine di acquisto / Purchase Order', rec: o, kind: 'order',
     righe: [['Vostra offerta / Your quotation', o.supplierQuote]],
     chi: 'RICHIEDENTE / BUYER', controparte: 'FORNITORE / SUPPLIER', vuota: '(fornitore non selezionato / not selected)' });
-  const head = hasSup
-    ? ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Cod. forn.\nSuppl. code', 'Descr. forn.\nSuppl. desc.', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Importo\nAmount', 'Data consegna\nDelivery date']
-    : ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Importo\nAmount', 'Data consegna\nDelivery date'];
+  const testa = ['#', 'Codice\nCode', 'Descrizione\nDescription', ...(hasSup ? ['Cod. forn.\nSuppl. code', 'Descr. forn.\nSuppl. desc.'] : []), 'Q.tà\nQty'];
+  const head = [...testa, ...docStampaPrezzoHead(o, 'Prezzo unit.\nUnit price'), 'Importo\nAmount', 'Data consegna\nDelivery date'];
   const body = (o.lines || []).map((l, i) => {
     const si = lineSupInfo(o.supplierId, l);
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
-    const tail = [(fmtQtyIt(qty) + ' ' + (l.uom || '')).trim(),
-      price != null ? fmtPrezzo(price) + (l.uom ? '/' + l.uom : '') : '',
+    const tail = [(fmtQtyIt(qty) + ' ' + (l.uom || '')).trim(), ...docPdfPrezzoCelle(o, l),
       price != null ? fmtN(importoRiga(l)) : '', fmtDateIt(l.deliveryDate)];
     return hasSup ? [i + 1, l.code || '', lineDescDoc(l), si ? si.code : '', si ? si.desc : '', ...tail] : [i + 1, l.code || '', lineDescDoc(l), ...tail];
   });
-  const totLabel = { content: 'Totale / Total', styles: { halign: 'right', fontStyle: 'bold' } };
-  const totVal = { content: fmtN(orderTotal(o)), styles: { fontStyle: 'bold' } };
-  const foot = hasSup ? [['', '', '', '', '', '', totLabel, totVal, '']] : [['', '', '', '', totLabel, totVal, '']];
+  const foot = docPdfFoot(o, head.length, head.length - 2);
   doc.autoTable({ startY, head: [head], body, foot, styles: { fontSize: 8 }, headStyles: { fillColor: [58, 123, 232] }, footStyles: { fillColor: [235, 238, 245], textColor: 20 } });
   doc.setTextColor(80); doc.setFontSize(9);
   // Solo o.notes: le note interne (notesInternal) non escono mai sul documento.
@@ -380,19 +417,17 @@ function exportOrderExcel(id) {
   // Nel foglio i numeri restano numeri: la valuta si dichiara in intestazione,
   // l'unità sta nella sua colonna e vale per q.tà, ricevuto e residuo.
   const hPrezzo = `Prezzo unitario (${cur()}/U.M.)`, hImporto = `Importo (${cur()})`;
-  data.push(hasSup
-    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota', 'Disegno / certificato']
-    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota', 'Disegno / certificato']);
+  data.push(['#', 'Codice', 'Descrizione', ...(hasSup ? ['Codice fornitore', 'Descrizione fornitore'] : []), 'Q.tà', 'U.M.', ...docXlsPrezzoHead(o, hPrezzo), hImporto, 'Consegna', 'Ricevuto', 'Residuo', 'Nota', 'Disegno / certificato']);
   (o.lines || []).forEach((l, i) => {
     const si = lineSupInfo(o.supplierId, l);
-    const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? '' : Number(l.price);
-    const amount = price === '' ? '' : importoRiga(l);
+    const qty = Number(l.qty) || 0;
+    const amount = (l.price === '' || l.price == null) ? '' : importoRiga(l);
     const rec = Number(l.received) || 0;
     const supCols = hasSup ? [si ? si.code : '', si ? si.desc : ''] : [];
-    data.push([i + 1, l.code || '', l.description, ...supCols, qty, l.uom || '', price, amount, fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '', lineExtraDoc(l).join(' · ')]);
+    data.push([i + 1, l.code || '', l.description, ...supCols, qty, l.uom || '', ...docXlsPrezzoCelle(o, l), amount, fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '', lineExtraDoc(l).join(' · ')]);
   });
   data.push([]);
-  data.push(['', 'TOTALE IMPONIBILE / TOTAL', orderTotal(o)]);
+  docXlsFoot(o).forEach(r => data.push(r));
   if (!docXlsSalva(data, o, 'Ordine', 'ordine', 'order')) return;
   askMarkSent(o, `Excel generato.\nSegnare l'ordine ${o.number} come inviato?`, 'inviato', renderOrders);
 }
@@ -414,7 +449,7 @@ function getOdl(id) { return (db.workOrders || []).find(o => o.id === id); }
 function odlMode(o) { return docMode('odl', o); }
 function odlGuard(id, kind) { return docGuard('odl', id, kind); }
 function odlUnlock(id) { return docUnlock('odl', id); }
-function odlTotal(o) { return totaleRighe(o.lines); }
+function odlTotal(o) { return totaliDocumento(o).imponibile; }
 // Progressivo per anno: ODL-<anno>-NNN. Numerazione **sua**: un ODL e un ODA
 // dello stesso giorno non devono avere lo stesso numero, o al telefono col
 // terzista non si capisce di quale documento si stia parlando.
@@ -464,7 +499,7 @@ function newOdl() {
   if (!roleGuard('docs')) return;
   return conNumeri({ ODL: 1 }, () => {
     const o = Store.insert('workOrders', { id: gid(), number: nextOdlNumber(), title: '', date: oggiISO(),
-      status: 'bozza', supplierId: null, transport: db.settings.transportDefault || '', payment: db.settings.paymentDefault || '',
+      status: 'bozza', supplierId: null, transport: db.settings.transportDefault || '', payment: db.settings.paymentDefault || '', discount: '',
       rfqId: null, planId: null, jobId: null, supplierConfirmation: '', notes: '', notesInternal: '', lines: [], active: true });
     docLeave('odl'); currentOdlId = o.id; odlView = 'edit'; renderOdl();
   });
@@ -1018,8 +1053,7 @@ function odlAddPhases(id) {
 function renderOdlEdit(id) {
   const o = getOdl(id); if (!o) { odlView = 'list'; return ''; }
   const lines = (o.lines || []).map((l, i) => {
-    const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
-    const amount = price != null ? importoRiga(l) : null;
+    const qty = Number(l.qty) || 0;
     const rec = Number(l.received) || 0, residual = qty - rec;
     // Avvia e dichiara stanno sotto la riga che li giustifica: terzista e
     // ordine sono già decisi, resta da dire cosa esce e cosa torna.
@@ -1030,8 +1064,7 @@ function renderOdlEdit(id) {
     `${esc(l.description)}${docLineNoteSub(l)}${cl}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-contract" value="${l.qty}" min="0" step="any" title="Pezzi da lavorare" onchange="odlSetLine('${id}','${l.id}','qty',this.value)">`,
     esc(l.uom || ''))}
-      ${cell2(`<input type="number" class="rfq-price-input lock-contract" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="Tariffa per pezzo" onchange="odlSetLine('${id}','${l.id}','price',this.value)">`,
-    `<span class="ln-amount">${amount != null ? fmtN(amount) : '—'}</span>`)}
+      ${docPrezzoCell('odl', o, l, 'Tariffa per pezzo')}
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.startDate || '')}" title="Inizio lavoro: il giorno in cui consegniamo il materiale al terzista" onchange="odlSetLine('${id}','${l.id}','startDate',this.value)">`,
     `<span class="empty-text" style="padding:0" title="Da inviare finché il materiale non parte; in lavorazione quando è uscito; rientrata quando i pezzi sono tornati">${esc(ODL_AVANZAMENTO[odlAvanzamentoRiga(o, l)])}</span>`)}
       ${cell2(`<input type="date" class="rfq-date-input lock-contract" value="${esc(l.deliveryDate || '')}" title="Data che abbiamo chiesto" onchange="odlSetLine('${id}','${l.id}','deliveryDate',this.value)">`,
@@ -1041,7 +1074,6 @@ function renderOdlEdit(id) {
       ${docLineActionsCell('odl', id, l)}
     </tr>`;
   }).join('') || `<tr><td colspan="8" class="empty-text">Nessuna lavorazione. Un ordine di lavoro si genera dal <strong>Fabbisogno</strong>, oppure si scrive qui con <em>+ Lavorazione da ciclo</em>: si sceglie la parte, le fasi da mandare fuori e i pezzi.</td></tr>`;
-  const total = odlTotal(o);
   const ritardo = orderWorstDelay(o);
   const lockBanner = docLockBanner(odlMode(o), 'Ordine di lavoro ' + (ORDER_STATUS[o.status] || o.status).toLowerCase(), 'odl', id);
   return docPaginaHtml({ numero: o.number, rail: { k: 'odl', rec: o, chiudi: 'odlBackToList()', cosa: "l'ordine di lavoro",
@@ -1050,7 +1082,7 @@ function renderOdlEdit(id) {
     salva: { id: 'odl-save-btn', azione: `odlSave('${id}')`, dirty: odlDirty }, comandi: storiaBtn('odl', o.id), lock: lockBanner,
     esporta: docExportBtnsHtml({ cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro", testi: { k: 'odl', rec: o } }) },
   corpo: `${docCoWarnHtml()}${odlOdpRef(o)}
-    ${docTestaHtml({ pfx: 'odl', rec: o, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', ddt: true, note: 'Note' })}
+    ${docTestaHtml({ pfx: 'odl', rec: o, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', ddt: true, note: 'Note', sconto: true })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta.</div>` : ''}
     <details class="doc-info"><summary>${ico('book', 'tinted', '')} Come funziona</summary><p>Ogni lavorazione si <strong>avvia</strong> quando il materiale parte e si <strong>dichiara</strong> quando i pezzi tornano, buoni e scarti: come sull'ordine di produzione. Il magazzino si muove ai due estremi del <strong>ciclo</strong> — il materiale esce all'avvio della prima tratta, il codice della parte si carica al rientro dell'ultima — e in mezzo i pezzi passano e basta. Se la lavorazione viene da un <strong>ordine di produzione</strong>, avvia e dichiara scrivono sulle sue fasi: il gesto è uno, in qualunque dei due documenti lo si faccia.</p></details>
     <h3 class="rfq-subhead">Lavorazioni
@@ -1064,13 +1096,13 @@ function renderOdlEdit(id) {
         <th scope="col" class="ln-idx">#</th>
         ${th2('Parte', 'Lavorazione')}
         ${th2('Pezzi', 'U.M.')}
-        ${th2(`Tariffa (${esc(cur())}/pz)`, `Importo (${esc(cur())})`, 'Quanto costa lavorare un pezzo; sotto, quanto fa per i pezzi di riga')}
+        ${docPrezzoTh(o, [`Tariffa (${esc(cur())}/pz)`, 'Quanto costa lavorare un pezzo; sotto, quanto fa per i pezzi di riga'])}
         ${th2('Inizio lavoro', 'Stato', 'Sopra il giorno in cui consegniamo il materiale al terzista, sotto a che punto è la lavorazione')}
         ${th2('Richiesta', 'Confermata', 'Sopra la data che abbiamo chiesto, sotto quella che il terzista ha confermato')}
         ${th2('Rientrati', 'Ancora fuori', 'Sopra quanti pezzi sono tornati, sotto quanti restano dal terzista')}
         <th scope="col"></th></tr></thead>
       <tbody>${lines}</tbody>
-      <tfoot><tr class="rfq-cmp-total"><td colspan="3" style="text-align:right">Totale imponibile</td><td>${fmtN(total)}</td><td colspan="4"></td></tr></tfoot>
+      ${docTotaliFootHtml(o, 3, 4)}
     </table></div>
     ${odlDeclBlock(o)}
     ${odlDirty ? '' : docEmessiHtml('workOrder', o)}` });
@@ -1109,17 +1141,14 @@ function exportOdlPDF(id, modo) {
   if (o.number) qrPdfDraw(doc, qrLink('odl', o.number), doc.internal.pageSize.getWidth() - 14 - 22, 5, 22);
   const startY = docPdfTesta(doc, { titolo: 'Ordine di lavoro / Subcontract Order', rec: o, kind: 'workOrder',
     chi: 'COMMITTENTE / PRINCIPAL', controparte: 'TERZISTA / SUBCONTRACTOR', vuota: '(terzista non selezionato / not selected)' });
-  const head = ['#', 'Parte\nPart', 'Lavorazione\nOperation', 'Pezzi\nQty', 'Tariffa\nUnit rate', 'Importo\nAmount',
+  const head = ['#', 'Parte\nPart', 'Lavorazione\nOperation', 'Pezzi\nQty', ...docStampaPrezzoHead(o, 'Tariffa\nUnit rate'), 'Importo\nAmount',
     'Inizio lavoro\nWork start', 'Data consegna\nDelivery date'];
   const body = (o.lines || []).map((l, i) => {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? null : Number(l.price);
-    return [i + 1, l.code || '', lineDescDoc(l), (fmtQtyIt(qty) + ' ' + (l.uom || '')).trim(),
-      price != null ? fmtPrezzo(price) + (l.uom ? '/' + l.uom : '') : '',
+    return [i + 1, l.code || '', lineDescDoc(l), (fmtQtyIt(qty) + ' ' + (l.uom || '')).trim(), ...docPdfPrezzoCelle(o, l),
       price != null ? fmtN(importoRiga(l)) : '', fmtDateIt(l.startDate), fmtDateIt(l.deliveryDate)];
   });
-  const totLabel = { content: 'Totale / Total', styles: { halign: 'right', fontStyle: 'bold' } };
-  const totVal = { content: fmtN(odlTotal(o)), styles: { fontStyle: 'bold' } };
-  doc.autoTable({ startY, head: [head], body, foot: [['', '', '', '', totLabel, totVal, '', '']],
+  doc.autoTable({ startY, head: [head], body, foot: docPdfFoot(o, head.length, head.length - 3),
     styles: { fontSize: 8 }, headStyles: { fillColor: [46, 164, 121] }, footStyles: { fillColor: [235, 242, 238], textColor: 20 } });
   // Il materiale che parte con l'ordine (dalla 0.154.0): il terzista sa che
   // cosa gli arriva e con quale DDT, e lo riporta sul DDT di reso.
@@ -1151,15 +1180,15 @@ function exportOdlExcel(id) {
     ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
     ['Conferma terzista / Order confirmation', o.supplierConfirmation],
     ['DDT di invio / Delivery note', odlTestoDdt(o)]] });
-  data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', `Tariffa (${cur()}/pz)`, `Importo (${cur()})`, 'Inizio lavoro', 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
+  data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', ...docXlsPrezzoHead(o, `Tariffa (${cur()}/pz)`), `Importo (${cur()})`, 'Inizio lavoro', 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
   (o.lines || []).forEach((l, i) => {
-    const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? '' : Number(l.price);
-    const amount = price === '' ? '' : importoRiga(l);
+    const qty = Number(l.qty) || 0;
+    const amount = (l.price === '' || l.price == null) ? '' : importoRiga(l);
     const rec = Number(l.received) || 0;
-    data.push([i + 1, l.code || '', l.description, qty, l.uom || '', price, amount, fmtDateIt(l.startDate), fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '']);
+    data.push([i + 1, l.code || '', l.description, qty, l.uom || '', ...docXlsPrezzoCelle(o, l), amount, fmtDateIt(l.startDate), fmtDateIt(l.deliveryDate), rec, qty - rec, l.note || '']);
   });
   data.push([]);
-  data.push(['', 'TOTALE IMPONIBILE / TOTAL', odlTotal(o)]);
+  docXlsFoot(o).forEach(r => data.push(r));
   const mat = odlMaterialeInviato(o);
   if (mat.length) {
     data.push([]);

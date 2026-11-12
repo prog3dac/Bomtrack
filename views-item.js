@@ -499,6 +499,8 @@ const STORICO_CAMPI = {
   referente: 'Referente', phone: 'Telefono', vat: 'Partita IVA', street: 'Via', streetNumber: 'Civico',
   zip: 'CAP', city: 'Città', province: 'Provincia', country: 'Nazione',
   defaultTransport: 'Trasporto predefinito', defaultPayment: 'Pagamento predefinito',
+  // Dalla 0.157.0
+  discount: 'Sconto %', listPrice: 'Prezzo di listino',
   hourlyRate: 'Tariffa oraria', capacityHours: 'Ore di capacità', suppliers: 'Fornitori',
   sigla: 'Sigla', subs: 'Sottofamiglie', username: 'Nome utente', color: 'Colore', path: 'Percorso',
   // Copie dei documenti emessi

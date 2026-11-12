@@ -221,15 +221,16 @@ describe('Il fornitore cambiato dopo si segnala in riga', () => {
     const o = app_.ref('getOrder')('o1');
     return app_.ctx.ordLineListinoWarn(o, o.lines[0]).replace(/<[^>]+>/g, '');
   }
-  // I prezzi non si riscrivono da soli — nessun prezzo cambia da sé, in
-  // quest'app — ma la riga rimasta col listino di un altro va detta.
+  // Dalla 0.157.0 cambiare il fornitore riscrive i prezzi delle righe di
+  // articolo: non resta niente da segnalare. Se qualcuno poi scrive a mano un
+  // prezzo diverso dal listino, l'avviso c'è ancora.
   it('niente da segnalare se il fornitore non è cambiato', () => {
     assert.equal(ordineCambiato('s1', 's1'), '');
   });
-  it('passando a un fornitore che quota diversamente, lo dice', () => {
-    assert.match(ordineCambiato('s1', 's2'), /a listino/);
+  it('passando a un fornitore che quota diversamente, la riga prende il suo prezzo', () => {
+    assert.equal(ordineCambiato('s1', 's2'), '');
   });
-  it('passando a un fornitore che non lo ha a listino, lo dice', () => {
-    assert.match(ordineCambiato('s1', 's3'), /non a listino/);
+  it('passando a un fornitore che non lo ha a listino, la riga resta senza prezzo', () => {
+    assert.equal(ordineCambiato('s1', 's3'), '', 'senza prezzo non c\'è niente da confrontare');
   });
 });

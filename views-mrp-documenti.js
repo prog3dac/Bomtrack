@@ -267,6 +267,9 @@ function planDocsBody(gruppi, planId, kind) {
         // Il listino applicabile non è quello con cui è stato costificato: il
         // documento seguirà il listino, e il totale qui sopra viene dal costo.
         else if (r.listinoDiverso) seg.push(`<span class="mrp-warn" title="Costificato a ${fmtPer(r.price, r.uom)}, ma ${esc(supplierName(r.supplierId) || 'il fornitore')} oggi quota ${fmtPer(r.docInGestione, r.uom)}. Sul documento va il listino.">${ico('refresh', 'tinted', '')} a listino ${fmtPer(r.priceDoc, r.uom)}</span>`);
+        // Lo scaglione dopo è a un passo (dalla 0.157.0): lo si dice, la
+        // quantità la decide chi ordina.
+        if (r.prossimoScaglione) seg.push(`<span class="ln-scaglione" title="Ordinando ${fmtUom(r.prossimoScaglione.qty, r.uom)} invece di ${fmtUom(r.qtyOrder, r.uom)} si passa allo scaglione dopo">da ${fmtUom(r.prossimoScaglione.qty, r.uom)} costa ${fmtPer(r.prossimoScaglione.price, r.uom)}</span>`);
       }
       // Questo pannello è l'anteprima del documento: l'importo è quello che il
       // documento porterà, cioè il listino applicabile. Senza una quotazione di
@@ -416,6 +419,7 @@ function planDocHead(p, supplierId) {
     date: oggiISO(), status: 'bozza', supplierId: supplierId || null,
     transport: (sup && sup.defaultTransport) || db.settings.transportDefault || '',
     payment: (sup && sup.defaultPayment) || db.settings.paymentDefault || '',
+    discount: (sup && sup.discount) || '',   // lo sconto del fornitore (dalla 0.157.0)
     // La commessa segue il piano fino al documento: è la catena che permette di
     // chiedere «cosa abbiamo ordinato per la commessa 240?» e avere risposta.
     planId: p.id, jobId: p.jobId || null, notes: '', notesInternal: '', active: true,
@@ -438,11 +442,18 @@ function planDocLine(r, conPrezzo) {
   // La data di consegna richiesta è quella in cui il materiale serve: era
   // sempre vuota, e chi generava un ordine dal fabbisogno doveva riscriverla a
   // mano su ogni riga — cioè non la scriveva.
-  return { id: gid(), itemId: it.id, code: it.code || '', description: it.name || '',
+  const l = { id: gid(), itemId: it.id, code: it.code || '', description: it.name || '',
     uom: itemUom(it) || defaultUom(),
     qty: Number(r.qtyOrder != null ? r.qtyOrder : r.qty) || 0,
-    price: conPrezzo && !r.noDocPrice && r.priceDoc > 0 ? r.priceDoc : '',
+    price: '', listPrice: '', discount: '',
     deliveryDate: r.due || '', note: '' };
+  // Prezzo di listino e sconto della quotazione; lo sconto del fornitore lo
+  // porta la testata del documento (planDocHead).
+  if (conPrezzo && !r.noDocPrice && r.priceDoc > 0) {
+    if (r.docLordo != null) rigaImpostaPrezzo(l, r.docLordo, r.docSconto);
+    else l.price = r.priceDoc;
+  }
+  return l;
 }
 // Riga di documento di una **fase di conto lavoro**.
 //

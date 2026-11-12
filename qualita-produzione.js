@@ -339,7 +339,7 @@ function qcCostoRipresa(o) {
   (o.phases || []).forEach(f => {
     if (f.supplierId) {
       const x = opOdlDi(f);
-      if (x && !righe.has(x.line.id)) { righe.add(x.line.id); tot += (Number(x.line.received) || 0) * (Number(x.line.price) || 0); }
+      if (x && !righe.has(x.line.id)) { righe.add(x.line.id); tot += (Number(x.line.received) || 0) * (prezzoPagatoRiga(x.odl, x.line) || 0); }
       return;
     }
     const pezzo = typeof consFaseCostoPezzo === 'function' ? consFaseCostoPezzo(f)

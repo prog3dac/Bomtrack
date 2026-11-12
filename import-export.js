@@ -457,11 +457,11 @@ function settingsSheets() {
       userList().map(u => [u.name || '', u.email || '', u.username || '', roleLabel(u.role), safeColor(u.color), siNo(u.active)])) });
 
   out.push({ key: 'suppliers', name: 'Fornitori',
-    cols: [{ wch: 28 }, { wch: 20 }, { wch: 26 }, { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 8 }, { wch: 8 }, { wch: 18 }, { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 8 }, { wch: 14 }],
-    aoa: [['Nome', 'Referente', 'Email', 'Telefono', 'P.IVA / C.F.', 'Via / indirizzo', 'Numero civico', 'CAP', 'Città', 'Provincia', 'Stato', 'Pagamento predefinito', 'Trasporto predefinito', 'Attivo', 'Trasporto CL gg']].concat(
+    cols: [{ wch: 28 }, { wch: 20 }, { wch: 26 }, { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 8 }, { wch: 8 }, { wch: 18 }, { wch: 6 }, { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 12 }],
+    aoa: [['Nome', 'Referente', 'Email', 'Telefono', 'P.IVA / C.F.', 'Via / indirizzo', 'Numero civico', 'CAP', 'Città', 'Provincia', 'Stato', 'Pagamento predefinito', 'Trasporto predefinito', 'Attivo', 'Trasporto CL gg', 'Sconto fornitore %']].concat(
       (db.suppliers || []).map(f => [f.name || '', f.referente || '', f.email || '', f.phone || '', f.vat || '',
         f.street || '', f.streetNumber || '', f.zip || '', f.city || '', f.province || '', f.country || '',
-        f.defaultPayment || '', f.defaultTransport || '', siNo(f.active), Number(f.transitDays) || 0])) });
+        f.defaultPayment || '', f.defaultTransport || '', siNo(f.active), Number(f.transitDays) || 0, f.discount || ''])) });
 
   out.push({ key: 'customers', name: 'Clienti',
     cols: [{ wch: 28 }, { wch: 20 }, { wch: 26 }, { wch: 16 }, { wch: 16 }, { wch: 26 }, { wch: 8 }, { wch: 8 }, { wch: 18 }, { wch: 6 }, { wch: 12 }, { wch: 30 }, { wch: 8 }],
@@ -866,7 +866,7 @@ function applySuppliersSheet(rows, rep) {
     const isNew = !s;
     if (isNew) {
       s = stampNew({ id: gid(), name, referente: '', email: '', phone: '', vat: '', street: '', streetNumber: '',
-        zip: '', city: '', province: '', country: '', defaultTransport: '', defaultPayment: '', active: true });
+        zip: '', city: '', province: '', country: '', defaultTransport: '', defaultPayment: '', discount: '', active: true });
       db.suppliers.push(s);
     }
     let cambiato = false;
@@ -878,6 +878,13 @@ function applySuppliersSheet(rows, rep) {
     });
     const att = boolCell(row, 'Attivo', 'Active');
     if (att !== null && s.active !== att) { s.active = att; cambiato = true; }
+    // Lo sconto del fornitore (dalla 0.157.0): colonna assente = invariato.
+    const scRaw = cell(row, 'Sconto fornitore %', 'Sconto fornitore', 'Sconto');
+    if (scRaw !== null) {
+      const sconto = scontoNorm(scRaw);
+      if (sconto == null) rep.errors.push(`Fornitori, riga ${i + 2}: sconto non valido ("${esc(scRaw)}"), si scrive come 10+5`);
+      else if ((s.discount || '') !== sconto) { s.discount = sconto; cambiato = true; fornitoreRiapplicaCosti(s.id); }
+    }
     // Giorni di trasporto verso il terzista: colonna assente = invariato.
     const trRaw = cell(row, 'Trasporto CL gg', 'Trasporto conto lavoro');
     if (s.transitDays == null) s.transitDays = 0;

@@ -2,6 +2,31 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.157.0 — 2026-11-12
+
+**Sconti su ordini e ordini di lavoro, e il fornitore cambiato aggiorna tutto.** Primo passo del piano listini e sconti.
+- Nuovo modulo **Listini e sconti** (*Gestione → Aree e moduli*, spento di serie). Sulle righe di ordini a fornitore e ordini di lavoro la colonna del prezzo diventa **listino e sconto** sopra, **netto e importo** sotto. Lo sconto si scrive a cascata come lo danno i fornitori: `10+5` è il 10% e poi il 5% (14,5%); il meno è una maggiorazione (`10+5-2`). Il netto scritto a mano toglie lo sconto.
+- **Sconto documento** in testata, sotto il totale delle righe: in fondo *Totale righe*, *Sconto documento*, *Totale imponibile*. Lo propone lo **sconto fornitore** di *Gestione → Fornitori* (anche dal foglio Excel dei fornitori, colonna *Sconto fornitore %*).
+- PDF ed Excel: colonne *Prezzo listino*, *Sconto %*, *Prezzo netto* solo se una riga ha uno sconto; nel piede lo sconto documento se c'è.
+- Costo medio d'acquisto, consuntivo, impegno di commessa, valore delle consegne in ritardo e costo della ripresa di una NC contano il prezzo **pagato**: netto di riga meno sconto documento.
+- **Cambiare il fornitore aggiorna tutto**, senza la domanda «Applicare il listino?»: trasporto, pagamento e sconto documento del nuovo fornitore (o quelli di Gestione), il suo listino su ogni riga di articolo anche se il prezzo era scritto a mano, e le righe che non ha a listino restano senza prezzo. Righe manuali e di conto lavoro restano. Sulla richiesta d'offerta i prezzi non cambiano.
+- `price` di riga resta il netto: i documenti di prima non cambiano, e a modulo spento l'app è quella di prima, salvo il cambio di fornitore.
+
+**Sconto e validità nel listino fornitori.** Secondo passo.
+- Ogni quotazione ha uno **Sconto %** e una data **Valida al**; sotto il prezzo si legge il netto. La data della quotazione è anche il giorno **da cui vale**: un listino annunciato non sostituisce quello di oggi e non manda niente nello storico.
+- **Il costo in uso è quello che si paga**: listino, sconto della quotazione e sconto del fornitore. ↓, il risparmio del Riepilogo e il fabbisogno confrontano i fornitori su questo; cambiando lo sconto di un fornitore i costi dei suoi articoli si ricalcolano.
+- Ordini, ordini di lavoro, documenti del fabbisogno e del riordino prendono **listino e sconto** dalla quotazione valida alla data del documento; l'ordine segnala uno sconto diverso dal listino e una quotazione **scaduta** (che si usa lo stesso).
+- Vista d'insieme del listino: colonna *Valida al*, filtro **Scadute o in scadenza (30 giorni)**, sconto e scadenza nell'export. Foglio catalogo: colonne *Sconto %* e *Valida al*.
+- **Richieste d'offerta**: listino e sconto sulle righe, **Offerta valida fino al** in testata, scrivibili a richiesta inviata. *Registra a listino* li porta nella quotazione; l'ordine creato dalla richiesta tiene listino e sconto. PDF ed Excel come per l'ordine.
+
+**Scaglioni di quantità.** Terzo passo.
+- Nel listino dell'articolo **+ scaglioni** apre i prezzi per quantità della quotazione (soglia, prezzo, sconto, netto). Il prezzo dello scaglione raggiunto vale per tutta la quantità.
+- Il **costo in uso** è il netto per il lotto di riordino (senza lotto, il primo scaglione); i fornitori si confrontano a quella quantità.
+- Sugli **ordini** lo scaglione si conta sulla somma delle righe dello stesso articolo; una riga col prezzo di listino segue la quantità da sola, una scritta a mano avvisa e ha **Applica**. La riga dice lo scaglione raggiunto e il prezzo del prossimo.
+- Il **fabbisogno** mette sul documento lo scaglione della quantità da ordinare e segnala lo scaglione dopo quando è entro il 20% in più. Il riordino sotto scorta prende lo scaglione della sua quantità.
+
+**Schema: cambia.** Colonna `breaks` (jsonb) su `item_prices`; colonna `discount` (testo) su `suppliers`, `orders`, `work_orders`, `order_lines`, `work_order_lines`, `rfq_lines`, `item_prices`; `list_price` (numerica) sulle righe di ordini, ordini di lavoro e richieste; `valid_to` su `item_prices` e `offer_valid_to` su `rfqs`; `schema_versione` 9. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+
 ### 0.156.1 — 2026-11-12
 
 **Correzioni dal controllo delle ultime versioni.**

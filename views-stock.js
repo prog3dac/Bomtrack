@@ -216,8 +216,9 @@ function costoMedioIndex() {
   (db.orders || []).forEach(o => {
     if (o.status === 'annullato') return;
     (o.lines || []).forEach(l => {
-      const ric = Number(l.received) || 0, prezzo = Number(l.price);
-      if (!l.itemId || !(ric > 0) || l.price === '' || l.price == null || !isFinite(prezzo)) return;
+      // Il prezzo pagato: il netto di riga, meno lo sconto del documento.
+      const ric = Number(l.received) || 0, prezzo = prezzoPagatoRiga(o, l);
+      if (!l.itemId || !(ric > 0) || prezzo == null) return;
       const it = getItem(l.itemId);
       const q = it ? fromAltUom(it, ric, l.uom) : ric;
       if (!(q > 0)) return;
@@ -1736,8 +1737,9 @@ function riordinoGenera(itemIds) {
       status: 'bozza', supplierId,
       transport: (sup && sup.defaultTransport) || db.settings.transportDefault || '',
       payment: (sup && sup.defaultPayment) || db.settings.paymentDefault || '',
+      discount: (sup && sup.discount) || '',
       rfqId: null, planId: null, supplierConfirmation: '', notes: '', notesInternal: 'Generato dal riordino sotto scorta del magazzino.',
-      lines: ps.map(p => Object.assign(docLineFromItem(p.it, supplierId), {
+      lines: ps.map(p => Object.assign(docLineFromItem(p.it, supplierId, oggi, p.qty), {
         qty: p.qty, received: 0, deliveryDate: p.leadDays ? supplierArrival(oggi, p.leadDays) : '' })),
       active: true });
     db.orders.push(o);

@@ -745,6 +745,22 @@ body.filt-open .filt-summary{display:none}
 .price-table .pl-price{width:88px}
 .price-table .pl-small{width:62px}
 .price-table .pl-date{width:132px}
+/* Sconto e netto sotto il prezzo, avvisi di validità sotto le date (0.157.0):
+   in colonna, perché affiancati allargavano la tabella oltre la scheda. */
+.price-table.pl-sconti .pl-sup,.price-table.pl-sconti .pl-sup > select,.price-table.pl-sconti .pl-sup > .combo{width:210px}
+.price-table.pl-sconti .pl-sup .pl-sub{flex-wrap:wrap}
+.price-table.pl-sconti .pl-desc{width:100%;order:3}
+.price-table.pl-sconti .pl-date{width:124px}
+.ln-scaglione{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--accent-soft, #e8f0fd);color:var(--accent, #3A7BE8);white-space:nowrap}
+.pl-tiers{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:-4px 0 6px}
+.pl-tiers-head{font-weight:600;margin-bottom:6px;font-size:13px}
+.pl-tiers-head span,.pl-tier-nota{font-weight:400;color:var(--text-dim);font-size:12px}
+.price-table.pl-tiers-table{width:auto;margin-bottom:8px}
+.price-table .pl-tiers-btn{width:auto;padding:2px 8px;font-size:12px;white-space:nowrap}
+.price-table .pl-tiers .rfq-sconto-input{width:88px;padding:4px 6px;font-size:12px}
+.price-table .pl-col{flex-direction:column;align-items:flex-start;gap:3px}
+.price-table .pl-col .rfq-sconto-input{width:88px;padding:4px 6px;font-size:12px}
+.price-table .pl-col span{white-space:normal}
 .pl-act{text-align:right;white-space:nowrap;width:1%}
 /* Il catalogo disegna un blocco di righe per volta: qui i comandi per allargare */
 .cat-more{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-dim);font-size:13px}
@@ -1006,6 +1022,13 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .rfq-table-2 .ln-idx{width:34px;color:var(--text-dim);font-family:var(--mono);font-size:12px}
 .ln-code{font-family:var(--mono)}
 .ln-amount{font-family:var(--mono);white-space:nowrap;color:var(--text)}
+/* Prezzo di listino e sconto nella stessa cella (dalla 0.157.0) */
+.ln-prezzo-sconto{display:inline-flex;gap:6px;align-items:center}
+.rfq-sconto-input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:13px;outline:none;width:72px;font-family:var(--mono)}
+.rfq-sconto-input:focus{border-color:var(--accent)}
+.ln-netto{font-family:var(--mono);white-space:nowrap;color:var(--text-dim)}
+.doc-subtot td{color:var(--text-dim);font-family:var(--mono)}
+@media (max-width:700px){.ln-prezzo-sconto{flex-direction:column;align-items:stretch;gap:4px}.rfq-sconto-input{width:90px}}
 .ln-residual{font-family:var(--mono);white-space:nowrap}
 .ln-residual.pos{color:var(--orange);font-weight:600}
 /* La nota e i riferimenti del fornitore stanno sotto la descrizione, cioè nel

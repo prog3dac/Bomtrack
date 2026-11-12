@@ -158,8 +158,8 @@ function consFaseCostoPezzo(f) {
 function consPrezziPagati(amb) {
   const idx = new Map();
   amb.orders.forEach(d => (d.lines || []).forEach(l => {
-    const ric = Number(l.received) || 0, prezzo = Number(l.price);
-    if (!l.itemId || l.phaseKey || !(ric > 0) || l.price === '' || l.price == null || !isFinite(prezzo)) return;
+    const ric = Number(l.received) || 0, prezzo = prezzoPagatoRiga(d, l);
+    if (!l.itemId || l.phaseKey || !(ric > 0) || prezzo == null) return;
     const it = getItem(l.itemId);
     const q = it ? fromAltUom(it, ric, l.uom) : ric;
     if (!(q > 0)) return;
@@ -243,7 +243,7 @@ function consReale(amb) {
   let ordinatoAperto = 0;
   let lavorazioni = 0;
   amb.orders.forEach(d => (d.lines || []).forEach(l => {
-    const r = Number(l.received) || 0, p = Number(l.price) || 0;
+    const r = Number(l.received) || 0, p = prezzoPagatoRiga(d, l) || 0;
     ordinatoAperto += Math.max(0, (Number(l.qty) || 0) - r) * p;
     if (!r) return;
     // Una riga di conto lavoro rimasta in un ODA è una lavorazione, non merce.
@@ -263,7 +263,7 @@ function consReale(amb) {
   }));
   // ── Lavorazioni esterne: gli ODL ricevuti ──
   amb.odl.forEach(d => (d.lines || []).forEach(l => {
-    const r = Number(l.received) || 0, p = Number(l.price) || 0;
+    const r = Number(l.received) || 0, p = prezzoPagatoRiga(d, l) || 0;
     ordinatoAperto += Math.max(0, (Number(l.qty) || 0) - r) * p;
     if (!r) return;
     lavorazioni += r * p;

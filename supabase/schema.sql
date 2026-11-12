@@ -367,6 +367,8 @@ create table if not exists public.rfqs (
 alter table public.rfqs add column if not exists reply_by date;
 -- 0.156.0: i testi scelti per il documento, copiati da Gestione.
 alter table public.rfqs add column if not exists texts jsonb;
+-- 0.157.0: fino a quando vale l'offerta del fornitore.
+alter table public.rfqs add column if not exists offer_valid_to date;
 
 create table if not exists public.rfq_lines (
   id uuid primary key,
@@ -379,6 +381,10 @@ create table if not exists public.rfq_lines (
   synced_at timestamptz not null default clock_timestamp()
 );
 
+-- 0.157.0: prezzo di listino e sconto dell'offerta.
+alter table public.rfq_lines add column if not exists list_price numeric;
+alter table public.rfq_lines add column if not exists discount text;
+
 create table if not exists public.item_prices (
   id uuid primary key,
   item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
@@ -390,6 +396,11 @@ create table if not exists public.item_prices (
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.157.0: sconto della quotazione e fino a quando vale.
+alter table public.item_prices add column if not exists discount text;
+alter table public.item_prices add column if not exists valid_to date;
+-- 0.157.0: scaglioni di quantità, [{ fromQty, price, discount }].
+alter table public.item_prices add column if not exists breaks jsonb;
 -- La stessa offerta registrata due volte non crea due quotazioni (rfqRecordPrices).
 create unique index if not exists item_prices_offerta on public.item_prices (item_id, rfq_id, line_id)
   where rfq_id is not null and line_id is not null;
@@ -517,6 +528,18 @@ create table if not exists public.work_order_lines (
 -- 0.113.0: l'inizio lavoro, cioè quando consegniamo il materiale al terzista,
 -- per i database già creati.
 alter table public.work_order_lines add column if not exists start_date date;
+
+-- 0.157.0, sconti: lo sconto del fornitore, quello del documento e, sulle
+-- righe, il prezzo di listino con il suo sconto. Lo sconto è il testo come lo
+-- scrive il fornitore («10+5», a cascata; il meno è una maggiorazione). `price`
+-- resta il prezzo netto della riga: i documenti di prima non cambiano.
+alter table public.suppliers add column if not exists discount text;
+alter table public.orders add column if not exists discount text;
+alter table public.work_orders add column if not exists discount text;
+alter table public.order_lines add column if not exists list_price numeric;
+alter table public.order_lines add column if not exists discount text;
+alter table public.work_order_lines add column if not exists list_price numeric;
+alter table public.work_order_lines add column if not exists discount text;
 
 -- ─── Eventi ─────────────────────────────────────────────────
 -- Righe piatte, che si aggiungono e non si correggono: la giacenza, il
@@ -1766,7 +1789,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 8)
+    'schema_versione', 9)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 
