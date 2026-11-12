@@ -240,7 +240,7 @@ function priceListRefresh() {
   if (host && window.__priceItemId) host.innerHTML = priceListBody(window.__priceItemId);
 }
 function priceListScontiVisibili(it) {
-  // Anche gli scaglioni (dalla 0.157.1): a modulo spento muovono ancora il
+  // Anche gli scaglioni (dalla 0.157.2): a modulo spento muovono ancora il
   // costo, e un costo che non si sa spiegare dal listino non si deve vedere.
   return moduloAttivo('listini') || priceRows(it).some(r => r.discount || r.validTo || (Array.isArray(r.breaks) && r.breaks.length));
 }

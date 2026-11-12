@@ -161,7 +161,7 @@ function qrCorse(m) {
   return out;
 }
 // Lo stesso testo dà sempre lo stesso disegno: si tiene quello già fatto
-// (dalla 0.157.1). Il Reparto ha un QR per fase e si ridisegna a ogni Inizia o
+// (dalla 0.157.2). Il Reparto ha un QR per fase e si ridisegna a ogni Inizia o
 // Pausa: ricalcolarli tutti costava quasi un secondo a tocco. Al più 500 voci,
 // poi si ricomincia: i link delle fasi aperte sono molti meno.
 const _qrSvgFatti = new Map();

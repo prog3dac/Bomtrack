@@ -1,4 +1,4 @@
-// Le correzioni dal controllo della 0.157.0 (dalla 0.157.1).
+// Le correzioni dal controllo della 0.157.0 (dalla 0.157.2).
 //
 //   1. un documento inviato non cambia fornitore, nemmeno sbloccato;
 //   2. al telefono il documento aperto si porta in vista (qui: non rompe senza schermo);

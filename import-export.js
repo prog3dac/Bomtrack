@@ -110,7 +110,7 @@ function leggiFile(file, estrai, cb) {
 // Una cella che in Excel si legge «10%» vale 0,1: il foglio tiene la frazione e
 // mostra la percentuale. In Bomtrack ogni percentuale (sconti, scarto, ricarico)
 // si scrive in punti, e uno sconto di 0,1% al posto del 10% passava senza un
-// avviso (dalla 0.157.1). Le celle in formato percentuale tornano in punti
+// avviso (dalla 0.157.2). Le celle in formato percentuale tornano in punti
 // prima di diventare righe; le altre non si toccano.
 function foglioPercentuali(wb) {
   ((wb && wb.SheetNames) || []).forEach(n => {

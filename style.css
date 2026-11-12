@@ -1452,7 +1452,7 @@ body.insp-on .row-actions{display:none}
 }
 /* Il menu dei fornitori in cui si scrive (combo.js) è un campo dentro un
    contenitore: sotto i 1100 px la regola qui sopra stringeva il campo e
-   lasciava la ▾ del contenitore sul bordo della scheda (dalla 0.157.1). */
+   lasciava la ▾ del contenitore sul bordo della scheda (dalla 0.157.2). */
 @media(max-width:1100px){
   .wl-filters .combo{flex:1;min-width:180px}
   .wl-filters .combo .combo-in{width:100%;min-width:0;flex:none}
@@ -1829,7 +1829,7 @@ select.combo-nascosto{display:none!important}
 body:has([id^="view-"].active .doc-page) #app-main{max-width:1440px}
 @media(min-width:1101px){.wl:has(.doc-page){grid-template-columns:minmax(0,1fr) 340px}}
 .doc-page{display:grid;grid-template-columns:200px minmax(0,1fr);grid-template-areas:"rail head" "rail body";gap:12px 16px;align-items:start}
-/* 0.157.1: portato in vista all'apertura sotto i 1100 px, sotto testata e barra delle sezioni */
+/* 0.157.2: portato in vista all'apertura sotto i 1100 px, sotto testata e barra delle sezioni */
 .doc-page{scroll-margin-top:calc(64px + var(--subnav-h,0px))}
 .doc-head{grid-area:head;display:flex;justify-content:center;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 16px}
 .doc-head-num{margin:0;font-family:var(--mono);font-size:20px;font-weight:700;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}

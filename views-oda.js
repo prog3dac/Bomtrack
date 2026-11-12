@@ -242,7 +242,7 @@ function ordAddCatalogModal(id) { if (!ordGuard(id, 'contract')) return; catalog
 function ordAddCatalogLines(id, ids) { docAddCatalogLines('order', id, ids); }
 
 // ─── La riga porta ancora il listino di un altro? ───
-// Dalla 0.157.0 il cambio di fornitore (solo in bozza, dalla 0.157.1) rimette
+// Dalla 0.157.0 il cambio di fornitore (solo in bozza, dalla 0.157.2) rimette
 // il listino del nuovo su ogni riga di articolo (docApplicaFornitore). Restano
 // i casi in cui la riga e il listino non coincidono: un prezzo scritto a mano,
 // uno scaglione cambiato con la quantità, una quotazione corretta dopo. Una

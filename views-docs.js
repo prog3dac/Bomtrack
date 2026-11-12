@@ -338,7 +338,7 @@ function docSetField(k, id, field, value) {
 // Codice e descrizione presso il fornitore seguono già da soli (lineSupInfo).
 // Sulla richiesta d'offerta cambiano le condizioni, non i prezzi: lì il
 // prezzo è la risposta del fornitore.
-// Un documento inviato non cambia fornitore (dalla 0.157.1): non si manda lo
+// Un documento inviato non cambia fornitore (dalla 0.157.2): non si manda lo
 // stesso documento a due fornitori, nemmeno sbloccandolo. Fuori dalla bozza la
 // tendina resta chiusa; per un altro fornitore serve un documento nuovo.
 function docFornitoreFisso(doc) { return !!doc && !!doc.status && doc.status !== 'bozza'; }
@@ -361,7 +361,7 @@ function docSetSupplier(k, id, sid) {
   if (esito && K.autoStatus) K.autoStatus(doc);
   touch(doc); docMarkDirty(k); K.render();
   // Le lavorazioni di conto lavoro non vengono da un listino e restano: la loro
-  // tariffa è quella del terzista di prima, e va detto (dalla 0.157.1).
+  // tariffa è quella del terzista di prima, e va detto (dalla 0.157.2).
   const lavorazioni = sup && prima ? (doc.lines || []).filter(l => l.phaseKey && l.price !== '' && l.price != null).length : 0;
   const fasi = lavorazioni ? ` ${lavorazioni === 1 ? 'Una lavorazione tiene' : lavorazioni + ' lavorazioni tengono'} la tariffa del fornitore di prima: verificala.` : '';
   if (esito && esito.aggiornate) {
@@ -716,7 +716,7 @@ function docPrezzoCell(pfx, doc, l, titolo, blocco) {
 function docTotaliFootHtml(doc, prima, dopo) {
   const t = totaliDocumento(doc);
   const riga = (cls, etichetta, valore) => `<tr class="${cls}"><td colspan="${prima}" style="text-align:right">${etichetta}</td><td>${valore}</td><td colspan="${dopo}"></td></tr>`;
-  // Un «-3» è una maggiorazione (dalla 0.157.1): si chiama così e si somma,
+  // Un «-3» è una maggiorazione (dalla 0.157.2): si chiama così e si somma,
   // invece di «Sconto documento -3% − € -291,36».
   const magg = t.sconto < 0;
   const sconto = doc.discount && t.sconto
@@ -734,7 +734,7 @@ function docStampaPrezzoHead(doc, testa) {
   return docRigheConSconto(doc) ? ['Prezzo listino\nList price', 'Sconto %\nDiscount %', 'Prezzo netto\nNet price'] : [testa];
 }
 // Con lo sconto la terza colonna è il netto, e si chiama così come sul PDF
-// (dalla 0.157.1): «Prezzo unitario» accanto a «Prezzo listino» non diceva quale.
+// (dalla 0.157.2): «Prezzo unitario» accanto a «Prezzo listino» non diceva quale.
 function docXlsPrezzoHead(doc, testa) {
   const unita = (String(testa).match(/\([^)]*\)\s*$/) || [`(${cur()})`])[0];
   return docRigheConSconto(doc) ? [`Prezzo listino ${unita}`, 'Sconto %', `Prezzo netto ${unita}`] : [testa];
@@ -763,7 +763,7 @@ function docPdfFoot(doc, nCol, iImporto) {
   });
 }
 // `iImporto` è la colonna degli importi: i totali stanno sotto di lei, con
-// l'etichetta a sinistra (dalla 0.157.1; prima finivano nella colonna B).
+// l'etichetta a sinistra (dalla 0.157.2; prima finivano nella colonna B).
 function docXlsFoot(doc, iImporto) {
   const col = Math.max(1, Number(iImporto) || 2);
   return docTotaliStampa(doc).map(([etichetta, v], i, voci) => {
@@ -803,7 +803,7 @@ function docPaginaHtml(o) {
 // Al telefono e sul tablet (sotto i 1100 px) l'elenco sta sopra la scheda: il
 // documento aperto con un tocco compariva centinaia di pixel più in basso, e la
 // pagina restava ferma sull'elenco come se il tocco non avesse fatto niente
-// (dalla 0.157.1). Si porta in vista il numero, solo se non si vede già.
+// (dalla 0.157.2). Si porta in vista il numero, solo se non si vede già.
 function docPortaInVista() {
   if (typeof window === 'undefined' || typeof document === 'undefined' || typeof window.matchMedia !== 'function') return;
   if (!window.matchMedia('(max-width: 1100px)').matches) return;
@@ -1873,7 +1873,7 @@ function renderRfqCompare() {
     // cerca solo fra le offerte complete; le altre dicono quante ne mancano.
     const quotate = sel.map(() => 0);
     const bodyRows = keys.map(k => {
-      // Il prezzo che si pagherebbe (dalla 0.157.1): quello della riga, già
+      // Il prezzo che si pagherebbe (dalla 0.157.2): quello della riga, già
       // netto del suo sconto, meno lo sconto del fornitore che l'ordine nato
       // dall'offerta prende in testata. È lo stesso confronto del listino.
       const cellsData = sel.map(r => {

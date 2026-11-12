@@ -988,7 +988,7 @@ Chiude E1–E6, trovate con la §69, e quattro difetti trovati rileggendo
   veniva dalla lorda, l'attrezzaggio dalla netta (al netto delle parti a
   scaffale): due misure in un numero. Ora tutto viene dalla lorda.
 
-## Risolto nella 0.157.1 — il controllo dopo listini e sconti
+## Risolto nella 0.157.2 — il controllo dopo listini e sconti
 
 Un giro sull'app intera dopo la 0.157.0: suite completa con Postgres e
 Chromium, l'archivio di prova in 21 viste a 1440 e 390 px, chiaro e scuro, e
@@ -1086,7 +1086,7 @@ la virgola — chiusi nella 0.107.0, §56–57.)*
 2.000 righe `store.js`, `core.js` e `cloud.js`, sotto il limite di 3.000 che ora
 un test fa valere.
 
-*Aggiornamento 0.157.1.* `store.js` 2.697 righe, `core.js` 2.430, `cloud.js`
+*Aggiornamento 0.157.2.* `store.js` 2.697 righe, `core.js` 2.430, `cloud.js`
 2.072, `views-docs.js` 1.931: `store.js` è il primo che toccherà il limite.
 
 **C4 — file lunghi con scope globale piatto:** `views-docs.js` ~1990 righe,
@@ -1200,7 +1200,7 @@ produzione fatto con uno strumento fuori non entra nell'analisi.
 mandare al laboratorio, la storia dello strumento nella scheda «Storia», il
 suggerimento dell'intervallo dalle tarature passate e gli studi R&R.
 
-### H. Listini e sconti *(censite nella 0.157.1)*
+### H. Listini e sconti *(censite nella 0.157.2)*
 
 **H1 — gli scaglioni non guardano la quantità minima.** Sotto la Q.tà min del
 fornitore vale il primo scaglione come se si potesse ordinare: l'ordine non
