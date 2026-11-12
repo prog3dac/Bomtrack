@@ -929,7 +929,7 @@ function migrateDB() {
   // Voci precompilabili per trasporto/pagamento nelle richieste di offerta (+ predefinita)
   if (!db.settings.transportOptions) db.settings.transportOptions = ['Porto franco', 'Porto assegnato', 'EXW', 'FCA', 'DAP', 'CIF'];
   if (!Array.isArray(db.settings.docTexts)) db.settings.docTexts = [];   // testi per i documenti (dalla 0.155.0)
-  // La frase su DDT e fattura era scritta nel programma (0.154.0); dalla 0.155.1
+  // La frase su DDT e fattura era scritta nel programma (0.154.0); dalla 0.156.0
   // è un testo di Gestione, «sempre» su ordini e ordini di lavoro, così il PDF
   // esce come prima finché qualcuno non la cambia. Si crea una volta sola: se
   // poi la si elimina, non torna.
@@ -1054,7 +1054,7 @@ function migrateDB() {
   // Il riferimento all'offerta del fornitore e il DDT di invio al terzista
   // (dalla 0.154.0): vuoti sui documenti di prima.
   (db.orders || []).forEach(o => { if (o.supplierQuote == null) o.supplierQuote = ''; });
-  // I testi scelti per il documento (dalla 0.155.1): una copia, vedi docTesti.
+  // I testi scelti per il documento (dalla 0.156.0): una copia, vedi docTesti.
   [].concat(db.rfqs || [], db.orders || [], db.workOrders || []).forEach(d => { if (!Array.isArray(d.texts)) d.texts = []; });
   (db.workOrders || []).forEach(o => { if (o.shipDdt == null) o.shipDdt = ''; });
   [].concat(db.orders || [], db.workOrders || []).forEach(o => {

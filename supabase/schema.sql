@@ -365,7 +365,7 @@ create table if not exists public.rfqs (
 
 -- 0.154.0: entro quando il fornitore deve rispondere.
 alter table public.rfqs add column if not exists reply_by date;
--- 0.155.1: i testi scelti per il documento, copiati da Gestione.
+-- 0.156.0: i testi scelti per il documento, copiati da Gestione.
 alter table public.rfqs add column if not exists texts jsonb;
 
 create table if not exists public.rfq_lines (

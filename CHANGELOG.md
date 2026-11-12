@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.155.1 — 2026-11-12
+### 0.156.0 — 2026-11-12
 
 **Testi per i documenti: si scelgono dal documento e non passano dalle note.**
 - Nella barra a sinistra di richieste, ordini e ordini di lavoro, sotto Genera PDF / Excel, il pulsante **Testi sul PDF** con il numero dei testi e i loro titoli. Apre una finestra con tutti i testi del tipo, ciascuno con una casella: i «sempre» sono spuntati e fermi, gli altri si scelgono e si conferma con Applica.

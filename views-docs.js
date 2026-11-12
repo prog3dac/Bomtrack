@@ -683,7 +683,7 @@ function docTestaHtml(o) {
       <div class="modal-field campo-nota"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label><textarea rows="${righeNota(r.notesInternal)}" class="notes-internal" ${campo('notesInternal')}>${esc(r.notesInternal || '')}</textarea></div>
     </div>`;
 }
-// ─── Testi per i documenti (dalla 0.155.0; scelta dal documento dalla 0.155.1) ───
+// ─── Testi per i documenti (dalla 0.155.0; scelta dal documento dalla 0.156.0) ───
 // Frasi che tornano su molti documenti (imballo, certificati, condizioni
 // generali) scritte una volta in Gestione → Testi per i documenti. Il titolo
 // serve solo a riconoscerle; sul PDF esce il testo e basta.

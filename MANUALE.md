@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.155.0**
+**Versione dell'app documentata: 0.156.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3762,7 +3762,7 @@ Sul PDF e nell'Excel i testi escono **in fondo, dopo trasporto, pagamento e note
 per testo, senza titolo: prima quelli *sempre*, poi quelli scelti. **Non entrano nelle note**,
 che restano di chi le scrive.
 
-**Nel documento** (dalla 0.155.1), nella barra a sinistra sotto *Genera PDF / Excel*, c'è
+**Nel documento** (dalla 0.156.0), nella barra a sinistra sotto *Genera PDF / Excel*, c'è
 **Testi sul PDF** con il numero dei testi che escono e, sotto, i loro titoli. Apre una finestra
 con tutti i testi validi per quel tipo di documento, ciascuno con il testo intero e una casella:
 i *sempre* sono spuntati e fermi, gli altri si spuntano e si conferma con **Applica**. Con molti

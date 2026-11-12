@@ -1,5 +1,5 @@
 // Testi per i documenti (dalla 0.155.0): scritti una volta in Gestione, si
-// scelgono dal pulsante «Testi sul PDF» del documento (dalla 0.155.1, senza
+// scelgono dal pulsante «Testi sul PDF» del documento (dalla 0.156.0, senza
 // passare dalle note) o escono sempre in fondo al PDF. Sul foglio va il testo,
 // non il titolo.
 
