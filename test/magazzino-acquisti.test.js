@@ -4,7 +4,8 @@
 // Le proprietà che contano:
 //   1. il confronto delle offerte non premia un'offerta solo perché è
 //      incompleta;
-//   2. scelto il fornitore, il suo listino si propone e non si applica da sé;
+//   2. scelto il fornitore, il suo listino si applica a ogni riga di articolo
+//      (dalla 0.157.0; prima si proponeva soltanto);
 //   3. dal QR dell'ordine si riceve anche una parte, riga per riga;
 //   4. le differenze d'inventario valgono quanto vale la giacenza;
 //   5. la rettifica singola non scrive giacenze negative per sbaglio, e non
@@ -57,40 +58,44 @@ describe('Confronto offerte: un\'offerta incompleta non è la più conveniente',
   });
 });
 
-describe('Listino del fornitore: si propone dopo averlo scelto', () => {
-  function conOrdine() {
-    const a = app({
-      orders: [{ id: 'o1', number: 'ODA-1', status: 'bozza', supplierId: null, active: true, date: '2026-10-01', lines: [
+describe('Listino del fornitore: si applica appena lo si sceglie', () => {
+  function conOrdine(extra) {
+    return app(Object.assign({
+      orders: [{ id: 'o1', number: 'ODA-1', status: 'bozza', supplierId: null, active: true, date: '2026-10-01', transport: 'vecchio', payment: 'vecchio', discount: '7', lines: [
         { id: 'l1', itemId: 'a1', code: 'A1', uom: 'pz', qty: 2, price: '' },
-        { id: 'l2', itemId: 'a2', code: 'A2', uom: 'pz', qty: 1, price: 9 },
-        { id: 'l3', itemId: 'a3', code: 'A3', uom: 'pz', qty: 1, price: '' },
-        { id: 'l4', itemId: null, code: 'MAN', uom: 'pz', qty: 1, price: '' }] }],
-    });
-    return a;
+        { id: 'l2', itemId: 'a2', code: 'A2', uom: 'pz', qty: 1, price: 9, listPrice: 10, discount: '10' },
+        { id: 'l3', itemId: 'a3', code: 'A3', uom: 'pz', qty: 1, price: 5 },
+        { id: 'l4', itemId: null, code: 'MAN', uom: 'pz', qty: 1, price: 3 }] }],
+    }, extra || {}));
   }
   const prezzi = a => J(a, "getOrder('o1').lines.map(l => l.price)");
-  it('scegliere il fornitore non cambia nessun prezzo, ma propone il suo listino', () => {
+  it('ogni riga di articolo prende il listino del nuovo fornitore, anche quelle con un prezzo', () => {
     const a = conOrdine();
     a.eval("ordSetSupplier('o1', 's1')");
-    assert.deepEqual(prezzi(a), ['', 9, '', ''], 'nessun prezzo cambia da sé');
-    assert.deepEqual(J(a, "docListinoProposta('order', 'o1')"), { vuote: ['l1'], diverse: ['l2'] });
-    const h = modale(a);
-    assert.match(h, /listino di Rossi/);
-    assert.match(h, /docApplicaListino\('order','o1'/);
+    assert.deepEqual(prezzi(a), [7, 4, '', 3], 'a1 e a2 dal listino, a3 senza prezzo, la manuale resta');
+    assert.deepEqual(J(a, "getOrder('o1').lines.map(l => [l.listPrice, l.discount])")[1], ['', ''], 'lo sconto di riga del prezzo di prima se ne va con lui');
+    assert.doesNotMatch(modale(a), /Applicare il listino/, 'nessuna domanda');
   });
-  it('confermando si riempiono le righe senza prezzo; quelle con un prezzo solo se lo si chiede', () => {
-    const a = conOrdine();
+  it('condizioni e sconto documento sono quelli del nuovo fornitore, anche se vuoti', () => {
+    const a = conOrdine({ suppliers: [{ id: 's1', name: 'Rossi', active: true, defaultPayment: 'RiBa 60', discount: '2' },
+      { id: 's2', name: 'Bianchi', active: true }] });
+    a.eval("db.settings.transportDefault = 'Franco'; db.settings.paymentDefault = ''");
     a.eval("ordSetSupplier('o1', 's1')");
-    assert.equal(a.eval("docApplicaListino('order', 'o1', false)"), 1);
-    assert.deepEqual(prezzi(a), [7, 9, '', '']);
-    assert.equal(a.eval("docApplicaListino('order', 'o1', true)"), 1);
-    assert.deepEqual(prezzi(a), [7, 4, '', '']);
+    assert.deepEqual(J(a, "[getOrder('o1').transport, getOrder('o1').payment, getOrder('o1').discount]"), ['Franco', 'RiBa 60', '2']);
+    a.eval("ordSetSupplier('o1', 's2')");
+    assert.deepEqual(J(a, "[getOrder('o1').payment, getOrder('o1').discount]"), ['', ''], 'lo sconto di Rossi non resta su un ordine a Bianchi');
   });
-  it('un fornitore senza quotazioni per quelle righe non propone niente', () => {
+  it('un fornitore senza quotazioni lascia le righe di articolo senza prezzo, e lo dice', () => {
     const a = conOrdine();
     a.eval("ordSetSupplier('o1', 's2')");
-    assert.deepEqual(J(a, "docListinoProposta('order', 'o1')"), { vuote: [], diverse: [] });
-    assert.doesNotMatch(modale(a), /docApplicaListino/);
+    assert.deepEqual(prezzi(a), ['', '', '', 3]);
+    assert.match(a.eval("document.getElementById('toast').innerHTML"), /3 righe aggiornate, 3 senza prezzo/);
+  });
+  it('a ordine inviato il fornitore non si cambia, e i prezzi restano', () => {
+    const a = conOrdine();
+    a.eval("getOrder('o1').status = 'inviato'; getOrder('o1').supplierId = 's2'");
+    a.eval("ordSetSupplier('o1', 's1')");
+    assert.deepEqual(prezzi(a), ['', 9, 5, 3]);
   });
 });
 

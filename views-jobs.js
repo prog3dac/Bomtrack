@@ -56,7 +56,7 @@ function jobTotals(jobId) {
   [].concat(orders, workOrders).forEach(o => {
     if (o.status === 'annullato') return;
     (o.lines || []).forEach(l => {
-      const q = Number(l.qty) || 0, p = Number(l.price) || 0, r = Number(l.received) || 0;
+      const q = Number(l.qty) || 0, p = prezzoPagatoRiga(o, l) || 0, r = Number(l.received) || 0;
       ordinato += q * p; ricevuto += r * p; righe++;
     });
   });

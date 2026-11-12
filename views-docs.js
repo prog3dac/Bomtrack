@@ -303,6 +303,14 @@ function docSetField(k, id, field, value) {
   if (!docGuard(k, id, lockKind)) { K.render(); return; }
   const doc = K.get(id); if (!doc) return;
   const before = doc.status;
+  if (field === 'discount') {
+    // Lo sconto del documento si scrive come quello di riga (scontoNorm).
+    const norm = scontoNorm(value);
+    if (norm == null) { showToast(SCONTO_ERRORE, 'error'); K.render(); return; }
+    doc.discount = norm;
+    touch(doc); docMarkDirty(k); K.render();
+    return;
+  }
   doc[field] = campoTesto(value) || (field === 'supplierId' ? null : '');
   if (K.afterSetField) K.afterSetField(doc, field, value);
   touch(doc); docMarkDirty(k);
@@ -312,84 +320,57 @@ function docSetField(k, id, field, value) {
     if (doc.status !== before) showToast('Stato: ' + (K.STATUS[doc.status] || doc.status));
   }
 }
-// Alla scelta del fornitore si ereditano le sue condizioni predefinite.
+// ─── Cambiare il fornitore aggiorna tutto (dalla 0.157.0) ───
+// Fino alla 0.156 i prezzi restavano e si proponeva il listino del nuovo
+// fornitore con una domanda. Ora, per scelta di chi usa l'app, un documento
+// intestato a un altro fornitore prende **tutto** del nuovo:
+//   - trasporto, pagamento e sconto documento sono i suoi, anche se vuoti
+//     (allora valgono quelli di Gestione, come su un documento nuovo): lo
+//     sconto di Rossi rimasto su un ordine a Bianchi è un numero sbagliato
+//     dall'aria giusta;
+//   - ogni riga di articolo prende il suo listino, anche se il prezzo era
+//     stato scritto a mano; quelle che non ha a listino restano **senza
+//     prezzo**, perché il prezzo di un altro fornitore non deve restare;
+//   - le righe manuali e di conto lavoro non vengono da un listino, e restano.
+// Codice e descrizione presso il fornitore seguono già da soli (lineSupInfo).
+// Sulla richiesta d'offerta cambiano le condizioni, non i prezzi: lì il
+// prezzo è la risposta del fornitore.
 function docSetSupplier(k, id, sid) {
   const K = docKind(k);
   if (!docGuard(k, id, 'contract')) { K.render(); return; }
   const doc = K.get(id); if (!doc) return;
   const prima = doc.supplierId || null;
   doc.supplierId = sid || null;
+  if (doc.supplierId === prima) { K.render(); return; }
   const sup = sid ? getSupplier(sid) : null;
-  if (sup) {
-    if (sup.defaultTransport) doc.transport = sup.defaultTransport;
-    if (sup.defaultPayment) doc.payment = sup.defaultPayment;
-  }
+  doc.transport = (sup && sup.defaultTransport) || db.settings.transportDefault || '';
+  doc.payment = (sup && sup.defaultPayment) || db.settings.paymentDefault || '';
+  const esito = K.hasLinePrice && sup ? docApplicaFornitore(doc) : null;
+  if (K.hasLinePrice) doc.discount = (sup && sup.discount) || '';
+  if (esito && K.autoStatus) K.autoStatus(doc);
   touch(doc); docMarkDirty(k); K.render();
-  if (k !== 'rfq' && sup && sup.id !== prima) docListinoModal(k, id);
+  if (esito && esito.aggiornate) {
+    const righe = n => n === 1 ? '1 riga' : n + ' righe';
+    showToast(`Fornitore cambiato: ${righe(esito.aggiornate)} aggiornat${esito.aggiornate === 1 ? 'a' : 'e'}`
+      + (esito.senzaPrezzo ? `, ${esito.senzaPrezzo} senza prezzo (${sup.name || 'il fornitore'} non le ha a listino)` : ''),
+      esito.senzaPrezzo ? 'error' : 'success');
+  }
 }
-
-// ─── Il listino del fornitore appena scelto (dalla 0.105.6) ───
-// Le righe si compilano anche prima di scegliere il fornitore, e allora
-// nascono senza prezzo (docLineFromItem); cambiato il fornitore, ogni riga
-// dice «⚠ … a listino» (ordLineListinoWarn). In tutti e due i casi le
-// quotazioni ci sono, e ricopiarle a mano riga per riga era il solo modo.
-// Qui si **propongono**: nessun prezzo cambia da sé, è la regola su cui poggia
-// il resto, ma un clic le applica. Di serie solo alle righe senza prezzo; a
-// quelle che ne hanno uno diverso solo se lo si chiede, perché quel numero può
-// essere un prezzo concordato.
-//
-// La richiesta d'offerta resta fuori: lì il prezzo è la risposta del
-// fornitore, non un listino da applicare.
-function docListinoProposta(k, id) {
-  const doc = docKind(k).get(id);
-  const out = { vuote: [], diverse: [] };
-  if (!doc || !doc.supplierId) return out;
+// Il listino del fornitore del documento su ogni riga di articolo. Il prezzo
+// passa da rowUnitCost(), la stessa porta di docLineFromItem: già convertito
+// nell'unità di gestione della riga. Torna quante righe ha riscritto e quante
+// sono rimaste senza prezzo.
+function docApplicaFornitore(doc) {
+  const out = { aggiornate: 0, senzaPrezzo: 0 };
   (doc.lines || []).forEach(l => {
-    if (!l.itemId) return;
+    if (!l.itemId || l.phaseKey) return;
     const it = getItem(l.itemId);
-    const row = supplierPriceRow(it, doc.supplierId);
-    if (!row || row.price === '' || row.price == null) return;
-    if (l.price === '' || l.price == null) out.vuote.push(l.id);
-    else if (Math.abs((rowUnitCost(it, row) || 0) - Number(l.price)) >= 0.00005) out.diverse.push(l.id);
+    const row = it ? supplierPriceRow(it, doc.supplierId) : null;
+    if (priceRowQuoted(row)) rigaImpostaPrezzo(l, rowUnitCost(it, row) || 0, '');
+    else { rigaImpostaPrezzo(l, '', ''); out.senzaPrezzo++; }
+    out.aggiornate++;
   });
   return out;
-}
-function docListinoModal(k, id) {
-  const doc = docKind(k).get(id); if (!doc) return;
-  const pr = docListinoProposta(k, id);
-  const nv = pr.vuote.length, nd = pr.diverse.length;
-  if (!nv && !nd) return;
-  const sup = supplierName(doc.supplierId) || 'questo fornitore';
-  const righe = n => n === 1 ? '1 riga' : n + ' righe';
-  openModal(`<h3>${ico('tag', 'tinted pill', '')} Applicare il listino di ${esc(sup)}?</h3>
-    <p>${esc(sup)} ha a listino ${nv ? `<strong>${righe(nv)} senza prezzo</strong>` : ''}${nv && nd ? ' e ' : ''}${nd ? `${righe(nd)} con un prezzo diverso da quello in riga` : ''}.</p>
-    ${nd ? `<label class="flag-check" style="margin:6px 0"><input type="checkbox" id="lst-diverse"${nv ? '' : ' checked'}> Sostituisci anche i prezzi già scritti (${righe(nd)})</label>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Un prezzo in riga può essere concordato: lascialo se non sei sicuro.</p>` : ''}
-    <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeModal()">No, lascia i prezzi</button>
-      <button class="add-btn-sm" onclick="docApplicaListino('${k}','${id}', !!(document.getElementById('lst-diverse') || {}).checked); closeModal()">${ico('check', '', '')} Applica il listino</button>
-    </div>`, false, 'form');
-}
-// Torna quante righe ha cambiato. Il prezzo passa da rowUnitCost(), la stessa
-// porta di docLineFromItem: già convertito nell'unità di gestione della riga.
-function docApplicaListino(k, id, ancheDiverse) {
-  const K = docKind(k);
-  if (!docGuard(k, id, 'contract')) return 0;
-  const doc = K.get(id); if (!doc) return 0;
-  const pr = docListinoProposta(k, id);
-  const ids = pr.vuote.concat(ancheDiverse ? pr.diverse : []);
-  let n = 0;
-  (doc.lines || []).forEach(l => {
-    if (!ids.includes(l.id)) return;
-    const it = getItem(l.itemId);
-    l.price = rowUnitCost(it, supplierPriceRow(it, doc.supplierId)) || 0;
-    n++;
-  });
-  if (!n) return 0;
-  if (K.autoStatus) K.autoStatus(doc);
-  touch(doc); docMarkDirty(k); K.render();
-  showToast(`Listino di ${supplierName(doc.supplierId) || 'fornitore'} applicato: ${n === 1 ? '1 riga' : n + ' righe'}`);
-  return n;
 }
 function docSetLine(k, id, lineId, field, value) {
   const K = docKind(k);
@@ -398,6 +379,23 @@ function docSetLine(k, id, lineId, field, value) {
   const l = (doc.lines || []).find(x => x.id === lineId); if (!l) return;
   const before = doc.status;
   const ricevutoPrima = l.received;
+  // Lordo e sconto (dalla 0.157.0): il netto si ricava, e `price` resta il
+  // netto che leggono tutti gli altri. Scrivere il netto a mano toglie lo
+  // sconto: è un prezzo concordato, e un lordo rimasto accanto mentirebbe.
+  if (field === 'listPrice' || field === 'discount') {
+    let lordo = rigaPrezzoLordo(l), sconto = l.discount || '';
+    if (field === 'listPrice') lordo = value === '' ? '' : clampNum(parseFloat(value), 0);
+    else {
+      sconto = scontoNorm(value);
+      if (sconto == null) { showToast(SCONTO_ERRORE, 'error'); K.render(); return; }
+    }
+    rigaImpostaPrezzo(l, lordo, sconto);
+    K.autoStatus(doc); touch(doc); docMarkDirty(k);
+    if (doc.status !== before) showToast('Stato: ' + (K.STATUS[doc.status] || doc.status));
+    K.render();
+    return;
+  }
+  if (field === 'price') { l.listPrice = ''; l.discount = ''; }
   // Modifica diretta in tabella: niente messaggi, si riporta a 0 (il vincolo è
   // anche sull'input, qui si copre l'incollaggio di testo).
   if (K.numLineFields.includes(field)) {
@@ -486,11 +484,17 @@ function docEditLineModal(k, id, lineId) {
   const qty = `<div class="modal-field"><label id="${p}-qty-label">${docQtyLabel(l.uom || '')}</label>
     <input id="${p}-qty" type="number" value="${l.qty}" min="0" step="any" ${ro ? 'disabled' : ''}>
     ${lotWarn ? `<span class="empty-text" style="padding:0">${lotWarn}</span>` : ''}</div>`;
-  const prezzo = K.hasLinePrice ? `<div class="modal-field"><label id="${p}-price-label">${docPriceLabel(l.uom || '')}</label>
-    <input id="${p}-price" type="number" min="0" step="any" value="${l.price === '' || l.price == null ? '' : l.price}" ${ro ? 'disabled' : ''}></div>` : '';
+  // Con gli sconti il prezzo che si scrive è quello di listino, e accanto lo
+  // sconto: il netto si ricava (rigaImpostaPrezzo), come nella tabella.
+  const conSconto = K.hasLinePrice && docScontiVisibili(doc);
+  const lordo = conSconto ? rigaPrezzoLordo(l) : l.price;
+  const prezzo = K.hasLinePrice ? `<div class="modal-field"><label id="${p}-price-label">${conSconto ? 'Prezzo di listino' : docPriceLabel(l.uom || '')}</label>
+    <input id="${p}-price" type="number" min="0" step="any" value="${lordo === '' || lordo == null ? '' : lordo}" ${ro ? 'disabled' : ''}></div>` : '';
+  const sconto = conSconto ? `<div class="modal-field"><label>Sconto %</label>
+    <input id="${p}-discount" value="${esc(l.discount || '')}" placeholder="es. 10+5" inputmode="decimal" title="Anche a cascata: 10+5 è il 10% e poi il 5%; il meno è una maggiorazione" ${ro ? 'disabled' : ''}></div>` : '';
   openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica riga</h3>
     ${lineIdentityFields(p, l, ro)}
-    ${prezzo ? `<div class="modal-grid">${qty}${prezzo}</div>` : qty}
+    ${prezzo ? `<div class="modal-grid">${qty}${prezzo}${sconto}</div>` : qty}
     <div class="modal-field"><label>Nota (stampata sul documento)</label><textarea id="${p}-note" rows="2">${esc(l.note || '')}</textarea></div>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="${DOC_PFX_FN[k] || 'rfq'}SaveLineEdit('${esc(id)}','${esc(lineId)}')">Salva</button></div>`);
@@ -501,16 +505,19 @@ function docSaveLineEdit(k, id, lineId) {
   if (!roleGuard('docs')) { closeModal(); return; }
   const doc = K.get(id); if (!doc) return;
   const l = (doc.lines || []).find(x => x.id === lineId); if (!l) return;
-  const prima = { qty: l.qty, price: l.price };
+  const prima = { qty: l.qty, price: l.price, discount: l.discount };
   if (modeAllows(docMode(k, doc), 'contract')) {
     if (!readLineIdentity(p, l)) return;
     if (isNeg(p + '-qty')) { showToast('La quantità non può essere negativa', 'error'); return; }
     if (K.hasLinePrice && isNeg(p + '-price')) { showToast('Il prezzo non può essere negativo', 'error'); return; }
+    const conSconto = K.hasLinePrice && !!document.getElementById(p + '-discount');
+    const sconto = conSconto ? scontoNorm(val(p + '-discount')) : '';
+    if (sconto == null) { showToast(SCONTO_ERRORE, 'error'); return; }
     l.qty = numVal(p + '-qty', 0);
-    if (K.hasLinePrice) l.price = val(p + '-price') === '' ? '' : numVal(p + '-price', 0);
+    if (K.hasLinePrice) rigaImpostaPrezzo(l, val(p + '-price') === '' ? '' : numVal(p + '-price', 0), sconto);
   }
   l.note = val(p + '-note');   // la nota passa sempre, anche a documento bloccato
-  if (l.qty !== prima.qty || l.price !== prima.price) K.autoStatus(doc);   // come in docSetLine
+  if (l.qty !== prima.qty || l.price !== prima.price || l.discount !== prima.discount) K.autoStatus(doc);   // come in docSetLine
   touch(doc); docMarkDirty(k); closeModal(); K.render();
 }
 function docAddCatalogLines(k, id, ids) {
@@ -610,6 +617,91 @@ function docLineActionsCell(pfx, id, l) {
   return cell2(`<button class="mini-btn" onclick="${pfx}EditLineModal('${id}','${l.id}')" title="Modifica riga / nota">${ico('edit', 'tinted', 'Modifica riga / nota')}</button>`,
     `<button class="mini-btn danger lock-contract" onclick="${pfx}DelLine('${id}','${l.id}')" title="Togli la riga">${ico('trash', 'tinted', 'Togli la riga')}</button>`, 'line-actions');
 }
+// ─── Prezzo, sconto e totali di un ordine (dalla 0.157.0) ───
+// Con il modulo Listini e sconti la cella del prezzo si apre in due: sopra il
+// prezzo di listino e lo sconto, sotto il netto e l'importo. Spento il modulo,
+// un documento che porta già degli sconti li mostra lo stesso: nasconderli
+// farebbe sembrare sbagliato un importo che è giusto.
+function docScontiVisibili(doc) {
+  return moduloAttivo('listini') || !!(doc && (doc.discount || (doc.lines || []).some(l => l.discount)));
+}
+// `senza` è l'intestazione di sempre, quando gli sconti non si vedono: [sopra, nota].
+function docPrezzoTh(doc, senza) {
+  return docScontiVisibili(doc)
+    ? th2('Listino · Sconto %', `Netto · Importo (${esc(cur())})`, 'Sopra il prezzo di listino di una unità e lo sconto, anche a cascata (10+5 è il 10% e poi il 5%); sotto il prezzo netto e quanto fa per la quantità di riga')
+    : th2(senza[0], `Importo (${esc(cur())})`, senza[1]);
+}
+function docPrezzoCell(pfx, doc, l, titolo) {
+  const price = (l.price === '' || l.price == null) ? null : Number(l.price);
+  const importo = `<span class="ln-amount">${price != null ? fmtN(importoRiga(l)) : '—'}</span>`;
+  const set = campo => `onchange="${pfx}SetLine('${doc.id}','${l.id}','${campo}',this.value)"`;
+  if (!docScontiVisibili(doc)) {
+    return cell2(`<input type="number" class="rfq-price-input lock-contract" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="${titolo}" ${set('price')}>`, importo);
+  }
+  const lordo = rigaPrezzoLordo(l);
+  const netto = l.discount && price != null
+    ? `<span class="ln-netto" title="Prezzo netto, sconto ${esc(scontoEquivalente(l.discount))}">${fmtPrezzo(price)}</span> · ` : '';
+  return cell2(`<span class="ln-prezzo-sconto"><input type="number" class="rfq-price-input lock-contract" value="${lordo === '' || lordo == null ? '' : lordo}" min="0" step="any" placeholder="—" title="Prezzo di listino di una unità, prima dello sconto" aria-label="Prezzo di listino" ${set('listPrice')}><input class="rfq-sconto-input lock-contract" value="${esc(l.discount || '')}" placeholder="sconto" inputmode="decimal" title="Sconto %, anche a cascata: 10+5 è il 10% e poi il 5%; il meno è una maggiorazione" aria-label="Sconto %" ${set('discount')}></span>`,
+    netto + importo);
+}
+// Il piede della tabella: il totale imponibile, e sopra, se il documento ha
+// uno sconto, il totale delle righe e lo sconto. `prima` e `dopo` sono le
+// colonne a sinistra e a destra della colonna degli importi.
+function docTotaliFootHtml(doc, prima, dopo) {
+  const t = totaliDocumento(doc);
+  const riga = (cls, etichetta, valore) => `<tr class="${cls}"><td colspan="${prima}" style="text-align:right">${etichetta}</td><td>${valore}</td><td colspan="${dopo}"></td></tr>`;
+  const sconto = doc.discount && t.sconto
+    ? riga('doc-subtot', 'Totale righe', fmtN(t.righe))
+      + riga('doc-subtot', `Sconto documento ${esc(doc.discount)}%${scontoPassi(doc.discount).length > 1 ? ` (${esc(scontoEquivalente(doc.discount))})` : ''}`, '− ' + fmtN(t.sconto))
+    : '';
+  return `<tfoot>${sconto}${riga('rfq-cmp-total', 'Totale imponibile', fmtN(t.imponibile))}</tfoot>`;
+}
+// Le colonne di prezzo per PDF ed Excel: lordo e sconto solo se almeno una
+// riga ha uno sconto, come le colonne del codice fornitore.
+function docRigheConSconto(doc) { return (doc.lines || []).some(l => l.discount); }
+// PDF ed Excel: l'intestazione e le celle di prezzo di una riga. Con lo
+// sconto una colonna diventa tre: listino, sconto, netto.
+function docStampaPrezzoHead(doc, testa) {
+  return docRigheConSconto(doc) ? ['Prezzo listino\nList price', 'Sconto %\nDiscount %', 'Prezzo netto\nNet price'] : [testa];
+}
+function docXlsPrezzoHead(doc, testa) {
+  return docRigheConSconto(doc) ? [`Prezzo listino (${cur()})`, 'Sconto %', testa] : [testa];
+}
+function docPdfPrezzoCelle(doc, l) {
+  const u = l.uom ? '/' + l.uom : '';
+  const prezzo = v => (v === '' || v == null) ? '' : fmtPrezzo(Number(v)) + u;
+  if (!docRigheConSconto(doc)) return [prezzo(l.price)];
+  return [prezzo(rigaPrezzoLordo(l)), l.discount || '', prezzo(l.price)];
+}
+function docXlsPrezzoCelle(doc, l) {
+  const num = v => (v === '' || v == null) ? '' : Number(v);
+  if (!docRigheConSconto(doc)) return [num(l.price)];
+  return [num(rigaPrezzoLordo(l)), l.discount || '', num(l.price)];
+}
+// Il piede del PDF: una riga per voce, l'etichetta nella colonna prima
+// dell'importo; l'ultima (il totale) in grassetto.
+function docPdfFoot(doc, nCol, iImporto) {
+  const voci = docTotaliStampa(doc);
+  return voci.map(([etichetta, v], i) => {
+    const stile = { fontStyle: i === voci.length - 1 ? 'bold' : 'normal' };
+    const r = new Array(nCol).fill('');
+    r[iImporto - 1] = { content: etichetta, styles: Object.assign({ halign: 'right' }, stile) };
+    r[iImporto] = { content: fmtN(v), styles: stile };
+    return r;
+  });
+}
+function docXlsFoot(doc) {
+  return docTotaliStampa(doc).map(([etichetta, v], i, voci) => ['', i === voci.length - 1 ? 'TOTALE IMPONIBILE / TOTAL' : etichetta, v]);
+}
+// Le righe del piede su PDF ed Excel: [etichetta, importo].
+function docTotaliStampa(doc) {
+  const t = totaliDocumento(doc);
+  if (!(doc.discount && t.sconto)) return [['Totale / Total', t.imponibile]];
+  return [['Totale righe / Lines total', t.righe],
+    [`Sconto / Discount ${doc.discount}%`, -t.sconto],
+    ['Totale / Total', t.imponibile]];
+}
+
 // Chiudi, numero, stato, Salva e il menu «⋯».
 //   o = { chiudi, cosa, rec, stati, dirty, saveId, salva, menu }
 // ─── La pagina di un documento (dalla 0.154.0) ───
@@ -656,7 +748,7 @@ function docRailHtml(o) {
     </aside>`;
 }
 // Titolo, controparte, data, stato, condizioni e note.
-//   o = { pfx, rec, controparte, data, conferma?, note, rispondere?, offerta?, ddt? }
+//   o = { pfx, rec, controparte, data, conferma?, note, rispondere?, offerta?, ddt?, sconto? }
 // `conferma` è l'etichetta del numero di conferma della controparte: la
 // richiesta d'offerta non ce l'ha.
 function docTestaHtml(o) {
@@ -679,6 +771,7 @@ function docTestaHtml(o) {
       <div class="modal-field campo-m"><label>Pagamento</label>
         <input list="${o.pfx}-payment-opts" class="lock-contract" value="${esc(r.payment || '')}" placeholder="es. Bonifico 30gg, RiBa 60gg…" ${campo('payment')}>
         <datalist id="${o.pfx}-payment-opts">${opzioni(db.settings.paymentOptions)}</datalist></div>
+      ${o.sconto && docScontiVisibili(r) ? `<div class="modal-field campo-s"><label>Sconto documento %</label><input class="lock-contract" value="${esc(r.discount || '')}" placeholder="es. 3 o 10+5" inputmode="decimal" title="Sconto sul totale delle righe, anche a cascata. Si propone quello del fornitore" ${campo('discount')}></div>` : ''}
       <div class="modal-field campo-nota"><label>${o.note}</label><textarea rows="${righeNota(r.notes)}" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
       <div class="modal-field campo-nota"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label><textarea rows="${righeNota(r.notesInternal)}" class="notes-internal" ${campo('notesInternal')}>${esc(r.notesInternal || '')}</textarea></div>
     </div>`;

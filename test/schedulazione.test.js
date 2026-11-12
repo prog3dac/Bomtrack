@@ -239,8 +239,9 @@ describe('Programmazione: i tempi nelle impostazioni Excel', () => {
   it('il trasporto del terzista esce e rientra col foglio Fornitori', () => {
     const app = conDb();
     const aoa = foglio(app, 'Fornitori');
-    assert.equal(aoa[0][aoa[0].length - 1], 'Trasporto CL gg');
-    assert.equal(aoa[1][aoa[1].length - 1], 2);
+    const c = aoa[0].indexOf('Trasporto CL gg');
+    assert.ok(c > 0);
+    assert.equal(aoa[1][c], 2);
     app.eval(`importSettingsSheets({ 'Fornitori': [{ 'Nome': 'Beta', 'Trasporto CL gg': 4 }] })`);
     assert.equal(ev(app, "getSupplier('beta').transitDays"), 4);
   });

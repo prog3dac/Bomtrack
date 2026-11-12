@@ -95,7 +95,7 @@ function dashModello(oggi, mesi) {
     const k = r.o.supplierId || '';
     const e = fornitori.get(k) || { supplierId: k, nome: supplierName(k) || '(senza fornitore)', righe: 0, valore: 0, ritardoMax: 0, docs: new Map() };
     e.righe++;
-    e.valore += r.residuo * (Number(r.l.price) || 0);
+    e.valore += r.residuo * (prezzoPagatoRiga(r.o, r.l) || 0);
     e.ritardoMax = Math.max(e.ritardoMax, supplierDaysBetween(r.data, oggi) || 0);
     e.docs.set(r.o.id, { id: r.o.id, tipo: r.tipo, numero: r.o.number || '' });
     fornitori.set(k, e);

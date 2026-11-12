@@ -466,7 +466,7 @@ function addSupplier() {
   const n = val('sup-name'); if (!n) { showToast('Nome richiesto', 'error'); return; }
   Store.insert('suppliers', { id: gid(), name: n, referente: val('sup-ref'), email: val('sup-email'),
     phone: val('sup-phone'), vat: '', street: '', streetNumber: '', zip: '', city: '', province: '', country: '',
-    defaultTransport: '', defaultPayment: '', active: true });
+    defaultTransport: '', defaultPayment: '', discount: '', active: true });
   renderManage(); savedToast('Fornitore aggiunto');
 }
 function addressFieldsHtml(pfx, o) {
@@ -563,6 +563,9 @@ function editSupplierModal(id) {
       <div class="modal-field"><label>Pagamento predefinito</label>
         <input id="es-dpayment" list="sup-payment-opts" value="${esc(s.defaultPayment || '')}" placeholder="es. Bonifico 30gg">
         <datalist id="sup-payment-opts">${(db.settings.paymentOptions || []).map(o => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>
+      ${moduloAttivo('listini') || s.discount ? `<div class="modal-field"><label>Sconto fornitore %</label>
+        <input id="es-discount" value="${esc(s.discount || '')}" placeholder="es. 3 o 10+5" inputmode="decimal">
+        <span class="empty-text" style="text-align:left;padding:2px 0 0">Si propone come sconto documento sui suoi ordini nuovi, e quando lo si sceglie su un ordine.</span></div>` : ''}
       <div class="modal-field"><label>Trasporto predefinito</label>
         <input id="es-dtransport" list="sup-transport-opts" value="${esc(s.defaultTransport || '')}" placeholder="es. Porto franco">
         <datalist id="sup-transport-opts">${(db.settings.transportOptions || []).map(o => `<option value="${esc(o)}"></option>`).join('')}</datalist></div>
@@ -579,9 +582,14 @@ function saveSupplier(id) {
   if (!roleGuard('manage')) return;
   const s = db.suppliers.find(x => x.id === id); if (!s) return;
   const nome = requireVal('es-name', 'Nome richiesto'); if (!nome) return;
+  // Lo sconto (modulo Listini e sconti) si controlla prima di scrivere niente.
+  const conSconto = !!document.getElementById('es-discount');
+  const sconto = conSconto ? scontoNorm(val('es-discount')) : undefined;
+  if (conSconto && sconto == null) { showToast(SCONTO_ERRORE, 'error'); return; }
   s.name = nome; s.referente = val('es-ref'); s.email = val('es-email');
   s.phone = val('es-phone'); s.vat = val('es-vat');
   s.defaultPayment = val('es-dpayment'); s.defaultTransport = val('es-dtransport');
+  if (conSconto) s.discount = sconto;
   if (isNeg('es-transit')) { showToast('I giorni di trasporto non possono essere negativi', 'error'); return; }
   const prima = Number(s.transitDays) || 0;
   s.transitDays = Math.round(numVal('es-transit', 0, 99));

@@ -416,6 +416,7 @@ function planDocHead(p, supplierId) {
     date: oggiISO(), status: 'bozza', supplierId: supplierId || null,
     transport: (sup && sup.defaultTransport) || db.settings.transportDefault || '',
     payment: (sup && sup.defaultPayment) || db.settings.paymentDefault || '',
+    discount: (sup && sup.discount) || '',   // lo sconto del fornitore (dalla 0.157.0)
     // La commessa segue il piano fino al documento: è la catena che permette di
     // chiedere «cosa abbiamo ordinato per la commessa 240?» e avere risposta.
     planId: p.id, jobId: p.jobId || null, notes: '', notesInternal: '', active: true,

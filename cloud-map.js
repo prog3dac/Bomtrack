@@ -240,7 +240,7 @@ const CLOUD_TABLES = {
 // (eccetto quelli in COLONNE_TESTO_ID); tutto il resto è testo.
 const CLOUD_TYPES = (() => {
   const t = {};
-  ['qty', 'price', 'minQty', 'leadDays', 'scrapPct', 'hours', 'days', 'rate', 'cost', 'costOverride',
+  ['qty', 'price', 'listPrice', 'minQty', 'leadDays', 'scrapPct', 'hours', 'days', 'rate', 'cost', 'costOverride',
     'unitCost', 'purchasePrice', 'altFactor', 'overheadPctOverride', 'marginPctOverride', 'hourlyRate',
     'capacityHours', 'hoursPerDay', 'operators', 'queueDays', 'setupHours', 'transitDays', 'assemblyDays', 'received', 'perPezzo', 'scrap', 'lotSize', 'safetyStock', 'size',
     'weightKg', 'volumeM3', 'lengthM', 'widthM', 'heightM', 'grossWeightKg'].forEach(k => { t[k] = 'numeric'; });
@@ -281,7 +281,7 @@ function cloudType(table, campo) {
 // Al ritorno, NULL torna `''` dove il modello locale scrive `''` per «vuoto»:
 // sono le normalizzazioni di migrateDB(), e un `null` lì farebbe risultare
 // modificato ogni record al primo confronto. Altrove NULL resta null.
-const VUOTO_STRINGA = ['price', 'minQty', 'leadDays', 'deliveryDate', 'dueDate', 'confirmedDate', 'startDate', 'replyBy'];
+const VUOTO_STRINGA = ['price', 'listPrice', 'minQty', 'leadDays', 'deliveryDate', 'dueDate', 'confirmedDate', 'startDate', 'replyBy'];
 const VUOTO_STRINGA_TABELLA = {
   items: ['familyId', 'subFamilyId', 'groupItemId', 'machineItemId'],
   reminders: ['jobId'],

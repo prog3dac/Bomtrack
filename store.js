@@ -996,6 +996,7 @@ function migrateDB() {
     if (s.vat == null) s.vat = '';
     if (s.defaultTransport == null) s.defaultTransport = '';
     if (s.defaultPayment == null) s.defaultPayment = '';
+    if (s.discount == null) s.discount = '';   // sconto del fornitore (dalla 0.157.0)
     // Giorni di trasporto verso e dal terzista, andata più ritorno: si sommano
     // all'attraversamento di ogni tratta di conto lavoro affidata a lui.
     if (s.transitDays == null) s.transitDays = 0;
@@ -1069,8 +1070,13 @@ function migrateDB() {
     // colonna: è l'incoerenza che tutte le righe qui sopra esistono per evitare.
     if (o.supplierConfirmation == null) o.supplierConfirmation = '';
     if (o.notesInternal == null) o.notesInternal = '';
+    // Sconto del documento e, sulle righe, prezzo di listino e sconto (dalla
+    // 0.157.0). `price` resta il netto: i documenti di prima non cambiano.
+    if (o.discount == null) o.discount = '';
     (o.lines || []).forEach(l => {
       if (l.price == null) l.price = '';
+      if (l.listPrice == null) l.listPrice = '';
+      if (l.discount == null) l.discount = '';
       if (l.deliveryDate == null) l.deliveryDate = '';
       if (l.received == null) l.received = 0;
       if (l.note == null) l.note = '';

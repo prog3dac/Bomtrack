@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.157.0 — 2026-11-12
+
+**Sconti su ordini e ordini di lavoro, e il fornitore cambiato aggiorna tutto.** Primo passo del piano listini e sconti.
+- Nuovo modulo **Listini e sconti** (*Gestione → Aree e moduli*, spento di serie). Sulle righe di ordini a fornitore e ordini di lavoro la colonna del prezzo diventa **listino e sconto** sopra, **netto e importo** sotto. Lo sconto si scrive a cascata come lo danno i fornitori: `10+5` è il 10% e poi il 5% (14,5%); il meno è una maggiorazione (`10+5-2`). Il netto scritto a mano toglie lo sconto.
+- **Sconto documento** in testata, sotto il totale delle righe: in fondo *Totale righe*, *Sconto documento*, *Totale imponibile*. Lo propone lo **sconto fornitore** di *Gestione → Fornitori* (anche dal foglio Excel dei fornitori, colonna *Sconto fornitore %*).
+- PDF ed Excel: colonne *Prezzo listino*, *Sconto %*, *Prezzo netto* solo se una riga ha uno sconto; nel piede lo sconto documento se c'è.
+- Costo medio d'acquisto, consuntivo, impegno di commessa, valore delle consegne in ritardo e costo della ripresa di una NC contano il prezzo **pagato**: netto di riga meno sconto documento.
+- **Cambiare il fornitore aggiorna tutto**, senza la domanda «Applicare il listino?»: trasporto, pagamento e sconto documento del nuovo fornitore (o quelli di Gestione), il suo listino su ogni riga di articolo anche se il prezzo era scritto a mano, e le righe che non ha a listino restano senza prezzo. Righe manuali e di conto lavoro restano. Sulla richiesta d'offerta i prezzi non cambiano.
+- `price` di riga resta il netto: i documenti di prima non cambiano, e a modulo spento l'app è quella di prima, salvo il cambio di fornitore.
+
+**Schema: cambia.** Colonna `discount` (testo) su `suppliers`, `orders`, `work_orders`, `order_lines`, `work_order_lines`; `list_price` (numerica) sulle righe; `schema_versione` 9. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+
 ### 0.156.1 — 2026-11-12
 
 **Correzioni dal controllo delle ultime versioni.**

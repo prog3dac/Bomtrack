@@ -518,6 +518,18 @@ create table if not exists public.work_order_lines (
 -- per i database già creati.
 alter table public.work_order_lines add column if not exists start_date date;
 
+-- 0.157.0, sconti: lo sconto del fornitore, quello del documento e, sulle
+-- righe, il prezzo di listino con il suo sconto. Lo sconto è il testo come lo
+-- scrive il fornitore («10+5», a cascata; il meno è una maggiorazione). `price`
+-- resta il prezzo netto della riga: i documenti di prima non cambiano.
+alter table public.suppliers add column if not exists discount text;
+alter table public.orders add column if not exists discount text;
+alter table public.work_orders add column if not exists discount text;
+alter table public.order_lines add column if not exists list_price numeric;
+alter table public.order_lines add column if not exists discount text;
+alter table public.work_order_lines add column if not exists list_price numeric;
+alter table public.work_order_lines add column if not exists discount text;
+
 -- ─── Eventi ─────────────────────────────────────────────────
 -- Righe piatte, che si aggiungono e non si correggono: la giacenza, il
 -- ricevuto e l'avanzamento sono somme di queste, mai colonne scrivibili.
@@ -1766,7 +1778,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 8)
+    'schema_versione', 9)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

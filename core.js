@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.156.1';
+const APP_VERSION = '0.157.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -87,6 +87,98 @@ function importoRiga(l) {
   return +(((Number(l && l.qty) || 0) * (Number(l && l.price) || 0)).toFixed(2));
 }
 function totaleRighe(lines) { return (lines || []).reduce((s, l) => s + importoRiga(l), 0); }
+
+// ─── Sconti a cascata (dalla 0.157.0) ───
+// Uno sconto si scrive come lo scrivono i fornitori: «10+5» è il 10% e poi il
+// 5% su quello che resta (14,5% in tutto), non il 15%. Un passaggio col meno
+// è una maggiorazione: «10+5-2» aggiunge il 2% alla fine (imballo, piccolo
+// lotto). Si tiene il testo, che è il dato come lo dà il fornitore e come si
+// stampa; il numero si ricava sempre da qui.
+//
+// Torna l'elenco dei passaggi in percentuale (lo sconto positivo, la
+// maggiorazione negativa), `[]` se è vuoto, `null` se non si legge: un
+// passaggio sopra il 100%, una lettera, più di quattro passaggi.
+const SCONTO_PASSI_MAX = 4;
+function scontoPassi(testo) {
+  const t = String(testo == null ? '' : testo).replace(/\s+/g, '').replace(/%(?=[+-]|$)/g, '').replace(/,/g, '.');
+  if (!t) return [];
+  const parti = t.match(/[+-]?[^+-]+/g);
+  if (!parti || parti.join('') !== t || parti.length > SCONTO_PASSI_MAX) return null;
+  const passi = [];
+  for (const p of parti) {
+    const segno = p[0] === '-' ? -1 : 1;
+    const corpo = p.replace(/^[+-]/, '');
+    if (!/^\d+(\.\d+)?$/.test(corpo)) return null;
+    const n = Number(corpo);
+    if (!(n <= 100)) return null;
+    if (n > 0) passi.push(segno * n);
+  }
+  return passi;
+}
+// Per quanto si moltiplica il prezzo: «10+5» → 0,855. Uno sconto che non si
+// legge vale 1, cioè nessuno sconto: chi lo scrive viene fermato prima (vedi
+// scontoNorm), qui si protegge un dato sporco arrivato da un archivio.
+function scontoFattore(testo) {
+  const passi = scontoPassi(testo);
+  if (!passi) return 1;
+  return passi.reduce((f, p) => f * (1 - p / 100), 1);
+}
+// Il testo in forma pulita, «10+5-2», o '' se non c'è sconto; `null` se non si
+// legge. Un passaggio a zero cade: «10+0» è «10».
+function scontoNorm(testo) {
+  const passi = scontoPassi(testo);
+  if (!passi) return null;
+  return passi.map((p, i) => (p < 0 ? '-' : (i ? '+' : '')) + fmtScontoNum(Math.abs(p))).join('');
+}
+function fmtScontoNum(n) { return String(+n.toFixed(4)).replace('.', ','); }
+// L'equivalente in un numero solo, per dirlo accanto al testo: «14,5%».
+function scontoEquivalente(testo) {
+  const f = scontoFattore(testo);
+  if (Math.abs(f - 1) < 1e-9) return '';
+  const p = (1 - f) * 100;
+  return (p < 0 ? '+' : '') + fmtScontoNum(+Math.abs(p).toFixed(2)) + '%';
+}
+// Il messaggio unico per uno sconto che non si legge.
+const SCONTO_ERRORE = 'Sconto non valido: scrivi le percentuali separate da + (es. 10+5), al più 4, ognuna fino a 100. Il meno è una maggiorazione.';
+
+// ─── Il prezzo di una riga: lordo, sconto e netto ───
+// `price` resta il prezzo **netto** della riga: è quello che leggono importo,
+// totali, costo medio, consuntivo e fabbisogno, e così chi non usa gli sconti
+// non vede cambiare niente. Lo sconto vive accanto, con il lordo da cui parte:
+// `listPrice` e `discount` sono pieni insieme o vuoti insieme.
+function rigaPrezzoLordo(l) {
+  if (!l) return '';
+  if (l.discount && l.listPrice !== '' && l.listPrice != null) return l.listPrice;
+  return l.price;
+}
+// Scrive lordo e sconto e ricava il netto. Il netto si tiene a sei decimali:
+// l'importo si arrotonda dove nasce (importoRiga), qui si evita solo che
+// 14 × 0,855 diventi 11,969999999999999.
+// Senza lordo lo sconto resta scritto, in attesa del prezzo.
+function rigaImpostaPrezzo(l, lordo, sconto) {
+  const norm = scontoNorm(sconto) || '';
+  if (lordo === '' || lordo == null) { l.price = ''; l.listPrice = ''; l.discount = norm; return; }
+  const n = Number(lordo) || 0;
+  if (!norm) { l.price = n; l.listPrice = ''; l.discount = ''; return; }
+  l.listPrice = n; l.discount = norm;
+  l.price = +(n * scontoFattore(norm)).toFixed(6);
+}
+
+// ─── Lo sconto del documento ───
+// Sotto il totale delle righe, prima dell'imponibile. Non tocca il prezzo di
+// riga: chi deve sapere quanto si è pagato davvero un articolo (costo medio,
+// consuntivo) moltiplica per il fattore del documento con prezzoPagatoRiga.
+function totaliDocumento(doc) {
+  const righe = +totaleRighe(doc && doc.lines).toFixed(2);
+  const f = scontoFattore(doc && doc.discount);
+  const sconto = +(righe * (1 - f)).toFixed(2);
+  return { righe, sconto, imponibile: +(righe - sconto).toFixed(2), fattore: f };
+}
+function prezzoPagatoRiga(doc, l) {
+  const p = Number(l && l.price);
+  if (l == null || l.price === '' || l.price == null || !isFinite(p)) return null;
+  return p * scontoFattore(doc && doc.discount);
+}
 // L'apice singolo c'è perché il codice scrive di continuo attributi come
 // onclick="fn('${x}')". Oggi `x` è sempre un id generato, quindi non c'è niente
 // da sfruttare — ma il contratto dell'helper deve reggere l'uso che se ne fa: il
@@ -723,6 +815,13 @@ const MODULI = {
     descr: 'Gli strumenti con cui si collauda, in Qualità → Strumenti: codice, tipo, scadenza della taratura e stato (valido, in scadenza, scaduto, in taratura, fuori servizio). Il piano di controllo chiede un tipo di strumento, chi collauda sceglie quale fra quelli validi, e uno scaduto non fa registrare l\'esito. Una taratura trovata fuori apre una non conformità con i collaudi da rivedere. Funziona con il modulo Qualità acceso.',
     area: 'magazzino',
     richiede: 'qualita',
+  },
+  // Dalla 0.157.0: sconti a cascata sulle righe degli ordini, sconto del
+  // documento e sconto predefinito del fornitore. Spento, i campi spariscono
+  // ma gli sconti già scritti continuano a contare nei totali.
+  listini: {
+    nome: 'Listini e sconti',
+    descr: 'Gli sconti come li danno i fornitori, anche a cascata (10+5 è il 10% e poi il 5%; il meno è una maggiorazione): sulle righe degli ordini a fornitore e degli ordini di lavoro accanto al prezzo di listino, sul documento sotto il totale delle righe, e uno sconto predefinito per fornitore che si propone sui documenti nuovi. PDF ed Excel stampano prezzo di listino, sconto e netto.',
   },
   // Dalla 0.126.0: le macchine dei centri, con tariffa e manutenzione proprie (macchine.js).
   macchine: {

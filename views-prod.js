@@ -1781,6 +1781,7 @@ function opDocHead(o, supplierId) {
     date: oggiISO(), status: 'bozza', supplierId: supplierId || null,
     transport: (sup && sup.defaultTransport) || db.settings.transportDefault || '',
     payment: (sup && sup.defaultPayment) || db.settings.paymentDefault || '',
+    discount: (sup && sup.discount) || '',   // lo sconto del fornitore (dalla 0.157.0)
     rfqId: null, planId: o.planId || null, jobId: o.jobId || null,
     odpId: o.id, supplierConfirmation: '', notes: '', notesInternal: '', active: true,
   };
