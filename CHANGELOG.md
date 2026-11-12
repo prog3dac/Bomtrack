@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.157.1 — 2026-11-12
+
+**Manuale allineato alle ultime versioni.** Nessun cambio all'app.
+- Richieste, ordini, ordini di lavoro, commesse e piani: tolte le descrizioni della vecchia toolbar e della barra *Documento* in fondo, e lo *Stato* fra i campi della testata. Il manuale descrive la barra a sinistra con Genera PDF / Excel e **Testi sul PDF**.
+- Nei campi di testata: *Rispondere entro* e *Offerta valida fino al* (richiesta), *Vostra offerta n° / del* e *Sconto documento* (ordine), *DDT di invio* (ordine di lavoro). In *Gestione → Fornitori* lo **sconto fornitore**, anche nel foglio Excel.
+- Il giro del conto lavoro nel capitolo 4 usa **Avvia** e **Dichiara** al posto dei comandi di prima, e non dice più che il rientro non carica il magazzino.
+- Nuova sezione *Gestione → Qualità* (collaudi, strumenti di misura, non conformità, valutazione fornitori). La barra di navigazione elenca il gruppo Qualità, Varianti, Reparto e Manutenzione.
+- Riepilogo: i segnali di qualità, tarature, manutenzione e capacità finita, e i filtri del calendario *Manutenzione*, *Non conformità* e *Tarature*.
+- Sconti, scaglioni e tarature anche negli stati dei documenti, negli export, nel glossario e nelle domande frequenti.
+
+Nessun cambio allo schema.
+
 ### 0.157.0 — 2026-11-12
 
 **Sconti su ordini e ordini di lavoro, e il fornitore cambiato aggiorna tutto.** Primo passo del piano listini e sconti.
