@@ -12,7 +12,14 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - **Cambiare il fornitore aggiorna tutto**, senza la domanda «Applicare il listino?»: trasporto, pagamento e sconto documento del nuovo fornitore (o quelli di Gestione), il suo listino su ogni riga di articolo anche se il prezzo era scritto a mano, e le righe che non ha a listino restano senza prezzo. Righe manuali e di conto lavoro restano. Sulla richiesta d'offerta i prezzi non cambiano.
 - `price` di riga resta il netto: i documenti di prima non cambiano, e a modulo spento l'app è quella di prima, salvo il cambio di fornitore.
 
-**Schema: cambia.** Colonna `discount` (testo) su `suppliers`, `orders`, `work_orders`, `order_lines`, `work_order_lines`; `list_price` (numerica) sulle righe; `schema_versione` 9. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+**Sconto e validità nel listino fornitori.** Secondo passo.
+- Ogni quotazione ha uno **Sconto %** e una data **Valida al**; sotto il prezzo si legge il netto. La data della quotazione è anche il giorno **da cui vale**: un listino annunciato non sostituisce quello di oggi e non manda niente nello storico.
+- **Il costo in uso è quello che si paga**: listino, sconto della quotazione e sconto del fornitore. ↓, il risparmio del Riepilogo e il fabbisogno confrontano i fornitori su questo; cambiando lo sconto di un fornitore i costi dei suoi articoli si ricalcolano.
+- Ordini, ordini di lavoro, documenti del fabbisogno e del riordino prendono **listino e sconto** dalla quotazione valida alla data del documento; l'ordine segnala uno sconto diverso dal listino e una quotazione **scaduta** (che si usa lo stesso).
+- Vista d'insieme del listino: colonna *Valida al*, filtro **Scadute o in scadenza (30 giorni)**, sconto e scadenza nell'export. Foglio catalogo: colonne *Sconto %* e *Valida al*.
+- **Richieste d'offerta**: listino e sconto sulle righe, **Offerta valida fino al** in testata, scrivibili a richiesta inviata. *Registra a listino* li porta nella quotazione; l'ordine creato dalla richiesta tiene listino e sconto. PDF ed Excel come per l'ordine.
+
+**Schema: cambia.** Colonna `discount` (testo) su `suppliers`, `orders`, `work_orders`, `order_lines`, `work_order_lines`, `rfq_lines`, `item_prices`; `list_price` (numerica) sulle righe di ordini, ordini di lavoro e richieste; `valid_to` su `item_prices` e `offer_valid_to` su `rfqs`; `schema_versione` 9. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
 
 ### 0.156.1 — 2026-11-12
 

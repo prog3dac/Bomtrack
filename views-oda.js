@@ -165,6 +165,8 @@ function orderFromRfqFatto(r) {
   // ordine d'acquisto. Mescolarle sarebbe il contrario della separazione.
   const copia = l => ({ id: gid(), itemId: l.itemId || null, code: l.code || '', description: l.description || '',
     uom: l.uom || defaultUom(), qty: Number(l.qty) || 0, price: (l.price === '' || l.price == null) ? '' : Number(l.price),
+    // Lordo e sconto dell'offerta passano all'ordine così come sono (0.157.0).
+    listPrice: l.discount && l.listPrice !== '' && l.listPrice != null ? Number(l.listPrice) : '', discount: l.discount || '',
     deliveryDate: l.deliveryDate || '', received: 0, note: l.note || '',
     phaseKey: l.phaseKey || null, phaseKeys: l.phaseKeys || l.phaseKey || null });
   const merce = (r.lines || []).filter(l => !l.phaseKey);
@@ -259,16 +261,24 @@ function ordLineListinoWarn(o, l) {
   const prezzo = (lordo === '' || lordo == null) ? null : Number(lordo);
   if (prezzo == null) return '';
   const it = getItem(l.itemId);
-  const row = supplierPriceRow(it, o.supplierId);
+  const row = supplierPriceRow(it, o.supplierId, o.date);
   const sup = supplierName(o.supplierId) || 'questo fornitore';
   if (!row || row.price === '' || row.price == null) {
     return `<span class="mrp-warn" title="${esc(sup)} non ha questo articolo a listino: il prezzo in riga viene da un'altra parte. Verificalo prima di mandare l'ordine.">⚠ non a listino</span>`;
   }
-  const cost = rowUnitCost(it, row) || 0;
-  if (Math.abs(cost - prezzo) < 0.00005) return '';
+  // Una quotazione scaduta si usa lo stesso, ma lo si dice: il fornitore
+  // potrebbe non tenerla più (dalla 0.157.0).
+  const scaduta = priceRowScaduta(row, o.date)
+    ? `<span class="mrp-warn" title="La quotazione di ${esc(sup)} valeva fino al ${esc(fmtDateIt(row.validTo))}: chiedi conferma del prezzo prima di mandare l'ordine.">⚠ listino scaduto il ${esc(fmtDateIt(row.validTo))}</span>`
+    : '';
+  const cost = rowUnitGross(it, row) || 0;
+  const scontoRiga = scontoNorm(l.discount) || '';
+  const scontoListino = scontoNorm(row.discount) || '';
+  if (Math.abs(cost - prezzo) < 0.00005 && scontoRiga === scontoListino) return scaduta;
   const uom = priceUomOf(it, row);
   const grezzo = uom !== (it.uom || '') ? ` (a listino ${fmtPer(row.price, uom)})` : '';
-  return `<span class="mrp-warn" title="A listino ${esc(sup)} quota ${fmtPer(cost, itemUom(it))}${grezzo}. La riga dice altro: può essere un prezzo concordato, o il listino di un fornitore diverso rimasto da prima.">⚠ ${fmtPer(cost, itemUom(it))} a listino</span>`;
+  const conSconto = scontoListino ? ` −${scontoListino}%` : '';
+  return `<span class="mrp-warn" title="A listino ${esc(sup)} quota ${fmtPer(cost, itemUom(it))}${grezzo}${scontoListino ? ', sconto ' + esc(scontoListino) + '%' : ''}. La riga dice altro: può essere un prezzo concordato, o il listino di un fornitore diverso rimasto da prima.">⚠ ${fmtPer(cost, itemUom(it))}${esc(conSconto)} a listino</span>${scaduta ? ' ' + scaduta : ''}`;
 }
 
 function renderOrderEdit(id) {

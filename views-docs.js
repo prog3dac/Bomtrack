@@ -122,13 +122,16 @@ const DOC_KINDS = {
     opsFields: ['status', 'notes', 'notesInternal'],
     // Il campo di riga decide quale blocco lo governa: prezzo e consegna sono
     // ciò che torna con l'offerta, e restano aperti a richiesta inviata.
-    lineLock: field => (field === 'price' || field === 'deliveryDate') ? 'offer' : 'contract',
+    // Dalla 0.157.0 anche prezzo di listino e sconto della riga.
+    lineLock: field => ['price', 'listPrice', 'discount', 'deliveryDate'].includes(field) ? 'offer' : 'contract',
+    // Nella testata, la scadenza dell'offerta torna con l'offerta (0.157.0).
+    offerFields: ['offerValidTo'],
     numLineFields: ['qty', 'price'],
     newLineExtra: () => ({}),
     // Una riga da catalogo su una richiesta non porta prezzo: si chiede
     // un'offerta nell'unità in cui quel fornitore quota, non gli si dice quanto
     // deve costare.
-    catalogLine: riga => Object.assign(riga, { price: '' }),
+    catalogLine: riga => Object.assign(riga, { price: '', listPrice: '', discount: '' }),
     catalogToast: (n) => n + ' righe aggiunte',
   },
   order: {
@@ -299,7 +302,7 @@ function docSave(k, id) {
 }
 function docSetField(k, id, field, value) {
   const K = docKind(k);
-  const lockKind = K.opsFields.includes(field) ? 'ops' : 'contract';
+  const lockKind = K.opsFields.includes(field) ? 'ops' : (K.offerFields || []).includes(field) ? 'offer' : 'contract';
   if (!docGuard(k, id, lockKind)) { K.render(); return; }
   const doc = K.get(id); if (!doc) return;
   const before = doc.status;
@@ -357,7 +360,7 @@ function docSetSupplier(k, id, sid) {
   }
 }
 // Il listino del fornitore del documento su ogni riga di articolo. Il prezzo
-// passa da rowUnitCost(), la stessa porta di docLineFromItem: già convertito
+// passa da rowUnitGross(), la stessa porta di docLineFromItem: già convertito
 // nell'unità di gestione della riga. Torna quante righe ha riscritto e quante
 // sono rimaste senza prezzo.
 function docApplicaFornitore(doc) {
@@ -365,8 +368,8 @@ function docApplicaFornitore(doc) {
   (doc.lines || []).forEach(l => {
     if (!l.itemId || l.phaseKey) return;
     const it = getItem(l.itemId);
-    const row = it ? supplierPriceRow(it, doc.supplierId) : null;
-    if (priceRowQuoted(row)) rigaImpostaPrezzo(l, rowUnitCost(it, row) || 0, '');
+    const row = it ? supplierPriceRow(it, doc.supplierId, doc.date) : null;
+    if (priceRowQuoted(row)) rigaImpostaPrezzo(l, rowUnitGross(it, row) || 0, row.discount);
     else { rigaImpostaPrezzo(l, '', ''); out.senzaPrezzo++; }
     out.aggiornate++;
   });
@@ -527,7 +530,7 @@ function docAddCatalogLines(k, id, ids) {
   let senzaPrezzo = 0;
   ids.forEach(itemId => {
     const it = getItem(itemId); if (!it) return;
-    const riga = K.catalogLine(docLineFromItem(it, doc.supplierId));
+    const riga = K.catalogLine(docLineFromItem(it, doc.supplierId, doc.date));
     if (riga.price === '') senzaPrezzo++;
     doc.lines.push(riga);
   });
@@ -631,17 +634,20 @@ function docPrezzoTh(doc, senza) {
     ? th2('Listino · Sconto %', `Netto · Importo (${esc(cur())})`, 'Sopra il prezzo di listino di una unità e lo sconto, anche a cascata (10+5 è il 10% e poi il 5%); sotto il prezzo netto e quanto fa per la quantità di riga')
     : th2(senza[0], `Importo (${esc(cur())})`, senza[1]);
 }
-function docPrezzoCell(pfx, doc, l, titolo) {
+// `blocco` è la classe del blocco che governa il prezzo: sulla richiesta è
+// 'lock-offer', perché il prezzo torna con l'offerta a richiesta già inviata.
+function docPrezzoCell(pfx, doc, l, titolo, blocco) {
+  const lk = blocco || 'lock-contract';
   const price = (l.price === '' || l.price == null) ? null : Number(l.price);
   const importo = `<span class="ln-amount">${price != null ? fmtN(importoRiga(l)) : '—'}</span>`;
   const set = campo => `onchange="${pfx}SetLine('${doc.id}','${l.id}','${campo}',this.value)"`;
   if (!docScontiVisibili(doc)) {
-    return cell2(`<input type="number" class="rfq-price-input lock-contract" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="${titolo}" ${set('price')}>`, importo);
+    return cell2(`<input type="number" class="rfq-price-input ${lk}" value="${price != null ? price : ''}" min="0" step="any" placeholder="—" title="${titolo}" ${set('price')}>`, importo);
   }
   const lordo = rigaPrezzoLordo(l);
   const netto = l.discount && price != null
     ? `<span class="ln-netto" title="Prezzo netto, sconto ${esc(scontoEquivalente(l.discount))}">${fmtPrezzo(price)}</span> · ` : '';
-  return cell2(`<span class="ln-prezzo-sconto"><input type="number" class="rfq-price-input lock-contract" value="${lordo === '' || lordo == null ? '' : lordo}" min="0" step="any" placeholder="—" title="Prezzo di listino di una unità, prima dello sconto" aria-label="Prezzo di listino" ${set('listPrice')}><input class="rfq-sconto-input lock-contract" value="${esc(l.discount || '')}" placeholder="sconto" inputmode="decimal" title="Sconto %, anche a cascata: 10+5 è il 10% e poi il 5%; il meno è una maggiorazione" aria-label="Sconto %" ${set('discount')}></span>`,
+  return cell2(`<span class="ln-prezzo-sconto"><input type="number" class="rfq-price-input ${lk}" value="${lordo === '' || lordo == null ? '' : lordo}" min="0" step="any" placeholder="—" title="Prezzo di listino di una unità, prima dello sconto" aria-label="Prezzo di listino" ${set('listPrice')}><input class="rfq-sconto-input ${lk}" value="${esc(l.discount || '')}" placeholder="sconto" inputmode="decimal" title="Sconto %, anche a cascata: 10+5 è il 10% e poi il 5%; il meno è una maggiorazione" aria-label="Sconto %" ${set('discount')}></span>`,
     netto + importo);
 }
 // Il piede della tabella: il totale imponibile, e sopra, se il documento ha
@@ -762,6 +768,7 @@ function docTestaHtml(o) {
       <div class="modal-field campo-l"><label>${o.controparte}</label><select class="lock-contract sel-cerca" onchange="${o.pfx}SetSupplier('${id}',this.value)">${supplierOptions(r.supplierId)}</select></div>
       <div class="modal-field campo-s"><label>${o.data}</label><input type="date" class="lock-contract" value="${(r.date || '').slice(0, 10)}" ${campo('date')}></div>
       ${o.rispondere ? `<div class="modal-field campo-s"><label>Rispondere entro</label><input type="date" class="lock-contract" value="${esc((r.replyBy || '').slice(0, 10))}" ${campo('replyBy')}></div>` : ''}
+      ${o.validaFino && (moduloAttivo('listini') || r.offerValidTo) ? `<div class="modal-field campo-s"><label>Offerta valida fino al</label><input type="date" class="lock-offer" value="${esc((r.offerValidTo || '').slice(0, 10))}" title="Lo dice il fornitore nell'offerta: diventa la scadenza delle quotazioni registrate a listino" ${campo('offerValidTo')}></div>` : ''}
       ${o.offerta ? `<div class="modal-field campo-m"><label>Vostra offerta n° / del</label><input class="lock-contract" value="${esc(r.supplierQuote || '')}" placeholder="es. 245 del 03/11/2026" ${campo('supplierQuote')}></div>` : ''}
       ${o.conferma ? `<div class="modal-field campo-m"><label>${o.conferma}</label><input value="${esc(r.supplierConfirmation || '')}" ${campo('supplierConfirmation')}></div>` : ''}
       ${o.ddt ? `<div class="modal-field campo-m"><label>DDT di invio (conto lavorazione)</label><input value="${esc(r.shipDdt || '')}" placeholder="es. 87 del 12/11/2026" ${campo('shipDdt')}></div>` : ''}
@@ -1016,10 +1023,12 @@ function rfqLineSupInfo(r, l) { return lineSupInfo(r.supplierId, l); }
 //
 // Il documento senza intestatario (capita: si compilano le righe e il fornitore
 // si sceglie dopo) ricade nello stesso caso: nessun listino da applicare.
-function docLineFromItem(it, supplierId) {
-  const row = supplierPriceRow(it, supplierId);
+// Dalla 0.157.0 la riga prende il prezzo di listino e lo sconto della
+// quotazione valida al giorno del documento (`giorno`, di norma la sua data).
+function docLineFromItem(it, supplierId, giorno) {
+  const row = supplierPriceRow(it, supplierId, giorno);
   const quotato = row && row.price !== '' && row.price != null;
-  return {
+  const l = {
     id: gid(), itemId: it.id, code: it.code || '', description: it.name || '',
     // La riga è sempre nell'unità di gestione dell'articolo — è quella con
     // cui si ordina, si riceve e si monta — anche quando il fornitore
@@ -1034,8 +1043,10 @@ function docLineFromItem(it, supplierId) {
     // di gestione e uomFactor() vale 1, quindi la conversione c'è sempre e
     // qualche volta non fa niente. Un ramo in meno da sbagliare.
     uom: itemUom(it) || defaultUom(),
-    qty: 1, price: quotato ? (rowUnitCost(it, row) || 0) : '', deliveryDate: '', note: '',
+    qty: 1, price: '', listPrice: '', discount: '', deliveryDate: '', note: '',
   };
+  if (quotato) rigaImpostaPrezzo(l, rowUnitGross(it, row) || 0, row.discount);
+  return l;
 }
 // Nei documenti la nota di riga si stampa sotto la descrizione, nella stessa cella.
 // L'etichetta di una riga senza articolo a catalogo. Non sono tutte uguali: una
@@ -1615,16 +1626,13 @@ function renderRfqEdit(id) {
     const siSub = docSupInfoSub(si);
     const noteSub = docLineNoteSub(l);
     const lotWarn = lineLotWarn(l);
-    const qty = Number(l.qty) || 0;
-    const price = (l.price === '' || l.price == null) ? null : Number(l.price);
     return `<tr>
       ${cell2(i + 1, '', 'ln-idx')}
       ${cell2(`<span class="ln-code">${codeLink(l.itemId, l.code || '')}</span>`,
     `${esc(l.description)}${lineOriginTag(l)}${lotWarn ? ' ' + lotWarn : ''}${siSub}${noteSub}`)}
       ${cell2(`<input type="number" class="rfq-qty-input lock-contract" value="${l.qty}" min="0" step="any" title="Quantità" onchange="rfqSetLine('${id}','${l.id}','qty',this.value)">`,
     esc(l.uom || ''))}
-      ${cell2(`<input type="number" class="rfq-price-input lock-offer" value="${price == null ? '' : price}" min="0" step="any" placeholder="—" title="Prezzo unitario" onchange="rfqSetLine('${id}','${l.id}','price',this.value)">`,
-    `<span class="ln-amount">${price != null ? fmtN(importoRiga(l)) : '—'}</span>`)}
+      ${docPrezzoCell('rfq', r, l, 'Prezzo unitario', 'lock-offer')}
       ${cell2(`<input type="date" class="rfq-date-input lock-offer" value="${esc(l.deliveryDate || '')}" title="Data di consegna richiesta" onchange="rfqSetLine('${id}','${l.id}','deliveryDate',this.value)">`, '')}
       ${docLineActionsCell('rfq', id, l)}
     </tr>`;
@@ -1641,7 +1649,7 @@ function renderRfqEdit(id) {
     salva: { id: 'rfq-save-btn', azione: `rfqSave('${id}')`, dirty: rfqDirty }, comandi: storiaBtn('rfq', r.id), lock: lockBanner,
     esporta: docExportBtnsHtml({ cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta', testi: { k: 'rfq', rec: r } }) },
   corpo: `${docCoWarnHtml()}
-    ${docTestaHtml({ pfx: 'rfq', rec: r, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore', rispondere: true })}
+    ${docTestaHtml({ pfx: 'rfq', rec: r, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore', rispondere: true, validaFino: true })}
     <h3 class="rfq-subhead">Righe richiesta
       <span class="rfq-head-actions">
         <button class="add-btn-sm lock-contract" onclick="rfqAddCatalogModal('${id}')">+ Da catalogo</button>
@@ -1653,7 +1661,7 @@ function renderRfqEdit(id) {
         <th scope="col" class="ln-idx">#</th>
         ${th2('Codice', 'Descrizione')}
         ${th2('Q.tà', 'U.M.')}
-        ${th2(`Prezzo unit. (${esc(cur())}/U.M.)`, `Importo (${esc(cur())})`, 'Prezzo di una unità, nella U.M. della riga; sotto, quanto fa per la quantità di riga')}
+        ${docPrezzoTh(r, [`Prezzo unit. (${esc(cur())}/U.M.)`, 'Prezzo di una unità, nella U.M. della riga; sotto, quanto fa per la quantità di riga'])}
         ${th2('Data consegna', '')}
         <th scope="col"></th></tr></thead>
       <tbody>${lines}</tbody></table></div>
@@ -1690,18 +1698,19 @@ function exportRfqPDF(id, modo) {
   const doc = new jsPDF(hasSup ? { orientation: 'landscape' } : undefined);
   // Documento bilingue IT / EN per fornitori esteri
   const startY = docPdfTesta(doc, { titolo: 'Richiesta di offerta / Request for Quotation', rec: r, kind: 'rfq',
-    righe: [['Rispondere entro il / Please reply by', fmtDateIt(r.replyBy)]],
+    righe: [['Rispondere entro il / Please reply by', fmtDateIt(r.replyBy)],
+      ...(r.offerValidTo ? [['Offerta valida fino al / Offer valid until', fmtDateIt(r.offerValidTo)]] : [])],
     chi: 'RICHIEDENTE / BUYER', controparte: 'FORNITORE / SUPPLIER', vuota: '(fornitore non selezionato / not selected)',
     xControparte: hasSup ? 160 : 110 });
+  const hPrezzo = docStampaPrezzoHead(r, 'Prezzo unit.\nUnit price');
   const head = hasSup
-    ? ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Cod. forn.\nSuppl. code', 'Descr. forn.\nSuppl. desc.', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Data consegna\nDelivery date']
-    : ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Q.tà\nQty', 'Prezzo unit.\nUnit price', 'Data consegna\nDelivery date'];
+    ? ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Cod. forn.\nSuppl. code', 'Descr. forn.\nSuppl. desc.', 'Q.tà\nQty', ...hPrezzo, 'Data consegna\nDelivery date']
+    : ['#', 'Codice\nCode', 'Descrizione\nDescription', 'Q.tà\nQty', ...hPrezzo, 'Data consegna\nDelivery date'];
   const body = (r.lines || []).map((l, i) => {
     const si = rfqLineSupInfo(r, l);
     // Il prezzo esce con il suo denominatore: su un documento che parte verso il
     // fornitore «3,20» e «3,20/m» sono due offerte diverse.
-    const price = l.price === '' || l.price == null ? '' : fmtPrezzo(l.price) + (l.uom ? '/' + l.uom : '');
-    const tail = [(fmtQtyIt(l.qty) + ' ' + (l.uom || '')).trim(), price, fmtDateIt(l.deliveryDate)];
+    const tail = [(fmtQtyIt(l.qty) + ' ' + (l.uom || '')).trim(), ...docPdfPrezzoCelle(r, l), fmtDateIt(l.deliveryDate)];
     return hasSup ? [i + 1, l.code || '', lineDescDoc(l), si ? si.code : '', si ? si.desc : '', ...tail]
       : [i + 1, l.code || '', lineDescDoc(l), ...tail];
   });
@@ -1723,20 +1732,21 @@ function exportRfqExcel(id) {
   if (!(r.lines || []).length) { showToast('Nessuna riga da esportare', 'error'); return; }
   const data = docXlsTesta({ titolo: 'Richiesta di offerta', rec: r, chi: 'RICHIEDENTE', controparte: 'FORNITORE', voci: [
     ['Rispondere entro il / Please reply by', fmtDateIt(r.replyBy)],
+    ...(r.offerValidTo ? [['Offerta valida fino al / Offer valid until', fmtDateIt(r.offerValidTo)]] : []),
     ['Trasporto / Shipping', r.transport], ['Pagamento / Payment', r.payment]] });
   const hasSup = (r.lines || []).some(l => rfqLineSupInfo(r, l));
   // Come nell'ordine: valuta in intestazione, unità nella colonna U.M.
-  const hPrezzo = `Prezzo unitario (${cur()}/U.M.)`;
+  const hPrezzo = docXlsPrezzoHead(r, `Prezzo unitario (${cur()}/U.M.)`);
   data.push(hasSup
-    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']
-    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']);
+    ? ['#', 'Codice', 'Descrizione', 'Codice fornitore', 'Descrizione fornitore', 'Q.tà', 'U.M.', ...hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']
+    : ['#', 'Codice', 'Descrizione', 'Q.tà', 'U.M.', ...hPrezzo, 'Data consegna', 'Nota', 'Disegno / certificato']);
   (r.lines || []).forEach((l, i) => {
     const si = rfqLineSupInfo(r, l);
-    const price = l.price === '' || l.price == null ? '' : l.price;
+    const prezzo = docXlsPrezzoCelle(r, l);
     const extra = lineExtraDoc(l).join(' · ');
     data.push(hasSup
-      ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]
-      : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', price, fmtDateIt(l.deliveryDate), l.note || '', extra]);
+      ? [i + 1, l.code || '', l.description, si ? si.code : '', si ? si.desc : '', l.qty || 0, l.uom || '', ...prezzo, fmtDateIt(l.deliveryDate), l.note || '', extra]
+      : [i + 1, l.code || '', l.description, l.qty || 0, l.uom || '', ...prezzo, fmtDateIt(l.deliveryDate), l.note || '', extra]);
   });
   if (!docXlsSalva(data, r, 'RFQ', 'richiesta', 'rfq')) return;
   askMarkSent(r, `Excel generato.\nSegnare la richiesta ${r.number} come inviata?`, 'inviata', renderRfq);

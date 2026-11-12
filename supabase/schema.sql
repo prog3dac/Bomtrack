@@ -367,6 +367,8 @@ create table if not exists public.rfqs (
 alter table public.rfqs add column if not exists reply_by date;
 -- 0.156.0: i testi scelti per il documento, copiati da Gestione.
 alter table public.rfqs add column if not exists texts jsonb;
+-- 0.157.0: fino a quando vale l'offerta del fornitore.
+alter table public.rfqs add column if not exists offer_valid_to date;
 
 create table if not exists public.rfq_lines (
   id uuid primary key,
@@ -379,6 +381,10 @@ create table if not exists public.rfq_lines (
   synced_at timestamptz not null default clock_timestamp()
 );
 
+-- 0.157.0: prezzo di listino e sconto dell'offerta.
+alter table public.rfq_lines add column if not exists list_price numeric;
+alter table public.rfq_lines add column if not exists discount text;
+
 create table if not exists public.item_prices (
   id uuid primary key,
   item_id uuid not null references public.items(id) on delete cascade deferrable initially deferred,
@@ -390,6 +396,9 @@ create table if not exists public.item_prices (
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- 0.157.0: sconto della quotazione e fino a quando vale.
+alter table public.item_prices add column if not exists discount text;
+alter table public.item_prices add column if not exists valid_to date;
 -- La stessa offerta registrata due volte non crea due quotazioni (rfqRecordPrices).
 create unique index if not exists item_prices_offerta on public.item_prices (item_id, rfq_id, line_id)
   where rfq_id is not null and line_id is not null;

@@ -1158,7 +1158,28 @@ quotazione si modifica** e si mette in uso.
 | **U.M. del prezzo** | A che unità si riferisce |
 | **Q.tà minima** | Sotto la quale il prezzo non vale |
 | **Giorni di consegna** | Il lead time dichiarato, in giorni lavorativi (o di calendario, se così impostato nel calendario di fabbrica) |
-| **Data** | Quando la quotazione è stata raccolta |
+| **Data** | Quando la quotazione è stata raccolta, e il giorno **da cui vale** (dalla 0.157.0) |
+| **Sconto %** | *Modulo Listini e sconti.* Lo sconto del fornitore su quel prezzo, anche a cascata (`10+5`); sotto si legge il **netto** che si paga |
+| **Valida al** | *Modulo Listini e sconti.* Fino a quando il fornitore tiene il prezzo; vuoto se non l'ha detto |
+
+**Sconto e validità** (dalla 0.157.0, modulo *Listini e sconti*).
+
+- **Il costo in uso è quello che si paga**: prezzo di listino, meno lo sconto della quotazione,
+  meno lo sconto del fornitore (*Gestione → Fornitori*). 10 € al 40% costano meno di 7 € netti, e
+  ↓ e il risparmio del Riepilogo confrontano i fornitori su questo. Cambiando lo sconto di un
+  fornitore, il costo degli articoli che usano il suo listino si ricalcola subito.
+- **Ordini e ordini di lavoro** prendono dalla quotazione il **prezzo di listino e lo sconto** sulla
+  riga; lo sconto del fornitore va in testata come sconto documento. Lo stesso per i documenti
+  nati dal fabbisogno e dal riordino. Se la riga dice un prezzo o uno sconto diverso dal listino,
+  l'ordine lo segnala.
+- **Un listino annunciato** (con la data di domani o più avanti) non sostituisce quello di oggi e
+  non manda niente nello storico: sotto la data si legge *valida dal …*. Il documento prende la
+  quotazione valida **alla sua data**.
+- **Una quotazione scaduta si usa lo stesso**, perché non c'è niente di meglio, ma il listino dice
+  *⚠ scaduta il …* e l'ordine *⚠ listino scaduto*: è il momento di chiedere conferma al fornitore.
+  Nella vista d'insieme il filtro **Scadute o in scadenza (30 giorni)** dà l'elenco dei prezzi da
+  farsi riconfermare.
+- Nel foglio Excel del catalogo ci sono le colonne **Sconto %** e **Valida al**.
 
 **Da sapere.**
 
@@ -2968,6 +2989,13 @@ l'elenco dei prezzi da registrare, tutti spuntati: togli la spunta a quelli che 
 Una riga lasciata fuori resta da registrare e la puoi aggiungere più tardi. La data della quotazione
 è quella di registrazione, non quella della richiesta.
 
+**Sconti e validità dell'offerta** (dalla 0.157.0, modulo *Listini e sconti*). Come sull'ordine, la
+colonna del prezzo ha **listino e sconto** sopra, **netto e importo** sotto, e restano scrivibili a
+richiesta inviata. In testata, **Offerta valida fino al** è la scadenza che dà il fornitore.
+*Registra a listino* porta nella quotazione listino, sconto e scadenza; se poi ne cambia uno, il
+pulsante torna attivo e la quotazione si aggiorna. L'ordine creato dalla richiesta tiene listino
+e sconto delle righe.
+
 **Confronta offerte.** Sotto-vista che mette a fianco i prezzi di più richieste sullo stesso
 materiale. Il totale più basso, in verde, si cerca **solo fra le offerte complete** (dalla
 0.105.6): un fornitore che quota una riga su tre ha per forza il totale più basso, e prima finiva
@@ -3898,7 +3926,7 @@ ordini, e ignorarle farebbe ricomprare quello che è già arrivato.
 | Macchine utensili (→ [cap. 24](#24-carico-dei-centri-di-lavoro)), nell'area Produzione interna | spento |
 | Qualità: collaudo in entrata, piani di controllo, non conformità, valutazione fornitori (→ [cap. 17](#17-magazzino)), nell'area Magazzino | spento |
 | Taratura strumenti: registro, tarature e blocco del collaudo (→ [cap. 17](#17-magazzino)), solo con la Qualità | spento |
-| Listini e sconti: sconti a cascata su righe e documenti, sconto del fornitore (→ [cap. 21](#21-ordini-a-fornitore-oda)) | spento |
+| Listini e sconti: sconti a cascata su righe e documenti, sconto del fornitore, sconto e validità delle quotazioni (→ [cap. 10](#10-listino-fornitori), [cap. 21](#21-ordini-a-fornitore-oda)) | spento |
 
 **Costi reali** (dalla 0.122.0) porta il **costo medio d'acquisto** e il **consuntivo di
 commessa**. Il costo medio di un articolo è la media dei prezzi degli ODA pesata sulle quantità

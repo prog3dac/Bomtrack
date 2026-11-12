@@ -883,7 +883,7 @@ function applySuppliersSheet(rows, rep) {
     if (scRaw !== null) {
       const sconto = scontoNorm(scRaw);
       if (sconto == null) rep.errors.push(`Fornitori, riga ${i + 2}: sconto non valido ("${esc(scRaw)}"), si scrive come 10+5`);
-      else if ((s.discount || '') !== sconto) { s.discount = sconto; cambiato = true; }
+      else if ((s.discount || '') !== sconto) { s.discount = sconto; cambiato = true; fornitoreRiapplicaCosti(s.id); }
     }
     // Giorni di trasporto verso il terzista: colonna assente = invariato.
     const trRaw = cell(row, 'Trasporto CL gg', 'Trasporto conto lavoro');

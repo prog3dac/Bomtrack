@@ -439,11 +439,18 @@ function planDocLine(r, conPrezzo) {
   // La data di consegna richiesta è quella in cui il materiale serve: era
   // sempre vuota, e chi generava un ordine dal fabbisogno doveva riscriverla a
   // mano su ogni riga — cioè non la scriveva.
-  return { id: gid(), itemId: it.id, code: it.code || '', description: it.name || '',
+  const l = { id: gid(), itemId: it.id, code: it.code || '', description: it.name || '',
     uom: itemUom(it) || defaultUom(),
     qty: Number(r.qtyOrder != null ? r.qtyOrder : r.qty) || 0,
-    price: conPrezzo && !r.noDocPrice && r.priceDoc > 0 ? r.priceDoc : '',
+    price: '', listPrice: '', discount: '',
     deliveryDate: r.due || '', note: '' };
+  // Prezzo di listino e sconto della quotazione; lo sconto del fornitore lo
+  // porta la testata del documento (planDocHead).
+  if (conPrezzo && !r.noDocPrice && r.priceDoc > 0) {
+    if (r.docLordo != null) rigaImpostaPrezzo(l, r.docLordo, r.docSconto);
+    else l.price = r.priceDoc;
+  }
+  return l;
 }
 // Riga di documento di una **fase di conto lavoro**.
 //

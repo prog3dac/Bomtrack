@@ -1022,7 +1022,10 @@ function migrateDB() {
     if (r.planId == null) r.planId = null;   // richiesta nata da un piano di fabbisogno
     if (r.jobId == null) r.jobId = null;    // e la commessa da cui quel piano discende
     if (r.replyBy == null) r.replyBy = '';  // «rispondere entro il» (dalla 0.154.0)
+    if (r.offerValidTo == null) r.offerValidTo = '';   // «offerta valida fino al» (dalla 0.157.0)
     (r.lines || []).forEach(l => {
+      if (l.listPrice == null) l.listPrice = '';   // listino e sconto dell'offerta (dalla 0.157.0)
+      if (l.discount == null) l.discount = '';
       if (l.price == null) {
         const o = r.offers && r.supplierId && r.offers[r.supplierId];
         l.price = (o && o.lines && o.lines[l.id] != null) ? o.lines[l.id] : '';
@@ -1260,6 +1263,11 @@ function migrateDB() {
         it.priceListSeeded = true;
       }
       if (modoCondiviso) togliQuotazioniDoppie(it);
+      // Sconto e scadenza della quotazione (dalla 0.157.0).
+      it.priceList.forEach(r => {
+        if (r.discount == null) r.discount = '';
+        if (r.validTo == null) r.validTo = '';
+      });
     }
     // Approvvigionamento della parte: si produce in casa o si compra. Ha preso il
     // posto del vecchio modo di calcolo (costMode), che rispondeva alla stessa

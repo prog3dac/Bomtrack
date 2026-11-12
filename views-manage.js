@@ -589,6 +589,7 @@ function saveSupplier(id) {
   s.name = nome; s.referente = val('es-ref'); s.email = val('es-email');
   s.phone = val('es-phone'); s.vat = val('es-vat');
   s.defaultPayment = val('es-dpayment'); s.defaultTransport = val('es-dtransport');
+  const scontoCambiato = conSconto && (s.discount || '') !== sconto;
   if (conSconto) s.discount = sconto;
   if (isNeg('es-transit')) { showToast('I giorni di trasporto non possono essere negativi', 'error'); return; }
   const prima = Number(s.transitDays) || 0;
@@ -597,7 +598,10 @@ function saveSupplier(id) {
   Object.assign(s, readAddressFields('es'));
   contattiApplica(s, contattiDaSalvare('es'));
   touch(s);
-  saveDB(); closeModal(); renderManage(); savedToast(fasi ? `Aggiornato, con ${fasi} ${fasi === 1 ? 'fase' : 'fasi'} di ciclo` : 'Aggiornato');
+  // Lo sconto è nel costo dei suoi articoli: si ricalcolano subito.
+  const costi = scontoCambiato ? fornitoreRiapplicaCosti(id) : 0;
+  const extra = [fasi ? `${fasi} ${fasi === 1 ? 'fase' : 'fasi'} di ciclo` : '', costi ? `${costi} ${costi === 1 ? 'costo articolo' : 'costi articolo'}` : ''].filter(Boolean);
+  saveDB(); closeModal(); renderManage(); savedToast(extra.length ? 'Aggiornato, con ' + extra.join(' e ') : 'Aggiornato');
 }
 // Dove compare un fornitore: articoli, quotazioni a listino, documenti,
 // lavorazioni esterne di ciclo e movimenti di magazzino. Controllare i soli

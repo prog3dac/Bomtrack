@@ -38,13 +38,32 @@ function activePriceRow(it) { return priceRows(it).find(r => r.id === it.activeP
 // aggiunta e ancora vuota non è un'offerta, e non deve far sparire quella che
 // c'è. Se il fornitore non ha ancora quotato niente, vale la riga vuota più
 // recente — il documento la mostra «senza prezzo», come prima.
-function supplierPriceRow(it, supplierId) {
+//
+// Dalla 0.157.0 la data della quotazione è anche il giorno **da cui vale**: una
+// quotazione con la data di domani è un listino annunciato, e fino a domani
+// vale quella prima. `giorno` è il giorno del documento (di norma oggi). Se il
+// fornitore ha solo quotazioni future, vale comunque la più vicina: meglio un
+// prezzo annunciato che una casella vuota.
+function supplierPriceRow(it, supplierId, giorno) {
   if (!it || !supplierId) return null;
-  const sue = priceRows(it).filter(r => r.supplierId === supplierId);
+  const g = giorno || oggiISO();
+  const tutte = priceRows(it).filter(r => r.supplierId === supplierId);
+  const valide = tutte.filter(r => !priceRowFutura(r, g));
+  const sue = valide.length ? valide : tutte;
   const quotate = sue.filter(priceRowQuoted);
+  if (!valide.length) {
+    // Solo listini annunciati: il primo che entra in vigore.
+    return (quotate.length ? quotate : sue)
+      .reduce((best, r) => (!best || (r.date || '') < (best.date || '') ? r : best), null);
+  }
   return (quotate.length ? quotate : sue)
     .reduce((best, r) => (!best || (r.date || '') >= (best.date || '') ? r : best), null);
 }
+// Una quotazione che entra in vigore dopo `giorno`.
+function priceRowFutura(r, giorno) { return !!r && !!r.date && r.date > (giorno || oggiISO()); }
+// Una quotazione scaduta: il fornitore ha detto fino a quando valeva, e quel
+// giorno è passato. Si usa lo stesso (non c'è niente di meglio), ma lo si dice.
+function priceRowScaduta(r, giorno) { return !!r && !!r.validTo && r.validTo < (giorno || oggiISO()); }
 function priceRowQuoted(r) { return !!r && r.price !== '' && r.price != null; }
 // ─── Quotazioni sostituite: lo storico ───
 // Un fornitore non ha due prezzi nello stesso momento: la quotazione nuova
@@ -54,8 +73,9 @@ function priceRowQuoted(r) { return !!r && r.price !== '' && r.price != null; }
 // senza fornitore non ne sostituisce e non ne è sostituita: non si sa di chi è.
 function priceRowSuperseded(it, row) {
   if (!row || !row.supplierId || !priceRowQuoted(row)) return false;
+  if (priceRowFutura(row)) return false;   // un listino annunciato non è storico
   const valida = supplierPriceRow(it, row.supplierId);
-  return !!valida && valida.id !== row.id;
+  return !!valida && valida.id !== row.id && !priceRowFutura(valida);
 }
 function validPriceRows(it) { return priceRows(it).filter(r => !priceRowSuperseded(it, r)); }
 // ─── Quotazioni in un'unità diversa da quella di gestione ───
@@ -66,12 +86,23 @@ function priceUomOf(it, row) {
   const u = row && row.priceUom;
   return (u && hasAltUom(it) && u === altUomOf(it)) ? u : (it ? (it.uom || '') : '');
 }
-// Il costo di una quotazione **nell'unità di gestione**, che è l'unica in cui i
+// Il prezzo di una quotazione **nell'unità di gestione**, che è l'unica in cui i
 // costi hanno senso: le quantità delle distinte sono in quella.
-// 2 €/kg su una barra da 8 kg/m fanno 16 €/m.
-function rowUnitCost(it, row) {
+// 2 €/kg su una barra da 8 kg/m fanno 16 €/m. È il prezzo di listino, prima
+// degli sconti: quello che va sulla riga del documento accanto allo sconto.
+function rowUnitGross(it, row) {
   if (!row || row.price === '' || row.price == null) return null;
   return (Number(row.price) || 0) * uomFactor(it, priceUomOf(it, row));
+}
+// Quello che si paga davvero (dalla 0.157.0): il prezzo di listino, meno lo
+// sconto della quotazione, meno lo sconto del fornitore sull'intero documento.
+// È il costo che entra nella costificazione e quello su cui si confrontano i
+// fornitori: 10 € al 40% costano meno di 7 € netti.
+function rowUnitCost(it, row) {
+  const lordo = rowUnitGross(it, row);
+  if (lordo == null) return null;
+  const sup = row.supplierId ? getSupplier(row.supplierId) : null;
+  return lordo * scontoFattore(row.discount) * scontoFattore(sup && sup.discount);
 }
 // La quotazione più bassa tra quelle valorizzate (a parità, la più recente).
 // Il confronto è sui costi **convertiti**, mai sui prezzi grezzi: «2 €/kg»
@@ -84,7 +115,7 @@ function rowUnitCost(it, row) {
 // risparmio, perché il prezzo nuovo dello stesso fornitore non è un'alternativa
 // ma il suo prezzo di oggi.
 function bestPriceRow(it, esclusoFornitore) {
-  const quotate = validPriceRows(it).filter(r => priceRowQuoted(r)
+  const quotate = validPriceRows(it).filter(r => priceRowQuoted(r) && !priceRowFutura(r)
     && !(esclusoFornitore && r.supplierId === esclusoFornitore));
   if (!quotate.length) return null;
   return quotate.reduce((best, r) => {
@@ -135,6 +166,20 @@ function applyPriceRow(it, row) {
   it.activePriceId = row.id;
 }
 
+// Lo sconto del fornitore entra nel costo di ogni sua quotazione: quando cambia,
+// gli articoli che costano col suo listino si ricalcolano. Torna quanti.
+function fornitoreRiapplicaCosti(supplierId) {
+  let n = 0;
+  (db.items || []).forEach(it => {
+    const row = activePriceRow(it);
+    if (!row || row.supplierId !== supplierId || !priceRowQuoted(row) || !costField(it)) return;
+    const prima = Number(it[costField(it)]) || 0;
+    applyPriceRow(it, row);
+    if (Math.abs((Number(it[costField(it)]) || 0) - prima) > 0.0000005) { touch(it); n++; }
+  });
+  return n;
+}
+
 // La scheda listino ricorda su quale articolo sta lavorando in una variabile
 // globale: chiusa la scheda, la variabile va spenta, o un ridisegno arrivato da
 // altrove continuerebbe a scrivere sull'articolo di prima.
@@ -152,6 +197,18 @@ function priceListRefresh() {
   const host = document.getElementById('pricelist-body');
   if (host && window.__priceItemId) host.innerHTML = priceListBody(window.__priceItemId);
 }
+function priceListScontiVisibili(it) {
+  return moduloAttivo('listini') || priceRows(it).some(r => r.discount || r.validTo);
+}
+// Sotto il prezzo di listino: lo sconto della quotazione e quello che si paga,
+// nell'unità di gestione, con lo sconto del fornitore se ne ha uno.
+function priceRowScontoHtml(it, r, ro) {
+  const sup = r.supplierId ? getSupplier(r.supplierId) : null;
+  const netto = priceRowQuoted(r) && (r.discount || (sup && sup.discount))
+    ? `<span title="Quello che si paga${sup && sup.discount ? ', compreso lo sconto fornitore ' + esc(sup.discount) + '%' : ''}, nell'unità di gestione">netto ${fmtN(rowUnitCost(it, r) || 0)}/${esc(it.uom || '')}</span>`
+    : '';
+  return `<div class="pl-sub pl-col"><input class="rfq-sconto-input" value="${esc(r.discount || '')}" placeholder="sconto %" title="Sconto della quotazione, anche a cascata: 10+5 è il 10% e poi il 5%; con il meno è una maggiorazione" aria-label="Sconto %" ${ro} onchange="priceSetField('${r.id}','discount',this.value)">${netto}</div>`;
+}
 function priceListBody(id) {
   const it = getItem(id); if (!it) return '';
   const campo = costField(it);
@@ -159,6 +216,10 @@ function priceListBody(id) {
   const migliore = bestPriceRow(it);
   const scrivibile = canWrite('catalog');
   const doppia = hasAltUom(it);   // la colonna dell'unità compare solo se serve
+  // Sconto e scadenza (dalla 0.157.0) col modulo Listini e sconti, o se una
+  // quotazione li ha già: un dato scritto non si nasconde.
+  const sconti = priceListScontiVisibili(it);
+  const oggi = oggiISO();
 
   // Le quotazioni più recenti in cima: è quello che si guarda per primo.
   // Quelle sostituite da una più recente dello stesso fornitore vanno nello
@@ -187,11 +248,15 @@ function priceListBody(id) {
         </div>
       </td>
       <td><input type="number" class="num pl-price" min="0" step="0.0001" value="${r.price === '' || r.price == null ? '' : r.price}" ${ro} onchange="priceSetField('${r.id}','price',this.value)">
+        ${sconti ? priceRowScontoHtml(it, r, ro) : ''}
         ${doppia ? `<div class="pl-sub"><select ${ro} title="Unità in cui il fornitore quota" onchange="priceSetField('${r.id}','priceUom',this.value)">${itemUomOptions(it, priceUomOf(it, r))}</select>
           ${priceUomOf(it, r) !== (it.uom || '') ? `<span title="Costo convertito nell'unità di gestione">= ${fmtN(rowUnitCost(it, r) || 0)}/${esc(it.uom || '')}</span>` : ''}</div>` : ''}</td>
       <td><input type="number" class="num pl-small" min="0" step="any" value="${r.minQty === '' || r.minQty == null ? '' : r.minQty}" placeholder="—" title="Quantità minima, nell'unità della quotazione" ${ro} onchange="priceSetField('${r.id}','minQty',this.value)"></td>
       <td><input type="number" class="num pl-small" min="0" max="9999" step="1" value="${r.leadDays === '' || r.leadDays == null ? '' : r.leadDays}" placeholder="—" title="Giorni di consegna" ${ro} onchange="priceSetField('${r.id}','leadDays',this.value)"></td>
-      <td><input type="date" class="pl-date" value="${esc(r.date || '')}" ${ro} onchange="priceSetField('${r.id}','date',this.value)"></td>
+      <td><input type="date" class="pl-date" value="${esc(r.date || '')}" title="${sconti ? 'Valida dal' : 'Data della quotazione'}" ${ro} onchange="priceSetField('${r.id}','date',this.value)">
+        ${sconti ? `<div class="pl-sub"><input type="date" class="pl-date" value="${esc(r.validTo || '')}" title="Valida fino al: vuoto se il fornitore non ha messo una scadenza" aria-label="Valida fino al" ${ro} onchange="priceSetField('${r.id}','validTo',this.value)"></div>` : ''}
+        ${priceRowFutura(r, oggi) ? `<div class="pl-sub pl-col"><span class="home-ris-superato" title="Fino a quel giorno vale la quotazione precedente">valida dal ${esc(fmtDateIt(r.date))}</span></div>`
+    : priceRowScaduta(r, oggi) ? `<div class="pl-sub pl-col"><span class="mrp-warn" title="Si usa lo stesso, ma il fornitore potrebbe non tenerla più">⚠ scaduta il ${esc(fmtDateIt(r.validTo))}</span></div>` : ''}</td>
       <td class="pl-act">
         ${attiva ? '' : `<button class="mini-btn" title="Usa questo prezzo nella costificazione" onclick="priceUseRow('${r.id}')">✓ Usa</button>`}
         <button class="mini-btn danger" title="Elimina la voce" onclick="priceDelRow('${r.id}')">${ico('trash', 'tinted', 'Elimina la voce')}</button>
@@ -213,7 +278,7 @@ function priceListBody(id) {
     </div>` : '';
   const righeStorico = storico.map(r => `<tr class="price-storico">
       <td>${esc(supplierName(r.supplierId) || '—')}${r.code ? ` <span style="font-family:var(--mono)">${esc(r.code)}</span>` : ''}</td>
-      <td class="num">${priceRowQuoted(r) ? fmtPer(Number(r.price) || 0, priceUomOf(it, r)) : '—'}</td>
+      <td class="num">${priceRowQuoted(r) ? fmtPer(Number(r.price) || 0, priceUomOf(it, r)) + (r.discount ? ` −${esc(r.discount)}%` : '') : '—'}</td>
       <td>${r.date ? esc(fmtDateIt(r.date)) : '—'}</td>
       <td>${esc(priceRowOrigin(r))}</td>
       <td class="pl-act">${scrivibile ? `<button class="mini-btn danger" title="Elimina dallo storico" onclick="priceDelRow('${r.id}')">${ico('trash', 'tinted', 'Elimina dallo storico')}</button>` : ''}</td></tr>`).join('');
@@ -224,9 +289,9 @@ function priceListBody(id) {
         <tbody>${righeStorico}</tbody></table></div>
     </details>` : '';
   return `${attuale}${avvisoSuperata}
-    <div class="table-wrap"><table class="price-table">
-      <thead><tr><th scope="col"></th><th scope="col">Fornitore</th><th scope="col">Prezzo (${esc(cur())}/${esc(uQuot)})</th><th scope="col">Q.tà min (${esc(uQuot)})</th>
-        <th scope="col" title="Giorni di consegna">GG</th><th scope="col">Data</th><th scope="col"></th></tr></thead>
+    <div class="table-wrap"><table class="price-table${sconti ? ' pl-sconti' : ''}">
+      <thead><tr><th scope="col"></th><th scope="col">Fornitore</th><th scope="col">${sconti ? `Listino · Sconto % (${esc(cur())}/${esc(uQuot)})` : `Prezzo (${esc(cur())}/${esc(uQuot)})`}</th><th scope="col">Q.tà min (${esc(uQuot)})</th>
+        <th scope="col" title="Giorni di consegna">GG</th><th scope="col">${sconti ? 'Valida dal · al' : 'Data'}</th><th scope="col"></th></tr></thead>
       <tbody>${corpo || vuoto}</tbody></table></div>
     <div style="margin-top:10px"><button class="add-btn-sm" onclick="priceAddRow()">+ Aggiungi quotazione</button></div>
     ${storicoHtml}`;
@@ -257,6 +322,9 @@ function plvRows() {
       if (_plv.solo === 'senza' && r.price !== '' && r.price != null) return;
       const storico = priceRowSuperseded(it, r);
       if (_plv.solo === 'valide' && storico) return;
+      // Scadute o in scadenza entro 30 giorni, fra quelle ancora valide: è la
+      // lista dei prezzi da farsi riconfermare.
+      if (_plv.solo === 'scadenza' && (storico || !r.validTo || r.validTo > plvFra30())) return;
       const sup = getSupplier(r.supplierId);
       if (q) {
         const testo = [it.code, it.name, sup && sup.name, r.code, r.desc].join(' ').toLowerCase();
@@ -270,6 +338,10 @@ function plvRows() {
   return out.sort((a, b) => (a.it.code || '').localeCompare(b.it.code || '', 'it', { numeric: true })
     || (b.r.date || '').localeCompare(a.r.date || ''));
 }
+function plvFra30() {
+  const d = new Date(oggiISO() + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 30);
+  return d.toISOString().slice(0, 10);
+}
 function plvSet(campo, valore) { _plv[campo] = valore; renderPriceListView(); }
 function plvSearchInput(v) {
   _plv.q = v;
@@ -279,7 +351,13 @@ function plvSearchInput(v) {
 function plvPrezzo(x) {
   if (x.r.price === '' || x.r.price == null) return '<span style="color:var(--text-dim)">—</span>';
   const u = priceUomOf(x.it, x.r);
-  return `<span style="font-family:var(--mono)">${fmtPer(Number(x.r.price) || 0, u)}</span>`;
+  return `<span style="font-family:var(--mono)">${fmtPer(Number(x.r.price) || 0, u)}</span>`
+    + (x.r.discount ? `<div class="pl-sub" title="Sconto della quotazione">−${esc(x.r.discount)}%</div>` : '');
+}
+function plvValidita(r) {
+  if (!r.validTo) return '—';
+  const scaduta = priceRowScaduta(r);
+  return `<span class="${scaduta ? 'mrp-warn' : ''}" title="${scaduta ? 'Scaduta: si usa lo stesso, ma va fatta riconfermare' : 'Valida fino al'}">${scaduta ? '⚠ ' : ''}${esc(fmtDateIt(r.validTo))}</span>`;
 }
 function plvBody(righe) {
   if (!righe.length) {
@@ -293,7 +371,7 @@ function plvBody(righe) {
   return `<div class="table-wrap"><table class="price-table plv-table">
     <thead><tr><th scope="col"></th><th scope="col">Articolo</th><th scope="col">Descrizione</th><th scope="col">Fornitore</th>
       <th scope="col">Cod. fornitore</th><th scope="col" class="num">Prezzo</th><th scope="col" class="num">Q.tà min</th>
-      <th scope="col" class="num" title="Giorni di consegna">GG</th><th scope="col">Data</th><th scope="col">Origine</th></tr></thead>
+      <th scope="col" class="num" title="Giorni di consegna">GG</th><th scope="col">Data</th><th scope="col">Valida al</th><th scope="col">Origine</th></tr></thead>
     <tbody>${righe.map(x => `<tr class="${x.attiva ? 'price-active' : x.storico ? 'price-storico' : ''}" style="cursor:pointer" tabindex="0" onclick="priceListModal('${x.it.id}')" onkeydown="if(event.key==='Enter')priceListModal('${x.it.id}')" title="Apri il listino di ${esc(x.it.code)}">
       <td class="pl-flag">${x.attiva ? '<span title="Prezzo in uso nella costificazione">✓</span>' : ''}${x.best ? '<span class="price-best" title="Quotazione più bassa">↓</span>' : ''}${x.storico ? '<span class="price-tag-storico" title="Sostituita da una quotazione più recente dello stesso fornitore">storico</span>' : ''}</td>
       <td><span class="code">${esc(x.it.code)}</span></td>
@@ -304,6 +382,7 @@ function plvBody(righe) {
       <td class="num">${x.r.minQty === '' || x.r.minQty == null ? '—' : esc(fmtQtyIt(x.r.minQty))}</td>
       <td class="num">${x.r.leadDays === '' || x.r.leadDays == null ? '—' : esc(String(x.r.leadDays))}</td>
       <td>${x.r.date ? esc(fmtDateIt(x.r.date)) : '—'}</td>
+      <td>${plvValidita(x.r)}</td>
       <td>${esc(priceRowOrigin(x.r))}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function renderPriceListView() {
@@ -334,16 +413,17 @@ function renderPriceListView() {
         <option value="uso" ${_plv.solo === 'uso' ? 'selected' : ''}>Solo i prezzi in uso</option>
         <option value="valide" ${_plv.solo === 'valide' ? 'selected' : ''}>Senza lo storico</option>
         <option value="senza" ${_plv.solo === 'senza' ? 'selected' : ''}>Senza prezzo</option>
+        <option value="scadenza" ${_plv.solo === 'scadenza' ? 'selected' : ''}>Scadute o in scadenza (30 giorni)</option>
       </select>
       <span class="doc-filter-count">${righe.length} ${righe.length === 1 ? 'quotazione' : 'quotazioni'}</span>
     </div>
-    <p class="empty-text" style="text-align:left;padding:0 0 8px">Tutte le quotazioni di commerciali, materie prime e parti. ✓ è il prezzo in uso nella costificazione, ↓ la quotazione più bassa dell'articolo. Per ogni fornitore vale la quotazione più recente: le precedenti sono segnate «storico» e non entrano nei confronti. Un clic sulla riga apre il listino dell'articolo, dove si modifica e si sceglie il prezzo in uso.</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Tutte le quotazioni di commerciali, materie prime e parti. ✓ è il prezzo in uso nella costificazione, ↓ la quotazione più bassa dell'articolo. Per ogni fornitore vale la quotazione più recente già in vigore: le precedenti sono segnate «storico» e non entrano nei confronti. Un clic sulla riga apre il listino dell'articolo, dove si modifica e si sceglie il prezzo in uso.</p>
     <div id="plv-body">${plvBody(righe)}</div>
   </div>`;
 }
 function plvExportSpec() {
   const righe = plvRows();
-  const solo = { uso: 'Solo i prezzi in uso', senza: 'Senza prezzo', valide: 'Senza lo storico' }[_plv.solo] || '';
+  const solo = { uso: 'Solo i prezzi in uso', senza: 'Senza prezzo', valide: 'Senza lo storico', scadenza: 'Scadute o in scadenza' }[_plv.solo] || '';
   return {
     titolo: 'Listino fornitori',
     slug: 'listino_fornitori',
@@ -353,14 +433,15 @@ function plvExportSpec() {
       nome: 'Quotazioni',
       colonne: [
         { h: 'Codice', w: 14 }, { h: 'Descrizione', w: 30 }, { h: 'Tipo', w: 14 }, { h: 'Fornitore', w: 24 },
-        { h: 'Cod. fornitore', w: 14 }, { h: 'Prezzo', w: 12, num: true }, { h: 'U.M.', w: 6 },
+        { h: 'Cod. fornitore', w: 14 }, { h: 'Prezzo', w: 12, num: true }, { h: 'Sconto %', w: 9 }, { h: 'U.M.', w: 6 },
         { h: 'Q.tà min', w: 9, num: true }, { h: 'GG', w: 6, num: true }, { h: 'Data', w: 11, data: true },
+        { h: 'Valida al', w: 11, data: true },
         { h: 'In uso', w: 7 }, { h: 'Storico', w: 8 }, { h: 'Origine', w: 14 }],
       righe: righe.map(x => [x.it.code || '', x.it.name || '', typeLabel(x.it.type), x.sup ? x.sup.name : '',
-        x.r.code || '', x.r.price === '' || x.r.price == null ? '' : Number(x.r.price) || 0, priceUomOf(x.it, x.r),
+        x.r.code || '', x.r.price === '' || x.r.price == null ? '' : Number(x.r.price) || 0, x.r.discount || '', priceUomOf(x.it, x.r),
         x.r.minQty === '' || x.r.minQty == null ? '' : Number(x.r.minQty) || 0,
         x.r.leadDays === '' || x.r.leadDays == null ? '' : Number(x.r.leadDays) || 0,
-        x.r.date || '', x.attiva ? 'sì' : '', x.storico ? 'sì' : '', priceRowOrigin(x.r)]),
+        x.r.date || '', x.r.validTo || '', x.attiva ? 'sì' : '', x.storico ? 'sì' : '', priceRowOrigin(x.r)]),
     }],
   };
 }
@@ -384,8 +465,8 @@ function priceAddRow() {
   // fragilità che costa una riga togliere.
   if (!Array.isArray(it.priceList)) it.priceList = [];
   it.priceList.push(stampNew({
-    id: gid(), supplierId: it.supplierId || null, price: '', minQty: '', leadDays: '',
-    code: '', desc: '', date: oggiISO(), rfqId: null, note: '',
+    id: gid(), supplierId: it.supplierId || null, price: '', discount: '', minQty: '', leadDays: '',
+    code: '', desc: '', date: oggiISO(), validTo: '', rfqId: null, note: '',
   }));
   touch(it); saveDB(); priceListRefresh(); renderCatalogs();
 }
@@ -405,6 +486,15 @@ function priceSetField(rowId, field, value) {
     row.leadDays = value === '' ? '' : clampNum(parseFloat(value), 0, 9999);
   } else if (field === 'supplierId') {
     row.supplierId = value || null;
+  } else if (field === 'discount') {
+    const norm = scontoNorm(value);
+    if (norm == null) { showToast(SCONTO_ERRORE, 'error'); priceListRefresh(); return; }
+    row.discount = norm;
+  } else if (field === 'validTo') {
+    if (value && row.date && value < row.date) {
+      showToast('La scadenza viene prima del giorno da cui vale la quotazione', 'error'); priceListRefresh(); return;
+    }
+    row.validTo = value || '';
   } else {
     row[field] = value;
   }
@@ -419,7 +509,7 @@ function priceSetField(rowId, field, value) {
   // sulla riga in uso lasciava quella copia al valore vecchio — cioè lasciava
   // in giro un secondo codice, sbagliato, che nessuna schermata mostrava come
   // tale. Si riapplica la riga: è già la porta unica per questo travaso.
-  const RIAPPLICA = ['price', 'priceUom', 'supplierId', 'code', 'desc'];
+  const RIAPPLICA = ['price', 'priceUom', 'supplierId', 'code', 'desc', 'discount'];
   if (RIAPPLICA.includes(field) && it.activePriceId === row.id) applyPriceRow(it, row);
   saveDB(); priceListRefresh(); renderCatalogs();
 }
@@ -494,9 +584,18 @@ function rfqPriceCandidates(r) {
     const it = getItem(l.itemId);
     if (!hasPriceList(it)) return false;
     const fatta = rfqQuoteRow(it, r, l);
-    return !fatta || Number(fatta.price) !== (Number(l.price) || 0);
+    return !fatta || rfqQuoteDiversa(r, l, fatta);
   });
 }
+// Dalla 0.157.0 la quotazione prende dalla riga il prezzo di listino e lo
+// sconto, e dalla richiesta la scadenza dell'offerta: se una delle tre cose è
+// cambiata, la quotazione è da aggiornare.
+function rfqQuoteDiversa(r, l, fatta) {
+  return Number(fatta.price) !== (Number(rigaPrezzoLordo(l)) || 0)
+    || (fatta.discount || '') !== (l.discount || '')
+    || (fatta.validTo || '') !== (r.offerValidTo || '');
+}
+function rfqPrezzoTesto(prezzo, sconto) { return fmtPrezzo(Number(prezzo) || 0) + (sconto ? ' −' + sconto + '%' : ''); }
 // L'id della quotazione nasce dalla richiesta e dalla riga, uguale su ogni PC:
 // due colleghi che registrano la stessa offerta prima di essersi visti
 // scrivono la stessa quotazione, non due che il server rifiuta (c'è un indice
@@ -515,10 +614,10 @@ function rfqRecordPricesModal(id) {
   const elenco = righe.map(l => {
     const it = getItem(l.itemId);
     const fatta = rfqQuoteRow(it, r, l);
-    const prezzo = fmtPrezzo(Number(l.price) || 0);
+    const prezzo = rfqPrezzoTesto(rigaPrezzoLordo(l), l.discount);
     return `<label class="rfq-pick-row"><input type="checkbox" value="${esc(l.id)}" checked onchange="rfqRecordPickCount()">
       <span style="font-family:var(--mono)">${esc(it.code || '')}</span> ${esc(it.name || '')}
-      <span class="rfq-pick-type">${fatta ? esc(fmtPrezzo(Number(fatta.price) || 0)) + ' → ' : ''}${esc(prezzo)}</span></label>`;
+      <span class="rfq-pick-type">${fatta ? esc(rfqPrezzoTesto(fatta.price, fatta.discount)) + ' → ' : ''}${esc(prezzo)}</span></label>`;
   }).join('');
   openModal(`<h3>${ico('euro', 'tinted pill', '')} Registra a listino</h3>
     <p>Scegli quali prezzi di ${esc(supplierName(r.supplierId) || 'questo fornitore')} registrare. Quelli già a listino con un prezzo diverso si aggiornano.</p>
@@ -556,10 +655,14 @@ function rfqRecordPrices(id, lineIds) {
   let nuove = 0, aggiornate = 0;
   righe.forEach(l => {
     const it = getItem(l.itemId);
-    const prezzo = Number(l.price) || 0;
+    const prezzo = Number(rigaPrezzoLordo(l)) || 0;
+    const sconto = l.discount || '';
     const fatta = rfqQuoteRow(it, r, l);
     if (fatta) {
       fatta.price = prezzo;
+      fatta.discount = sconto;
+      fatta.validTo = r.offerValidTo || '';
+      touch(fatta);
       // Quella in uso porta il prezzo nel costo: si riapplica, come quando lo
       // si corregge dal listino (priceSetField).
       if (it.activePriceId === fatta.id) applyPriceRow(it, fatta);
@@ -567,9 +670,9 @@ function rfqRecordPrices(id, lineIds) {
     } else {
       const si = rfqLineSupInfo(r, l);
       it.priceList.push(stampNew({
-        id: rfqQuoteId(r.id, l.id), supplierId: r.supplierId, price: prezzo,
+        id: rfqQuoteId(r.id, l.id), supplierId: r.supplierId, price: prezzo, discount: sconto,
         minQty: '', leadDays: '', code: (si && si.code) || '', desc: (si && si.desc) || '',
-        date: data, rfqId: r.id, lineId: l.id, note: '',
+        date: data, validTo: r.offerValidTo || '', rfqId: r.id, lineId: l.id, note: '',
       }));
       nuove++;
     }

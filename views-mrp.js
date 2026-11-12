@@ -824,6 +824,11 @@ function mrpBuyRow(entry, netMode, planId) {
   // (docInGestione), mai il prezzo grezzo della quotazione.
   const docInGestione = quotato ? (rowUnitCost(it, doc) || 0) : null;
   const priceDoc = docInGestione != null ? docInGestione : 0;
+  // Sulla riga del documento vanno il prezzo di listino e lo sconto della
+  // quotazione (dalla 0.157.0): priceDoc è quello che si paga, sconto del
+  // fornitore compreso, e serve ai confronti e agli importi del fabbisogno.
+  const docLordo = quotato ? rowUnitGross(it, doc) : null;
+  const docSconto = quotato ? (doc.discount || '') : '';
   // Il minimo del fornitore è dichiarato nella SUA unità di quotazione: va
   // convertito nell'unità di gestione prima di confrontarlo con la quantità
   // ordinata, altrimenti l'allarme scatterebbe sul numero sbagliato.
@@ -840,7 +845,7 @@ function mrpBuyRow(entry, netMode, planId) {
   return {
     item: it, qty: entry.qty, uom: itemUom(it),
     due, leadDays, orderBy, urgenza: urgenzaOrdine(orderBy),
-    priceDoc, amountDoc: priceDoc * qtyOrder,
+    priceDoc, docLordo, docSconto, amountDoc: priceDoc * qtyOrder,
     onHand: st.onHand, incoming: st.incoming, safety: st.safety, lotSize: st.lotSize, lotMode: st.lotMode,
     // Impegnato dai piani aperti **più urgenti**, e il dettaglio di chi lo impegna:
     // un numero che toglie merce senza dire chi se l'è presa è un numero che non
