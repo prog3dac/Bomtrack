@@ -1739,7 +1739,7 @@ function riordinoGenera(itemIds) {
       payment: (sup && sup.defaultPayment) || db.settings.paymentDefault || '',
       discount: (sup && sup.discount) || '',
       rfqId: null, planId: null, supplierConfirmation: '', notes: '', notesInternal: 'Generato dal riordino sotto scorta del magazzino.',
-      lines: ps.map(p => Object.assign(docLineFromItem(p.it, supplierId), {
+      lines: ps.map(p => Object.assign(docLineFromItem(p.it, supplierId, oggi, p.qty), {
         qty: p.qty, received: 0, deliveryDate: p.leadDays ? supplierArrival(oggi, p.leadDays) : '' })),
       active: true });
     db.orders.push(o);

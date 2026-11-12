@@ -261,7 +261,7 @@ const CLOUD_TYPES = (() => {
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'replyBy', 'validTo', 'offerValidTo', 'plannedStart', 'plannedEnd', 'downFrom', 'downTo'].forEach(k => { t[k] = 'date'; });
   ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt', 'startedAt', 'endedAt', 'closedAt'].forEach(k => { t[k] = 'timestamptz'; });
   ['active', 'favorite', 'obsolete', 'done', 'codeManual'].forEach(k => { t[k] = 'bool'; });
-  ['snapshot', 'record', 'ecoImpact', 'configChoices', 'costSnapshot', 'ricambi', 'contacts', 'texts'].forEach(k => { t[k] = 'jsonb'; });
+  ['snapshot', 'record', 'ecoImpact', 'configChoices', 'costSnapshot', 'ricambi', 'contacts', 'texts', 'breaks'].forEach(k => { t[k] = 'jsonb'; });
   ['createdBy', 'updatedBy', 'deletedBy', 'codeManualBy'].forEach(k => { t[k] = 'uuid'; });
   return t;
 })();

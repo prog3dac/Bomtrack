@@ -19,7 +19,13 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - Vista d'insieme del listino: colonna *Valida al*, filtro **Scadute o in scadenza (30 giorni)**, sconto e scadenza nell'export. Foglio catalogo: colonne *Sconto %* e *Valida al*.
 - **Richieste d'offerta**: listino e sconto sulle righe, **Offerta valida fino al** in testata, scrivibili a richiesta inviata. *Registra a listino* li porta nella quotazione; l'ordine creato dalla richiesta tiene listino e sconto. PDF ed Excel come per l'ordine.
 
-**Schema: cambia.** Colonna `discount` (testo) su `suppliers`, `orders`, `work_orders`, `order_lines`, `work_order_lines`, `rfq_lines`, `item_prices`; `list_price` (numerica) sulle righe di ordini, ordini di lavoro e richieste; `valid_to` su `item_prices` e `offer_valid_to` su `rfqs`; `schema_versione` 9. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+**Scaglioni di quantità.** Terzo passo.
+- Nel listino dell'articolo **+ scaglioni** apre i prezzi per quantità della quotazione (soglia, prezzo, sconto, netto). Il prezzo dello scaglione raggiunto vale per tutta la quantità.
+- Il **costo in uso** è il netto per il lotto di riordino (senza lotto, il primo scaglione); i fornitori si confrontano a quella quantità.
+- Sugli **ordini** lo scaglione si conta sulla somma delle righe dello stesso articolo; una riga col prezzo di listino segue la quantità da sola, una scritta a mano avvisa e ha **Applica**. La riga dice lo scaglione raggiunto e il prezzo del prossimo.
+- Il **fabbisogno** mette sul documento lo scaglione della quantità da ordinare e segnala lo scaglione dopo quando è entro il 20% in più. Il riordino sotto scorta prende lo scaglione della sua quantità.
+
+**Schema: cambia.** Colonna `breaks` (jsonb) su `item_prices`; colonna `discount` (testo) su `suppliers`, `orders`, `work_orders`, `order_lines`, `work_order_lines`, `rfq_lines`, `item_prices`; `list_price` (numerica) sulle righe di ordini, ordini di lavoro e richieste; `valid_to` su `item_prices` e `offer_valid_to` su `rfqs`; `schema_versione` 9. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
 
 ### 0.156.1 — 2026-11-12
 

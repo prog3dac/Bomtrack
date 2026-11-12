@@ -399,6 +399,8 @@ create table if not exists public.item_prices (
 -- 0.157.0: sconto della quotazione e fino a quando vale.
 alter table public.item_prices add column if not exists discount text;
 alter table public.item_prices add column if not exists valid_to date;
+-- 0.157.0: scaglioni di quantità, [{ fromQty, price, discount }].
+alter table public.item_prices add column if not exists breaks jsonb;
 -- La stessa offerta registrata due volte non crea due quotazioni (rfqRecordPrices).
 create unique index if not exists item_prices_offerta on public.item_prices (item_id, rfq_id, line_id)
   where rfq_id is not null and line_id is not null;

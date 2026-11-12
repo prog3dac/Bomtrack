@@ -1043,7 +1043,7 @@ function catUpsertQuote(it, row, ctx, foglio, ln, prezzo) {
     return null;
   }
   const nuova = stampNew({ id: gid(), supplierId: sid, price: prezzo, discount: r.discount, minQty: r.minQty, leadDays: r.leadDays,
-    code: r.code, desc: r.desc, date: data, validTo: r.validTo, rfqId: null, note: r.note });
+    code: r.code, desc: r.desc, date: data, validTo: r.validTo, breaks: [], rfqId: null, note: r.note });
   if (r.priceUom) nuova.priceUom = r.priceUom;
   it.priceList.push(nuova);
   return nuova;

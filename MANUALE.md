@@ -1181,6 +1181,25 @@ quotazione si modifica** e si mette in uso.
   farsi riconfermare.
 - Nel foglio Excel del catalogo ci sono le colonne **Sconto %** e **Valida al**.
 
+**Scaglioni di quantità** (dalla 0.157.0, modulo *Listini e sconti*). Sotto il fornitore,
+**+ scaglioni** apre sotto la quotazione la tabella dei prezzi per quantità: «da 50 pz 12,60 −10»,
+«da 200 pz 11,80 −10». Il primo scaglione è il prezzo della quotazione, da Q.tà min in su; le
+soglie sono nell'unità della quotazione. Il prezzo dello scaglione raggiunto vale **per tutta la
+quantità**.
+
+- **Il costo in uso** è il netto per il **lotto di riordino** dell'articolo (senza lotto, il primo
+  scaglione), e i fornitori si confrontano a quella stessa quantità. In testa al listino si legge
+  per quale quantità è calcolato.
+- **Sugli ordini** lo scaglione si conta sulla **somma delle righe** dello stesso articolo: due
+  consegne da 30 pz sono un ordine da 60. Una riga che porta ancora il prezzo del listino passa
+  da sola allo scaglione giusto quando cambia la quantità, anche togliendo o aggiungendo righe.
+  Una riga scritta a mano non cambia: mostra il prezzo di listino e il pulsante **Applica**. Sotto
+  la descrizione una pillola dice lo scaglione raggiunto e quanto costa il prossimo.
+- **Nel fabbisogno** il documento prende lo scaglione della quantità da ordinare; se lo scaglione
+  dopo è entro il 20% in più, la riga lo dice («da 50 pz costa 11,34»). La quantità non cambia da
+  sola.
+- Nella vista d'insieme la colonna del prezzo dice quanti scaglioni ci sono; l'export li elenca.
+
 **Da sapere.**
 
 - **Vale per tutto**: commerciali, materie prime **e parti** acquistate.

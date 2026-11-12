@@ -823,12 +823,21 @@ function mrpBuyRow(entry, netMode, planId) {
   // valorizza il listino. Il prezzo di riga è quindi il costo **convertito**
   // (docInGestione), mai il prezzo grezzo della quotazione.
   const docInGestione = quotato ? (rowUnitCost(it, doc) || 0) : null;
-  const priceDoc = docInGestione != null ? docInGestione : 0;
+  // Sul documento va lo scaglione della quantità da ordinare (dalla 0.157.0);
+  // docInGestione resta il costo alla quantità di riferimento, quello che si
+  // confronta con la costificazione.
+  const priceDoc = quotato ? (rowUnitCost(it, doc, qtyOrder) || 0) : 0;
   // Sulla riga del documento vanno il prezzo di listino e lo sconto della
   // quotazione (dalla 0.157.0): priceDoc è quello che si paga, sconto del
   // fornitore compreso, e serve ai confronti e agli importi del fabbisogno.
-  const docLordo = quotato ? rowUnitGross(it, doc) : null;
-  const docSconto = quotato ? (doc.discount || '') : '';
+  const docLordo = quotato ? rowUnitGross(it, doc, qtyOrder) : null;
+  const docSconto = quotato ? rowUnitDiscount(it, doc, qtyOrder) : '';
+  // La soglia dello scaglione dopo, se è a un passo (entro il 20% in più):
+  // «da 50 pz costa 11,34». Si propone, non si cambia la quantità da soli.
+  const dopo = quotato && qtyOrder > 0 ? priceRowNextTier(it, doc, qtyOrder) : null;
+  const dopoQta = dopo ? fromAltUom(it, dopo.fromQty, priceUomOf(it, doc)) : 0;
+  const prossimoScaglione = dopo && dopoQta <= qtyOrder * 1.2
+    ? { qty: dopoQta, price: rowUnitCost(it, doc, dopoQta) || 0 } : null;
   // Il minimo del fornitore è dichiarato nella SUA unità di quotazione: va
   // convertito nell'unità di gestione prima di confrontarlo con la quantità
   // ordinata, altrimenti l'allarme scatterebbe sul numero sbagliato.
@@ -845,7 +854,7 @@ function mrpBuyRow(entry, netMode, planId) {
   return {
     item: it, qty: entry.qty, uom: itemUom(it),
     due, leadDays, orderBy, urgenza: urgenzaOrdine(orderBy),
-    priceDoc, docLordo, docSconto, amountDoc: priceDoc * qtyOrder,
+    priceDoc, docLordo, docSconto, prossimoScaglione, amountDoc: priceDoc * qtyOrder,
     onHand: st.onHand, incoming: st.incoming, safety: st.safety, lotSize: st.lotSize, lotMode: st.lotMode,
     // Impegnato dai piani aperti **più urgenti**, e il dettaglio di chi lo impegna:
     // un numero che toglie merce senza dire chi se l'è presa è un numero che non

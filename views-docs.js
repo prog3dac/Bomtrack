@@ -369,11 +369,54 @@ function docApplicaFornitore(doc) {
     if (!l.itemId || l.phaseKey) return;
     const it = getItem(l.itemId);
     const row = it ? supplierPriceRow(it, doc.supplierId, doc.date) : null;
-    if (priceRowQuoted(row)) rigaImpostaPrezzo(l, rowUnitGross(it, row) || 0, row.discount);
+    const q = docQtaArticolo(doc, l.itemId);
+    if (priceRowQuoted(row)) rigaImpostaPrezzo(l, rowUnitGross(it, row, q) || 0, rowUnitDiscount(it, row, q));
     else { rigaImpostaPrezzo(l, '', ''); out.senzaPrezzo++; }
     out.aggiornate++;
   });
   return out;
+}
+// ─── Scaglioni sulle righe (dalla 0.157.0) ───
+// La quantità di riga nell'unità di gestione dell'articolo.
+function rigaQtaGestione(it, l) {
+  const uom = l.uom || itemUom(it);
+  return hasAltUom(it) && uom === altUomOf(it) ? fromAltUom(it, l.qty, uom) : (Number(l.qty) || 0);
+}
+// Lo scaglione si conta sulla **somma** delle righe dello stesso articolo nello
+// stesso documento: due consegne da 30 sono un ordine da 60, e il fornitore lo
+// prezza così.
+function docQtaArticolo(doc, itemId) {
+  const it = getItem(itemId); if (!it) return 0;
+  return (doc.lines || []).filter(l => l.itemId === itemId && !l.phaseKey)
+    .reduce((s, l) => s + rigaQtaGestione(it, l), 0);
+}
+// Una riga che porta ancora un prezzo del listino (lordo e sconto di uno degli
+// scaglioni) è «intatta»: cambiando la quantità passa da sola allo scaglione
+// giusto. Una riga che qualcuno ha scritto a mano non si tocca: avvisa e basta
+// (ordLineListinoWarn).
+function rigaListinoIntatta(it, row, l) {
+  const lordo = rigaPrezzoLordo(l);
+  if (lordo === '' || lordo == null) return false;
+  const f = uomFactor(it, priceUomOf(it, row));
+  return priceRowTiers(row).some(t => Math.abs(t.price * f - Number(lordo)) < 0.000005
+    && (scontoNorm(t.discount) || '') === (scontoNorm(l.discount) || ''));
+}
+// Riporta allo scaglione della quantità di oggi le righe intatte di un
+// articolo. Torna quante ne ha cambiate.
+function docAggiornaScaglioni(doc, itemId) {
+  const it = getItem(itemId); if (!it || !doc.supplierId) return 0;
+  const row = supplierPriceRow(it, doc.supplierId, doc.date);
+  if (!priceRowQuoted(row) || priceRowTiers(row).length < 2) return 0;
+  const q = docQtaArticolo(doc, itemId);
+  const lordo = rowUnitGross(it, row, q), sconto = rowUnitDiscount(it, row, q);
+  let n = 0;
+  (doc.lines || []).forEach(l => {
+    if (l.itemId !== itemId || l.phaseKey || !rigaListinoIntatta(it, row, l)) return;
+    const prima = l.price;
+    rigaImpostaPrezzo(l, lordo, sconto);
+    if (l.price !== prima) n++;
+  });
+  return n;
 }
 function docSetLine(k, id, lineId, field, value) {
   const K = docKind(k);
@@ -421,6 +464,7 @@ function docSetLine(k, id, lineId, field, value) {
   // quantità, prezzo (per la richiesta). Una nota o una data confermata non
   // devono riscrivere uno stato scelto a mano (dalla 0.105.5: un ordine
   // chiuso corto come «Evaso» tornava «Parziale» alla prima nota).
+  if (field === 'qty' && K.hasLinePrice && l.itemId) docAggiornaScaglioni(doc, l.itemId);
   if (['received', 'qty', 'price'].includes(field)) K.autoStatus(doc);
   touch(doc); docMarkDirty(k);
   if (doc.status !== before) { K.render(); showToast('Stato: ' + (K.STATUS[doc.status] || doc.status)); }
@@ -456,7 +500,9 @@ function docDelLine(k, id, lineId) {
   const K = docKind(k);
   if (!docGuard(k, id, 'contract')) return;
   const doc = K.get(id); if (!doc) return;
+  const tolta = (doc.lines || []).find(x => x.id === lineId);
   doc.lines = (doc.lines || []).filter(x => x.id !== lineId);
+  if (tolta && tolta.itemId && K.hasLinePrice) docAggiornaScaglioni(doc, tolta.itemId);
   K.autoStatus(doc); touch(doc); docMarkDirty(k); K.render();
 }
 function docAddManualLine(k, id) {
@@ -520,6 +566,7 @@ function docSaveLineEdit(k, id, lineId) {
     if (K.hasLinePrice) rigaImpostaPrezzo(l, val(p + '-price') === '' ? '' : numVal(p + '-price', 0), sconto);
   }
   l.note = val(p + '-note');   // la nota passa sempre, anche a documento bloccato
+  if (l.qty !== prima.qty && K.hasLinePrice && l.itemId) docAggiornaScaglioni(doc, l.itemId);
   if (l.qty !== prima.qty || l.price !== prima.price || l.discount !== prima.discount) K.autoStatus(doc);   // come in docSetLine
   touch(doc); docMarkDirty(k); closeModal(); K.render();
 }
@@ -533,6 +580,7 @@ function docAddCatalogLines(k, id, ids) {
     const riga = K.catalogLine(docLineFromItem(it, doc.supplierId, doc.date));
     if (riga.price === '') senzaPrezzo++;
     doc.lines.push(riga);
+    if (K.hasLinePrice) docAggiornaScaglioni(doc, itemId);
   });
   K.autoStatus(doc); touch(doc); docMarkDirty(k); closeModal(); K.render();
   showToast(K.catalogToast(ids.length, senzaPrezzo, doc));
@@ -1025,7 +1073,8 @@ function rfqLineSupInfo(r, l) { return lineSupInfo(r.supplierId, l); }
 // si sceglie dopo) ricade nello stesso caso: nessun listino da applicare.
 // Dalla 0.157.0 la riga prende il prezzo di listino e lo sconto della
 // quotazione valida al giorno del documento (`giorno`, di norma la sua data).
-function docLineFromItem(it, supplierId, giorno) {
+// `qty` (di norma 1) sceglie lo scaglione e diventa la quantità della riga.
+function docLineFromItem(it, supplierId, giorno, qty) {
   const row = supplierPriceRow(it, supplierId, giorno);
   const quotato = row && row.price !== '' && row.price != null;
   const l = {
@@ -1043,9 +1092,9 @@ function docLineFromItem(it, supplierId, giorno) {
     // di gestione e uomFactor() vale 1, quindi la conversione c'è sempre e
     // qualche volta non fa niente. Un ramo in meno da sbagliare.
     uom: itemUom(it) || defaultUom(),
-    qty: 1, price: '', listPrice: '', discount: '', deliveryDate: '', note: '',
+    qty: qty == null ? 1 : qty, price: '', listPrice: '', discount: '', deliveryDate: '', note: '',
   };
-  if (quotato) rigaImpostaPrezzo(l, rowUnitGross(it, row) || 0, row.discount);
+  if (quotato) rigaImpostaPrezzo(l, rowUnitGross(it, row, l.qty) || 0, rowUnitDiscount(it, row, l.qty));
   return l;
 }
 // Nei documenti la nota di riga si stampa sotto la descrizione, nella stessa cella.

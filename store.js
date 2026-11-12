@@ -1267,6 +1267,7 @@ function migrateDB() {
       it.priceList.forEach(r => {
         if (r.discount == null) r.discount = '';
         if (r.validTo == null) r.validTo = '';
+        if (!Array.isArray(r.breaks)) r.breaks = [];   // scaglioni di quantità
       });
     }
     // Approvvigionamento della parte: si produce in casa o si compra. Ha preso il

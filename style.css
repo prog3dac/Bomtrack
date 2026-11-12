@@ -751,6 +751,13 @@ body.filt-open .filt-summary{display:none}
 .price-table.pl-sconti .pl-sup .pl-sub{flex-wrap:wrap}
 .price-table.pl-sconti .pl-desc{width:100%;order:3}
 .price-table.pl-sconti .pl-date{width:124px}
+.ln-scaglione{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:var(--accent-soft, #e8f0fd);color:var(--accent, #3A7BE8);white-space:nowrap}
+.pl-tiers{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:-4px 0 6px}
+.pl-tiers-head{font-weight:600;margin-bottom:6px;font-size:13px}
+.pl-tiers-head span,.pl-tier-nota{font-weight:400;color:var(--text-dim);font-size:12px}
+.price-table.pl-tiers-table{width:auto;margin-bottom:8px}
+.price-table .pl-tiers-btn{width:auto;padding:2px 8px;font-size:12px;white-space:nowrap}
+.price-table .pl-tiers .rfq-sconto-input{width:88px;padding:4px 6px;font-size:12px}
 .price-table .pl-col{flex-direction:column;align-items:flex-start;gap:3px}
 .price-table .pl-col .rfq-sconto-input{width:88px;padding:4px 6px;font-size:12px}
 .price-table .pl-col span{white-space:normal}

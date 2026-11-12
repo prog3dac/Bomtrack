@@ -267,6 +267,9 @@ function planDocsBody(gruppi, planId, kind) {
         // Il listino applicabile non è quello con cui è stato costificato: il
         // documento seguirà il listino, e il totale qui sopra viene dal costo.
         else if (r.listinoDiverso) seg.push(`<span class="mrp-warn" title="Costificato a ${fmtPer(r.price, r.uom)}, ma ${esc(supplierName(r.supplierId) || 'il fornitore')} oggi quota ${fmtPer(r.docInGestione, r.uom)}. Sul documento va il listino.">${ico('refresh', 'tinted', '')} a listino ${fmtPer(r.priceDoc, r.uom)}</span>`);
+        // Lo scaglione dopo è a un passo (dalla 0.157.0): lo si dice, la
+        // quantità la decide chi ordina.
+        if (r.prossimoScaglione) seg.push(`<span class="ln-scaglione" title="Ordinando ${fmtUom(r.prossimoScaglione.qty, r.uom)} invece di ${fmtUom(r.qtyOrder, r.uom)} si passa allo scaglione dopo">da ${fmtUom(r.prossimoScaglione.qty, r.uom)} costa ${fmtPer(r.prossimoScaglione.price, r.uom)}</span>`);
       }
       // Questo pannello è l'anteprima del documento: l'importo è quello che il
       // documento porterà, cioè il listino applicabile. Senza una quotazione di

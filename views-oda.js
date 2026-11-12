@@ -271,14 +271,44 @@ function ordLineListinoWarn(o, l) {
   const scaduta = priceRowScaduta(row, o.date)
     ? `<span class="mrp-warn" title="La quotazione di ${esc(sup)} valeva fino al ${esc(fmtDateIt(row.validTo))}: chiedi conferma del prezzo prima di mandare l'ordine.">⚠ listino scaduto il ${esc(fmtDateIt(row.validTo))}</span>`
     : '';
-  const cost = rowUnitGross(it, row) || 0;
+  // Lo scaglione è quello della quantità di tutto l'ordine per l'articolo.
+  const q = docQtaArticolo(o, l.itemId);
+  const cost = rowUnitGross(it, row, q) || 0;
   const scontoRiga = scontoNorm(l.discount) || '';
-  const scontoListino = scontoNorm(row.discount) || '';
-  if (Math.abs(cost - prezzo) < 0.00005 && scontoRiga === scontoListino) return scaduta;
+  const scontoListino = scontoNorm(rowUnitDiscount(it, row, q)) || '';
+  const scaglione = ordLineScaglioneHtml(it, row, q);
+  if (Math.abs(cost - prezzo) < 0.00005 && scontoRiga === scontoListino) return [scaglione, scaduta].filter(Boolean).join(' ');
   const uom = priceUomOf(it, row);
-  const grezzo = uom !== (it.uom || '') ? ` (a listino ${fmtPer(row.price, uom)})` : '';
+  const grezzo = uom !== (it.uom || '') ? ` (a listino ${fmtPer(cost / (uomFactor(it, uom) || 1), uom)})` : '';
   const conSconto = scontoListino ? ` −${scontoListino}%` : '';
-  return `<span class="mrp-warn" title="A listino ${esc(sup)} quota ${fmtPer(cost, itemUom(it))}${grezzo}${scontoListino ? ', sconto ' + esc(scontoListino) + '%' : ''}. La riga dice altro: può essere un prezzo concordato, o il listino di un fornitore diverso rimasto da prima.">⚠ ${fmtPer(cost, itemUom(it))}${esc(conSconto)} a listino</span>${scaduta ? ' ' + scaduta : ''}`;
+  return `<span class="mrp-warn" title="A listino ${esc(sup)} quota ${fmtPer(cost, itemUom(it))}${grezzo}${scontoListino ? ', sconto ' + esc(scontoListino) + '%' : ''} per ${esc(fmtQtyIt(q))} ${esc(itemUom(it))}. La riga dice altro: può essere un prezzo concordato, o il listino di un fornitore diverso rimasto da prima.">⚠ ${fmtPer(cost, itemUom(it))}${esc(conSconto)} a listino</span>`
+    + ` <button class="mini-btn lock-contract" title="Riporta la riga al prezzo di listino per questa quantità" onclick="ordApplicaListinoRiga('${o.id}','${l.id}')">Applica</button>`
+    + (scaglione ? ' ' + scaglione : '') + (scaduta ? ' ' + scaduta : '');
+}
+// Lo scaglione raggiunto e, se c'è, il prossimo con il suo netto: «da 25 pz ·
+// da 50 pz costa 11,34». Solo per le quotazioni con più di uno scaglione.
+function ordLineScaglioneHtml(it, row, q) {
+  const scaglioni = priceRowTiers(row);
+  if (scaglioni.length < 2) return '';
+  const u = priceUomOf(it, row);
+  const t = priceRowTier(it, row, q);
+  const dopo = priceRowNextTier(it, row, q);
+  const da = x => `da ${fmtQtyIt(x.fromQty)} ${u}`;
+  const netto = x => fmtPrezzo(x.price * uomFactor(it, u) * scontoFattore(x.discount));
+  const testo = (t.base && !t.fromQty ? 'primo scaglione' : 'scaglione ' + da(t)) + (dopo ? ` · ${da(dopo)} costa ${netto(dopo)}` : '');
+  return `<span class="ln-scaglione" title="Il prezzo dello scaglione vale per tutta la quantità dell'articolo nell'ordine (${esc(fmtQtyIt(q))} ${esc(itemUom(it))})">${esc(testo)}</span>`;
+}
+// «Applica»: la riga torna al listino del fornitore per la quantità dell'ordine.
+function ordApplicaListinoRiga(oid, lineId) {
+  if (!docGuard('order', oid, 'contract')) { renderOrders(); return; }
+  const o = getOrder(oid); if (!o) return;
+  const l = (o.lines || []).find(x => x.id === lineId); if (!l || !l.itemId) return;
+  const it = getItem(l.itemId);
+  const row = supplierPriceRow(it, o.supplierId, o.date);
+  if (!priceRowQuoted(row)) return;
+  const q = docQtaArticolo(o, l.itemId);
+  rigaImpostaPrezzo(l, rowUnitGross(it, row, q) || 0, rowUnitDiscount(it, row, q));
+  ordAutoStatus(o); touch(o); docMarkDirty('order'); renderOrders();
 }
 
 function renderOrderEdit(id) {
