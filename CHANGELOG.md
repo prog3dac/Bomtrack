@@ -2,6 +2,16 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.155.1 — 2026-11-12
+
+**Testi per i documenti: si scelgono dal documento e non passano dalle note.**
+- Nella barra a sinistra di richieste, ordini e ordini di lavoro, sotto Genera PDF / Excel, il pulsante **Testi sul PDF** con il numero dei testi e i loro titoli. Apre una finestra con tutti i testi del tipo, ciascuno con una casella: i «sempre» sono spuntati e fermi, gli altri si scelgono e si conferma con Applica.
+- I testi scelti **non vanno più nelle note**: il documento ne tiene una copia sua, che non cambia se poi si corregge il testo in Gestione. «＋ Testo» accanto alle note non c'è più.
+- Sul PDF e nell'Excel esce **solo il testo**, senza titolo, in fondo dopo le condizioni: prima i «sempre», poi quelli scelti. Il titolo serve solo a riconoscerlo, e in Gestione i due campi lo dicono.
+- La frase **«Indicare il n° ordine e il n° di riga su DDT e fattura»** non è più scritta nel programma: all'aggiornamento diventa un testo di Gestione, «sempre» su ordine e ordine di lavoro, quindi il PDF esce come prima finché non la si cambia.
+
+**Schema: cambia.** Nuova colonna `texts` (jsonb) su `rfqs`, `orders` e `work_orders`, `schema_versione` 8. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql` nel SQL Editor di Supabase.
+
 ### 0.155.0 — 2026-11-11
 
 **Testi per i documenti.**

@@ -569,7 +569,8 @@ function docCoda(doc, voci, y) {
     // quando il blocco non entra: una nota di quattromila caratteri è più alta
     // di una pagina intera, e spostarla su un foglio nuovo la farebbe traboccare
     // da quello — stesso troncamento silenzioso, un foglio più in là.
-    const righe = doc.splitTextToSize(v.etichetta + ': ' + v.testo, largh);
+    // Senza etichetta esce il testo e basta: i testi per i documenti.
+    const righe = doc.splitTextToSize(v.etichetta ? v.etichetta + ': ' + v.testo : v.testo, largh);
     let i = 0;
     while (i < righe.length) {
       if (y + PDF_INTERLINEA > fondo) { doc.addPage(); y = PDF_MARGINE + 6; }
@@ -678,51 +679,100 @@ function docTestaHtml(o) {
       <div class="modal-field campo-m"><label>Pagamento</label>
         <input list="${o.pfx}-payment-opts" class="lock-contract" value="${esc(r.payment || '')}" placeholder="es. Bonifico 30gg, RiBa 60gg…" ${campo('payment')}>
         <datalist id="${o.pfx}-payment-opts">${opzioni(db.settings.paymentOptions)}</datalist></div>
-      <div class="modal-field campo-nota"><div class="label-con-azione"><label>${o.note}</label>${docTestiMenuHtml(o.pfx, id)}</div><textarea rows="${righeNota(r.notes)}" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
+      <div class="modal-field campo-nota"><label>${o.note}</label><textarea rows="${righeNota(r.notes)}" ${campo('notes')}>${esc(r.notes || '')}</textarea></div>
       <div class="modal-field campo-nota"><label>${ico('lock', 'tinted', '')} Note interne (non stampate)</label><textarea rows="${righeNota(r.notesInternal)}" class="notes-internal" ${campo('notesInternal')}>${esc(r.notesInternal || '')}</textarea></div>
     </div>`;
 }
-// ─── Testi predefiniti (dalla 0.155.0) ───
+// ─── Testi per i documenti (dalla 0.155.0; scelta dal documento dalla 0.155.1) ───
 // Frasi che tornano su molti documenti (imballo, certificati, condizioni
-// generali) scritte una volta in Gestione → Testi per i documenti. Ognuna dice
-// su quali documenti vale e se va **sempre** in fondo al PDF o si inserisce
-// **a scelta** nelle note, dove si può ancora correggere per quel documento.
+// generali) scritte una volta in Gestione → Testi per i documenti. Il titolo
+// serve solo a riconoscerle; sul PDF esce il testo e basta.
 //   db.settings.docTexts = [{ id, title, text, docs: ['rfq','order','odl'], always }]
+// Le «sempre» escono su ogni documento del tipo, e seguono la Gestione. Le
+// altre si scelgono dal pulsante «Testi sul PDF» del documento, e si
+// **copiano** sul documento (`rec.texts`, [{ id, title, text }]): un ordine già
+// fatto non cambia se domani si corregge il testo in Gestione. Non passano più
+// dalle note, che restano di chi le scrive.
 const DOC_TESTI_TIPI = { rfq: 'Richiesta di offerta', order: 'Ordine a fornitore', odl: 'Ordine di lavoro' };
-const DOC_TESTI_PFX = { rfq: 'rfq', ord: 'order', odl: 'odl' };
 function docTesti(kind, sempre) {
   return (db.settings.docTexts || []).filter(t => t && t.text && (t.docs || []).includes(kind) && !!t.always === !!sempre);
 }
-// Le voci della coda del PDF (e del foglio Excel) per i testi «sempre».
-function docTestiSempre(kind) {
-  return kind ? docTesti(kind, true).map(t => ({ etichetta: t.title || 'Condizioni', testo: t.text })) : [];
+// Che cosa esce in fondo al documento, nell'ordine: prima i «sempre», poi quelli scelti.
+function docTestiStampa(kind, rec) {
+  if (!kind) return [];
+  const scelti = (rec && Array.isArray(rec.texts) ? rec.texts : []).filter(t => t && t.text);
+  return docTesti(kind, true).map(t => t.text).concat(scelti.map(t => t.text));
 }
-// «＋ Testo» accanto all'etichetta delle note: solo se c'è qualcosa da inserire.
-function docTestiMenuHtml(pfx, id) {
-  const voci = docTesti(DOC_TESTI_PFX[pfx], false).map(t => ({ label: t.title || t.text.slice(0, 40), onclick: `docInserisciTesto('${pfx}','${id}','${t.id}')` }));
-  return voci.length ? tendina('＋ Testo', voci, { cls: 'dd-testi', title: 'Inserisci un testo predefinito nelle note' }) : '';
+// Le stesse righe come voci della coda del PDF: senza etichetta, solo il testo.
+function docTestiCoda(kind, rec) { return docTestiStampa(kind, rec).map(testo => ({ etichetta: '', testo })); }
+// Il pulsante nella barra, sotto Genera PDF / Excel, con quanti testi escono e
+// i loro titoli. Non c'è se in Gestione non c'è niente per quel tipo e il
+// documento non ne porta già.
+function docTestiBtnHtml(k, rec) {
+  const scelti = Array.isArray(rec.texts) ? rec.texts : [];
+  const sempre = docTesti(k, true);
+  if (!sempre.length && !docTesti(k, false).length && !scelti.length) return '';
+  const titoli = sempre.map(t => t.title).concat(scelti.map(t => t.title)).filter(Boolean);
+  const n = sempre.length + scelti.length;
+  return `<button class="doc-testi-btn" onclick="docTestiApri('${k}','${rec.id}')" title="Scegli i testi che escono in fondo al documento">${ico('file', 'tinted', '')} Testi sul PDF${n ? ` <span class="conta-pill">${n}</span>` : ''}</button>
+      ${titoli.length ? `<div class="doc-testi-elenco">${titoli.map(esc).join(' · ')}</div>` : ''}`;
 }
-function docInserisciTesto(pfx, id, testoId) {
-  const k = DOC_TESTI_PFX[pfx];
-  const t = (db.settings.docTexts || []).find(x => x.id === testoId);
-  const doc = k && docKind(k).get(id);
-  if (!t || !doc) return;
-  const prima = String(doc.notes || '').replace(/\s+$/, '');
-  if (prima.includes(t.text)) { showToast('Il testo è già nelle note'); return; }
-  docSetField(k, id, 'notes', prima ? prima + '\n' + t.text : t.text);
-  docKind(k).render();
+// La finestra: tutti i testi validi per il tipo, con una casella. I «sempre»
+// sono spuntati e fermi; un testo scelto e poi tolto da Gestione resta in
+// elenco finché non lo si toglie anche dal documento.
+function docTestiApri(k, id) {
+  const K = docKind(k); const rec = K.get(id); if (!rec) return;
+  const scelti = Array.isArray(rec.texts) ? rec.texts : [];
+  const voce = (t, on, fermo) => `<label class="doc-testi-voce${on ? ' on' : ''}${fermo ? ' fermo' : ''}" data-cerca="${esc(((t.title || '') + ' ' + t.text).toLowerCase())}">
+      <input type="checkbox" value="${esc(t.id)}" ${on ? 'checked' : ''} ${fermo ? 'disabled' : ''} onchange="this.closest('label').classList.toggle('on',this.checked)">
+      <div><b>${esc(t.title || 'Senza titolo')}</b>${fermo ? ' <span class="doc-testi-badge">sempre</span>' : ''}<div class="doc-testi-testo">${esc(t.text)}</div></div></label>`;
+  const scegli = docTesti(k, false);
+  const orfani = scelti.filter(x => !scegli.some(t => t.id === x.id));
+  const righe = docTesti(k, true).map(t => voce(t, true, true))
+    .concat(scegli.map(t => { const s = scelti.find(x => x.id === t.id); return voce(s || t, !!s, false); }))
+    .concat(orfani.map(t => voce(t, true, false))).join('');
+  openModal(`<h3>${ico('file', 'tinted pill', '')} Testi sul PDF — ${esc(rec.number || '')}</h3>
+    <p class="empty-text" style="text-align:left;padding:0">Spunta i testi che devono uscire in fondo al documento: sul PDF esce il testo, non il titolo. Quelli «sempre» si cambiano da <strong>Gestione → Testi per i documenti</strong>.</p>
+    ${scegli.length + orfani.length > 6 ? `<input class="doc-testi-cerca" placeholder="Cerca un testo…" oninput="docTestiFiltra(this.value)">` : ''}
+    <div class="doc-testi-lista" id="doc-testi-lista">${righe || '<div class="empty-text">Nessun testo per questo tipo di documento.</div>'}</div>
+    <div class="modal-actions"><button class="btn-outline" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="docTestiApplica('${k}','${id}')">Applica</button></div>`, false, 'doc-testi');
+}
+function docTestiFiltra(q) {
+  const t = String(q || '').trim().toLowerCase();
+  document.querySelectorAll('#doc-testi-lista .doc-testi-voce').forEach(el => { el.style.display = !t || el.dataset.cerca.includes(t) ? '' : 'none'; });
+}
+// Un testo già sul documento resta com'era (la copia di quando si è scelto);
+// uno nuovo si copia da Gestione adesso. L'ordine è quello di Gestione.
+function docTestiImposta(k, id, ids) {
+  const K = docKind(k);
+  if (!docGuard(k, id, 'contract')) { K.render(); return false; }
+  const rec = K.get(id); if (!rec) return false;
+  const prima = Array.isArray(rec.texts) ? rec.texts : [];
+  const voluti = (ids || []).filter((x, i, l) => l.indexOf(x) === i);
+  const daGestione = docTesti(k, false).filter(t => voluti.includes(t.id))
+    .map(t => prima.find(x => x.id === t.id) || { id: t.id, title: t.title || '', text: t.text });
+  const orfani = prima.filter(x => voluti.includes(x.id) && !daGestione.some(t => t.id === x.id));
+  rec.texts = daGestione.concat(orfani);
+  touch(rec); docMarkDirty(k);
+  return true;
+}
+function docTestiApplica(k, id) {
+  const ids = Array.from(document.querySelectorAll('#doc-testi-lista input[type=checkbox]:checked:not(:disabled)')).map(el => el.value);
+  if (docTestiImposta(k, id, ids)) { closeModal(); docKind(k).render(); }
 }
 // Una nota vuota occupa una riga; una scritta su più righe si mostra intera,
 // fino a sei.
 function righeNota(t) { return Math.min(6, Math.max(1, String(t || '').split('\n').length)); }
 // «PDF» ed «Excel» nella barra a sinistra, spenti finché il documento non è
 // salvato. Le copie già in archivio restano in fondo alla pagina (documenti.js).
-//   o = { cls, pdf, xls, dirty, cosa }
+//   o = { cls, pdf, xls, dirty, cosa, testi?: { k, rec } }
 function docExportBtnsHtml(o) {
   const dis = o.dirty ? `disabled title="Salva ${o.cosa} prima di generare il documento"` : '';
   return `<button class="export-btn-pdf ${o.cls}" onclick="${o.pdf}" ${dis}>${ico('file', 'tinted', '')} Genera PDF</button>
       <button class="export-btn-xls ${o.cls}" onclick="${o.xls}" ${dis}>${ico('sheet', 'tinted', '')} Genera Excel</button>
-      ${o.dirty ? '<span class="rfq-dirty-hint">Salva per generare il documento</span>' : ''}`;
+      ${o.dirty ? '<span class="rfq-dirty-hint">Salva per generare il documento</span>' : ''}
+      ${o.testi ? docTestiBtnHtml(o.testi.k, o.testi.rec) : ''}`;
 }
 // Il nome del file: numero e controparte, senza i caratteri che un disco rifiuta.
 function docNomeFile(rec, sup, ripiego, ext) {
@@ -777,8 +827,8 @@ function docXlsTesta(o) {
 // note interne (notesInternal) non escono mai sul documento.
 function docXlsSalva(data, rec, foglio, ripiego, kind) {
   if (rec.notes) { data.push([]); data.push(['Note', rec.notes]); }
-  const sempre = docTestiSempre(kind);
-  if (sempre.length) { data.push([]); sempre.forEach(v => data.push([v.etichetta, v.testo])); }
+  const testi = docTestiStampa(kind, rec);
+  if (testi.length) { data.push([]); testi.forEach(t => data.push([t])); }
   if (!requireXlsx()) return false;
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), foglio);
@@ -988,7 +1038,6 @@ function lineExtraDoc(l) {
   return out;
 }
 // La frase che fa abbinare il DDT e la fattura all'ordine senza telefonate.
-const DOC_RIF_DDT = 'Indicare il n° ordine e il n° di riga su DDT e fattura / Please quote our order no. and line no. on delivery note and invoice';
 
 // ═══════════════════════════════════════════════════════════
 //  A CHE PUNTO È, E DA DOVE VIENE (0.93.0)
@@ -1497,7 +1546,7 @@ function renderRfqEdit(id) {
       { label: 'Elimina la richiesta', icon: 'trash', onclick: `delRfq('${id}')`, danger: true },
     ],
     salva: { id: 'rfq-save-btn', azione: `rfqSave('${id}')`, dirty: rfqDirty }, comandi: storiaBtn('rfq', r.id), lock: lockBanner,
-    esporta: docExportBtnsHtml({ cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta' }) },
+    esporta: docExportBtnsHtml({ cls: 'rfq-export-btn', pdf: `exportRfqPDF('${id}')`, xls: `exportRfqExcel('${id}')`, dirty: rfqDirty, cosa: 'la richiesta', testi: { k: 'rfq', rec: r } }) },
   corpo: `${docCoWarnHtml()}
     ${docTestaHtml({ pfx: 'rfq', rec: r, controparte: 'Fornitore', data: 'Data', note: 'Note per il fornitore', rispondere: true })}
     <h3 class="rfq-subhead">Righe richiesta
@@ -1570,7 +1619,7 @@ function exportRfqPDF(id, modo) {
     { etichetta: 'Trasporto / Shipping', testo: r.transport },
     { etichetta: 'Pagamento / Payment', testo: r.payment },
     { etichetta: 'Note / Notes', testo: r.notes },
-    ...docTestiSempre('rfq'),
+    ...docTestiCoda('rfq', r),
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('rfq', r, doc, { ripiego: 'richiesta', modo, stato: 'inviata', rerender: renderRfq,
     domanda: `PDF generato.\nSegnare la richiesta ${r.number} come inviata?` });

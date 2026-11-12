@@ -71,11 +71,10 @@ describe('Documenti per i fornitori', () => {
     assert.ok(!/Certificat/.test(a.eval("lineDescDoc(getOrder('o1').lines[0])")));
   });
 
-  it('l\'ordine stampa l\'offerta del fornitore, il rimando a DDT e fattura e le pagine', () => {
+  it('l\'ordine stampa l\'offerta del fornitore e le pagine', () => {
     const a = app();
     const t = pdf(a, "exportOrderPDF('o1')").testi.join('\n');
     assert.match(t, /Vostra offerta \/ Your quotation: 245 del 03\/11\/2026/);
-    assert.match(t, /n° ordine e il n° di riga su DDT e fattura/);
     assert.match(t, /ODA-2026-001 · Pagina 1 di 1/);
     assert.match(t, /C\.F\. BNCMRA80A01F257X · SDI ABC1234 · PEC bianchi@pec\.it/);
   });

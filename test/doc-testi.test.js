@@ -1,5 +1,7 @@
 // Testi per i documenti (dalla 0.155.0): scritti una volta in Gestione, si
-// inseriscono nelle note con «＋ Testo» o escono sempre in fondo al PDF.
+// scelgono dal pulsante «Testi sul PDF» del documento (dalla 0.155.1, senza
+// passare dalle note) o escono sempre in fondo al PDF. Sul foglio va il testo,
+// non il titolo.
 
 const assert = require('node:assert/strict');
 const { describe, it } = require('./tap.js');
@@ -56,40 +58,73 @@ function app(role) {
 }
 
 describe('Testi per i documenti', () => {
-  it('«＋ Testo» offre solo i testi a scelta di quel tipo di documento', () => {
+  it('il pulsante sta nella barra, con quanti testi escono e i loro titoli', () => {
     const a = app();
-    a.eval('renderOrders(); openOrderEdit("o1")');
+    a.eval('getOrder("o1").texts = [{ id: "t1", title: "Imballo", text: "Imballare su pallet a perdere." }]; renderOrders(); openOrderEdit("o1")');
     const h = a.html('view-orders');
-    assert.match(h, /docInserisciTesto\('ord','o1','t1'\)/);
-    assert.ok(!/'t2'\)/.test(h), 'un testo «sempre» non si inserisce');
-    assert.ok(!/'t3'\)/.test(h), 'un testo della richiesta non sta sull\'ordine');
-    a.eval('renderRfq(); openRfqEdit("r1")');
-    assert.match(a.html('view-rfq'), /docInserisciTesto\('rfq','r1','t3'\)/);
+    const rail = h.slice(h.indexOf('class="doc-rail"'), h.indexOf('</aside>'));
+    assert.match(rail, /docTestiApri\('order','o1'\)/);
+    assert.match(rail, /Testi sul PDF <span class="conta-pill">2<\/span>/);
+    assert.match(rail, /Condizioni generali · Imballo/);
+    assert.ok(!/docInserisciTesto|＋ Testo/.test(h), 'niente più testi dentro le note');
   });
 
-  it('senza testi il pulsante non c\'è', () => {
+  it('senza testi in Gestione il pulsante non c\'è', () => {
     const a = app();
     a.eval('db.settings.docTexts = []; renderOrders(); openOrderEdit("o1")');
-    assert.ok(!/＋ Testo/.test(a.html('view-orders')));
+    assert.ok(!/docTestiApri/.test(a.html('view-orders')));
   });
 
-  it('il testo si aggiunge in fondo alle note, una volta sola', () => {
+  it('la finestra elenca i testi del tipo, con i «sempre» spuntati e fermi', () => {
     const a = app();
-    a.eval('renderOrders(); openOrderEdit("o1"); docInserisciTesto("ord","o1","t1")');
-    assert.equal(a.eval('getOrder("o1").notes'), 'Urgente\nImballare su pallet a perdere.');
-    a.eval('docInserisciTesto("ord","o1","t1")');
-    assert.equal(a.eval('getOrder("o1").notes'), 'Urgente\nImballare su pallet a perdere.');
+    a.eval('globalThis.__m = ""; openModal = h => { __m = h; }; renderOrders(); openOrderEdit("o1"); docTestiApri("order","o1")');
+    const m = a.eval('__m');
+    assert.match(m, /value="t2" checked disabled/);
+    assert.match(m, /value="t1"\s+onchange/, "a scelta: libero e non spuntato");
+    assert.ok(!/value="t3"/.test(m), 'un testo della richiesta non sta sull\'ordine');
   });
 
-  it('un testo «sempre» esce in fondo al PDF e all\'Excel del suo tipo', () => {
+  it('la scelta si copia sul documento, non nelle note, e resta se poi il testo cambia', () => {
     const a = app();
-    a.eval('exportOrderPDF("o1")');
-    assert.ok(a.eval('scaricati[0].testi.join("\\n")').includes('Condizioni generali: Vale il nostro capitolato CGA-01.'));
+    a.eval('renderOrders(); openOrderEdit("o1"); docTestiImposta("order","o1",["t1"])');
+    assert.equal(a.eval('getOrder("o1").notes'), 'Urgente');
+    assert.deepEqual(JSON.parse(a.eval('JSON.stringify(getOrder("o1").texts)')), [{ id: 't1', title: 'Imballo', text: 'Imballare su pallet a perdere.' }]);
+    a.eval('db.settings.docTexts[0].text = "Altro"; docTestiImposta("order","o1",["t1"])');
+    assert.equal(a.eval('getOrder("o1").texts[0].text'), 'Imballare su pallet a perdere.', 'resta la copia di quando si è scelto');
+    a.eval('docTestiImposta("order","o1",[])');
+    assert.equal(a.eval('getOrder("o1").texts.length'), 0);
+  });
+
+  it('un testo «sempre» e quelli scelti escono in fondo al PDF e all\'Excel, senza titolo', () => {
+    const a = app();
+    a.eval('getOrder("o1").texts = [{ id: "t1", title: "Imballo", text: "Imballare su pallet a perdere." }]; exportOrderPDF("o1")');
+    const t = a.eval('scaricati[0].testi.join("\\n")');
+    assert.ok(t.includes('Vale il nostro capitolato CGA-01.\nImballare su pallet a perdere.'), t);
+    assert.ok(!/Condizioni generali:|Imballo:/.test(t), 'il titolo non va sul foglio');
     a.eval('exportOrderExcel("o1")');
     const celle = JSON.parse(a.eval('JSON.stringify(scaricati[1].celle)'));
-    assert.ok(celle.some(r => r[0] === 'Condizioni generali' && r[1] === 'Vale il nostro capitolato CGA-01.'));
+    assert.ok(celle.some(r => r.length === 1 && r[0] === 'Vale il nostro capitolato CGA-01.'));
+    assert.ok(celle.some(r => r.length === 1 && r[0] === 'Imballare su pallet a perdere.'));
     a.eval('exportRfqPDF("r1")');
     assert.ok(!a.eval('scaricati[2].testi.join("\\n")').includes('CGA-01'), 'non sulla richiesta');
+  });
+
+  it('su un ordine protetto i testi non cambiano senza sblocco', () => {
+    const a = app();
+    a.eval('getOrder("o1").status = "confermato"; renderOrders(); openOrderEdit("o1")');
+    assert.equal(a.eval('docTestiImposta("order","o1",["t1"])'), false);
+    assert.equal(a.eval('getOrder("o1").texts ? getOrder("o1").texts.length : 0'), 0);
+  });
+
+  it('la frase su DDT e fattura diventa un testo «sempre» di Gestione, una volta sola', () => {
+    const a = app();
+    a.eval('db.settings.docTexts = []; delete db.settings.docTextsRifDdt; migrateDB()');
+    const t = JSON.parse(a.eval('JSON.stringify(db.settings.docTexts)'));
+    assert.equal(t.length, 1);
+    assert.deepEqual([t[0].always, t[0].docs], [true, ['order', 'odl']]);
+    assert.match(t[0].text, /n° ordine e il n° di riga su DDT e fattura/);
+    a.eval('db.settings.docTexts = []; migrateDB()');
+    assert.equal(a.eval('db.settings.docTexts.length'), 0, 'eliminata, non torna');
   });
 
   it('in Gestione si aggiungono, si modificano e si eliminano', () => {

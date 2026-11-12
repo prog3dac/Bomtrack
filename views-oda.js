@@ -303,7 +303,7 @@ function renderOrderEdit(id) {
     stato: { stati: ORDER_STATUS, azione: `ordSetField('${id}','status',this.value)` },
     menu: [{ label: "Elimina l'ordine", icon: 'trash', onclick: `delOrder('${id}')`, danger: true }],
     salva: { id: 'order-save-btn', azione: `ordSave('${id}')`, dirty: orderDirty }, comandi: storiaBtn('order', o.id), lock: lockBanner,
-    esporta: docExportBtnsHtml({ cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine" }) },
+    esporta: docExportBtnsHtml({ cls: 'order-export-btn', pdf: `exportOrderPDF('${id}')`, xls: `exportOrderExcel('${id}')`, dirty: orderDirty, cosa: "l'ordine", testi: { k: 'order', rec: o } }) },
   corpo: `${docCoWarnHtml()}
     ${docTestaHtml({ pfx: 'ord', rec: o, controparte: 'Fornitore', data: 'Data ordine', offerta: true, conferma: "N° conferma d'ordine fornitore", note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il fornitore ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta. Se questo materiale è a commessa, la consegna al cliente va verificata.</div>` : ''}
@@ -362,8 +362,7 @@ function exportOrderPDF(id, modo) {
     { etichetta: 'Pagamento / Payment', testo: o.payment },
     { etichetta: 'Conferma fornitore / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
-    { etichetta: 'Importante / Important', testo: DOC_RIF_DDT },
-    ...docTestiSempre('order'),
+    ...docTestiCoda('order', o),
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('order', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOrders,
     domanda: `PDF generato.\nSegnare l'ordine ${o.number} come inviato?` });
@@ -376,8 +375,7 @@ function exportOrderExcel(id) {
     ['Da richiesta', o.rfqId && getRfq(o.rfqId) ? getRfq(o.rfqId).number : ''],
     ['Vostra offerta / Your quotation', o.supplierQuote],
     ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
-    ['Conferma fornitore / Order confirmation', o.supplierConfirmation],
-    ['Importante / Important', DOC_RIF_DDT]] });
+    ['Conferma fornitore / Order confirmation', o.supplierConfirmation]] });
   const hasSup = (o.lines || []).some(l => lineSupInfo(o.supplierId, l));
   // Nel foglio i numeri restano numeri: la valuta si dichiara in intestazione,
   // l'unità sta nella sua colonna e vale per q.tà, ricevuto e residuo.
@@ -1050,7 +1048,7 @@ function renderOdlEdit(id) {
     stato: { stati: ORDER_STATUS, azione: `odlSetField('${id}','status',this.value)` },
     menu: [{ label: "Elimina l'ordine di lavoro", icon: 'trash', onclick: `delOdl('${id}')`, danger: true }],
     salva: { id: 'odl-save-btn', azione: `odlSave('${id}')`, dirty: odlDirty }, comandi: storiaBtn('odl', o.id), lock: lockBanner,
-    esporta: docExportBtnsHtml({ cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro" }) },
+    esporta: docExportBtnsHtml({ cls: 'odl-export-btn', pdf: `exportOdlPDF('${id}')`, xls: `exportOdlExcel('${id}')`, dirty: odlDirty, cosa: "l'ordine di lavoro", testi: { k: 'odl', rec: o } }) },
   corpo: `${docCoWarnHtml()}${odlOdpRef(o)}
     ${docTestaHtml({ pfx: 'odl', rec: o, controparte: 'Terzista', data: 'Data ordine', conferma: 'N° conferma del terzista', ddt: true, note: 'Note' })}
     ${ritardo != null ? `<div class="rfq-warn">${ico('clock', 'tinted', '')} Il terzista ha confermato con <strong>${supplierDaysText(ritardo)}</strong> di ritardo sulla data richiesta.</div>` : ''}
@@ -1140,8 +1138,7 @@ function exportOdlPDF(id, modo) {
     { etichetta: 'Pagamento / Payment', testo: o.payment },
     { etichetta: 'Conferma terzista / Order confirmation', testo: o.supplierConfirmation },
     { etichetta: 'Note / Notes', testo: o.notes },
-    { etichetta: 'Importante / Important', testo: DOC_RIF_DDT },
-    ...docTestiSempre('odl'),
+    ...docTestiCoda('odl', o),
   ], doc.lastAutoTable.finalY + 8);
   return docPdfEmetti('workOrder', o, doc, { ripiego: 'ordine', modo, stato: 'inviato', rerender: renderOdl,
     domanda: `PDF generato.\nSegnare l'ordine di lavoro ${o.number} come inviato?` });
@@ -1153,8 +1150,7 @@ function exportOdlExcel(id) {
     ['Da richiesta', o.rfqId && getRfq(o.rfqId) ? getRfq(o.rfqId).number : ''],
     ['Trasporto / Shipping', o.transport], ['Pagamento / Payment', o.payment],
     ['Conferma terzista / Order confirmation', o.supplierConfirmation],
-    ['DDT di invio / Delivery note', odlTestoDdt(o)],
-    ['Importante / Important', DOC_RIF_DDT]] });
+    ['DDT di invio / Delivery note', odlTestoDdt(o)]] });
   data.push(['#', 'Parte', 'Lavorazione', 'Pezzi', 'U.M.', `Tariffa (${cur()}/pz)`, `Importo (${cur()})`, 'Inizio lavoro', 'Consegna', 'Rientrati', 'Ancora fuori', 'Nota']);
   (o.lines || []).forEach((l, i) => {
     const qty = Number(l.qty) || 0, price = (l.price === '' || l.price == null) ? '' : Number(l.price);

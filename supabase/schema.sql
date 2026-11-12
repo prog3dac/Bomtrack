@@ -365,6 +365,8 @@ create table if not exists public.rfqs (
 
 -- 0.154.0: entro quando il fornitore deve rispondere.
 alter table public.rfqs add column if not exists reply_by date;
+-- 0.155.1: i testi scelti per il documento, copiati da Gestione.
+alter table public.rfqs add column if not exists texts jsonb;
 
 create table if not exists public.rfq_lines (
   id uuid primary key,
@@ -412,6 +414,7 @@ create table if not exists public.orders (
 
 -- 0.154.0: il riferimento all'offerta del fornitore, stampato sull'ordine.
 alter table public.orders add column if not exists supplier_quote text;
+alter table public.orders add column if not exists texts jsonb;
 
 -- Nessuna colonna `received`: è la somma di order_receipts (vista più sotto).
 create table if not exists public.order_lines (
@@ -495,6 +498,7 @@ create table if not exists public.work_orders (
 
 -- 0.154.0: il DDT con cui il materiale parte in conto lavorazione.
 alter table public.work_orders add column if not exists ship_ddt text;
+alter table public.work_orders add column if not exists texts jsonb;
 
 create table if not exists public.work_order_lines (
   id uuid primary key,
@@ -1762,7 +1766,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 7)
+    'schema_versione', 8)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

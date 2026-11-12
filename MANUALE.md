@@ -3751,18 +3751,35 @@ Sono i valori proposti nei campi omonimi di richieste, ordini e ordini di lavoro
 ### 📄 Testi per i documenti
 
 Le frasi che tornano su molti documenti (istruzioni di imballo, certificati da allegare,
-condizioni generali d'acquisto) si scrivono qui una volta. Ogni testo ha un **titolo**, il
-**testo** (anche su più righe), **i documenti** su cui vale (richiesta di offerta, ordine a
-fornitore, ordine di lavoro) e **quando esce**:
+condizioni generali d'acquisto) si scrivono qui una volta. Ogni testo ha:
 
-- **a scelta**: nella pagina del documento, accanto all'etichetta delle note, c'è **＋ Testo** con
-  i titoli. Un clic aggiunge il testo in fondo alle note, dove si può ancora correggere per quel
-  documento. Lo stesso testo non si aggiunge due volte;
-- **sempre**: esce in fondo a ogni PDF ed Excel di quel tipo, con il titolo come etichetta, senza
-  toccare le note.
+- un **titolo**, che serve solo a riconoscerlo nella scelta e **non va sul documento**;
+- il **testo stampato sul documento**, anche su più righe;
+- **i documenti** su cui vale (richiesta di offerta, ordine a fornitore, ordine di lavoro);
+- **quando esce**: *a scelta* oppure *sempre*.
+
+Sul PDF e nell'Excel i testi escono **in fondo, dopo trasporto, pagamento e note**, un paragrafo
+per testo, senza titolo: prima quelli *sempre*, poi quelli scelti. **Non entrano nelle note**,
+che restano di chi le scrive.
+
+**Nel documento** (dalla 0.155.1), nella barra a sinistra sotto *Genera PDF / Excel*, c'è
+**Testi sul PDF** con il numero dei testi che escono e, sotto, i loro titoli. Apre una finestra
+con tutti i testi validi per quel tipo di documento, ciascuno con il testo intero e una casella:
+i *sempre* sono spuntati e fermi, gli altri si spuntano e si conferma con **Applica**. Con molti
+testi in alto c'è la ricerca.
+
+Un testo scelto **si copia sul documento**: se poi lo correggi qui, gli ordini già fatti restano
+come erano, e la ristampa esce uguale. I testi *sempre* invece seguono questa pagina. Su un
+documento protetto (inviato, confermato…) i testi si cambiano solo dopo *Sblocca*, come le
+altre condizioni.
+
+La frase **«Indicare il n° ordine e il n° di riga su DDT e fattura»**, che fino alla 0.155.0
+era fissa su ordini e ordini di lavoro, è un testo di questa pagina (*Riferimenti su DDT e
+fattura*), *sempre* su ordine e ordine di lavoro: si può correggere, mettere *a scelta* o
+eliminare.
 
 Ogni campo si salva uscendo. Eliminare un testo non lo toglie dai documenti dove è già stato
-inserito.
+scelto.
 
 ### 🛒 Famiglie commerciali · 📦 Famiglie materie prime · 🔧 Famiglie parti
 
@@ -4171,8 +4188,8 @@ condizioni, richieste, ordini e ordini di lavoro stampano:
   documento è cambiato: «Rev. 2 — sostituisce la rev. 1». Ristampato senza modifiche porta la
   revisione che ha già. Senza archivio non si scrive niente;
 - **«Pagina 1 di 3»** in fondo a ogni foglio, con il numero del documento;
-- sull'ordine e sull'ordine di lavoro, in fondo, **«Indicare il n° ordine e il n° di riga su DDT
-  e fattura»**;
+- in fondo, i **testi per i documenti** (→ *Gestione → Testi per i documenti*); fra questi, su
+  ordine e ordine di lavoro, «Indicare il n° ordine e il n° di riga su DDT e fattura»;
 - sulla **richiesta di offerta**, il campo **Rispondere entro** della testata, in evidenza sotto
   l'oggetto;
 - sull'**ordine**, il campo **Vostra offerta n° / del** (es. «245 del 03/11/2026»): il riferimento
