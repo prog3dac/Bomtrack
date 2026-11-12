@@ -321,9 +321,10 @@ function termsSetDefault(kind, i) {
 }
 
 // ─── Testi per i documenti (dalla 0.155.0) ───
-// Le frasi da inserire nelle note di richieste, ordini e ordini di lavoro, o da
-// stampare sempre in fondo (views-docs.js, docTesti). Ogni campo si salva da
-// sé quando si esce, come le righe di un documento.
+// Le frasi da scegliere su richieste, ordini e ordini di lavoro, o da stampare
+// sempre in fondo (views-docs.js, docTesti). Il titolo serve solo a
+// riconoscerle; sul documento esce il testo. Ogni campo si salva da sé quando
+// si esce, come le righe di un documento.
 function renderDocTexts() {
   const ro = canWrite('manage') ? '' : 'disabled';
   const righe = (db.settings.docTexts || []).map(t => {
@@ -331,20 +332,22 @@ function renderDocTexts() {
     const tipi = Object.entries(DOC_TESTI_TIPI).map(([k, v]) => `<label class="chk-inline"><input type="checkbox" ${ro} ${(t.docs || []).includes(k) ? 'checked' : ''}
         onchange="docTestoDoc('${t.id}','${k}',this.checked)"> ${v}</label>`).join('');
     return `<div class="doc-testo">
+      <div class="doc-testo-etichetta">Titolo — solo per sceglierlo, non va sul documento</div>
       <div class="doc-testo-testa">
-        <input class="doc-testo-titolo" ${ro} value="${esc(t.title || '')}" placeholder="Titolo (es. Imballo, Certificati, Condizioni generali)" ${set('title')}>
+        <input class="doc-testo-titolo" ${ro} value="${esc(t.title || '')}" placeholder="es. Imballo, Certificati, Condizioni generali" aria-label="Titolo" ${set('title')}>
         <select ${ro} onchange="docTestoSet('${t.id}','always',this.value === '1')" title="Quando esce sul documento">
-          <option value="0" ${t.always ? '' : 'selected'}>A scelta, con «＋ Testo» nelle note</option>
-          <option value="1" ${t.always ? 'selected' : ''}>Sempre, in fondo al PDF</option></select>
+          <option value="0" ${t.always ? '' : 'selected'}>A scelta, da «Testi sul PDF»</option>
+          <option value="1" ${t.always ? 'selected' : ''}>Sempre, su ogni documento</option></select>
         <button class="mini-btn danger" ${ro} onclick="docTestoDel('${t.id}')" title="Elimina">${ico('trash', 'tinted', 'Elimina')}</button>
       </div>
-      <textarea rows="${Math.min(8, Math.max(2, String(t.text || '').split('\n').length))}" ${ro} placeholder="Il testo come deve uscire sul documento" ${set('text')}>${esc(t.text || '')}</textarea>
+      <div class="doc-testo-etichetta">Testo stampato sul documento</div>
+      <textarea aria-label="Testo stampato sul documento" rows="${Math.min(8, Math.max(2, String(t.text || '').split('\n').length))}" ${ro} placeholder="Il testo come deve uscire sul documento" ${set('text')}>${esc(t.text || '')}</textarea>
       <div class="doc-testo-tipi">${tipi}</div>
     </div>`;
   }).join('') || '<div class="empty-text">Nessun testo. Aggiungine uno: per esempio le istruzioni di imballo o le condizioni generali d\'acquisto.</div>';
   return `<div class="mgmt-panel">
     <h3 class="settings-group-title">${ico('file', 'tinted', '')} Testi per i documenti</h3>
-    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Frasi da usare su richieste di offerta, ordini e ordini di lavoro. Quelle <strong>a scelta</strong> si inseriscono nelle note del documento con <strong>＋ Testo</strong>, e lì si possono ancora correggere; quelle <strong>sempre</strong> escono in fondo a ogni PDF ed Excel del tipo scelto.</p>
+    <p class="empty-text" style="text-align:left;padding:4px 0 12px">Frasi da usare su richieste di offerta, ordini e ordini di lavoro. Il <strong>titolo</strong> serve solo a riconoscerle nella scelta; sul documento esce solo il <strong>testo</strong>, in fondo, dopo le condizioni. Quelle <strong>a scelta</strong> si aggiungono dal pulsante <strong>Testi sul PDF</strong> del documento, e restano come erano anche se poi le cambi qui; quelle <strong>sempre</strong> escono su ogni documento del tipo spuntato.</p>
     <div class="doc-testi">${righe}</div>
     ${ro ? '' : '<button class="add-btn-sm" onclick="docTestoNuovo()">+ Nuovo testo</button>'}</div>`;
 }
@@ -373,7 +376,7 @@ function docTestoDoc(id, kind, on) {
 function docTestoDel(id) {
   if (!roleGuard('manage')) return;
   const t = docTestoGet(id); if (!t) return;
-  askConfirm(`Eliminare il testo «${t.title || 'senza titolo'}»? I documenti dove è già stato inserito lo tengono nelle note.`, () => {
+  askConfirm(`Eliminare il testo «${t.title || 'senza titolo'}»? I documenti dove è già stato scelto lo tengono.`, () => {
     db.settings.docTexts = (db.settings.docTexts || []).filter(x => x.id !== id);
     saveDB(); renderManage(); savedToast('Eliminato');
   });
