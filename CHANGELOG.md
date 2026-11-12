@@ -2,6 +2,16 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.156.1 — 2026-11-12
+
+**Correzioni dal controllo delle ultime versioni.**
+- **Taratura con una data passata:** la prossima scadenza si contava da oggi anche per una taratura fatta mesi prima, e lo strumento restava valido più a lungo dell'intervallo. Ora segue la data della taratura, finché non la si corregge a mano.
+- **Taratura, esito all'arrivo:** con l'EMA e i punti compilati, l'esito scelto a mano tornava subito a quello proposto dall'app. Ora resta quello scelto.
+- **Carico centri:** i pezzi del piano ancora da lanciare non contavano l'attrezzaggio quando una parte l'aveva già fatta un ODP chiuso, e il carico usciva più basso del vero. Ora lo contano; lo tolgono solo i pezzi dichiarati fuori dagli ODP.
+- Le icone sui pulsanti blu (Nuovo strumento, Registra taratura, Nuova NC…) sono bianche come il testo: prima si vedevano appena.
+
+Nessun cambio allo schema.
+
 ### 0.156.0 — 2026-11-12
 
 **Testi per i documenti: si scelgono dal documento e non passano dalle note.**

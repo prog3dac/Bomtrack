@@ -959,9 +959,12 @@ function mrpLoadEntries(plans) {
         const fare = q > 0 && typeof daFare === 'function' ? daFare(p.id, itemId, q) : q;
         const lanciare = q > 0 && typeof daLanciare === 'function' ? daLanciare(p.id, itemId, q) : fare;
         // L'attrezzaggio resta se i pezzi mancanti dovranno partire con un
-        // ordine nuovo; se invece una parte è già stata fatta fuori da un
-        // ODP, la fase è già stata attrezzata.
-        quota.set(itemId, q > 0 ? { f: lanciare / q, setup: fare >= q - 1e-9 } : { f: 1, setup: true });
+        // ordine nuovo, anche quando una parte l'ha già fatta un ODP chiuso
+        // (dalla 0.156.1: prima lo si toglieva, e il carico usciva più basso
+        // di quello che il nuovo ODP chiederà). Lo toglie solo chi dichiara
+        // pezzi fuori dagli ODP: lì la fase è già stata attrezzata.
+        const sciolti = (db.productions || []).some(x => x.planId === p.id && x.itemId === itemId && Number(x.qty) > 0);
+        quota.set(itemId, q > 0 ? { f: lanciare / q, setup: fare >= q - 1e-9 || !sciolti } : { f: 1, setup: true });
       }
       return quota.get(itemId);
     };

@@ -146,6 +146,23 @@ describe('Carico: gli ODP del piano con le loro fasi', () => {
     nuovoOdp(app, 4, { planId: 'pl1' });
     approx(oreCentro(app, 'mrpLoadAll()', 'tor'), (4 * 0.5 + 2) + (6 * 0.5 + 2));
   });
+  it('fatti da un ODP chiuso: il resto da lanciare porta il suo attrezzaggio', () => {
+    const app = conDb('make', piano());
+    const id = nuovoOdp(app, 4, { planId: 'pl1' });
+    app.eval(`opLancia(${JSON.stringify(id)})`);
+    app.eval(`opAvvia(${JSON.stringify(id)}, ${JSON.stringify(fase(app, id, 0))})`);
+    app.eval(`opDichiara(${JSON.stringify(id)}, ${JSON.stringify(fase(app, id, 0))}, { qty: 4 })`);
+    // I pezzi versati a magazzino e l'ordine chiuso, senza rifare il giro delle fasi.
+    app.eval(`addMovement('perno', 'versamento', 4, 'prova', { orderId: ${JSON.stringify(id)} });
+      getOdp(${JSON.stringify(id)}).status = 'chiuso'; invalidateCaches();`);
+    approx(Number(app.eval("prodottiDi('pl1', 'perno')")), 4, 'i quattro pezzi sono versati');
+    approx(oreCentro(app, 'mrpLoadAll()', 'tor'), 6 * 0.5 + 2, 'sei pezzi con un ODP nuovo, che va attrezzato');
+  });
+  it('fatti con una dichiarazione fuori dagli ODP: la fase è già attrezzata', () => {
+    const app = conDb('make', piano());
+    app.eval(`db.productions.push({ id: 'pr1', planId: 'pl1', itemId: 'perno', qty: 4, date: '2026-11-02' }); invalidateCaches();`);
+    approx(oreCentro(app, 'mrpLoadAll()', 'tor'), 6 * 0.5);
+  });
   it('lanciato per più pezzi: contano quelli dell\'ODP', () => {
     const app = conDb('make', piano());
     nuovoOdp(app, 14, { planId: 'pl1' });

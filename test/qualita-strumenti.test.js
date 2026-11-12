@@ -289,3 +289,51 @@ describe('QR, avvisi e calendario', () => {
     assert.equal(ev.find(e => e.testo === 'Taratura STR-0002').gravita, 'alta');
   });
 });
+
+// Dalla 0.156.1: la finestra della taratura. La scadenza proposta seguiva oggi
+// anche per una taratura di mesi fa, e l'esito scelto a mano tornava subito a
+// quello calcolato dai punti.
+describe('La finestra della taratura', () => {
+  // I campi come li lascia la finestra appena aperta, nel DOM finto.
+  const apri = a => {
+    a.eval('tarModal("s1")');
+    const campi = { 'tar-date': a.eval('oggiISO()'), 'tar-err': '', 'tar-found': '', 'tar-adj': '', 'tar-left': 'conforme',
+      'tar-next': a.eval('struPiuMesi(oggiISO(), 12)'), 'tar-kind': 'esterna', 'tar-sup': '', 'tar-cert': '', 'tar-cost': '0', 'tar-note': '' };
+    Object.entries(campi).forEach(([id, v]) => { const e = a.el(id); e.value = v; e.dataset = {}; e.readOnly = false; });
+  };
+  it('la prossima taratura si conta dalla data della taratura, non da oggi', () => {
+    const { a } = app();
+    apri(a);
+    a.el('tar-date').value = '2026-09-01';
+    a.eval('tarModalAggiorna("s1")');
+    assert.equal(a.el('tar-next').value, '2027-09-01');
+    a.el('tar-found').value = 'conforme';
+    const cal = J(a, 'tarModalSalva("s1")');
+    assert.equal(cal.nextDue, '2027-09-01');
+    assert.equal(J(a, 'struGet("s1")').nextDue, '2027-09-01');
+  });
+  it('una scadenza scritta a mano resta, anche se poi cambia la data', () => {
+    const { a } = app();
+    apri(a);
+    a.el('tar-next').value = '2027-03-31';
+    a.el('tar-next').dataset.mano = '1';
+    a.el('tar-date').value = '2026-09-01';
+    a.eval('tarModalAggiorna("s1")');
+    assert.equal(a.el('tar-next').value, '2027-03-31');
+  });
+  it('l\'esito scelto a mano non torna a quello proposto dai punti', () => {
+    const { a } = app();
+    apri(a);
+    // EMA 0,03 ed errore 0,01: l'app propone «conforme».
+    a.el('tar-err').value = '0,01';
+    a.eval('tarModalAggiorna("s1")');
+    assert.equal(a.el('tar-found').value, 'conforme');
+    a.el('tar-found').value = 'non_conforme';
+    a.el('tar-found').dataset.mano = '1';
+    a.eval('tarModalAggiorna("s1")');
+    assert.equal(a.el('tar-found').value, 'non_conforme');
+    a.el('tar-adj').value = 'si';
+    a.eval('tarModalAggiorna("s1")');
+    assert.equal(a.el('tar-found').value, 'non_conforme', 'anche dopo un altro cambio nella finestra');
+  });
+});
