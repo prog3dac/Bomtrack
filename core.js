@@ -716,7 +716,7 @@ const MODULI = {
     descr: 'Il controllo della merce che arriva. Gli articoli (o le famiglie) che lo chiedono aprono un collaudo a ogni ricevimento e a ogni rientro dal terzista: fino all\'esito quella quantità è a scaffale ma non è libera, e il Magazzino la mostra nella colonna «In collaudo». I piani di controllo dicono che cosa misurare e su quanti pezzi (anche AQL e salto lotti); un respinto o una deroga aprono una non conformità con causa, azioni e rapporto PDF; la valutazione dei fornitori dà a ciascuno una classe A, B o C.',
     area: 'magazzino',
   },
-  // Dalla 0.152.0: gli strumenti di misura e le loro tarature (qualita-strumenti.js).
+  // Dalla 0.153.0: gli strumenti di misura e le loro tarature (qualita-strumenti.js).
   // Vive dentro Qualità: senza collaudi non c'è niente da misurare.
   tarature: {
     nome: 'Taratura strumenti',

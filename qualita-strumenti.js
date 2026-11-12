@@ -836,12 +836,12 @@ function tarModal(instrumentId) {
       <tbody id="tar-punti">${punti}</tbody></table></div>
     <div class="modal-grid">
       <div class="modal-field"><label>Errore massimo trovato${s.uom ? ' (' + esc(s.uom) + ')' : ''}</label><input id="tar-err" inputmode="decimal" class="num" placeholder="dai punti, o scrivilo" oninput="tarModalAggiorna('${s.id}')"></div>
-      <div class="modal-field"><label>Com'era all'arrivo</label><select id="tar-found" onchange="tarModalAggiorna('${s.id}')">
+      <div class="modal-field"><label>Com'era all'arrivo</label><select id="tar-found" onchange="this.dataset.mano=this.value?'1':'';tarModalAggiorna('${s.id}')">
         <option value="">— scegli —</option>${Object.keys(TAR_ESITI).map(k => `<option value="${k}">${esc(TAR_ESITI[k])}</option>`).join('')}</select></div>
       <div class="modal-field"><label>Regolato o riparato</label><select id="tar-adj" onchange="tarModalAggiorna('${s.id}')"><option value="">No</option><option value="si">Sì</option></select></div>
       <div class="modal-field" id="tar-left-f" style="display:none"><label>Dopo la regolazione</label><select id="tar-left" onchange="tarModalAggiorna('${s.id}')">
         ${Object.keys(TAR_ESITI).map(k => `<option value="${k}">${esc(TAR_ESITI[k])}</option>`).join('')}</select></div>
-      <div class="modal-field"><label>Prossima taratura</label><input type="date" id="tar-next" value="${struPiuMesi(oggi, struMesi(s))}" onchange="tarModalAggiorna('${s.id}')"></div>
+      <div class="modal-field"><label>Prossima taratura</label><input type="date" id="tar-next" value="${struPiuMesi(oggi, struMesi(s))}" onchange="this.dataset.mano=this.value?'1':'';tarModalAggiorna('${s.id}')"></div>
       <div class="modal-field"><label>Costo (${esc(cur())})</label><input type="number" id="tar-cost" min="0" step="any" value="0"></div>
     </div>
     <div class="modal-field"><label>Nota</label><textarea id="tar-note" rows="2"></textarea></div>
@@ -853,9 +853,14 @@ function tarModalPunti() {
   const nom = Array.from(document.querySelectorAll('#tar-punti .tar-nom') || []), trov = Array.from(document.querySelectorAll('#tar-punti .tar-found') || []);
   return nom.map((n, i) => ({ nominal: n.value, found: trov[i] ? trov[i].value : '' }));
 }
-// A ogni cambio: l'errore dai punti, l'esito proposto e la riga di conseguenza.
+// A ogni cambio: l'errore dai punti, l'esito proposto, la prossima scadenza e
+// la riga di conseguenza. Esito e scadenza scelti a mano (`dataset.mano`, dalla
+// 0.156.1) non si toccano più: prima l'esito tornava subito a quello proposto,
+// e la scadenza restava contata da oggi anche per una taratura di mesi fa.
 function tarModalAggiorna(instrumentId) {
   const s = struGet(instrumentId); if (!s) return;
+  const next = document.getElementById('tar-next'), data = val('tar-date');
+  if (next && !next.dataset.mano && /^\d{4}-\d{2}-\d{2}$/.test(data)) next.value = struPiuMesi(data, struMesi(s));
   const err = tarErroreMax(tarModalPunti());
   const errEl = document.getElementById('tar-err');
   if (errEl && err != null) { errEl.value = String(err).replace('.', ','); errEl.readOnly = true; } else if (errEl) errEl.readOnly = false;

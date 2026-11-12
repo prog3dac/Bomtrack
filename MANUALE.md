@@ -2140,9 +2140,11 @@ i dismessi.
 **Registrare una taratura.** Dalla scheda, **Registra taratura**: data, chi l'ha fatta (laboratorio
 esterno o interna), il laboratorio fra i fornitori, il numero di certificato e i **punti** misurati
 (il valore di riferimento e quello letto). Dai punti l'app calcola l'**errore massimo** e, se lo
-strumento ha l'EMA, propone l'esito **all'arrivo** (*conforme* se l'errore resta entro l'EMA). Se lo
+strumento ha l'EMA, propone l'esito **all'arrivo** (*conforme* se l'errore resta entro l'EMA), che si può cambiare a
+mano. Se lo
 strumento è stato **regolato** o riparato si dice anche com'è **dopo**. Conforme, lo strumento torna
-in uso e la prossima scadenza è la data più i mesi dell'intervallo (si può correggere); non conforme,
+in uso e la prossima scadenza è la data della taratura più i mesi dell'intervallo: cambiando la data, la
+scadenza la segue finché non la si corregge a mano. Non conforme, lo strumento
 va **fuori servizio** e ci resta finché una taratura conforme non lo rimette in uso. Il PDF del
 certificato si allega quando su quel PC è scelta la cartella d'archivio, e va in
 `Documenti Bomtrack/Tarature/<codice>/`. La data della prima taratura e la scadenza si scrivono a mano
@@ -3449,7 +3451,9 @@ le date del fabbisogno: così le ore non si contano due volte. Una fase a metà 
 che restano, una data ripianificata sposta le ore, e un ODP lanciato per più pezzi del piano
 carica tutti i suoi. Nel dettaglio di cella, al posto del piano, si legge il numero dell'ODP. Con
 un piano solo nel filtro, e nella scheda del piano, contano il suo non lanciato e i suoi ODP.
-Completati, chiusi e annullati non caricano.
+Completati, chiusi e annullati non caricano. I pezzi del piano ancora da lanciare portano
+l'attrezzaggio, anche quando una parte l'ha già fatta un ODP chiuso: partiranno con un ordine
+nuovo. Non lo portano solo se una parte è stata dichiarata fatta fuori dagli ODP.
 
 > Prima della 0.152.0 un ODP generato da un piano aperto non caricava con le sue fasi: ne prendeva
 > il posto l'esplosione del piano, che toglieva solo i pezzi già versati a magazzino.

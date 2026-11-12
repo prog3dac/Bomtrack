@@ -368,6 +368,8 @@ input[type=date]::-webkit-calendar-picker-indicator,input[type=datetime-local]::
 .add-btn:hover{background:var(--accent-h)}
 .add-btn-sm{background:var(--accent-solid);border:none;color:#fff;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .add-btn-sm:hover{background:var(--accent-h)}
+/* Su un pulsante pieno l'icona colorata spariva nel blu: prende il bianco del testo (0.156.1). */
+.add-btn-sm .ico.tinted{color:currentColor}
 .btn-primary{background:var(--accent-solid);border:none;color:#fff;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;transition:background .15s}
 .btn-primary:hover{background:var(--accent-h)}
 .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-dim);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;transition:all .15s}
