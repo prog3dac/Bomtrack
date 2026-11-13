@@ -1407,8 +1407,10 @@ select t, a from (values
   ('quality_plans', 'docs'),
   ('nonconformities', 'shop'), ('nonconformities', 'docs'),
   -- Gli strumenti e le tarature: chi collauda in magazzino (`shop`) e
-  -- l'ufficio (`docs`). Intervallo e dismissione li riserva l'app
-  -- all'amministratore: è una divisione fra colleghi, non una barriera.
+  -- l'ufficio (`docs`), perché una taratura riscrive stato e scadenza dello
+  -- strumento. L'anagrafica (nuovi, codice, EMA, intervallo, dismissione) la
+  -- riserva l'app all'amministratore, in Gestione: è una divisione fra
+  -- colleghi, non una barriera.
   ('instruments', 'shop'), ('instruments', 'docs'),
   ('calibrations', 'shop'), ('calibrations', 'docs'),
   -- Il cestino e le lapidi li scrive chiunque elimini qualcosa, in qualunque area.

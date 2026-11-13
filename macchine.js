@@ -211,7 +211,7 @@ function editMachineModal(id) {
   const fasi = macchinaUsiCicli(id).length;
   openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica macchina</h3>
     <div class="modal-grid">
-      <div class="modal-field"><label>Codice</label><input id="em-code" value="${esc(m.code || '')}"></div>
+      <div class="modal-field"><label>Codice</label><input id="em-code" value="${esc(m.code || '')}"${macchinaCodiceBloccato(m) ? ` readonly title="${esc('Usata in ' + macchinaUsi(id).join(', ') + ': il codice non si cambia più')}"` : ''}></div>
       <div class="modal-field"><label>Nome</label><input id="em-name" value="${esc(m.name || '')}"></div>
       <div class="modal-field"><label>Centro di lavoro</label><select id="em-wc">${centri.map(w => `<option value="${esc(w.id)}" ${w.id === m.workCenterId ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select></div>
       <div class="modal-field"><label>Tariffa (${cur()}/h di macchina)</label><input id="em-rate" type="number" min="0" step="0.5" value="${Number(m.hourlyRate) || 0}"></div>
@@ -253,6 +253,10 @@ function saveMachine(id) {
   if (isNeg('em-rate') || isNeg('em-hstart')) { showToast('Tariffa e ore non possono essere negative', 'error'); return; }
   const wcId = val('em-wc');
   if (!getWorkCenter(wcId)) { showToast('Scegli il centro di lavoro', 'error'); return; }
+  if (val('em-code') !== String(m.code || '') && macchinaCodiceBloccato(m)) {
+    showToast(`La macchina è usata in ${macchinaUsi(id).join(', ')}: il codice ${m.code} non si cambia più`, 'error');
+    return;
+  }
   const usi = macchinaUsiCicli(id);
   // Una macchina che cambia centro lascerebbe le fasi su un centro che non la
   // contiene: la fase direbbe «Tornitura» e la macchina starebbe in Fresatura.
@@ -275,15 +279,24 @@ function saveMachine(id) {
   saveDB(); closeModal(); renderManage();
   savedToast(toccati.size ? `Aggiornata, con la tariffa in ${toccati.size} ${toccati.size === 1 ? 'ciclo' : 'cicli'}` : 'Aggiornata');
 }
-function delMachine(id) {
-  if (!roleGuard('manage')) return;
+// Dove è usata la macchina, in parole: vuoto se in nessun posto. Una macchina
+// usata non si elimina e, dalla 0.158.0, non cambia più codice: il codice è
+// stampato sulle schede di fase, scritto sulle timbrature e sulla targhetta.
+function macchinaUsi(id) {
   const cicli = macchinaUsiCicli(id).length;
   const odp = (db.prodOrders || []).filter(o => (o.phases || []).some(f => f.machineId === id)).length;
   const piani = (db.maintPlans || []).filter(p => p.machineId === id).length;
   const ev = (db.maintEvents || []).filter(e => e.machineId === id).length;
   const log = (db.timeLogs || []).filter(l => l.machineId === id).length;
-  const usi = [cicli && `${cicli} fasi di ciclo`, odp && `${odp} ordini di produzione`, piani && `${piani} piani di manutenzione`,
+  return [cicli && `${cicli} fasi di ciclo`, odp && `${odp} ordini di produzione`, piani && `${piani} piani di manutenzione`,
     ev && `${ev} interventi`, log && `${log} timbrature`].filter(Boolean);
+}
+// Il codice si scrive una volta: finché è vuoto o la macchina non è usata si
+// cambia, dopo resta quello.
+function macchinaCodiceBloccato(m) { return !!(m && String(m.code || '').trim() && macchinaUsi(m.id).length); }
+function delMachine(id) {
+  if (!roleGuard('manage')) return;
+  const usi = macchinaUsi(id);
   if (usi.length) { showToast('Usata in ' + usi.join(', ') + ': sospendila invece di eliminarla', 'error'); return; }
   askConfirm('Eliminare la macchina?', () => {
     removeConUndo('machines', id, 'Macchina eliminata', renderManage);

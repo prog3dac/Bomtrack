@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.158.0 — 2026-11-13
+
+**Gli strumenti di misura si registrano in Gestione, come le macchine.**
+- Nuova scheda *Gestione → Strumenti di misura* (con il modulo Taratura strumenti): l'amministratore crea, modifica, dismette ed elimina gli strumenti. La modifica salva tutti i campi insieme, o nessuno se uno è sbagliato.
+- *Qualità → Strumenti* resta il posto del lavoro di ogni giorno: registrare una taratura, mandare in taratura, mettere fuori servizio, scrivere dove sta lo strumento e a chi è assegnato. L'anagrafica lì si legge; l'amministratore ha *Anagrafica* nell'elenco e *Modifica* nella scheda. Ufficio e officina non creano più strumenti.
+- **I codici usati non si cambiano più.** Una macchina citata da cicli, ordini di produzione, manutenzioni o timbrature tiene il suo codice; uno strumento già tarato o usato in un collaudo anche. Finché non sono usati, il codice si corregge.
+
+Schema: nessun cambiamento (solo un commento).
+
 ### 0.157.2 — 2026-11-12
 
 **Correzioni dal controllo dopo listini e sconti.**
