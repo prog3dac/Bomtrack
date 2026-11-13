@@ -29,6 +29,9 @@ const MGMT_TABS = [
   { id: 'calendario', gruppo: 'Pianificazione e produzione', label: ico('clock', 'tinted', '') + ' Calendario di fabbrica' },
   { id: 'workcenters', gruppo: 'Pianificazione e produzione', label: ico('wrench', 'tinted', '') + ' Centri di lavoro', area: 'produzione' },
   { id: 'machines', gruppo: 'Pianificazione e produzione', label: ico('settings', 'tinted', '') + ' Macchine utensili', modulo: 'macchine' },
+  // Dalla 0.158.0 l'anagrafica degli strumenti sta qui, accanto alle macchine:
+  // in Qualità restano le tarature.
+  { id: 'strumenti', gruppo: 'Pianificazione e produzione', label: ico('gauge', 'tinted', '') + ' Strumenti di misura', modulo: 'tarature' },
   { id: 'moduli', gruppo: 'Configurazione', label: ico('settings', 'tinted', '') + ' Aree e moduli' },
   { id: 'costi', gruppo: 'Configurazione', label: ico('euro', 'tinted', '') + ' Costi e margini' },
   { id: 'codifica', gruppo: 'Configurazione', label: ico('tag', 'tinted', '') + ' Codifica articoli' },
@@ -65,6 +68,7 @@ function renderManage() {
   else if (mgmtTab === 'fam-parte') c.innerHTML = renderFamilies('parte');
   else if (mgmtTab === 'workcenters') c.innerHTML = renderWorkCenters();
   else if (mgmtTab === 'machines') c.innerHTML = renderMachines();
+  else if (mgmtTab === 'strumenti') c.innerHTML = renderStruGestione();
   else if (mgmtTab === 'concepts') c.innerHTML = renderConcepts();
   else if (mgmtTab === 'uoms') c.innerHTML = renderUoms();
   else if (mgmtTab === 'calendario') c.innerHTML = renderSettingsPage(renderCalendarSettings());

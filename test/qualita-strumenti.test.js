@@ -159,6 +159,64 @@ describe('Registrare una taratura', () => {
   });
 });
 
+// Dalla 0.158.0 l'anagrafica sta in Gestione, come le macchine: la scrive
+// l'amministratore. In Qualità restano tarature, stato, dove sta.
+describe('L\'anagrafica in Gestione', () => {
+  // Il modale di modifica con i campi dello strumento, poi `cambi` sopra.
+  const modifica = (a, id, cambi) => {
+    a.eval(`struModificaModal(${S(id)})`);
+    const s = J(a, `struGet(${S(id)})`);
+    a.eval('STRU_CAMPI').forEach(k => { a.el('stru-e-' + k).value = s[k] == null ? '' : String(s[k]); });
+    Object.keys(cambi || {}).forEach(k => { a.el('stru-e-' + k).value = cambi[k]; });
+    return a.eval(`struModificaSalva(${S(id)})`);
+  };
+  it('la scheda di Gestione c\'è col modulo, ed elenca gli strumenti', () => {
+    const { a } = app();
+    a.eval("setView('manage'); setMgmtTab('strumenti')");
+    assert.match(a.html('mgmt-tabs'), /Strumenti di misura/);
+    assert.match(a.html('mgmt-content'), /STR-0001/);
+    const { a: b } = app({ spento: true });
+    b.eval("setView('manage'); setMgmtTab('strumenti')");
+    assert.doesNotMatch(b.html('mgmt-tabs'), /Strumenti di misura/);
+  });
+  it('l\'officina non crea strumenti e non tocca l\'anagrafica, ma scrive dove sta', () => {
+    const { a } = app({ ruolo: 'officina' });
+    assert.equal(a.eval('struCrea({ name: "Calibro" })'), null);
+    assert.equal(a.eval('struSet("s1", "ema", "0,05")'), false);
+    assert.equal(a.eval('struSet("s1", "holder", "Rossi")'), true);
+    assert.equal(J(a, 'struGet("s1")').ema, 0.03);
+  });
+  it('in Qualità l\'anagrafica si legge, e non c\'è più «Nuovo strumento»', () => {
+    const { a } = app({ ruolo: 'officina' });
+    a.eval("struApriDaAltrove('s1')");
+    const h = a.html('view-strumenti');
+    assert.doesNotMatch(h, /struNuovoModal|struSet\('s1','ema'/);
+    assert.match(h, /struSet\('s1','location'/);
+    assert.match(h, /Gestione → Strumenti di misura/);
+  });
+  it('la modifica salva tutto insieme, o niente', () => {
+    const { a } = app();
+    assert.equal(modifica(a, 's1', { ema: '0,02', serial: 'M-77' }), true);
+    assert.equal(J(a, 'struGet("s1")').ema, 0.02);
+    assert.equal(J(a, 'struGet("s1")').serial, 'M-77');
+    assert.equal(modifica(a, 's1', { serial: 'M-78', intervalMonths: '500' }), false);
+    assert.equal(J(a, 'struGet("s1")').serial, 'M-77', 'un campo sbagliato non lascia scritti gli altri');
+  });
+  it('il codice si cambia finché lo strumento non è tarato né usato, poi resta', () => {
+    const { a, oggi } = app();
+    assert.equal(modifica(a, 's1', { code: 'CAL-01' }), true);
+    assert.equal(J(a, 'struGet("s1")').code, 'CAL-01');
+    a.eval(`tarRegistra("s1", { date: ${S(oggi)}, asFound: 'conforme' })`);
+    assert.equal(modifica(a, 's1', { code: 'CAL-02' }), false);
+    assert.equal(a.eval('struSet("s1", "code", "CAL-03")'), false);
+    assert.equal(J(a, 'struGet("s1")').code, 'CAL-01');
+    // Usato in un collaudo, senza tarature: bloccato lo stesso.
+    a.eval('qcSetStrumento("i1", "k3", "m1")');
+    assert.equal(a.eval('struSet("m1", "code", "MIC-01")'), false);
+    assert.equal(J(a, 'struGet("m1")').code, 'STR-0006');
+  });
+});
+
 describe('Lo strumento nel collaudo', () => {
   it('scelto in una riga, le altre dello stesso tipo ancora senza lo prendono', () => {
     const { a, oggi } = app();

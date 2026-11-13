@@ -31,6 +31,16 @@
 //
 // I tipi di strumento stanno nelle impostazioni (come le causali delle NC),
 // con id leggibili: si scelgono nel piano e si cambiano in Gestione.
+//
+// ── Chi scrive che cosa (dalla 0.158.0) ──
+// L'anagrafica dello strumento sta in *Gestione → Strumenti di misura*, come
+// le macchine utensili: la crea e la cambia l'amministratore (codice, tipo,
+// matricola, EMA, intervallo, laboratorio), e lì si dismette o si elimina.
+// In *Qualità → Strumenti* resta il lavoro di ogni giorno: registrare una
+// taratura, mandarlo in taratura, metterlo fuori servizio, scrivere dove sta
+// e a chi è assegnato. Il codice, una volta tarato lo strumento o usato in un
+// collaudo, non si cambia più: è inciso, stampato sui certificati e sui
+// rapporti di collaudo, che ne tengono una fotografia.
 
 function struAttivo() { return typeof moduloAttivo === 'function' && moduloAttivo('tarature'); }
 
@@ -171,8 +181,9 @@ function struUsi(instrumentId) {
 }
 
 // ─── Scrivere ───
-// Lo scrive chi scrive in Qualità: l'ufficio e chi collauda in magazzino.
-// Intervallo, dismissione ed eliminazione restano all'amministratore.
+// Il lavoro di ogni giorno lo scrive chi scrive in Qualità: l'ufficio e chi
+// collauda in magazzino. L'anagrafica, la dismissione e l'eliminazione sono
+// dell'amministratore, in Gestione.
 function struGuard() { return typeof roleGuardShop === 'function' ? roleGuardShop('docs') : roleGuard('docs'); }
 function struPuoScrivere() { return canWrite('docs') || (typeof canWriteShop === 'function' && canWriteShop('docs')); }
 function struCodiceProssimo() {
@@ -186,9 +197,12 @@ function struCodiceLibero(code, tranne) {
   const k = String(code || '').trim().toLowerCase();
   return !(db.instruments || []).some(s => s.id !== tranne && s.active !== false && String(s.code || '').trim().toLowerCase() === k);
 }
+// Usato vuol dire tarato almeno una volta o scelto in un collaudo: da lì il
+// codice è sui certificati e sui rapporti, e non si cambia più.
+function struCodiceBloccato(s) { return !!(s && (tarDi(s.id).length || struUsi(s.id).length)); }
 // `dati` = { code, name, typeId, control, serial, location, nextDue }.
 function struCrea(dati) {
-  if (!struGuard()) return null;
+  if (!roleGuard('manage')) return null;
   const d = dati || {};
   const code = String(d.code || '').trim() || struCodiceProssimo();
   if (!struCodiceLibero(code)) { showToast(`Il codice ${code} è già di un altro strumento`, 'error'); return null; }
@@ -203,31 +217,30 @@ function struCrea(dati) {
     labId: null, status: 'attivo', lastCal: '', nextDue, sentOn: '', notes: '', active: true,
   });
 }
+// I campi di ogni giorno, che scrive chi collauda; gli altri sono anagrafica.
+const STRU_CAMPI_LAVORO = ['location', 'holder', 'notes'];
 const STRU_CAMPI = ['code', 'name', 'typeId', 'brand', 'model', 'serial', 'rangeText', 'resolution', 'ema', 'uom', 'location',
   'holder', 'owner', 'control', 'intervalMonths', 'labId', 'notes', 'nextDue', 'lastCal'];
-// Ritorna vero se ha scritto. Le date si correggono a mano solo finché non c'è
-// una taratura registrata: dopo le scrive la taratura, e un ritocco a mano
-// sarebbe una scadenza senza prova.
-function struSet(id, campo, valore) {
-  if (!struGuard()) return false;
-  const s = struGet(id); if (!s || !STRU_CAMPI.includes(campo)) return false;
-  if (s.status === 'dismesso') { showToast('Lo strumento è dismesso', 'error'); return false; }
+// Il valore da scrivere in `campo`, già ripulito: { v } o { errore }. Le date
+// si correggono a mano solo finché non c'è una taratura registrata: dopo le
+// scrive la taratura, e un ritocco a mano sarebbe una scadenza senza prova.
+function struNormalizza(s, campo, valore) {
   let v = valore == null ? '' : String(valore).trim();
   if (campo === 'code') {
-    if (!v) { showToast('Il codice non può essere vuoto', 'error'); return false; }
-    if (!struCodiceLibero(v, id)) { showToast(`Il codice ${v} è già di un altro strumento`, 'error'); return false; }
+    if (!v) return { errore: 'Il codice non può essere vuoto' };
+    if (v !== String(s.code || '') && struCodiceBloccato(s)) return { errore: `${s.code} è già tarato o usato in un collaudo: il codice non si cambia più` };
+    if (!struCodiceLibero(v, s.id)) return { errore: `Il codice ${v} è già di un altro strumento` };
   }
-  if (campo === 'name' && !v) { showToast('Il nome non può essere vuoto', 'error'); return false; }
+  if (campo === 'name' && !v) return { errore: 'Il nome non può essere vuoto' };
   if (campo === 'intervalMonths') {
-    if (!isAdmin()) { showToast('L\'intervallo di taratura lo cambia l\'amministratore', 'error'); return false; }
     v = parseInt(v, 10);
-    if (!(v >= 1 && v <= 120)) { showToast('L\'intervallo va da 1 a 120 mesi', 'error'); return false; }
+    if (!(v >= 1 && v <= 120)) return { errore: 'L\'intervallo va da 1 a 120 mesi' };
   }
   if (campo === 'resolution' || campo === 'ema') {
     if (v === '') v = null;
     else {
       v = Number(v.replace(',', '.'));
-      if (!isFinite(v) || v < 0) { showToast('Numero non valido', 'error'); return false; }
+      if (!isFinite(v) || v < 0) return { errore: 'Numero non valido' };
     }
   }
   if (campo === 'typeId') v = struTipo(v) ? v : '';
@@ -235,12 +248,21 @@ function struSet(id, campo, valore) {
   if (campo === 'owner' && !STRU_PROPRIETARI[v]) v = 'nostro';
   if (campo === 'control' && !STRU_CONTROLLI[v]) v = 'esterna';
   if (campo === 'nextDue' || campo === 'lastCal') {
-    if (tarDi(id).length) { showToast('Le date le scrive la taratura registrata', 'error'); return false; }
-    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) { showToast('Data non valida', 'error'); return false; }
+    if (tarDi(s.id).length) return { errore: 'Le date le scrive la taratura registrata' };
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { errore: 'Data non valida' };
   }
-  const patch = { [campo]: v };
+  return { v };
+}
+// Ritorna vero se ha scritto. L'anagrafica la scrive l'amministratore.
+function struSet(id, campo, valore) {
+  const s = struGet(id); if (!s || !STRU_CAMPI.includes(campo)) return false;
+  if (!(STRU_CAMPI_LAVORO.includes(campo) ? struGuard() : roleGuard('manage'))) return false;
+  if (s.status === 'dismesso') { showToast('Lo strumento è dismesso', 'error'); return false; }
+  const n = struNormalizza(s, campo, valore);
+  if (n.errore) { showToast(n.errore, 'error'); return false; }
+  const patch = { [campo]: n.v };
   // Una prima taratura scritta a mano: la prossima viene da sola, se manca.
-  if (campo === 'lastCal' && v && !s.nextDue) patch.nextDue = struPiuMesi(v, struMesi(s));
+  if (campo === 'lastCal' && n.v && !s.nextDue) patch.nextDue = struPiuMesi(n.v, struMesi(s));
   Store.update('instruments', id, patch);
   return true;
 }
@@ -619,7 +641,11 @@ const STRU_FILTRI = {
   dafare: 'Da fare', valido: 'Validi', scaduto: 'Scaduti o mai tarati', in_scadenza: 'In scadenza', in_taratura: 'In taratura',
   fuori_servizio: 'Fuori servizio', dismesso: 'Dismessi', '': 'Tutti',
 };
-function struRidisegna() { if (typeof activeView !== 'undefined' && activeView === 'strumenti') renderStrumenti(); }
+function struRidisegna() {
+  if (typeof activeView === 'undefined') return;
+  if (activeView === 'strumenti') renderStrumenti();
+  else if (activeView === 'manage' && typeof mgmtTab !== 'undefined' && mgmtTab === 'strumenti') renderManage();
+}
 function struSearchInput() { struFiltro.q = val('stru-search'); ridisegnaCercando('stru-search', renderStrumenti); }
 function struStatoChange() { struFiltro.stato = val('stru-stato'); renderStrumenti(); }
 function struApri(id) { struCurrentId = id; renderStrumenti(); }
@@ -649,7 +675,8 @@ function renderStrumenti() {
   const scrive = struPuoScrivere();
   const g = oggiISO();
   const conta = k => (db.instruments || []).filter(s => s && struNelFiltro(s, k, g)).length;
-  const nuovo = scrive ? `<button class="add-btn-sm" onclick="struNuovoModal()">${ico('plus', 'tinted', '')} Nuovo strumento</button>` : '';
+  // Gli strumenti si registrano in Gestione: qui l'amministratore ha la scorciatoia.
+  const nuovo = isAdmin() ? `<button class="btn-outline" onclick="struVaiGestione()" title="L'anagrafica degli strumenti: nuovi, modifiche, dismessi">${ico('settings', 'tinted', '')} Anagrafica</button>` : '';
   const etichette = righe.length ? `<button class="btn-outline" onclick="struEtichette()" title="Le etichette QR degli strumenti in elenco">${ico('qr', 'tinted', '')} Etichette</button>` : '';
   el.innerHTML = worklistHtml({
     titolo: 'Strumenti di misura', icona: 'gauge', listaId: 'stru-list', comandi: nuovo + etichette,
@@ -670,27 +697,26 @@ function renderStrumenti() {
     doc: corrente ? struSchedaHtml(corrente, scrive) : '',
     vuoto: {
       titolo: 'Strumenti di misura',
-      testo: 'Calibri, micrometri, tamponi: ogni strumento con cui si collauda, con la sua <strong>scadenza di taratura</strong> e il suo stato. Il piano di controllo chiede un tipo di strumento, chi collauda sceglie quale fra quelli validi, e il collaudo ne tiene il codice. Uno strumento trovato fuori alla taratura apre una non conformità con le misure da rivedere.',
+      testo: 'Calibri, micrometri, tamponi: ogni strumento con cui si collauda, con la sua <strong>scadenza di taratura</strong> e il suo stato. Il piano di controllo chiede un tipo di strumento, chi collauda sceglie quale fra quelli validi, e il collaudo ne tiene il codice. Uno strumento trovato fuori alla taratura apre una non conformità con le misure da rivedere. Gli strumenti li registra l\'amministratore in <em>Gestione → Strumenti di misura</em>.',
       comandi: nuovo,
     },
   });
   a11yFields(el);
 }
 
+// Un numero dell'anagrafica come si legge: 0,01 e non 0.01.
+function struNumTesto(v) { return v == null || v === '' ? '' : String(v).replace(/^(\d+)\.(\d+)$/, '$1,$2'); }
 function struSchedaHtml(s, scrive) {
   const vivo = s.status !== 'dismesso';
   const dis = scrive && vivo ? '' : 'disabled';
   const tarature = tarDi(s.id);
   const set = campo => `onchange="struSet('${s.id}','${campo}',this.value);struRidisegna()"`;
+  // Quello che si cambia da qui: dove sta e a chi è assegnato.
   const campo = (etichetta, k, attr) => `<div class="modal-field"><label>${esc(etichetta)}</label>
-      <input value="${esc(s[k] == null ? '' : String(s[k]).replace(/^(\d+)\.(\d+)$/, '$1,$2'))}" ${attr || ''} ${dis} ${set(k)}></div>`;
-  const scelta = (etichetta, k, opzioni, attr) => `<div class="modal-field"><label>${esc(etichetta)}</label>
-      <select ${attr || ''} ${dis} ${set(k)}>${opzioni}</select></div>`;
-  const opz = (mappa, v) => Object.keys(mappa).map(k => `<option value="${k}" ${v === k ? 'selected' : ''}>${esc(mappa[k])}</option>`).join('');
-  const tipi = `<option value="">—</option>` + struTipi().map(t => `<option value="${esc(t.id)}" ${s.typeId === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
-  const lab = `<option value="">—</option>` + (db.suppliers || []).filter(f => f.active !== false || f.id === s.labId)
-    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'))
-    .map(f => `<option value="${f.id}" ${s.labId === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
+      <input value="${esc(s[k] == null ? '' : String(s[k]))}" ${attr || ''} ${dis} ${set(k)}></div>`;
+  // L'anagrafica, in sola lettura: si cambia in Gestione.
+  const dato = (etichetta, testo, forte) => `<div class="modal-field"><label>${esc(etichetta)}</label><div class="qc-val">${forte ? '<strong>' : ''}${esc(testo || '—')}${forte ? '</strong>' : ''}</div></div>`;
+  const tipo = struTipo(s.typeId);
   const st = struStato(s);
   const colore = { valido: 'green', in_scadenza: 'orange', in_taratura: 'text-dim', dismesso: 'text-dim', indicativo: 'text-dim' }[st] || 'red';
   const archivio = typeof archivioStato === 'function' && archivioStato() === 'configurato';
@@ -716,8 +742,7 @@ function struSchedaHtml(s, scrive) {
   if (scrive && ['in_taratura', 'fuori_servizio'].includes(s.status)) comandi.push(`<button class="btn-outline" onclick="struRimettiInUso('${s.id}')">${ico('refresh', 'tinted', '')} Rimetti in uso</button>`);
   if (scrive && s.status === 'attivo') comandi.push(`<button class="btn-outline" onclick="struFuoriServizio('${s.id}')" title="Rotto, caduto, sigillo rotto: non si usa finché non torna in uso">${ico('blocked', 'tinted', '')} Fuori servizio</button>`);
   comandi.push(`<button class="btn-outline" onclick="qrEtichetteModal(['${s.id}'], 'str')" title="L'etichetta QR da attaccare allo strumento">${ico('qr', 'tinted', '')} Etichetta</button>`);
-  if (isAdmin() && vivo) comandi.push(`<button class="btn-outline" onclick="struDismetti('${s.id}')" title="Non si usa più: resta in archivio">${ico('close', 'tinted', '')} Dismetti</button>`);
-  if (isAdmin() && !tarature.length && !usi.length) comandi.push(`<button class="btn-outline danger" onclick="struElimina('${s.id}')" title="Elimina (solo se mai tarato e mai usato)">${ico('trash', 'tinted', 'Elimina')}</button>`);
+  if (isAdmin() && vivo) comandi.push(`<button class="btn-outline" onclick="struModificaModal('${s.id}')" title="L'anagrafica dello strumento, come in Gestione → Strumenti di misura">${ico('edit', 'tinted', '')} Modifica</button>`);
   return `<div class="manage-wrap">
     <div class="bom-toolbar">
       <div class="bom-toolbar-left">
@@ -731,34 +756,28 @@ function struSchedaHtml(s, scrive) {
     <div class="qc-card">
       <h3>Lo strumento</h3>
       <div class="modal-grid">
-        ${campo('Codice', 'code', 'maxlength="40"')}
-        ${campo('Descrizione', 'name', 'placeholder="es. Calibro 0–150 centesimale"')}
-        ${scelta('Tipo', 'typeId', tipi)}
-        ${campo('Costruttore', 'brand')}
-        ${campo('Modello', 'model')}
-        ${campo('Matricola', 'serial')}
-        ${campo('Campo di misura', 'rangeText', 'placeholder="es. 0–150 mm"')}
-        ${campo('Risoluzione', 'resolution', 'inputmode="decimal" class="num" placeholder="es. 0,01"')}
-        ${campo('U.M.', 'uom', 'maxlength="8"')}
+        ${dato('Descrizione', s.name)}
+        ${dato('Tipo', tipo ? tipo.name : '')}
+        ${dato('Costruttore e modello', [s.brand, s.model].filter(Boolean).join(' '))}
+        ${dato('Matricola', s.serial)}
+        ${dato('Campo di misura', s.rangeText)}
+        ${dato('Risoluzione', [struNumTesto(s.resolution), struNumTesto(s.resolution) ? s.uom : ''].filter(Boolean).join(' '))}
+        ${dato('Di chi è', STRU_PROPRIETARI[s.owner || 'nostro'])}
         ${campo('Dove sta', 'location', 'placeholder="es. Sala metrologica, armadio 2"')}
         ${campo('Assegnato a', 'holder', 'placeholder="es. Rossi, reparto torni"')}
-        ${scelta('Di chi è', 'owner', opz(STRU_PROPRIETARI, s.owner || 'nostro'))}
       </div>
     </div>
     <div class="qc-card">
       <h3>La taratura</h3>
       <div class="modal-grid">
-        ${scelta('Come si controlla', 'control', opz(STRU_CONTROLLI, s.control || 'esterna'))}
-        ${campo('Ogni (mesi)', 'intervalMonths', `type="number" min="1" max="120" step="1" ${isAdmin() ? '' : 'readonly title="Lo cambia l\'amministratore"'}`)}
-        ${campo('EMA, errore massimo ammesso', 'ema', 'inputmode="decimal" class="num" placeholder="es. 0,02"')}
-        ${scelta('Laboratorio', 'labId', lab)}
-        ${tarature.length
-    ? `<div class="modal-field"><label>Ultima taratura</label><div class="qc-val">${esc(fmtDateIt(s.lastCal) || '—')}</div></div>
-           <div class="modal-field"><label>Prossima taratura</label><div class="qc-val"><strong>${esc(fmtDateIt(s.nextDue) || '—')}</strong></div></div>`
-    : `${campo('Ultima taratura', 'lastCal', 'type="date"')}${campo('Prossima taratura', 'nextDue', 'type="date"')}`}
+        ${dato('Come si controlla', STRU_CONTROLLI[s.control || 'esterna'])}
+        ${dato('Ogni', struMesi(s) + ' mesi')}
+        ${dato('EMA, errore massimo ammesso', [struNumTesto(s.ema), struNumTesto(s.ema) ? s.uom : ''].filter(Boolean).join(' '))}
+        ${dato('Laboratorio', s.labId ? supplierName(s.labId) : '')}
+        ${dato('Ultima taratura', fmtDateIt(s.lastCal))}
+        ${dato('Prossima taratura', fmtDateIt(s.nextDue), true)}
       </div>
-      ${tarature.length ? '' : '<p class="empty-text qc-hint">Per uno strumento che esiste già, scrivi l\'ultima taratura: la prossima si calcola dall\'intervallo. Da quando registri una taratura, le date le scrive lei.</p>'}
-      <p class="empty-text qc-hint">L'EMA è l'errore che lo strumento può avere per l'uso che ne fate: la taratura lo confronta con l'errore trovato e propone conforme o non conforme.</p>
+      <p class="empty-text qc-hint">Codice, tipo, EMA e intervallo stanno nell'anagrafica, in <em>Gestione → Strumenti di misura</em>: li cambia l'amministratore. Da qui si registrano le tarature, che spostano la scadenza.</p>
     </div>
     <div class="qc-card">
       <h3>Tarature</h3>
@@ -784,7 +803,7 @@ function struSchedaHtml(s, scrive) {
 
 // ─── Nuovo strumento ───
 function struNuovoModal() {
-  if (!struGuard()) return;
+  if (!roleGuard('manage')) return;
   openModal(`<h2 class="modal-title">${ico('gauge', 'tinted', '')} Nuovo strumento</h2>
     <div class="modal-grid">
       <div class="modal-field"><label>Codice</label><input id="stru-n-code" value="${esc(struCodiceProssimo())}" maxlength="40"></div>
@@ -804,10 +823,91 @@ function struNuovoSalva() {
     control: val('stru-n-ctrl'), nextDue: val('stru-n-due') });
   if (!s) return null;
   closeModal();
-  struCurrentId = s.id;
-  if (typeof activeView !== 'undefined' && activeView === 'strumenti') renderStrumenti(); else setView('strumenti');
-  showToast(`Strumento ${s.code} creato`);
+  struRidisegna();
+  showToast(`Strumento ${s.code} creato: il resto dell'anagrafica con Modifica`);
   return s;
+}
+
+// ─── Gestione → Strumenti di misura (dalla 0.158.0) ───
+// L'anagrafica, come le macchine utensili: l'elenco con lo stato, il nuovo,
+// la modifica, la dismissione. Le tarature restano in Qualità.
+function struVaiGestione() { setView('manage'); setMgmtTab('strumenti'); }
+function struApriInQualita(id) { struCurrentId = id; setView('strumenti'); }
+function renderStruGestione() {
+  const list = (db.instruments || []).filter(Boolean).slice()
+    .sort((a, b) => (a.status === 'dismesso') - (b.status === 'dismesso') || confrontaAlfa(a.code || '', b.code || ''))
+    .map(x => {
+      const t = struTipo(x.typeId);
+      const vivo = x.status !== 'dismesso';
+      const eliminabile = !struCodiceBloccato(x);
+      return `<div class="mgmt-item">
+    <span class="mgmt-item-name" style="font-family:var(--mono)">${esc(x.code || '')}</span>
+    <span class="mgmt-item-meta">${esc([x.name, t ? t.name : '', x.serial ? 'matr. ' + x.serial : ''].filter(Boolean).join(' · '))}</span>
+    ${struBadge(x)}
+    <div class="mgmt-item-actions">
+      <button class="mini-btn" onclick="struApriInQualita('${x.id}')" title="Apri in Qualità: tarature e collaudi">${ico('gauge', 'tinted', 'Apri in Qualità')}</button>
+      ${vivo ? `<button class="mini-btn" onclick="struModificaModal('${x.id}')" title="Modifica strumento">${ico('edit', 'tinted', 'Modifica strumento')}</button>
+      <button class="mini-btn" onclick="struDismetti('${x.id}')" title="Dismetti: non si usa più, resta in archivio">${ico('close', 'tinted', 'Dismetti')}</button>` : ''}
+      ${eliminabile ? `<button class="mini-btn danger" onclick="struElimina('${x.id}')" title="Elimina (solo se mai tarato e mai usato)">${ico('trash', 'tinted', 'Elimina strumento')}</button>` : ''}</div></div>`;
+    }).join('') || '<div class="empty-text">Nessuno strumento. Ogni strumento con cui si collauda ha un codice (quello inciso o sull\'etichetta), un tipo e una scadenza di taratura.</div>';
+  return `<div class="mgmt-panel">
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">L'anagrafica degli strumenti di misura. Le tarature, lo stato di ogni giorno e i collaudi in cui sono stati usati stanno in <em>Qualità → Strumenti</em>. Il <strong>codice</strong> di uno strumento già tarato o usato in un collaudo non si cambia più: è sui certificati e sui rapporti.</p>
+    <div class="mgmt-list">${list}</div>
+    <div class="mgmt-form"><button class="add-btn-sm" onclick="struNuovoModal()">${ico('plus', 'tinted', '')} Nuovo strumento</button></div></div>`;
+}
+function struModificaModal(id) {
+  if (!roleGuard('manage')) return;
+  const s = struGet(id); if (!s) return;
+  const bloccato = struCodiceBloccato(s);
+  const tarato = tarDi(id).length > 0;
+  const opz = (mappa, v) => Object.keys(mappa).map(k => `<option value="${k}" ${v === k ? 'selected' : ''}>${esc(mappa[k])}</option>`).join('');
+  const lab = (db.suppliers || []).filter(f => f.active !== false || f.id === s.labId)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'it'))
+    .map(f => `<option value="${f.id}" ${s.labId === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('');
+  const campo = (etichetta, k, attr) => `<div class="modal-field"><label>${esc(etichetta)}</label>
+      <input id="stru-e-${k}" value="${esc(k === 'resolution' || k === 'ema' ? struNumTesto(s[k]) : s[k] == null ? '' : String(s[k]))}" ${attr || ''}></div>`;
+  openModal(`<h3>${ico('gauge', 'tinted pill', '')} Strumento ${esc(s.code || '')}</h3>
+    <div class="modal-grid">
+      ${campo('Codice', 'code', `maxlength="40"${bloccato ? ' readonly title="Già tarato o usato in un collaudo: il codice non si cambia più"' : ''}`)}
+      ${campo('Descrizione', 'name', 'placeholder="es. Calibro 0–150 centesimale"')}
+      <div class="modal-field"><label>Tipo</label><select id="stru-e-typeId"><option value="">—</option>
+        ${struTipi().map(t => `<option value="${esc(t.id)}" ${s.typeId === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+      ${campo('Costruttore', 'brand')}
+      ${campo('Modello', 'model')}
+      ${campo('Matricola', 'serial')}
+      ${campo('Campo di misura', 'rangeText', 'placeholder="es. 0–150 mm"')}
+      ${campo('Risoluzione', 'resolution', 'inputmode="decimal" class="num" placeholder="es. 0,01"')}
+      ${campo('U.M.', 'uom', 'maxlength="8"')}
+      <div class="modal-field"><label>Di chi è</label><select id="stru-e-owner">${opz(STRU_PROPRIETARI, s.owner || 'nostro')}</select></div>
+      <div class="modal-field"><label>Come si controlla</label><select id="stru-e-control">${opz(STRU_CONTROLLI, s.control || 'esterna')}</select></div>
+      ${campo('Ogni (mesi)', 'intervalMonths', 'type="number" min="1" max="120" step="1"')}
+      ${campo('EMA, errore massimo ammesso', 'ema', 'inputmode="decimal" class="num" placeholder="es. 0,02"')}
+      <div class="modal-field"><label>Laboratorio</label><select id="stru-e-labId"><option value="">—</option>${lab}</select></div>
+      ${tarato ? '' : `${campo('Ultima taratura', 'lastCal', 'type="date"')}${campo('Prossima taratura', 'nextDue', 'type="date"')}`}
+    </div>
+    <p class="empty-text" style="text-align:left;padding:4px 0">${bloccato ? 'Il codice resta questo: lo strumento è già tarato o usato in un collaudo. ' : ''}${tarato ? 'Le date le scrivono le tarature registrate in Qualità.' : 'Per uno strumento che esiste già, scrivi l\'ultima taratura: la prossima si calcola dall\'intervallo.'} L'EMA è l'errore che lo strumento può avere per l'uso che ne fate: la taratura lo confronta con l'errore trovato.</p>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="struModificaSalva('${s.id}')">Salva</button></div>`, true, 'form');
+}
+// Tutto o niente: un campo sbagliato non lascia l'anagrafica scritta a metà.
+function struModificaSalva(id) {
+  if (!roleGuard('manage')) return false;
+  const s = struGet(id); if (!s) return false;
+  if (s.status === 'dismesso') { showToast('Lo strumento è dismesso', 'error'); return false; }
+  const patch = {};
+  for (const k of STRU_CAMPI.filter(c => !STRU_CAMPI_LAVORO.includes(c))) {
+    const el = document.getElementById('stru-e-' + k); if (!el) continue;
+    const n = struNormalizza(s, k, el.value);
+    if (n.errore) { showToast(n.errore, 'error'); return false; }
+    if (n.v !== s[k]) patch[k] = n.v;
+  }
+  const last = 'lastCal' in patch ? patch.lastCal : s.lastCal;
+  if (last && !('nextDue' in patch ? patch.nextDue : s.nextDue)) patch.nextDue = struPiuMesi(last, struMesi(Object.assign({}, s, patch)));
+  if (Object.keys(patch).length) Store.update('instruments', id, patch);
+  closeModal();
+  struRidisegna();
+  savedToast('Strumento aggiornato');
+  return true;
 }
 
 // ─── Registra taratura ───

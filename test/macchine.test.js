@@ -78,7 +78,7 @@ describe('Anagrafica macchine', () => {
   });
   it('cambiando la tariffa si aggiornano le fasi dei cicli che la usano', () => {
     const a = app({ macchine: true });
-    a.eval(`editMachineModal('m1'); document.getElementById('em-name').value = 'Tornio CNC'; document.getElementById('em-wc').value = 'w1';
+    a.eval(`editMachineModal('m1'); document.getElementById('em-code').value = 'T01'; document.getElementById('em-name').value = 'Tornio CNC'; document.getElementById('em-wc').value = 'w1';
       document.getElementById('em-rate').value = '40'; saveMachine('m1')`);
     assert.equal(a.eval("getItem('p1').cycle[0].machineRate"), 40);
     assert.equal(a.eval("cycleRowCost(getItem('p1').cycle[0])"), 100);
@@ -91,6 +91,19 @@ describe('Anagrafica macchine', () => {
       machineRateCalcApplica()`);
     // (10000 + 2000) / 1600 + 10 × 0.2 = 7.5 + 2 = 9.5
     assert.equal(a.eval("document.getElementById('em-rate').value"), '9.5');
+  });
+  it('usata, non cambia più codice; ancora mai usata, sì (0.158.0)', () => {
+    const a = app({ macchine: true });
+    const salva = (id, code) => a.eval(`editMachineModal('${id}'); document.getElementById('em-code').value = '${code}'; document.getElementById('em-name').value = 'Tornio';
+      document.getElementById('em-wc').value = 'w1'; document.getElementById('em-rate').value = '25'; saveMachine('${id}')`);
+    assert.ok(a.eval("macchinaCodiceBloccato(getMachine('m1'))"), 'm1 è nel ciclo di P1');
+    salva('m1', 'T99');
+    assert.equal(a.eval("getMachine('m1').code"), 'T01');
+    assert.match(a.eval("macchinaUsi('m1').join(', ')"), /fasi di ciclo/);
+    a.eval("db.prodOrders = []");
+    assert.ok(!a.eval("macchinaCodiceBloccato(getMachine('m2'))"), 'm2 non è usata');
+    salva('m2', 'T05');
+    assert.equal(a.eval("getMachine('m2').code"), 'T05');
   });
   it('usata in un ciclo non si elimina: si sospende', () => {
     const a = app({ macchine: true });

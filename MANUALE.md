@@ -2183,7 +2183,9 @@ L'elenco si esporta in **Excel** e **PDF**.
 **A cosa serve.** A sapere che ogni misura scritta in un collaudo è stata presa con uno strumento
 tarato, come chiede la ISO 9001 al punto 7.1.5.2, e a capire che cosa rivedere quando uno strumento
 risulta fuori. Si accende in *Gestione → Moduli → Taratura strumenti*, e solo con la **Qualità**
-accesa. Compare la vista *Qualità → Strumenti*.
+accesa. Compaiono la scheda *Gestione → Strumenti di misura*, dove l'amministratore registra gli
+strumenti, e la vista *Qualità → Strumenti*, dove si lavorano: tarature, invio in taratura, fuori
+servizio, dove sta e a chi è assegnato.
 
 **Il registro.** Ogni strumento ha un **codice** (proposto `STR-0001`, `STR-0002`…, o quello inciso),
 il **tipo** (calibro a corsoio, micrometro, tampone…), marca, modello, matricola, campo di misura,
@@ -2239,9 +2241,12 @@ controllo passa/non passa. La NC è *maggiore* se c'è almeno una misura da rive
 altrimenti, e **non si chiude** finché ogni misura non ha la sua decisione (*nessun impatto* o *da
 ricontrollare*). Il rapporto PDF della NC porta la tabella.
 
-**Chi scrive.** Strumenti e tarature li scrivono *Ufficio acquisti*, l'officina e l'amministratore;
-l'**intervallo**, la **dismissione** e l'**eliminazione** solo l'amministratore. Si elimina solo uno
-strumento senza tarature e senza collaudi: gli altri si dismettono.
+**Chi scrive.** Le tarature, l'invio in taratura, il fuori servizio, *dove sta* e *assegnato a* li
+scrivono *Ufficio acquisti*, l'officina e l'amministratore. L'**anagrafica** (nuovi strumenti,
+codice, tipo, EMA, intervallo, laboratorio), la **dismissione** e l'**eliminazione** solo
+l'amministratore, in *Gestione → Strumenti di misura* (o con **Modifica** dalla scheda). Si elimina
+solo uno strumento senza tarature e senza collaudi: gli altri si dismettono. Da quando uno strumento
+è tarato o usato in un collaudo, il suo **codice** non si cambia più.
 
 **Avvisi e calendario.** Il **Riepilogo** elenca gli strumenti scaduti o mai tarati (gravità alta) e
 quelli in scadenza; il **Calendario scadenze** ha la data di ogni taratura, con il filtro
@@ -3807,7 +3812,7 @@ L'ordine è solo quello a video: una voce nuova va al suo posto nell'elenco.
 | **Azienda** | Dati azienda · Utenti e accesso |
 | **Anagrafiche** | Fornitori · Clienti · Condizioni offerta · Testi per i documenti |
 | **Classificazione articoli** | Famiglie commerciali · Famiglie materie prime · Famiglie parti · Concetti · Unità di misura |
-| **Pianificazione e produzione** | Calendario di fabbrica · Centri di lavoro · Macchine utensili (con il modulo) |
+| **Pianificazione e produzione** | Calendario di fabbrica · Centri di lavoro · Macchine utensili (con il modulo) · Strumenti di misura (con il modulo Taratura strumenti) |
 | **Configurazione** | Aree e moduli · Costi e margini · Codifica articoli · Etichette QR · Qualità (con il modulo) |
 | **Dati** | Import · Backup |
 
@@ -3948,7 +3953,7 @@ c'è anche l'elenco delle **macchine** del centro, e un centro con macchine non 
 
 | Campo | Note |
 |---|---|
-| **Codice** · **Nome** | T01 · Tornio CNC |
+| **Codice** · **Nome** | T01 · Tornio CNC. Il codice di una macchina già usata (cicli, ordini, manutenzioni, timbrature) non si cambia più: è sulle schede di fase e sulle timbrature |
 | **Centro di lavoro** | Il reparto in cui sta. Una macchina usata nei cicli non cambia centro |
 | **Tariffa (€/h di macchina)** | Si **somma** a quella del centro sulle ore di macchina (→ [cap. 24](#24-carico-dei-centri-di-lavoro)) |
 | **Tipo** · **Costruttore** · **Modello** · **Matricola** · **Anno** | Anagrafica |
@@ -3958,6 +3963,16 @@ c'è anche l'elenco delle **macchine** del centro, e un centro con macchine non 
 manutenzione all'anno) ÷ ore lavorate in un anno + kW × €/kWh. **Usa questa tariffa** riempie il
 campo, che resta modificabile. Una macchina citata da cicli, ordini, manutenzioni o timbrature non
 si elimina: si sospende (⏸).
+
+### 📐 Strumenti di misura (modulo Taratura strumenti, dalla 0.158.0)
+
+L'anagrafica degli strumenti con cui si collauda, accanto alle macchine: **Nuovo strumento**, ✏️
+modifica (codice, tipo, costruttore, modello, matricola, campo di misura, risoluzione, di chi è, come
+si controlla, ogni quanti mesi, EMA, laboratorio e, finché non c'è una taratura registrata, le date
+dell'ultima e della prossima), **Dismetti** ed **Elimina** (solo uno strumento mai tarato e mai
+usato). Il **codice** di uno strumento già tarato o usato in un collaudo non si cambia più: è sui
+certificati e sui rapporti. Le tarature e lo stato di ogni giorno stanno in *Qualità → Strumenti*
+(→ [cap. 17](#17-magazzino)).
 
 ### 📏 Unità di misura
 
