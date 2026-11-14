@@ -600,9 +600,9 @@ async function cloudGiro() {
     if (!Store.hasPendingChanges()) {
       await cloudRicevi();
       // Arrivati i dati dei colleghi, l'Amministratore fa il passaggio alle
-      // revisioni approvate (views-rev.js); il giro dopo le manda.
-      if (typeof revAvvio === 'function' && revAvvio() > 0) {
-        _cloud.ancora = true;
+      // revisioni approvate (views-rev.js) e lo manda subito, nello stesso giro.
+      if (revAvvio() > 0) {
+        await cloudInvia();
         if (typeof renderView === 'function' && typeof activeView !== 'undefined') renderView(activeView);
       }
     }
