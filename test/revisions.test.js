@@ -350,7 +350,7 @@ describe('Due revisioni a confronto, non solo con l\'attuale', () => {
     const { a, rA, rB } = treRevisioni();
     a.eval(`revCompareModal(${JSON.stringify(rA.id)}, ${JSON.stringify(rB.id)})`);
     const h = pannello(a, 'confronto');
-    assert.match(h, /Rev\. A → Rev\. B/);
+    assert.match(h, /v0 → v1/);
     assert.match(h, /Aggiunte \(1\)/);
     assert.match(h, /M2/);
     assert.doesNotMatch(h, /Cambiate/, 'la quantità di M1 è cambiata dopo la B');
@@ -360,7 +360,7 @@ describe('Due revisioni a confronto, non solo con l\'attuale', () => {
     const { a, rA, rB } = treRevisioni();
     a.eval(`revCompareModal(${JSON.stringify(rB.id)}, ${JSON.stringify(rA.id)})`);
     const h = pannello(a, 'confronto');
-    assert.match(h, /Rev\. A → Rev\. B/);
+    assert.match(h, /v0 → v1/);
     assert.match(h, /Aggiunte \(1\)/);
     assert.doesNotMatch(h, /Rimosse/);
   });
@@ -369,10 +369,10 @@ describe('Due revisioni a confronto, non solo con l\'attuale', () => {
     const { a, rA } = treRevisioni();
     a.eval(`revCompareModal(${JSON.stringify(rA.id)})`);
     const h = pannello(a, 'confronto');
-    assert.match(h, /Rev\. A → attuale \(C\)/);
+    assert.match(h, /v0 → bozza \(v2\)/);
     assert.match(h, /Cambiate \(1\)/);
     assert.match(h, /<select id="rev-contro"/);
-    assert.match(h, /la Rev\. B del/);
+    assert.match(h, /la v1 del/);
   });
 
   it('i costi delle due tessere sono quelli congelati di ciascuna', () => {
@@ -381,8 +381,8 @@ describe('Due revisioni a confronto, non solo con l\'attuale', () => {
     const h = pannello(a, 'confronto');
     approx(rA.snapshot.cost.total, 40);
     approx(rB.snapshot.cost.total, 43);
-    assert.match(h, /Costo alla Rev\. A/);
-    assert.match(h, /Costo alla Rev\. B/);
+    assert.match(h, /Costo alla v0/);
+    assert.match(h, /Costo alla v1/);
     assert.match(h, /\+€ 3,00|\+ ?€ ?3,00/);
   });
 });

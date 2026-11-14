@@ -69,7 +69,7 @@ function mrpExplode(lines, opz) {
   // sbaglia a passare.
   const acc = { buy: new Map(), make: new Map(), phases: new Map(), load: new Map(),
     asm: new Map(), intOps: new Map(), stock: new Map(), cycle: false, setupVisti: new Set(),
-    scaffale: (opz && opz.scaffale) || null, lotti: mrpLotti(lines) };
+    scaffale: (opz && opz.scaffale) || null, lotti: mrpLotti(lines), senzaRev: new Map() };
   (lines || []).forEach(l => mrpDescend(l.itemId, Number(l.qty) || 0, new Set(), acc, l.dueDate || ''));
   // Le decisioni «usa l'alternativo» del piano (alternativi.js), dopo la
   // discesa: spostano quantità fra articoli d'acquisto già accumulati.
@@ -84,7 +84,7 @@ function mrpExplode(lines, opz) {
   // `stock` sono le parti prese dal magazzino invece che fabbricate.
   return { buy: perCodice(acc.buy), make: perCodice(acc.make), phases: perFase(acc.phases),
     load: Array.from(acc.load.values()), asm: perCodice(acc.asm), intOps: perFase(acc.intOps),
-    stock: perCodice(acc.stock), cycle: acc.cycle };
+    stock: perCodice(acc.stock), cycle: acc.cycle, senzaRev: perCodice(acc.senzaRev) };
 }
 // Le date sono stringhe ISO `YYYY-MM-DD`: si confrontano bene così come sono, e
 // una vuota non deve mai vincere su una valorizzata.
@@ -128,25 +128,31 @@ function mrpAddPhase(map, it, row, opIndex, qty, due, start) {
 // Lordo, senza lo scaffale: chi compare in un ramo solo usa la sua quantità.
 function mrpLotti(lines) {
   const tot = new Map(), rami = new Map();
-  const giu = (itemId, qty, ancestors) => {
-    const it = getItem(itemId);
+  const giu = (itemId, qty, ancestors, due) => {
+    const it = getItemOperativo(itemId, due);
     if (!it || !(qty > 0) || ancestors.has(itemId)) return;
     if (it.type === 'materiale' || it.type === 'acquistato') return;
     if (it.type === 'parte' && partSourcing(it) === 'buy') return;
     tot.set(itemId, (tot.get(itemId) || 0) + qty);
     rami.set(itemId, (rami.get(itemId) || 0) + 1);
     const next = new Set(ancestors); next.add(itemId);
-    (it.type === 'parte' ? distintaRighe(it) : varRigheComuni(it)).forEach(c => giu(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next));
+    (it.type === 'parte' ? distintaRighe(it) : varRigheComuni(it)).forEach(c => giu(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next, due));
   };
-  (lines || []).forEach(l => giu(l.itemId, Number(l.qty) || 0, new Set()));
+  (lines || []).forEach(l => giu(l.itemId, Number(l.qty) || 0, new Set(), l.dueDate || ''));
   const lotti = new Map();
   rami.forEach((n, id) => { if (n > 1) lotti.set(id, tot.get(id)); });
   return lotti;
 }
 function mrpLotto(acc, it, qty) { return Math.max(qty, (acc.lotti && acc.lotti.get(it.id)) || 0); }
+// Con le revisioni approvate attive (dalla 0.159.0) la struttura — righe di
+// distinta e fasi — viene dalla revisione valida il giorno in cui il pezzo
+// serve (`op`); le voci del fabbisogno portano l'articolo vero (`it`), e chi
+// non ha una revisione valida finisce in `senzaRev` invece di esplodere.
 function mrpDescend(itemId, qty, ancestors, acc, due) {
   const it = getItem(itemId);
   if (!it || !(qty > 0)) return;
+  const op = itemOperativo(it, due || oggiISO());
+  if (op._senzaRev && acc.senzaRev) mrpAdd(acc.senzaRev, it, qty, due);
   // Anello: si segnala e si smette di scendere, come fa flattenBom
   if (ancestors.has(itemId)) { acc.cycle = true; return; }
   if (it.type === 'materiale' || it.type === 'acquistato') { mrpAdd(acc.buy, it, qty, due); return; }
@@ -168,12 +174,12 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
     // fase ha il suo inizio e la sua fine, e il materiale serve all'inizio
     // della prima. Le ore di una fase interna stanno nella settimana in cui la
     // fase **comincia**, non in quella in cui il pezzo serve.
-    const prog = schedPart(it, mrpLotto(acc, it, qty), due);
+    const prog = schedPart(op, mrpLotto(acc, it, qty), due);
     mrpAdd(acc.make, it, qty, due, prog.start);
     // Dalla 0.125.0 il materiale sta nella distinta della parte, e come quella
     // degli assiemi ha lo scarto: entra nella quantità come nel costo.
     const perFigli = schedChildDue(prog.start);
-    cicloFasi(it).forEach((r, k) => {
+    cicloFasi(op).forEach((r, k) => {
       const f = prog.fasi[k] || { start: due, end: due };
       // Con un fornitore la fase si compra; senza, si fa in casa — e allora
       // non è un acquisto, è un'ora di macchina da qualche parte.
@@ -185,20 +191,20 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
     });
     // Ogni riga serve all'inizio della sua fase di consumo (dalla 0.138.0):
     // la vernice della quarta fase non deve arrivare per la prima.
-    distintaRighe(it).forEach(c =>
-      mrpDescend(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next, acc, schedRigaDue(c, it, prog, perFigli)));
+    distintaRighe(op).forEach(c =>
+      mrpDescend(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), next, acc, schedRigaDue(c, op, prog, perFigli)));
     return;
   }
   // assieme: il montaggio finisce quando l'assieme serve e comincia prima dei
   // suoi giorni; i componenti servono all'inizio del montaggio.
-  const prog = schedAssembly(it, mrpLotto(acc, it, qty), due);
+  const prog = schedAssembly(op, mrpLotto(acc, it, qty), due);
   mrpAdd(acc.asm, it, qty, due, prog.start);
   // Le fasi del suo ciclo (dalla 0.124.0) fanno quello che fanno le fasi di
   // una parte: le interne caricano i centri nella settimana in cui
   // cominciano, quelle con un terzista sono conto lavoro da commissionare.
   // Vanno raccolte qui e non a posteriori: le quantità esplose degli assiemi
   // non le conserva nessuno.
-  cicloFasi(it).forEach((r, k) => {
+  cicloFasi(op).forEach((r, k) => {
     const f = prog.fasi[k] || { start: prog.start, end: due };
     if (r.supplierId) mrpAddPhase(acc.phases, it, r, k, qty, f.end, f.start);
     else {
@@ -209,9 +215,9 @@ function mrpDescend(itemId, qty, ancestors, acc, due) {
   const perFigli = schedChildDue(prog.start);
   // la quantità di riga porta con sé lo scarto, come nel rollup. Di un
   // modello da configurare (varianti.js) conta la parte comune, come nel costo.
-  varRigheComuni(it).forEach(c => {
+  varRigheComuni(op).forEach(c => {
     const f = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
-    mrpDescend(c.itemId, qty * f, next, acc, schedRigaDue(c, it, prog, perFigli));
+    mrpDescend(c.itemId, qty * f, next, acc, schedRigaDue(c, op, prog, perFigli));
   });
 }
 
@@ -440,23 +446,24 @@ function schedTree(itemId, qty, due, ancestors, lotti) {
       days: lead, lead, supplierId: buySupplierId(it), steps: [], children: [] };
   }
   const next = new Set(visti); next.add(itemId);
+  const op = itemOperativo(it, due || oggiISO());
   if (it.type === 'parte') {
-    const prog = schedPart(it, mrpLotto({ lotti }, it, qty), due);
+    const prog = schedPart(op, mrpLotto({ lotti }, it, qty), due);
     const figli = [];
     const perFigli = schedChildDue(prog.start);
-    distintaRighe(it).forEach(c => {
-      const n = schedTree(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), schedRigaDue(c, it, prog, perFigli), next, lotti);
+    distintaRighe(op).forEach(c => {
+      const n = schedTree(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), schedRigaDue(c, op, prog, perFigli), next, lotti);
       if (n) figli.push(n);
     });
     return { item: it, kind: 'make', qty, start: prog.start, end: due || '', days: 0,
       steps: prog.steps, children: figli };
   }
-  const prog = schedAssembly(it, mrpLotto({ lotti }, it, qty), due);
+  const prog = schedAssembly(op, mrpLotto({ lotti }, it, qty), due);
   const perFigli = schedChildDue(prog.start);
   const figli = [];
-  varRigheComuni(it).forEach(c => {
+  varRigheComuni(op).forEach(c => {
     const f = (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
-    const n = schedTree(c.itemId, qty * f, schedRigaDue(c, it, prog, perFigli), next, lotti);
+    const n = schedTree(c.itemId, qty * f, schedRigaDue(c, op, prog, perFigli), next, lotti);
     if (n) figli.push(n);
   });
   return { item: it, kind: 'asm', qty, start: prog.start, end: due || '', days: prog.days,
@@ -1655,12 +1662,13 @@ function mrpRunFasiLabel(r) {
 // distinguere senza indovinare da quali campi mancano.
 function mrpMakeRow(entry, planId) {
   const it = entry.item;
+  const op = itemOperativo(it, entry.due || oggiISO());
   // Le **fasi** sono quelle del ciclo; le **tratte esterne** sono quelle che
   // diventeranno ordini di lavoro. Sono due conti diversi e vanno detti
   // entrambi: «tre fasi, una in conto lavoro» dice cosa ci si aspetta di dover
   // commissionare, e «tre fasi» da solo no.
-  const nFasi = cicloFasi(it).length;
-  const tratte = clCycleRuns(it);
+  const nFasi = cicloFasi(op).length;
+  const tratte = clCycleRuns(op);
   // Quanti lanciarne: il **residuo**, non il lordo. I pezzi già dichiarati fatti
   // in «Da fabbricare» sono gli stessi che il netto delle lavorazioni toglie già
   // agli ordini di lavoro, e lanciarne un ordine di produzione per l'intero

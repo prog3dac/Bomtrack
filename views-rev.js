@@ -25,8 +25,31 @@
 // impedisce — e una fotografia nessuno la modifica per sbaglio.
 // Rilasciata la A, la distinta viva diventa la B e si continua a lavorare.
 
-// Revisione in lavorazione. Gli articoli già a catalogo non hanno il campo:
-// valgono A, senza bisogno di riscrivere il database.
+// ── Revisioni approvate (dalla 0.159.0) ──
+// Il modello qui sopra lasciava usare la distinta mentre la si scriveva: piani,
+// ODP e fasi per il terzista leggevano la copia in lavorazione, e la revisione
+// rilasciata era solo una fotografia per lo storico. Ora vale la regola
+// opposta, ma solo dove conta: **la bozza resta sempre modificabile, e
+// piani e ODP usano soltanto una revisione approvata e valida alla data in cui
+// il pezzo serve**. La fotografia diventa così la cosa che si usa, non un
+// ricordo.
+//
+// Le numerazioni sono due e indipendenti:
+//   - la revisione di distinta e ciclo (v0, v1, v2…) è gestita qui: bozza,
+//     richiesta, approvazione, validità;
+//   - la revisione del codice (00, 01, 02…) si decide fuori, nell'ufficio
+//     tecnico o nel CAD, e l'app la registra soltanto (più sotto).
+//
+// Validità: ogni revisione approvata ha un «dal» (`validFrom`). Il suo «al» non
+// si scrive da nessuna parte: è il giorno prima del «dal» della successiva.
+// Così le date non si sovrappongono e non lasciano buchi per costruzione, e i
+// record restano eventi che non si riscrivono, come nell'archivio condiviso.
+
+// Revisione in lavorazione, salvata come lettera (A, B, C…) come prima della
+// 0.159.0: è la stessa sequenza, e riscrivere ogni articolo e ogni revisione per
+// cambiarle nome avrebbe solo creato traffico verso l'archivio condiviso. A
+// video diventa v0, v1, v2 (revLabel). Gli articoli già a catalogo non hanno il
+// campo: valgono A, cioè v0.
 function itemRev(it) { return (it && it.rev) || 'A'; }
 // A → B … Z → AA → AB. Le lettere bastano per anni; quando finiscono, si
 // continua a contare invece di fermarsi.
@@ -40,6 +63,15 @@ function nextRev(letter) {
   }
   return 'A' + chars.join('');
 }
+// La lettera come numero: A = 0, Z = 25, AA = 26. È la stessa sequenza di
+// nextRev, contata.
+function revNum(letter) {
+  const s = String(letter || 'A').toUpperCase().replace(/[^A-Z]/g, '') || 'A';
+  let n = 0;
+  for (const ch of s) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+function revLabel(letter) { return 'v' + revNum(letter); }
 // Solo ciò che ha una distinta: un commerciale non ha revisioni di distinta,
 // ha un prezzo.
 function hasRevisions(it) { return !!it && (isAssembly(it.type) || it.type === 'parte'); }
@@ -58,6 +90,90 @@ function revisionsOf(itemId) {
     .map(x => x.r);
 }
 function getRevision(id) { return (db.revisions || []).find(r => r.id === id); }
+
+// ─── Validità ───
+// Il «dal» di una revisione: quello scelto all'approvazione, o per le
+// revisioni di prima il giorno del rilascio.
+function revDal(r) { return (r && r.validFrom) || String((r && r.date) || '').slice(0, 10); }
+// Le revisioni di un articolo nell'ordine in cui entrano in vigore, ognuna col
+// suo periodo. `mai`: superata prima ancora di cominciare (due approvazioni con
+// lo stesso «dal»: vale l'ultima).
+function revPeriodi(itemId) {
+  const c = (db.revisions || []).map((r, i) => ({ r, i }))
+    .filter(x => x.r.itemId === itemId)
+    .sort((a, b) => revDal(a.r).localeCompare(revDal(b.r)) || String(a.r.date || '').localeCompare(String(b.r.date || '')) || a.i - b.i)
+    .map(x => x.r);
+  return c.map((r, k) => {
+    const dal = revDal(r), dopo = c[k + 1];
+    const al = dopo ? addDays(revDal(dopo), -1) : '';
+    return { r, dal, al, mai: !!(al && al < dal) };
+  });
+}
+function revPeriodo(r) { return r ? revPeriodi(r.itemId).find(p => p.r === r) || null : null; }
+// La revisione approvata valida in una data (oggi se non la si dice).
+function revValidaAl(itemId, data) {
+  const d = data || oggiISO();
+  let ok = null;
+  revPeriodi(itemId).forEach(p => { if (!p.mai && p.dal <= d && (!p.al || d <= p.al)) ok = p.r; });
+  return ok;
+}
+// La prima revisione approvata che entra in vigore dopo oggi, se c'è.
+function revProssima(itemId) {
+  const oggi = oggiISO();
+  const p = revPeriodi(itemId).find(x => !x.mai && x.dal > oggi);
+  return p ? p.r : null;
+}
+// Il «dal» più vicino che si può scegliere: da oggi, e non prima dell'ultima
+// revisione approvata (le date non tornano indietro).
+function revDalMinimo(itemId) {
+  const oggi = oggiISO();
+  const per = revPeriodi(itemId);
+  const ultimo = per.length ? per[per.length - 1].dal : '';
+  return ultimo > oggi ? ultimo : oggi;
+}
+// Che cosa non va in un «dal» proposto; '' se va bene.
+function revDalErrore(itemId, dal) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dal || ''))) return 'Scegli la data da cui vale la revisione';
+  if (dal < oggiISO()) return 'La data da cui vale non può essere nel passato';
+  const min = revDalMinimo(itemId);
+  if (dal < min) return `La revisione approvata più recente vale dal ${fmtDateIt(min)}: la nuova non può cominciare prima`;
+  return '';
+}
+
+// ─── Chi usa che cosa ───
+// Le revisioni approvate valgono sempre. `settings.revApprovate` dice solo che
+// l'archivio ha già fatto il passaggio dal modello di prima (revAvvio, qui
+// sotto): finché non l'ha fatto, piani e ODP usano la bozza come hanno sempre
+// fatto, perché un archivio con mille distinte e nessuna revisione non deve
+// svegliarsi con i piani vuoti.
+function revApprovateAttive() { return !!(db.settings && db.settings.revApprovate); }
+// Ha bisogno di una revisione per essere usato? Un assieme sì, e una parte
+// fatta in casa. Una parte comprata è una foglia d'acquisto: la sua distinta
+// non scende nel fabbisogno, e non serve approvarla per comprarla.
+function revServe(it) { return hasRevisions(it) && (it.type !== 'parte' || partSourcing(it) === 'make'); }
+// L'articolo come lo vedono piani, ODP e ordini di lavoro alla data `data`:
+// le sue righe di distinta e le sue fasi sono quelle della revisione valida.
+// Una copia superficiale — chi la riceve legge soltanto. Senza una revisione
+// valida l'articolo resta senza righe e porta `_senzaRev`: il fabbisogno lo
+// segnala invece di esplodere la bozza.
+function itemOperativo(it, data) {
+  if (!it || !revApprovateAttive() || !revServe(it)) return it;
+  const r = revValidaAl(it.id, data);
+  if (!r) return Object.assign({}, it, { components: [], cycle: [], operations: [], _senzaRev: true });
+  const s = r.snapshot || {};
+  return Object.assign({}, it, { components: s.components || [], cycle: s.cycle || [], operations: s.operations || [],
+    sourcing: s.sourcing || it.sourcing, _rev: r });
+}
+function getItemOperativo(id, data) { return itemOperativo(getItem(id), data); }
+// La bozza è in approvazione: distinta e ciclo si guardano ma non si toccano,
+// così chi approva firma esattamente quello che vede.
+function revInApprovazione(it) { return !!(it && it.revRequest && revApprovateAttive()); }
+function revBozzaLibera(itemId) {
+  const it = getItem(itemId);
+  if (!revInApprovazione(it)) return true;
+  showToast(`La bozza ${revLabel(itemRev(it))} di ${it.code} è in approvazione: per modificarla ritira prima la richiesta`, 'error');
+  return false;
+}
 
 // La fotografia. Si copia in profondità: se restassero riferimenti agli array
 // vivi, modificare la distinta domani cambierebbe la revisione di ieri — cioè
@@ -79,33 +195,48 @@ function revSnapshot(it) {
   };
 }
 
-// Rilascia la revisione in lavorazione e ne apre la successiva.
+// Rilascia (approva) la revisione in lavorazione e ne apre la successiva.
 // Ritorna il record creato, o null se non c'era niente da rilasciare.
-// `eco` (facoltativo): { tipo } — il tipo di modifica tecnica. Il numero
-// MT-… e l'impatto sui documenti aperti li calcola il rilascio stesso: sono un
-// fatto del momento, e chi chiama non deve poterli scrivere diversi.
+// `eco` (facoltativo): { tipo, dal, richiestaDa, iniziale } — il tipo di
+// modifica tecnica, la data da cui vale (oggi se manca), chi l'aveva chiesta.
+// Il numero MT-… e l'impatto sui documenti aperti li calcola il rilascio
+// stesso: sono un fatto del momento, e chi chiama non deve poterli scrivere
+// diversi. L'approvazione iniziale (`iniziale`) non prende un numero MT: non è
+// una modifica, è il punto di partenza.
 function releaseRevision(itemId, motivo, eco) {
   // La guardia sta nel mutatore, non solo nei chiamanti: la funzione è globale
   // e chiunque la raggiunga deve passare dallo stesso controllo.
   if (!roleGuard('bom')) return null;
   const it = getItem(itemId);
   if (!it || !hasRevisions(it)) return null;
+  const e = eco || {};
+  // Con le revisioni approvate attive, approva solo l'Amministratore: gli
+  // altri chiedono (revRichiedi).
+  if (revApprovateAttive() && !isAdmin()) { showToast('Solo l\'Amministratore approva una revisione: chiedi l\'approvazione', 'error'); return null; }
+  const dal = e.dal || oggiISO();
+  const errDal = revApprovateAttive() ? revDalErrore(it.id, dal) : '';
+  if (errDal) { showToast(errDal, 'error'); return null; }
   const rev = itemRev(it);
   const snapshot = revSnapshot(it);
   const ultima = revisionsOf(it.id)[0];
   const rec = {
     id: gid(), itemId, rev,
     date: nowISO(),
+    validFrom: dal,
+    codeRev: itemCodeRev(it, dal),
     motivo: String(motivo || '').trim(),
     snapshot,
-    ecoNumber: nextEcoNumber(),
-    ecoKind: ECO_TIPI[eco && eco.tipo] ? eco.tipo : '',
-    ecoImpact: ecoImpatto(it.id, ultima ? revDiff(ultima.snapshot, snapshot) : null),
+    ecoNumber: e.iniziale ? '' : nextEcoNumber(),
+    ecoKind: ECO_TIPI[e.tipo] ? e.tipo : '',
+    ecoImpact: e.iniziale ? [] : ecoImpatto(it.id, ultima ? revDiff(ultima.snapshot, snapshot) : null),
   };
+  if (e.richiestaDa) rec.requestedBy = e.richiestaDa;
   // Prima si avanza l'articolo, poi si inserisce: Store.insert salva una volta
   // sola e porta con sé entrambe le modifiche. Passa da lì anche perché crea la
   // collezione se manca — su un database precedente alla 0.25.0 non c'è.
   it.rev = nextRev(rev);
+  if (it.revRequest) it.revRequest = null;
+  if (it.revRejected) it.revRejected = null;
   touch(it);
   Store.insert('revisions', rec);
   return rec;
@@ -208,7 +339,7 @@ function ecoRegistroModal() {
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <strong style="font-family:var(--mono)">${esc(r.ecoNumber || '—')}</strong>
         ${it ? codeLink(it.id, it.code) : '<span class="empty-text" style="padding:0">(articolo eliminato)</span>'}
-        <span>Rev. ${esc(r.rev)}</span>
+        <span>${esc(revLabel(r.rev))}${r.validFrom ? ' · dal ' + esc(fmtDateIt(r.validFrom)) : ''}</span>
         ${r.ecoKind ? `<span class="doc-badge">${esc(ecoTipoLabel(r.ecoKind))}</span>` : ''}
         <span style="flex:1"></span>
         <span class="empty-text" style="padding:0">${esc(fmtDateIt(r.date))} · ${esc(r.createdBy ? actorName(r.createdBy) : '—')}</span>
@@ -306,12 +437,199 @@ function revDiff(snapPrima, snapDopo) {
 }
 function revDiffVuoto(d) { return !d.aggiunte.length && !d.rimosse.length && !d.cambiate.length; }
 
+// ─── Revisione del codice (dalla 0.159.0) ───
+// Il numero che si legge nel cartiglio del disegno: 00 alla creazione, poi 01,
+// 02… Si decide fuori dall'app (ufficio tecnico, CAD) e qui si **registra**,
+// con la data da cui vale, il riferimento al disegno, una nota e la fotografia
+// dei dati tecnici di quel momento. Non passa da un'approvazione: è già stata
+// decisa. La storia sta sull'articolo (`codeRevs`), dalla più vecchia; la 00
+// iniziale non ha bisogno di una voce.
+const CODE_REV_TECNICI = ['drawingRef', 'material', 'finish', 'treatment', 'weightKg', 'grossWeightKg', 'lengthM', 'widthM', 'heightM', 'volumeM3'];
+function codeRevPad(n) { return String(Math.max(0, Number(n) || 0)).padStart(2, '0'); }
+// La revisione del codice valida in una data (oggi se non la si dice).
+function itemCodeRev(it, data) {
+  const d = data || oggiISO();
+  let ok = '00';
+  ((it && it.codeRevs) || []).forEach(x => { if (x && x.from && x.from <= d) ok = x.rev; });
+  return ok;
+}
+// L'ultima registrata, anche se vale da una data futura.
+function itemCodeRevUltima(it) {
+  const st = (it && it.codeRevs) || [];
+  return st.length ? st[st.length - 1].rev : '00';
+}
+function nextCodeRev(rev) { return codeRevPad(Number(rev || 0) + 1); }
+function registraCodeRev(itemId, dati) {
+  if (!roleGuard('bom')) return null;
+  const it = getItem(itemId); if (!it) return null;
+  if (!hasRevisions(it)) { showToast('La revisione del codice si registra solo sui codici da progetto: parti e assiemi', 'error'); return null; }
+  const d = dati || {};
+  const ultima = itemCodeRevUltima(it);
+  const rev = /^\d{1,3}$/.test(String(d.rev || '')) ? codeRevPad(d.rev) : nextCodeRev(ultima);
+  if (Number(rev) <= Number(ultima)) { showToast(`La revisione del codice dev'essere dopo la ${ultima}`, 'error'); return null; }
+  const st = it.codeRevs || [];
+  const dal = d.dal || oggiISO();
+  const prima = st.length ? st[st.length - 1].from : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dal) || (prima && dal < prima)) { showToast('La data da cui vale non può essere prima di quella della revisione precedente', 'error'); return null; }
+  const tecnici = {};
+  CODE_REV_TECNICI.forEach(k => { if (it[k] != null && it[k] !== '') tecnici[k] = it[k]; });
+  const voce = { rev, from: dal, drawingRef: String(d.drawingRef != null ? d.drawingRef : (it.drawingRef || '')).trim(),
+    note: String(d.note || '').trim(), tech: tecnici, by: currentUser ? currentUser.id : null, at: nowISO() };
+  it.codeRevs = st.concat([voce]);
+  if (voce.drawingRef) it.drawingRef = voce.drawingRef;
+  touch(it); saveDB();
+  return voce;
+}
+// Distinta e ciclo validi sono fatti per una revisione del codice di prima?
+function revDaAllineare(it) {
+  if (!hasRevisions(it)) return null;
+  const r = revValidaAl(it.id) || revisionsOf(it.id)[0];
+  if (!r) return null;
+  const cr = itemCodeRev(it);
+  return (r.codeRev || '00') !== cr && !(it.codeRevOk === cr) ? { r, cr } : null;
+}
+function codeRevConfermaAllineata(itemId) {
+  if (!roleGuard('bom')) return;
+  const it = getItem(itemId); if (!it) return;
+  it.codeRevOk = itemCodeRev(it); touch(it); saveDB();
+  revRidisegna(it); savedToast(`Distinta e ciclo valgono anche per la rev. ${it.codeRevOk}`);
+}
+function codeRevModal(itemId) {
+  if (!roleGuard('bom')) return;
+  const it = getItem(itemId); if (!it || !hasRevisions(it)) return;
+  const ultima = itemCodeRevUltima(it);
+  const storia = (it.codeRevs || []).slice().reverse().map(x => `<li><strong>Rev. ${esc(x.rev)}</strong> dal ${esc(fmtDateIt(x.from))}${x.drawingRef ? ' · ' + esc(x.drawingRef) : ''}${x.note ? ' — ' + esc(x.note) : ''} <span class="storico-prima">${esc(x.by ? actorName(x.by) : '')}</span></li>`).join('');
+  openModal(`<h3>${ico('pin', 'tinted pill', '')} Registra revisione del codice</h3>
+    <p><strong>${esc(it.code)} — ${esc(it.name)}</strong> è alla <strong>rev. ${esc(ultima)}</strong>. La revisione del codice è quella del disegno, decisa fuori dall'app: qui si registra, con i dati tecnici di oggi.</p>
+    <div class="modal-field"><label>Nuova revisione</label><input id="crev-num" value="${esc(nextCodeRev(ultima))}" autocomplete="off" inputmode="numeric"></div>
+    <div class="modal-field"><label>Valida dal</label><input id="crev-dal" type="date" value="${esc(oggiISO())}"></div>
+    <div class="modal-field"><label>Riferimento disegno</label><input id="crev-dis" value="${esc(it.drawingRef || '')}" autocomplete="off"></div>
+    <div class="modal-field"><label>Nota</label><input id="crev-nota" placeholder="es. Foro Ø12 portato a Ø14" autocomplete="off"></div>
+    ${storia ? `<div class="modal-field"><label>Revisioni registrate</label><ul class="storico-campi">${storia}</ul></div>` : ''}
+    ${hasRevisions(it) ? '<p class="empty-text" style="text-align:left;padding:0 0 10px">Dopo la registrazione la barra revisioni chiede se distinta e ciclo validi vanno bene anche per la nuova revisione.</p>' : ''}
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="codeRevConfirm('${it.id}')">Registra</button>
+    </div>`, false, 'coderev');
+}
+function codeRevConfirm(itemId) {
+  const voce = registraCodeRev(itemId, { rev: val('crev-num'), dal: val('crev-dal'), drawingRef: val('crev-dis'), note: val('crev-nota') });
+  if (!voce) return;
+  closeModal();
+  const it = getItem(itemId);
+  revRidisegna(it);
+  const campo = document.getElementById('it-coderev');
+  if (campo) campo.innerHTML = codeRevCampoHtml(it);
+  if (typeof activeView !== 'undefined' && activeView === 'catalog' && typeof renderCatalog === 'function') renderCatalog();
+  savedToast(`Revisione del codice ${voce.rev} registrata`);
+}
+// Nella scheda di modifica dell'articolo, accanto al disegno: la revisione in
+// cui il codice è adesso e il pulsante per registrare la successiva.
+function codeRevCampoHtml(it) {
+  const st = it.codeRevs || [];
+  const cr = itemCodeRev(it), ultima = itemCodeRevUltima(it);
+  const voce = st.slice().reverse().find(x => x.rev === cr);
+  const dopo = ultima !== cr ? st[st.length - 1] : null;
+  return `<strong>rev. ${esc(cr)}</strong>${voce ? ` dal ${esc(fmtDateIt(voce.from))}` : st.length ? '' : ' (alla creazione)'}${dopo ? ` · prossima <strong>rev. ${esc(dopo.rev)}</strong> dal ${esc(fmtDateIt(dopo.from))}` : ''}
+    ${canWrite('bom') ? `<button type="button" class="btn-outline" style="margin-left:8px" onclick="codeRevModal('${it.id}')">${ico('pin', 'tinted', '')} Nuova revisione del codice…</button>` : ''}`;
+}
+
+// ─── Richiesta, approvazione, respingimento (dalla 0.159.0) ───
+// Progettazione prepara la bozza e chiede l'approvazione; l'Amministratore la
+// approva e fissa da quando vale, oppure la respinge con una nota. La richiesta
+// sta sull'articolo (`revRequest`): non è ancora una revisione, e così il
+// registro delle revisioni resta fatto solo di revisioni approvate.
+function revRichiedi(itemId, dati) {
+  if (!roleGuard('bom')) return false;
+  const it = getItem(itemId); if (!it || !hasRevisions(it)) return false;
+  const d = dati || {};
+  const err = revDalErrore(it.id, d.dal);
+  if (err) { showToast(err, 'error'); return false; }
+  it.revRequest = { by: currentUser ? currentUser.id : null, at: nowISO(), tipo: ECO_TIPI[d.tipo] ? d.tipo : '',
+    motivo: String(d.motivo || '').trim(), dal: d.dal };
+  it.revRejected = null;
+  touch(it); saveDB();
+  return true;
+}
+function revRitira(itemId) {
+  if (!roleGuard('bom')) return;
+  const it = getItem(itemId); if (!it || !it.revRequest) return;
+  if (!isAdmin() && currentUser && it.revRequest.by && it.revRequest.by !== currentUser.id) { showToast('La richiesta la ritira chi l\'ha fatta, o l\'Amministratore', 'error'); return; }
+  it.revRequest = null; touch(it); saveDB();
+  revRidisegna(it); savedToast('Richiesta ritirata: la bozza torna modificabile');
+}
+function revRespingi(itemId, nota) {
+  if (!roleGuard('bom')) return false;
+  if (!isAdmin()) { showToast('Solo l\'Amministratore respinge una richiesta', 'error'); return false; }
+  const it = getItem(itemId); if (!it || !it.revRequest) return false;
+  it.revRejected = { by: currentUser ? currentUser.id : null, at: nowISO(), note: String(nota || '').trim(), rev: itemRev(it) };
+  it.revRequest = null; touch(it); saveDB();
+  return true;
+}
+// Le richieste in attesa, dalla più vecchia: la Home dell'Amministratore.
+function revDaApprovare() {
+  return (db.items || []).filter(i => i.revRequest && hasRevisions(i) && i.active !== false)
+    .sort((a, b) => String(a.revRequest.at || '').localeCompare(String(b.revRequest.at || '')));
+}
+
+// ─── Attivazione (dalla 0.159.0) ───
+// Il passaggio dal modello di prima: ogni assieme e parte fatta in casa che ha
+// una distinta o un ciclo riceve una revisione approvata valida da oggi, se
+// la bozza è diversa dall'ultima rilasciata o se non c'è mai stato un rilascio.
+// Senza numero MT: non è una modifica, è il punto di partenza.
+function revDaApprovareAllAvvio() {
+  return (db.items || []).filter(it => {
+    if (!revServe(it) || it.active === false) return false;
+    if (!distintaRighe(it).length && !cicloFasi(it).length) return false;
+    const ultima = revisionsOf(it.id)[0];
+    return !ultima || !revDiffVuoto(revDiff(ultima.snapshot, revSnapshot(it)));
+  });
+}
+// Il passaggio si fa da solo, la prima volta che entra chi può farlo: con
+// l'archivio condiviso l'Amministratore, dopo aver ricevuto i dati dei
+// colleghi; in locale chi modifica le distinte. Restituisce quante
+// approvazioni iniziali ha fatto, -1 se non tocca a chi è entrato.
+function revAvvio() {
+  if (revApprovateAttive()) return 0;
+  const condiviso = typeof Store !== 'undefined' && Store.modoCondiviso;
+  if (!currentUser || !canWrite('bom') || (condiviso && !isAdmin())) return -1;
+  const lista = revDaApprovareAllAvvio();
+  lista.forEach(it => releaseRevision(it.id, 'Approvazione iniziale', { iniziale: true }));
+  db.settings.revApprovate = true;
+  saveDB();
+  return lista.length;
+}
+
 // ─── Interfaccia ───
 function revBadge(it) {
   if (!hasRevisions(it)) return '';
   const n = revisionsOf(it.id).length;
-  const titolo = n ? `Revisione in lavorazione. ${n} ${n === 1 ? 'revisione rilasciata' : 'revisioni rilasciate'}` : 'Revisione in lavorazione. Nessun rilascio finora';
-  return `<span class="doc-badge" title="${esc(titolo)}">Rev. ${esc(itemRev(it))}${n ? ' · ' + n + ' rilasciate' : ''}</span>`;
+  if (!revApprovateAttive()) {
+    const titolo = n ? `Revisione in lavorazione. ${n} ${n === 1 ? 'revisione rilasciata' : 'revisioni rilasciate'}` : 'Revisione in lavorazione. Nessun rilascio finora';
+    return `<span class="doc-badge rev-badge" title="${esc(titolo)}">${esc(revLabel(itemRev(it)))}${n ? ' · ' + n + ' rilasciate' : ''}</span>`;
+  }
+  const valida = revValidaAl(it.id), prossima = revProssima(it.id);
+  const per = valida ? revPeriodo(valida) : null;
+  return [
+    `<span class="doc-badge rev-badge" title="Revisione del codice, quella del disegno">Codice rev. ${esc(itemCodeRev(it))}</span>`,
+    valida ? `<span class="doc-badge rev-badge" title="La revisione che usano piani e ODP oggi">Valida: ${esc(revLabel(valida.rev))} dal ${esc(fmtDateIt(per.dal))}</span>`
+      : (revServe(it) ? '<span class="doc-badge rev-badge" style="color:var(--red)" title="Piani e ODP non possono usare questo codice">Nessuna revisione approvata</span>' : ''),
+    prossima ? `<span class="doc-badge rev-badge" title="Approvata, entra in vigore più avanti">Prossima: ${esc(revLabel(prossima.rev))} dal ${esc(fmtDateIt(revDal(prossima)))}</span>` : '',
+    `<span class="doc-badge rev-badge" title="La bozza: si modifica liberamente, nessuno la usa finché non è approvata">Bozza ${esc(revLabel(itemRev(it)))}${revInApprovazione(it) ? ' · in approvazione' : ''}</span>`,
+  ].join(' ');
+}
+// Fasce sopra la distinta: in approvazione, respinta, da allineare.
+function revFasceHtml(it) {
+  if (!revApprovateAttive() || !hasRevisions(it)) return '';
+  const out = [];
+  const q = it.revRequest;
+  if (q) out.push(`<div class="rev-fascia">${ico('clock', 'tinted', '')} La bozza ${esc(revLabel(itemRev(it)))} è <strong>in approvazione</strong> dal ${esc(fmtDateIt(q.at))}, chiesta da ${esc(actorName(q.by) || '—')}, valida dal ${esc(fmtDateIt(q.dal))}. Distinta e ciclo non si modificano finché l'Amministratore non decide.</div>`);
+  const no = it.revRejected;
+  if (!q && no) out.push(`<div class="rev-fascia">${ico('blocked', 'tinted', '')} Richiesta respinta il ${esc(fmtDateIt(no.at))} da ${esc(actorName(no.by) || '—')}${no.note ? ': <em>' + esc(no.note) + '</em>' : ''}</div>`);
+  const al = revDaAllineare(it);
+  if (al) out.push(`<div class="rev-fascia">${ico('pin', 'tinted', '')} Distinta e ciclo validi (${esc(revLabel(al.r.rev))}) sono fatti per la rev. ${esc(al.r.codeRev || '00')} del codice, che ora è alla <strong>${esc(al.cr)}</strong>.
+    <button class="btn-ghost" onclick="codeRevConfermaAllineata('${it.id}')">Vanno bene anche per la ${esc(al.cr)}</button></div>`);
+  return out.join('');
 }
 // La stessa barra serve due viste: le distinte degli assiemi e i cicli delle
 // parti. Sono la stessa cosa — ciò che definisce il costo di un articolo — e
@@ -320,83 +638,167 @@ function renderRevBar(elId, itemId) {
   const el = document.getElementById(elId); if (!el) return;
   const it = getItem(itemId);
   if (!it || !hasRevisions(it)) { el.innerHTML = ''; return; }
+  const attive = revApprovateAttive();
+  let azioni;
+  if (!attive) azioni = `<button class="btn-outline" onclick="releaseRevisionModal('${it.id}')">${ico('pin', 'tinted', '')} Nuova revisione</button>`;
+  else if (it.revRequest) azioni = (isAdmin() ? `<button class="btn-outline" onclick="releaseRevisionModal('${it.id}')">${ico('pin', 'tinted', '')} Approva o respingi</button>` : '')
+    + `<button class="btn-outline" onclick="revRitira('${it.id}')">Ritira richiesta</button>`;
+  else azioni = `<button class="btn-outline" onclick="releaseRevisionModal('${it.id}')">${ico('pin', 'tinted', '')} ${isAdmin() ? 'Approva bozza' : 'Chiedi approvazione'}</button>`;
   el.innerHTML = `${revBadge(it)}
-    <button class="btn-outline" onclick="releaseRevisionModal('${it.id}')">${ico('pin', 'tinted', '')} Nuova revisione</button>
+    ${azioni}
     <button class="btn-outline" onclick="revHistoryModal('${it.id}')">${ico('clock', 'tinted', '')} Storico revisioni</button>
-    <button class="btn-outline" onclick="ecoRegistroModal()" title="Tutte le revisioni rilasciate, di tutti gli articoli">Modifiche tecniche</button>${isAssembly(it.type) ? `
-    <button class="btn-outline" onclick="bomCompareModal('${it.id}')" title="Le differenze con un'altra distinta, su tutti i livelli">⇄ Confronta con…</button>` : ''}`;
+    <button class="btn-outline" onclick="ecoRegistroModal()" title="Tutte le revisioni approvate, di tutti gli articoli">Modifiche tecniche</button>${isAssembly(it.type) ? `
+    <button class="btn-outline" onclick="bomCompareModal('${it.id}')" title="Le differenze con un'altra distinta, su tutti i livelli">⇄ Confronta con…</button>` : ''}
+    ${revFasceHtml(it)}`;
 }
 function renderBomRevBar() { renderRevBar('bom-rev-bar', currentBomId); }
 function renderCyclesRevBar() { renderRevBar('cycles-rev-bar', currentCycleItemId); }
+// Si ridisegna la vista da cui si è partiti, non quella dell'altro tipo.
+function revRidisegna(it) {
+  if (typeof activeView === 'undefined') return;
+  if (activeView === 'cycles' && typeof renderCycles === 'function') renderCycles();
+  else if (activeView === 'bom' && typeof renderBom === 'function') renderBom();
+}
 
+// La finestra del rilascio. Prima dell'attivazione è quella di sempre; dopo,
+// con la data da cui vale, e diventa «chiedi», «approva» o «approva o
+// respingi» secondo il ruolo e lo stato della bozza.
 function releaseRevisionModal(itemId) {
   if (!roleGuard('bom')) return;
   const it = getItem(itemId || currentBomId); if (!it || !hasRevisions(it)) return;
-  const rev = itemRev(it);
+  const attive = revApprovateAttive();
+  const rev = itemRev(it), nome = revLabel(rev);
+  const q = attive ? it.revRequest : null;
+  const decide = attive && isAdmin();
   const ultima = revisionsOf(it.id)[0];
   const d = ultima ? revDiff(ultima.snapshot, revSnapshot(it)) : null;
   // Se dall'ultimo rilascio non è cambiato niente, si dice invece di lasciar
   // creare una revisione identica alla precedente: uno storico pieno di
   // revisioni uguali non è uno storico.
   const avviso = d && revDiffVuoto(d)
-    ? `<p style="color:var(--red)"><strong>Dalla revisione ${esc(ultima.rev)} non è cambiato niente.</strong> Rilasciarla creerebbe una copia identica.</p>` : '';
+    ? `<p style="color:var(--red)"><strong>Dalla revisione ${esc(revLabel(ultima.rev))} non è cambiato niente.</strong> Approvarla creerebbe una copia identica.</p>` : '';
   const riepilogo = d && !revDiffVuoto(d)
-    ? `<p>Rispetto alla ${esc(ultima.rev)}: ${d.aggiunte.length} aggiunte, ${d.rimosse.length} rimosse, ${d.cambiate.length} modificate.</p>` : '';
-  openModal(`<h3>${ico('pin', 'tinted pill', '')} Rilascia revisione ${esc(rev)}</h3>
-    <p>La distinta di <strong>${esc(it.code)} — ${esc(it.name)}</strong> viene <strong>congelata così com'è</strong>, col costo di oggi. Da qui in poi si lavora sulla <strong>${esc(nextRev(rev))}</strong>: la ${esc(rev)} resta consultabile e non cambia più.</p>
+    ? `<p>Rispetto alla ${esc(revLabel(ultima.rev))}: ${d.aggiunte.length} aggiunte, ${d.rimosse.length} rimosse, ${d.cambiate.length} modificate.</p>` : '';
+  const dalMin = attive ? revDalMinimo(it.id) : oggiISO();
+  const valida = attive ? revValidaAl(it.id) : null;
+  const titolo = !attive ? `Rilascia revisione ${esc(nome)}` : (q ? `Approva o respingi la ${esc(nome)}` : (decide ? `Approva la ${esc(nome)}` : `Chiedi l'approvazione della ${esc(nome)}`));
+  const testa = !attive
+    ? `<p>La distinta di <strong>${esc(it.code)} — ${esc(it.name)}</strong> viene <strong>congelata così com'è</strong>, col costo di oggi. Da qui in poi si lavora sulla <strong>${esc(revLabel(nextRev(rev)))}</strong>: la ${esc(nome)} resta consultabile e non cambia più.</p>`
+    : `<p>Distinta e ciclo di <strong>${esc(it.code)} — ${esc(it.name)}</strong>, per la rev. ${esc(itemCodeRev(it))} del codice. ${decide ? 'Approvata, la bozza viene <strong>congelata così com\'è</strong> e piani e ODP la useranno dalla data scelta.' : 'La bozza si blocca finché l\'Amministratore non decide.'}</p>
+       ${q ? `<p>Chiesta da <strong>${esc(actorName(q.by) || '—')}</strong> il ${esc(fmtDateIt(q.at))}.</p>` : ''}`;
+  const tipo = q ? q.tipo : '', motivo = q ? q.motivo : '', dal = q && q.dal >= dalMin ? q.dal : dalMin;
+  const campoDal = attive ? `<div class="modal-field"><label>Valida dal</label>
+      <input id="rev-dal" type="date" value="${esc(dal)}" min="${esc(dalMin)}" ${q && !decide ? 'disabled' : ''} oninput="revDalAnteprima('${it.id}')"></div>
+      <p class="empty-text" id="rev-dal-nota" style="text-align:left;padding:0 0 10px">${revDalNota(it.id, dal, valida)}</p>` : '';
+  const bottoni = !attive ? `<button class="add-btn-sm" onclick="releaseRevisionConfirm('${it.id}')">Rilascia ${esc(nome)}</button>`
+    : q ? (decide ? `<button class="btn-outline" onclick="revRespingiModal('${it.id}')">Respingi…</button>
+        <button class="add-btn-sm" onclick="releaseRevisionConfirm('${it.id}')">Approva ${esc(nome)}</button>` : '')
+    : decide ? `<button class="add-btn-sm" onclick="releaseRevisionConfirm('${it.id}')">Approva ${esc(nome)}</button>`
+    : `<button class="add-btn-sm" onclick="revRichiediConfirm('${it.id}')">Chiedi approvazione</button>`;
+  const sola = q ? 'disabled' : '';
+  openModal(`<h3>${ico('pin', 'tinted pill', '')} ${titolo}</h3>
+    ${testa}
     ${riepilogo}${avviso}
     <div class="modal-field"><label>Tipo di modifica</label>
-      <select id="rev-tipo"><option value="">— scegli —</option>${Object.entries(ECO_TIPI).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select></div>
-    <div class="modal-field"><label>Documenti aperti costruiti sulla ${esc(rev)}</label>
+      <select id="rev-tipo" ${sola}><option value="">— scegli —</option>${Object.entries(ECO_TIPI).map(([k, v]) => `<option value="${k}"${k === tipo ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+    ${campoDal}
+    <div class="modal-field"><label>Documenti aperti costruiti sulla ${attive && valida ? esc(revLabel(valida.rev)) : 'revisione attuale'}</label>
       ${ecoImpattoHtml(ecoImpatto(it.id, d), true)}</div>
-    <div class="modal-field"><label>Motivo del rilascio</label>
-      <input id="rev-motivo" placeholder="es. Approvata per produzione lotto 2026-08" autocomplete="off"></div>
+    <div class="modal-field"><label>Motivo</label>
+      <input id="rev-motivo" value="${esc(motivo)}" ${sola} placeholder="es. Cambio terzista per la zincatura" autocomplete="off"></div>
     <p class="empty-text" style="text-align:left;padding:0 0 10px">Il motivo è quello che si legge fra un anno per capire perché la distinta è cambiata. Vale la pena scriverlo.</p>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
-      <button class="add-btn-sm" onclick="releaseRevisionConfirm('${it.id}')">Rilascia ${esc(rev)}</button>
+      ${bottoni}
     </div>`, false, 'form');
-  setTimeout(() => { const e = document.getElementById('rev-motivo'); if (e) e.focus(); }, 50);
+  setTimeout(() => { const e = document.getElementById('rev-motivo'); if (e && !e.disabled) e.focus(); }, 50);
+}
+// Che cosa succede alla revisione che vale oggi, con la data scelta.
+function revDalNota(itemId, dal, valida) {
+  const err = revDalErrore(itemId, dal);
+  if (err) return `<span style="color:var(--red)">${esc(err)}</span>`;
+  const per = revPeriodi(itemId).filter(p => !p.mai);
+  const ultima = per.length ? per[per.length - 1] : null;
+  if (!ultima) return 'È la prima revisione approvata: da quella data il codice si può usare in piani e ODP.';
+  if (ultima.dal === dal) return `La ${esc(revLabel(ultima.r.rev))} comincia lo stesso giorno e non entrerà mai in vigore: vale la nuova.`;
+  return `La ${esc(revLabel(ultima.r.rev))} vale fino al ${esc(fmtDateIt(addDays(dal, -1)))}.`;
+}
+function revDalAnteprima(itemId) {
+  const el = document.getElementById('rev-dal-nota'); if (!el) return;
+  el.innerHTML = revDalNota(itemId, val('rev-dal'), revValidaAl(itemId));
 }
 function releaseRevisionConfirm(itemId) {
   if (!roleGuard('bom')) return;
   const it = getItem(itemId || currentBomId); if (!it) return;
   const motivo = val('rev-motivo'), tipo = val('rev-tipo');
-  return conNumeri({ MT: 1 }, () => releaseRevisionFatto(it, motivo, tipo));
+  const attive = revApprovateAttive();
+  const dal = attive ? val('rev-dal') : '';
+  if (attive) { const err = revDalErrore(it.id, dal); if (err) { showToast(err, 'error'); return; } }
+  const richiestaDa = attive && it.revRequest ? it.revRequest.by : null;
+  return conNumeri({ MT: 1 }, () => releaseRevisionFatto(it, motivo, tipo, dal, richiestaDa));
 }
-function releaseRevisionFatto(it, motivo, tipo) {
-  const rec = releaseRevision(it.id, motivo, { tipo });
-  if (!rec) { showToast('Questo articolo non ha una distinta da rilasciare', 'error'); return; }
+function releaseRevisionFatto(it, motivo, tipo, dal, richiestaDa) {
+  const rec = releaseRevision(it.id, motivo, { tipo, dal, richiestaDa });
+  if (!rec) { if (!revApprovateAttive()) showToast('Questo articolo non ha una distinta da rilasciare', 'error'); return; }
   closeModal();
-  // Si ridisegna la vista da cui si è partiti, non quella dell'altro tipo.
-  if (it.type === 'parte' && typeof renderCycles === 'function' && activeView === 'cycles') renderCycles();
-  else renderBom();
-  showToast(`${rec.ecoNumber}: revisione ${rec.rev} rilasciata — si lavora sulla ${itemRev(getItem(it.id))}${rec.ecoImpact.length ? ` · ${rec.ecoImpact.length} documenti aperti da verificare` : ''}`);
+  revRidisegna(it);
+  const quando = revApprovateAttive() ? ` · valida dal ${fmtDateIt(rec.validFrom)}` : '';
+  showToast(`${rec.ecoNumber}: revisione ${revLabel(rec.rev)} ${revApprovateAttive() ? 'approvata' : 'rilasciata'}${quando} — la bozza è la ${revLabel(itemRev(getItem(it.id)))}${rec.ecoImpact.length ? ` · ${rec.ecoImpact.length} documenti aperti da verificare` : ''}`);
+}
+function revRichiediConfirm(itemId) {
+  const ok = revRichiedi(itemId, { tipo: val('rev-tipo'), motivo: val('rev-motivo'), dal: val('rev-dal') });
+  if (!ok) return;
+  closeModal();
+  revRidisegna(getItem(itemId));
+  savedToast('Approvazione chiesta: la bozza resta bloccata finché l\'Amministratore non decide');
+}
+function revRespingiModal(itemId) {
+  const it = getItem(itemId); if (!it || !it.revRequest) return;
+  openModal(`<h3>${ico('blocked', 'tinted pill', '')} Respingi la ${esc(revLabel(itemRev(it)))}</h3>
+    <p>La bozza di <strong>${esc(it.code)}</strong> torna modificabile. La nota resta nella barra revisioni finché non arriva una nuova richiesta.</p>
+    <div class="modal-field"><label>Perché</label><input id="rev-nota" placeholder="es. Manca la fase di sbavatura" autocomplete="off"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="revRespingiConfirm('${it.id}')">Respingi</button>
+    </div>`, false, 'form');
+  setTimeout(() => { const e = document.getElementById('rev-nota'); if (e) e.focus(); }, 50);
+}
+function revRespingiConfirm(itemId) {
+  if (!revRespingi(itemId, val('rev-nota'))) return;
+  closeModal();
+  revRidisegna(getItem(itemId));
+  savedToast('Richiesta respinta');
 }
 
 function revHistoryModal(itemId) {
   const it = getItem(itemId || currentBomId); if (!it) return;
   const lista = revisionsOf(it.id);
+  const attive = revApprovateAttive();
   // La fotografia dell'attuale è la stessa per tutte le righe: si scatta una
   // volta, non tre deep-clone e un rollup di costo per ogni revisione in elenco.
   const attuale = lista.length ? revSnapshot(it) : null;
+  const periodi = new Map(revPeriodi(it.id).map(p => [p.r, p]));
+  const valida = revValidaAl(it.id);
   const corpo = lista.length ? lista.map(r => {
     const d = revDiff(r.snapshot, attuale);
     const quante = d.aggiunte.length + d.rimosse.length + d.cambiate.length;
+    const p = periodi.get(r);
+    const validita = p ? (p.mai ? 'mai entrata in vigore' : `valida dal ${fmtDateIt(p.dal)}${p.al ? ' al ' + fmtDateIt(p.al) : ''}`) : '';
     return `<div class="mgmt-item" style="display:block">
-      <div style="display:flex;align-items:center;gap:8px">
-        <strong style="font-family:var(--mono)">Rev. ${esc(r.rev)}</strong>${r.ecoNumber ? ` <span class="empty-text" style="padding:0;font-family:var(--mono)">${esc(r.ecoNumber)}</span>` : ''}${r.ecoKind ? ` <span class="doc-badge">${esc(ecoTipoLabel(r.ecoKind))}</span>` : ''}
-        <span class="empty-text" style="padding:0">${esc(String(r.date || '').slice(0, 10))} · ${esc(r.createdBy ? actorName(r.createdBy) : '—')}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <strong style="font-family:var(--mono)">${esc(revLabel(r.rev))}</strong>${r.ecoNumber ? ` <span class="empty-text" style="padding:0;font-family:var(--mono)">${esc(r.ecoNumber)}</span>` : ''}${r.ecoKind ? ` <span class="doc-badge">${esc(ecoTipoLabel(r.ecoKind))}</span>` : ''}${attive && r === valida ? ' <span class="doc-badge">in vigore</span>' : ''}
+        <span class="empty-text" style="padding:0">${esc(validita)}${r.codeRev ? ' · codice rev. ' + esc(r.codeRev) : ''}</span>
         <span style="flex:1"></span>
         <span class="empty-text" style="padding:0">${fmtPer(r.snapshot.cost ? r.snapshot.cost.total : 0, itemUom(it))}</span>
         <button class="btn-ghost" onclick="revCompareModal('${r.id}')">${quante ? '⇄ Confronta (' + quante + ')' : '⇄ Confronta'}</button>
       </div>
+      <div class="empty-text" style="text-align:left;padding:2px 0 0">${esc(attive ? 'Approvata' : 'Rilasciata')} il ${esc(fmtDateIt(r.date))} da ${esc(r.createdBy ? actorName(r.createdBy) : '—')}${r.requestedBy ? ', chiesta da ' + esc(actorName(r.requestedBy)) : ''}</div>
       ${r.motivo ? `<div style="margin-top:4px">${esc(r.motivo)}</div>` : '<div class="empty-text" style="text-align:left;padding:2px 0 0">nessun motivo indicato</div>'}
       ${(r.ecoImpact || []).length ? `<div style="margin-top:4px"><span class="storico-campo">Documenti aperti al rilascio</span>${ecoImpattoHtml(r.ecoImpact)}</div>` : ''}
     </div>`;
-  }).join('') : `<div class="empty-text">Nessuna revisione rilasciata. La distinta attuale è la ${esc(itemRev(it))}.</div>`;
+  }).join('') : `<div class="empty-text">Nessuna revisione ${attive ? 'approvata' : 'rilasciata'}. La bozza è la ${esc(revLabel(itemRev(it)))}.</div>`;
   openModal(`<h3>${ico('clock', 'tinted pill', '')} Revisioni — ${esc(it.code)} ${esc(it.name)}</h3>
-    <p>In lavorazione: <strong>Rev. ${esc(itemRev(it))}</strong>. Le revisioni qui sotto sono congelate e non cambiano più.</p>
+    <p>Bozza: <strong>${esc(revLabel(itemRev(it)))}</strong>. Le revisioni qui sotto sono congelate e non cambiano più.</p>
     <div style="display:flex;flex-direction:column;gap:8px">${corpo}</div>
     <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'storico');
 }
@@ -425,20 +827,20 @@ function revCompareModal(revId, controId) {
   const costoDopo = dopo ? (dopo.snapshot.cost ? dopo.snapshot.cost.total : 0) : costOf(it.id).total;
   const delta = costoDopo - costoPrima;
   const u = itemUom(it);
-  const nomeDopo = dopo ? 'Rev. ' + dopo.rev : 'attuale (' + itemRev(it) + ')';
+  const nomeDopo = dopo ? revLabel(dopo.rev) : 'bozza (' + revLabel(itemRev(it)) + ')';
   // Il selettore propone sempre l'altra metà del confronto: la distinta attuale
   // e ogni revisione diversa da quella di partenza.
-  const opzioni = [`<option value=""${!contro ? ' selected' : ''}>la distinta attuale (${esc(itemRev(it))})</option>`]
+  const opzioni = [`<option value=""${!contro ? ' selected' : ''}>la bozza (${esc(revLabel(itemRev(it)))})</option>`]
     .concat(lista.filter(x => x.id !== r.id).map(x =>
-      `<option value="${esc(x.id)}"${contro && contro.id === x.id ? ' selected' : ''}>la Rev. ${esc(x.rev)} del ${esc(String(x.date || '').slice(0, 10))}</option>`)).join('');
+      `<option value="${esc(x.id)}"${contro && contro.id === x.id ? ' selected' : ''}>la ${esc(revLabel(x.rev))} del ${esc(String(x.date || '').slice(0, 10))}</option>`)).join('');
   const motivo = dopo && dopo.motivo ? dopo.motivo : (!dopo && prima.motivo ? prima.motivo : '');
-  openModal(`<h3>⇄ Rev. ${esc(prima.rev)} → ${esc(nomeDopo)}</h3>
+  openModal(`<h3>⇄ ${esc(revLabel(prima.rev))} → ${esc(nomeDopo)}</h3>
     <p>${esc(it.code)} — ${esc(it.name)}${motivo ? ` · <em>${esc(motivo)}</em>` : ''}</p>
-    ${lista.length > 1 ? `<div class="modal-field" style="max-width:420px;margin-top:10px"><label>Confronta la Rev. ${esc(r.rev)} con</label>
+    ${lista.length > 1 ? `<div class="modal-field" style="max-width:420px;margin-top:10px"><label>Confronta la ${esc(revLabel(r.rev))} con</label>
       <select id="rev-contro" onchange="revCompareModal('${r.id}', this.value)">${opzioni}</select></div>` : ''}
     <div class="cost-summary">
-      ${kpi('Costo alla Rev. ' + esc(prima.rev), fmtPer(costoPrima, u), '')}
-      ${kpi(dopo ? 'Costo alla Rev. ' + esc(dopo.rev) : 'Costo attuale', fmtPer(costoDopo, u), '')}
+      ${kpi('Costo alla ' + esc(revLabel(prima.rev)), fmtPer(costoPrima, u), '')}
+      ${kpi(dopo ? 'Costo alla ' + esc(revLabel(dopo.rev)) : 'Costo della bozza', fmtPer(costoDopo, u), '')}
       ${kpi('Differenza', (delta >= 0 ? '+' : '') + fmtPer(delta, u), delta > 0 ? 'orange' : (delta < 0 ? 'green' : ''))}
     </div>
     ${revDiffVuoto(d) ? '<div class="empty-text">Nessuna differenza nella distinta. Se il costo è cambiato, è cambiato un prezzo, non la distinta.</div>' : ''}

@@ -175,7 +175,7 @@ describe('Cosa dice la scheda', () => {
     const h = apri(a, 'mac');
     assert.match(h, /prima emissione/);
     assert.match(h, /costo congelato/);
-    assert.match(h, /In lavorazione: <strong>B<\/strong>/);
+    assert.match(h, /Bozza: <strong>v1<\/strong>/);
   });
 });
 

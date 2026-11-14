@@ -33,12 +33,12 @@ const FINTI = `
 function app(extra) {
   const a = loadApp({ silent: true });
   a.eval(FINTI);
-  const disegnato = Object.assign(acq('c1', 5), { drawingRef: '12-345', rev: 'C' });
+  const disegnato = Object.assign(acq('c1', 5), { drawingRef: '12-345', rev: 'C', codeRevs: [{ rev: '03', from: '2026-01-01' }] });
   a.setDb(makeDb(Object.assign({
     settings: { currency: '€', modules: { qualita: true },
       company: { name: 'Officina Bianchi', vat: '01234567890', fiscalCode: 'BNCMRA80A01F257X', sdi: 'ABC1234', pec: 'bianchi@pec.it' } },
     suppliers: [{ id: 's1', name: 'SKF', active: true }],
-    items: [disegnato, acq('c2', 3), { id: 'p1', code: 'P1', name: 'Staffa', type: 'parte', drawingRef: 'ST-9', rev: 'B' }],
+    items: [disegnato, acq('c2', 3), { id: 'p1', code: 'P1', name: 'Staffa', type: 'parte', drawingRef: 'ST-9', rev: 'B', codeRevs: [{ rev: '01', from: '2026-01-01' }] }],
     qualityPlans: [{ id: 'q1', name: 'Cuscinetti', itemIds: ['c1'], cert: '3.1 EN 10204', sampling: 'tutto', characteristics: [], active: true }],
     rfqs: [{ id: 'r1', number: 'RDO-2026-001', title: '', status: 'bozza', date: '2026-11-01', supplierId: 's1', replyBy: '2026-11-20', active: true,
       lines: [{ id: 'rl1', itemId: 'c1', code: 'c1', description: 'Cuscinetto', uom: 'pz', qty: 10, price: '', deliveryDate: '' }] }],
@@ -60,7 +60,9 @@ describe('Documenti per i fornitori', () => {
     const a = app();
     const d = pdf(a, "exportOrderPDF('o1')");
     const desc = d.tabelle[0].body.map(r => r[2]);
-    assert.match(desc[0], /Dis\. \/ Drw\. 12-345 rev\. C/);
+    // Un commerciale porta il disegno senza revisione: la revisione del codice
+    // è dei codici da progetto (dalla 0.159.0), e la si vede sull'ODL qui sotto.
+    assert.match(desc[0], /Dis\. \/ Drw\. 12-345(?! rev)/);
     assert.match(desc[0], /Certificate required: 3\.1 EN 10204/);
     assert.equal(desc[1], 'Vite', 'un articolo senza disegno né piano resta com\'era');
   });
@@ -99,7 +101,7 @@ describe('Documenti per i fornitori', () => {
     const m = JSON.parse(a.eval("JSON.stringify(odlMaterialeInviato(getOdl('w1')))"));
     assert.equal(m.length, 1, 'due fasi della stessa parte: il pezzo parte una volta');
     assert.equal(m[0].qty, 40);
-    assert.equal(m[0].disegno, 'Dis. ST-9 rev. B');
+    assert.equal(m[0].disegno, 'Dis. ST-9 rev. 01');
     const d = pdf(a, "exportOdlPDF('w1')");
     assert.equal(d.tabelle.length, 2, 'righe e materiale');
     assert.match(d.tabelle[1].head[0][0], /Materiale che vi inviamo/);

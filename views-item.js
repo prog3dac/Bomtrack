@@ -94,7 +94,7 @@ function itemInfoHtml(it) {
   return `<h3>${ico('eye', 'tinted pill', 'Scheda di sola lettura')} ${esc(it.code)} — ${esc(it.name)}${itemBadges(it)}</h3>
     <p style="color:var(--text-dim);margin-bottom:4px">
       <span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span> ${esc(typeLabel(it.type))}
-      · U.M. <strong>${esc(it.uom || '—')}</strong>${hasRevisions(it) ? ` · revisione in lavorazione <strong>${esc(itemRev(it))}</strong>` : ''}</p>
+      · U.M. <strong>${esc(it.uom || '—')}</strong>${hasRevisions(it) ? ` · codice rev. <strong>${esc(itemCodeRev(it))}</strong> · ${itemInfoRevStato(it)}` : ''}</p>
     <p class="empty-text" style="text-align:left;padding:0 0 12px">Scheda di <strong>sola lettura</strong>: qui non si modifica niente, e per questo si può aprire in mezzo a qualunque lavoro. Le modifiche si fanno dall'anagrafica, dal listino e dalla distinta.</p>
     ${itemInfoBody(it)}
     <div class="modal-actions">
@@ -441,18 +441,31 @@ function itemInfoAllegati(it) {
      <p class="empty-text" style="text-align:left;padding:6px 0 0">${dove}</p>`);
 }
 
+// Lo stato della revisione di distinta e ciclo, in una riga (dalla 0.159.0).
+function itemInfoRevStato(it) {
+  if (!revApprovateAttive()) return `bozza <strong>${esc(revLabel(itemRev(it)))}</strong>`;
+  const v = revValidaAl(it.id);
+  if (v) return `valida <strong>${esc(revLabel(v.rev))}</strong>, bozza ${esc(revLabel(itemRev(it)))}${it.revRequest ? ' in approvazione' : ''}`;
+  return revServe(it) ? '<strong style="color:var(--red)">non approvato</strong>: piani e ODP non lo usano' : `bozza <strong>${esc(revLabel(itemRev(it)))}</strong>`;
+}
 function itemInfoRevisioni(it) {
-  if (!hasRevisions(it)) return '';
+  const codice = (it.codeRevs || []).slice().reverse().map(x => `<div class="mgmt-item">
+        <span class="mgmt-item-name"><strong>Codice rev. ${esc(x.rev)}</strong>${x.note ? ' — ' + esc(x.note) : ''}</span>
+        <span class="mgmt-item-meta">dal ${esc(fmtDateIt(x.from))}${x.drawingRef ? ' · ' + esc(x.drawingRef) : ''}</span>
+      </div>`).join('');
+  if (!hasRevisions(it)) return codice ? itemInfoSection(ico('clock', 'tinted', '') + ' Revisioni del codice', `<div class="mgmt-list">${codice}</div>`) : '';
   const revs = revisionsOf(it.id);
-  if (!revs.length) return itemInfoSection(ico('clock', 'tinted', '') + ' Revisioni', `<div class="empty-text">Nessun rilascio: si sta lavorando sulla <strong>${esc(itemRev(it))}</strong>, la prima.</div>`);
-  return itemInfoSection(ico('clock', 'tinted', '') + ' Revisioni', `<div class="mgmt-list">${revs.map(r => {
+  if (!revs.length && !codice) return itemInfoSection(ico('clock', 'tinted', '') + ' Revisioni', `<div class="empty-text">Nessuna revisione ${revApprovateAttive() ? 'approvata' : 'rilasciata'}: la bozza è la <strong>${esc(revLabel(itemRev(it)))}</strong>, la prima.</div>`);
+  const per = new Map(revPeriodi(it.id).map(p => [p.r, p]));
+  return itemInfoSection(ico('clock', 'tinted', '') + ' Revisioni', `<div class="mgmt-list">${codice}${revs.map(r => {
       const tot = r.snapshot && r.snapshot.cost ? r.snapshot.cost.total : null;
+      const p = per.get(r);
       return `<div class="mgmt-item">
-        <span class="mgmt-item-name"><strong>${esc(r.rev || '')}</strong>${r.motivo ? ' — ' + esc(r.motivo) : ''}</span>
-        <span class="mgmt-item-meta">${esc(fmtStamp(r.date))}${tot != null ? ' · costo congelato ' + fmtPer(tot, itemUom(it)) : ''}</span>
+        <span class="mgmt-item-name"><strong>${esc(revLabel(r.rev))}</strong>${r.motivo ? ' — ' + esc(r.motivo) : ''}</span>
+        <span class="mgmt-item-meta">${p && !p.mai ? 'dal ' + esc(fmtDateIt(p.dal)) + (p.al ? ' al ' + esc(fmtDateIt(p.al)) : '') : esc(fmtStamp(r.date))}${tot != null ? ' · costo congelato ' + fmtPer(tot, itemUom(it)) : ''}</span>
       </div>`;
     }).join('')}</div>
-    <p class="empty-text" style="text-align:left;padding:6px 0 0">In lavorazione: <strong>${esc(itemRev(it))}</strong>. Le revisioni rilasciate sono fotografie e non cambiano più.</p>`);
+    <p class="empty-text" style="text-align:left;padding:6px 0 0">Bozza: <strong>${esc(revLabel(itemRev(it)))}</strong>. Le revisioni approvate sono fotografie e non cambiano più.</p>`);
 }
 
 // ═══════════════════════════════════════════════════════════

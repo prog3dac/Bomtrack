@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.158.0**
+**Versione dell'app documentata: 0.159.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -968,7 +968,7 @@ creazione, sta sopra le sottoschede perché le riempie tutte.
 | **Dimensioni L × P × H (m)** | Tecnico | facoltativo, tutti i tipi | Lunghezza, larghezza e altezza d'ingombro, in metri, in tre caselle affiancate. |
 | **Produttore** · **Codice produttore** | Tecnico | commerciali e materie prime | Chi fa l'articolo e con che codice, distinti da fornitore e codice del fornitore: lo stesso cuscinetto SKF si compra da più rivenditori. |
 | **Materiale** · **Finitura** · **Trattamento** | Tecnico | parti | Testo libero, con i valori già usati su altri articoli proposti mentre si scrive, così «S235JR» si scrive sempre allo stesso modo. |
-| **Riferimento disegno** | Tecnico | parti e assiemi | Dalla 0.139.0: numero e revisione del disegno, es. *DIS-0412 rev. B*. |
+| **Riferimento disegno** | Tecnico | parti e assiemi | Dalla 0.139.0: numero del disegno, es. *DIS-0412*. Sui documenti esce con la revisione del codice valida alla data (dalla 0.159.0, → [cap. 15](#15-revisioni)). |
 
 Tutti i dati tecnici (dalla 0.138.0) compaiono nella sezione **Dati tecnici** della scheda di sola
 lettura, ed entrano ed escono dal file Excel degli articoli con le colonne *Lunghezza m*, *Larghezza
@@ -1336,7 +1336,8 @@ parte*, sotto).
 
 **Cosa si vede.**
 
-- In alto la **barra revisioni**: il badge `Rev. X · N rilasciate`, **Nuova revisione**,
+- In alto la **barra revisioni**: i badge della revisione del codice e della revisione valida (`Valida: v1 dal …`), i pulsanti per
+  rilasciare, chiedere o approvare la revisione,
   **Storico revisioni** (→ [cap. 15](#15-revisioni)).
 - Le **card di costo** unitario: Materiale · Commerciali · Parti · Lavorazioni · Spese generali ·
   **Costo totale** · **Prezzo vendita**.
@@ -1615,53 +1616,147 @@ Da lì:
 
 ## 15. Revisioni
 
-**A cosa serve.** Congelare com'era una distinta in un certo momento, e poterci tornare.
+**A cosa serve.** Dare ufficialità a distinte e cicli: decidere quale versione si usa, da quando, e
+chi l'ha approvata. E poter tornare a com'era una distinta in un certo momento.
 
 **Come ci si arriva.** Dalla barra revisioni, in cima a *Gestione DB* (per gli assiemi) e a
 *Cicli di lavorazione* (per le parti).
 
-**Come funziona.** Ogni assieme e ogni parte ha una **revisione in lavorazione**, identificata da
-una lettera che parte da `A`. Ci si lavora liberamente.
+**Le numerazioni sono due, indipendenti** (dalla 0.159.0):
 
-**Rilascia revisione** (pulsante **Nuova revisione**) fa tre cose:
+| | Revisione del codice | Revisione di distinta e ciclo |
+|---|---|---|
+| Numeri | 00, 01, 02… (00 alla creazione) | v0, v1, v2… (v0 alla creazione) |
+| Chi ce l'ha | i codici da progetto: parti e assiemi | assiemi e parti fatte in casa |
+| Dove si vede e si cambia | nella scheda dell'articolo | nella barra revisioni di distinta e ciclo |
+| Dove si decide | fuori dall'app: ufficio tecnico, CAD | nell'app |
+| Come cambia | si **registra** | bozza → richiesta → **approvazione** |
+| Sui PDF di richieste, ordini e ordini di lavoro | «Dis. … rev. 02» | no |
+| In piani e ODP | sì | sì |
 
-1. chiede il **motivo** del rilascio;
-2. **congela** la distinta com'è adesso, con il costo di oggi;
-3. passa alla lettera successiva, che diventa quella in lavorazione.
+Le revisioni di distinta e ciclo che prima si chiamavano A, B, C… ora si leggono v0, v1, v2: è la
+stessa sequenza, contata da zero.
 
-**Ogni rilascio è una modifica tecnica** (dalla 0.96.0). Nella finestra del rilascio, oltre al
-motivo, si sceglie il **tipo**: *Correttiva*, *Migliorativa*, *Richiesta del cliente*, *Cambio di
-fornitore o componente*, *Riduzione dei costi* (si può lasciare vuoto). La finestra mostra prima
-di confermare **quali documenti aperti sono costruiti sulla versione che si lascia**: i piani
-attivi e gli ODP aperti dell'articolo **e degli assiemi che lo contengono**, e le richieste, gli
-ordini e gli ODL aperti dei componenti che la modifica aggiunge, toglie o cambia di quantità. Al
-rilascio la revisione riceve un numero **MT-AAAA-NNN**, progressivo nell'anno, e quella lista resta
-fotografata così com'era: serve a sapere cosa andava rivisto, anche dopo che i documenti si sono
-chiusi.
+### Revisioni di distinta e ciclo
+
+Ogni assieme e ogni parte ha una **bozza**: la distinta e il ciclo che si vedono e si modificano
+in *Gestione DB* e in *Cicli di lavorazione*. Una sola revisione copre distinta e ciclo insieme.
+
+Approvare una revisione fa tre cose:
+
+1. **congela** la bozza così com'è, col costo di oggi;
+2. le dà una **data da cui vale** (*Valida dal*): oggi o un giorno futuro;
+3. apre la bozza successiva (v1 → v2), che parte come copia.
+
+**Le date di validità non si sovrappongono e non lasciano buchi.** La revisione precedente vale
+fino al giorno prima del «dal» della nuova, e la finestra lo dice prima di confermare («la v1 vale
+fino al 30/11/2026»). Quella in corso di validità non ha data di fine. Il «dal» non può essere nel
+passato né prima di quello dell'ultima revisione approvata. Se due revisioni hanno lo stesso «dal»
+vale l'ultima, e la prima risulta *mai entrata in vigore*. Un codice che non si usa più si segna
+**obsoleto**, come sempre.
+
+**Ogni approvazione è una modifica tecnica** (dalla 0.96.0). Nella finestra, oltre al motivo, si
+sceglie il **tipo**: *Correttiva*, *Migliorativa*, *Richiesta del cliente*, *Cambio di fornitore o
+componente*, *Riduzione dei costi* (si può lasciare vuoto). La finestra mostra **quali documenti
+aperti sono costruiti sulla revisione che si lascia**: i piani attivi e gli ODP aperti
+dell'articolo **e degli assiemi che lo contengono**, e le richieste, gli ordini e gli ODL aperti
+dei componenti che la modifica aggiunge, toglie o cambia di quantità. All'approvazione la
+revisione riceve un numero **MT-AAAA-NNN**, progressivo nell'anno, e quella lista resta
+fotografata.
+
+### Chi usa quale revisione
+
+Con le revisioni approvate attive, **la bozza non la usa nessuno**: si modifica liberamente senza
+toccare il lavoro in corso. Piani, ODP e ordini di lavoro usano la revisione **approvata e valida
+il giorno in cui il pezzo serve**:
+
+| Dove | Revisione usata |
+|---|---|
+| Fabbisogno del piano | la valida alla data in cui serve ogni componente |
+| Nuovo ODP | la valida alla data in cui servono i pezzi; l'ordine se la ricorda |
+| Lavorazioni da ciclo in un ordine di lavoro, materiale al terzista | la valida alla data della lavorazione |
+| Montaggio dichiarato nel piano | la valida alla consegna del piano |
+| Costo in *Gestione DB* e nei report | la bozza, come prima |
+
+Così una revisione che vale dal 1° dicembre serve già oggi a pianificare le consegne di dicembre,
+mentre quelle di novembre restano sulla precedente.
+
+**Un codice senza una revisione valida** (mai approvato, o con la prima revisione che comincia
+più avanti) non scende nel fabbisogno: il piano lo dice in rosso, con il collegamento alla barra
+revisioni, e un ODP non si crea. I commerciali, le materie prime e le parti che si comprano non
+hanno bisogno di revisioni.
+
+### Chiedere e approvare
+
+- **Progettazione** prepara la bozza e preme **Chiedi approvazione**: tipo, motivo e «dal»
+  proposto. Da quel momento la bozza è **in approvazione**: distinta e ciclo si guardano ma non si
+  modificano, così chi approva vede esattamente quello che firma. **Ritira richiesta** la sblocca.
+- **L'Amministratore** trova le richieste nel Riepilogo (*revisioni da approvare*) e, dalla barra
+  revisioni, **Approva o respingi**: può cambiare il «dal»; respingendo scrive perché, e la nota
+  resta nella barra finché non arriva una nuova richiesta. Una bozza preparata da lui la approva
+  direttamente (**Approva bozza**).
+- Acquisti, Officina e Lettore vedono lo stato ma non fanno passaggi.
+
+Nella barra revisioni i badge dicono tutto in una riga: *Codice rev. 02*, *Valida: v3 dal
+01/11/2026*, *Prossima: v4 dal 01/12/2026* (se ce n'è una approvata che non è ancora in vigore) e
+*Bozza v4*, con *in approvazione* quando lo è.
+
+### Revisione del codice
+
+È il numero del cartiglio del disegno: dice in che revisione è il codice. Si decide fuori
+dall'app e qui si **registra**, dalla scheda dell'articolo: *Anagrafica articoli →* l'articolo *→
+Tecnico*, accanto al riferimento disegno, c'è la revisione in cui è il codice e **Nuova revisione
+del codice…**: numero (propone il successivo), data da cui vale, riferimento disegno e nota. La registrazione fotografa i dati tecnici dell'articolo (materiale,
+finitura, trattamento, pesi, misure). Il numero non torna indietro.
+
+Sulle righe di richieste, ordini e ordini di lavoro la riga «Dis. … rev. 02» porta la revisione
+del codice **valida alla data di consegna** della riga. Prima della 0.159.0 portava la lettera della
+distinta in lavorazione, che il fornitore non doveva vedere.
+
+Ogni revisione di distinta e ciclo dice **per quale revisione del codice è fatta**. Registrata una
+revisione del codice nuova, la barra avvisa che distinta e ciclo validi sono fatti per la
+precedente: **Vanno bene anche per la 02** lo conferma, altrimenti si prepara una revisione nuova.
+
+La revisione del codice ce l'hanno solo i **codici da progetto**, parti e assiemi. Un commerciale
+o una materia prima porta il riferimento disegno senza revisione; anche la scheda di sola lettura
+mostra la revisione del codice solo per parti e assiemi.
+
+### Il passaggio dalle versioni prima della 0.159.0
+
+Le revisioni approvate valgono sempre, e non c'è niente da attivare. Un archivio che arriva da una
+versione precedente fa il passaggio da solo, una volta, al primo accesso di chi modifica le
+distinte (con l'archivio condiviso, dell'Amministratore). Per non fermare niente, ogni codice che
+non è mai stato rilasciato o la cui bozza è cambiata dall'ultimo rilascio riceve
+un'**approvazione iniziale** valida da oggi, senza numero MT. Le revisioni rilasciate prima
+diventano approvate, ciascuna valida dal giorno del suo rilascio.
+
+Con l'archivio condiviso serve lo schema aggiornato (rieseguire `supabase/schema.sql`): il server
+accetta una revisione approvata solo dall'Amministratore.
+
+### Storico e confronto
 
 **Modifiche tecniche**, nella barra revisioni, apre il **registro** di tutte le revisioni
-rilasciate, di tutti gli articoli, dalla più recente: numero, articolo, revisione, tipo, motivo,
-chi e quando, e i documenti che erano aperti. Le revisioni rilasciate prima della 0.96.0 compaiono
-senza numero.
+approvate, di tutti gli articoli, dalla più recente: numero, articolo, revisione, data da cui vale,
+tipo, motivo, chi e quando, e i documenti che erano aperti. Le revisioni rilasciate prima della
+0.96.0 compaiono senza numero.
 
-**Storico revisioni** mostra le revisioni rilasciate, con data, autore e motivo (e, dalla 0.96.0,
-numero, tipo e documenti aperti). **⇄ Confronta**,
-su ogni riga, mette quella revisione a fianco della distinta attuale; dal menu **Confronta la Rev. …
-con** si sceglie invece un'altra revisione (dalla 0.85.0). Il confronto dice cosa è **aggiunto**,
-cosa **rimosso** e cosa ha **cambiato quantità**, con il costo congelato di ciascuna delle due e la
-differenza. Fra due revisioni si legge sempre dalla più vecchia alla più nuova, in qualunque
-ordine le si scelga.
+**Storico revisioni** mostra le revisioni dell'articolo con il periodo di validità, la revisione
+del codice per cui sono fatte, chi le ha chieste e chi le ha approvate. **⇄ Confronta**, su ogni
+riga, mette quella revisione a fianco della bozza; dal menu **Confronta la v… con** si sceglie
+invece un'altra revisione (dalla 0.85.0). Il confronto dice cosa è **aggiunto**, cosa **rimosso** e
+cosa ha **cambiato quantità**, con il costo congelato di ciascuna delle due e la differenza. Fra
+due revisioni si legge sempre dalla più vecchia alla più nuova, in qualunque ordine le si scelga.
 
 **Da sapere.**
-- Se dall'ultimo rilascio non è cambiato niente, l'app lo dice invece di creare una revisione
+- Se dall'ultima approvazione non è cambiato niente, l'app lo dice invece di creare una revisione
   identica alla precedente.
 - Il confronto fra revisioni guarda un livello: i componenti diretti. Un sottogruppo che ha
-  cambiato la *sua* distinta lo dicono le revisioni del sottogruppo.
-- **Un articolo che sta in una revisione rilasciata non si elimina** (dalla 0.105.6), anche se
-  nella distinta di oggi non c'è più: la revisione è una fotografia, e deve continuare a dire che
-  cosa c'era. Prima un componente tolto dalla Rev. B si poteva eliminare, e da quel momento la
-  Rev. A — e il registro delle modifiche — diceva «(articolo eliminato)». Un articolo che non
-  serve più si segna **obsoleto**.
+  cambiato la *sua* distinta lo dicono le revisioni del sottogruppo. La distinta di un assieme
+  punta al **codice** del componente: quale revisione del componente usare si decide alla data in
+  cui serve, e una revisione di una vite non obbliga a riapprovare le macchine.
+- **Un articolo che sta in una revisione approvata non si elimina** (dalla 0.105.6), anche se
+  nella bozza non c'è più: la revisione è una fotografia, e deve continuare a dire che cosa c'era.
+  Un articolo che non serve più si segna **obsoleto**.
 
 ### Confrontare due distinte diverse
 
@@ -5025,7 +5120,7 @@ dentro**: uscendo e rientrando, il documento torna bloccato.
 | **Capacità** | Le ore che un centro può fare in una settimana. **0 = non dichiarata** |
 | **Macchina utensile** | La risorsa dentro un centro di lavoro (il tornio CNC nella Tornitura), con tariffa, manutenzione e fermi propri (modulo, dalla 0.126.0) |
 | **Ore di macchina** | Le ore-uomo di una fase divise per i suoi operatori: quanto la macchina lavora |
-| **Revisione** | Una fotografia congelata di una distinta, identificata da una lettera |
+| **Revisione** | Due numerazioni: la revisione del codice (00, 01, 02…), decisa fuori dall'app e registrata; la revisione di distinta e ciclo (v0, v1, v2…), una fotografia congelata con un periodo di validità, approvata dall'Amministratore (→ [cap. 15](#15-revisioni)) |
 | **Cruscotto** | La pagina che dice come stanno le cose: valore di magazzino, articoli fermi, sotto scorta, consegne scadute (→ [cap. 5](#il-cruscotto)) |
 | **Articolo fermo** | Un articolo con giacenza e nessun movimento da 3, 6 o 12 mesi: denaro immobilizzato a scaffale |
 | **Valore giacenza** | Esistente × costo unitario, sommato su tutto il magazzino |

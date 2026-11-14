@@ -58,7 +58,7 @@ const CLOUD_LIMITE_MS = 90000;   // una richiesta senza risposta dopo questo val
 const CLOUD_MARGINE_MS = 15000;
 // La versione dello schema che questa app si aspetta da archivio_stato()
 // (dalla 0.141.0): si alza insieme a `schema_versione` in supabase/schema.sql.
-const CLOUD_SCHEMA_VERSIONE = 9;
+const CLOUD_SCHEMA_VERSIONE = 10;
 const CLOUD_PULIZIA_MS = 6 * 3600 * 1000;   // ogni quanto un PC ricorda al server di pulire
 
 function cloudLeggi(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
@@ -597,7 +597,15 @@ async function cloudGiro() {
   try {
     await cloudInvia();
     await cloudPulizia();
-    if (!Store.hasPendingChanges()) await cloudRicevi();
+    if (!Store.hasPendingChanges()) {
+      await cloudRicevi();
+      // Arrivati i dati dei colleghi, l'Amministratore fa il passaggio alle
+      // revisioni approvate (views-rev.js) e lo manda subito, nello stesso giro.
+      if (revAvvio() > 0) {
+        await cloudInvia();
+        if (typeof renderView === 'function' && typeof activeView !== 'undefined') renderView(activeView);
+      }
+    }
     _cloud.ultimo = new Date();
     // I codici visti presi da un collega valgono un giro: se intanto li ha
     // restituiti tornano liberi, e se li tiene ancora il server lo ridice.

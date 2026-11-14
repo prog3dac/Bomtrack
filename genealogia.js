@@ -269,7 +269,7 @@ function storiaNodo(key) {
     n.badge = opChiusa(o, f) ? '<span class="doc-badge st-completato">Chiusa</span>'
       : opAvviata(o, f) ? '<span class="doc-badge st-corso">In corso</span>' : '<span class="doc-badge st-bozza">Da fare</span>';
   }
-  else if (k === 'rev') { n.numero = d.ecoNumber || ''; n.titolo = articolo(d.itemId) + (d.rev ? ' rev. ' + d.rev : ''); n.sotto = d.motivo || ''; n.badge = '<span class="doc-badge st-chiuso">Rilasciata</span>'; }
+  else if (k === 'rev') { n.numero = d.ecoNumber || ''; n.titolo = articolo(d.itemId) + (d.rev ? ' ' + revLabel(d.rev) : ''); n.sotto = d.motivo || ''; n.badge = '<span class="doc-badge st-chiuso">Rilasciata</span>'; }
   return n;
 }
 // Il testo che si cerca di un documento: numero, titolo, controparte, articolo.
