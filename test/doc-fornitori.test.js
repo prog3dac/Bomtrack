@@ -60,8 +60,9 @@ describe('Documenti per i fornitori', () => {
     const a = app();
     const d = pdf(a, "exportOrderPDF('o1')");
     const desc = d.tabelle[0].body.map(r => r[2]);
-    // La revisione del codice (dalla 0.159.0), non la lettera della distinta.
-    assert.match(desc[0], /Dis\. \/ Drw\. 12-345 rev\. 03/);
+    // Un commerciale porta il disegno senza revisione: la revisione del codice
+    // è dei codici da progetto (dalla 0.159.0), e la si vede sull'ODL qui sotto.
+    assert.match(desc[0], /Dis\. \/ Drw\. 12-345(?! rev)/);
     assert.match(desc[0], /Certificate required: 3\.1 EN 10204/);
     assert.equal(desc[1], 'Vite', 'un articolo senza disegno né piano resta com\'era');
   });

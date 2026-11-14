@@ -582,7 +582,8 @@ function itemTechFieldsHtml(it) {
       </div>
     </div>
     <div class="modal-grid" id="fld-drawing">
-      ${itemTechTxt(it, 'it-drawing', 'drawingRef', 'Riferimento disegno', 'es. DIS-0412 rev. B', false)}
+      ${itemTechTxt(it, 'it-drawing', 'drawingRef', 'Riferimento disegno', 'es. DIS-0412', false)}
+      ${it && it.id && hasRevisions(it) ? `<div class="modal-field"><label>Revisione del codice</label><span id="it-coderev" class="empty-text" style="padding:0;text-align:left">${codeRevCampoHtml(it)}</span></div>` : ''}
     </div>`;
 }
 // Un numero tecnico in italiano, senza zeri inutili.

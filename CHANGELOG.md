@@ -9,7 +9,8 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 - **Validità senza buchi.** Ogni revisione vale da una data; la precedente finisce il giorno prima. Le date non si sovrappongono, non si sceglie una data passata e la revisione in corso non ha data di fine.
 - **Si usa solo una revisione approvata e valida alla data in cui il pezzo serve.** MRP, ordini di produzione, montaggio e conto lavoro leggono distinta e ciclo dalla revisione valida, non dalla bozza. Un articolo senza revisione valida resta fuori e l'MRP lo segnala; l'ordine di produzione ricorda revisione e revisione del codice.
 - **Chi decide.** Progettazione modifica la bozza e chiede l'approvazione, dicendo se la modifica è tecnica, commerciale o economica e da quando vale. L'Amministratore approva o respinge con una nota; il cruscotto gli segnala le richieste. Mentre la richiesta è aperta, la bozza non si tocca. Quando una revisione del codice nuova arriva dopo l'ultima revisione approvata, l'articolo chiede di allineare distinta e ciclo o di confermare che vanno bene così.
-- **Si attiva quando si vuole.** Finché l'Amministratore non preme *Attiva le revisioni approvate…* tutto funziona come prima. All'attivazione ogni distinta e ciclo in uso riceve un'approvazione iniziale, senza numero MT.
+- **La revisione del codice sta nella scheda del codice**, e solo per i codici da progetto (parti e assiemi): *Anagrafica → Tecnico*, accanto al disegno, con *Nuova revisione del codice…*. Un commerciale porta il disegno sui documenti senza revisione.
+- **Valgono sempre**, senza un pulsante per attivarle. Un archivio di prima fa il passaggio da solo al primo accesso di chi modifica le distinte (con l'archivio condiviso, dell'Amministratore): ogni distinta e ciclo in uso riceve un'approvazione iniziale, senza numero MT.
 
 Da sapere: il costo, le righe di richieste e ordini e i collaudi leggono ancora la bozza (in `docs/analisi-tecnica.md`, R1–R4).
 

@@ -28,9 +28,8 @@
 // ── Revisioni approvate (dalla 0.159.0) ──
 // Il modello qui sopra lasciava usare la distinta mentre la si scriveva: piani,
 // ODP e fasi per il terzista leggevano la copia in lavorazione, e la revisione
-// rilasciata era solo una fotografia per lo storico. Da quando le revisioni
-// approvate sono attive (Gestione → Revisioni, `settings.revApprovate`) vale la
-// regola opposta, ma solo dove conta: **la bozza resta sempre modificabile, e
+// rilasciata era solo una fotografia per lo storico. Ora vale la regola
+// opposta, ma solo dove conta: **la bozza resta sempre modificabile, e
 // piani e ODP usano soltanto una revisione approvata e valida alla data in cui
 // il pezzo serve**. La fotografia diventa così la cosa che si usa, non un
 // ricordo.
@@ -142,10 +141,11 @@ function revDalErrore(itemId, dal) {
 }
 
 // ─── Chi usa che cosa ───
-// Le revisioni approvate sono attive? Prima che l'Amministratore le attivi,
-// piani e ODP continuano a usare la bozza come hanno sempre fatto: un archivio
-// che ha mille distinte e nessuna revisione non deve svegliarsi con i piani
-// vuoti.
+// Le revisioni approvate valgono sempre. `settings.revApprovate` dice solo che
+// l'archivio ha già fatto il passaggio dal modello di prima (revAvvio, qui
+// sotto): finché non l'ha fatto, piani e ODP usano la bozza come hanno sempre
+// fatto, perché un archivio con mille distinte e nessuna revisione non deve
+// svegliarsi con i piani vuoti.
 function revApprovateAttive() { return !!(db.settings && db.settings.revApprovate); }
 // Ha bisogno di una revisione per essere usato? Un assieme sì, e una parte
 // fatta in casa. Una parte comprata è una foglia d'acquisto: la sua distinta
@@ -462,6 +462,7 @@ function nextCodeRev(rev) { return codeRevPad(Number(rev || 0) + 1); }
 function registraCodeRev(itemId, dati) {
   if (!roleGuard('bom')) return null;
   const it = getItem(itemId); if (!it) return null;
+  if (!hasRevisions(it)) { showToast('La revisione del codice si registra solo sui codici da progetto: parti e assiemi', 'error'); return null; }
   const d = dati || {};
   const ultima = itemCodeRevUltima(it);
   const rev = /^\d{1,3}$/.test(String(d.rev || '')) ? codeRevPad(d.rev) : nextCodeRev(ultima);
@@ -495,7 +496,7 @@ function codeRevConfermaAllineata(itemId) {
 }
 function codeRevModal(itemId) {
   if (!roleGuard('bom')) return;
-  const it = getItem(itemId); if (!it) return;
+  const it = getItem(itemId); if (!it || !hasRevisions(it)) return;
   const ultima = itemCodeRevUltima(it);
   const storia = (it.codeRevs || []).slice().reverse().map(x => `<li><strong>Rev. ${esc(x.rev)}</strong> dal ${esc(fmtDateIt(x.from))}${x.drawingRef ? ' · ' + esc(x.drawingRef) : ''}${x.note ? ' — ' + esc(x.note) : ''} <span class="storico-prima">${esc(x.by ? actorName(x.by) : '')}</span></li>`).join('');
   openModal(`<h3>${ico('pin', 'tinted pill', '')} Registra revisione del codice</h3>
@@ -509,7 +510,7 @@ function codeRevModal(itemId) {
     <div class="modal-actions">
       <button class="btn-ghost" onclick="closeModal()">Annulla</button>
       <button class="add-btn-sm" onclick="codeRevConfirm('${it.id}')">Registra</button>
-    </div>`, false, 'form');
+    </div>`, false, 'coderev');
 }
 function codeRevConfirm(itemId) {
   const voce = registraCodeRev(itemId, { rev: val('crev-num'), dal: val('crev-dal'), drawingRef: val('crev-dis'), note: val('crev-nota') });
@@ -517,8 +518,20 @@ function codeRevConfirm(itemId) {
   closeModal();
   const it = getItem(itemId);
   revRidisegna(it);
+  const campo = document.getElementById('it-coderev');
+  if (campo) campo.innerHTML = codeRevCampoHtml(it);
   if (typeof activeView !== 'undefined' && activeView === 'catalog' && typeof renderCatalog === 'function') renderCatalog();
   savedToast(`Revisione del codice ${voce.rev} registrata`);
+}
+// Nella scheda di modifica dell'articolo, accanto al disegno: la revisione in
+// cui il codice è adesso e il pulsante per registrare la successiva.
+function codeRevCampoHtml(it) {
+  const st = it.codeRevs || [];
+  const cr = itemCodeRev(it), ultima = itemCodeRevUltima(it);
+  const voce = st.slice().reverse().find(x => x.rev === cr);
+  const dopo = ultima !== cr ? st[st.length - 1] : null;
+  return `<strong>rev. ${esc(cr)}</strong>${voce ? ` dal ${esc(fmtDateIt(voce.from))}` : st.length ? '' : ' (alla creazione)'}${dopo ? ` · prossima <strong>rev. ${esc(dopo.rev)}</strong> dal ${esc(fmtDateIt(dopo.from))}` : ''}
+    ${canWrite('bom') ? `<button type="button" class="btn-outline" style="margin-left:8px" onclick="codeRevModal('${it.id}')">${ico('pin', 'tinted', '')} Nuova revisione del codice…</button>` : ''}`;
 }
 
 // ─── Richiesta, approvazione, respingimento (dalla 0.159.0) ───
@@ -572,31 +585,19 @@ function revDaApprovareAllAvvio() {
     return !ultima || !revDiffVuoto(revDiff(ultima.snapshot, revSnapshot(it)));
   });
 }
-function revAttivaModal() {
-  if (!isAdmin()) { showToast('Le revisioni approvate le attiva l\'Amministratore', 'error'); return; }
-  const lista = revDaApprovareAllAvvio();
-  openModal(`<h3>${ico('pin', 'tinted pill', '')} Attiva le revisioni approvate</h3>
-    <p>Da adesso piani, ODP e ordini di lavoro useranno solo distinte e cicli <strong>approvati e validi</strong> alla data in cui il pezzo serve. La bozza resta modificabile, ma non la usa più nessuno finché non viene approvata.</p>
-    <p>Per non fermare niente, <strong>${lista.length} ${lista.length === 1 ? 'codice riceve' : 'codici ricevono'}</strong> adesso un'approvazione iniziale valida da oggi: quelli che non sono mai stati rilasciati o la cui bozza è cambiata dall'ultimo rilascio. Gli altri usano l'ultima revisione rilasciata.</p>
-    <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeModal()">Annulla</button>
-      <button class="add-btn-sm" onclick="revAttivaConfirm()">Attiva</button>
-    </div>`, false, 'form');
-}
-function revAttiva() {
-  if (!roleGuard('bom') || !isAdmin()) return -1;
+// Il passaggio si fa da solo, la prima volta che entra chi può farlo: con
+// l'archivio condiviso l'Amministratore, dopo aver ricevuto i dati dei
+// colleghi; in locale chi modifica le distinte. Restituisce quante
+// approvazioni iniziali ha fatto, -1 se non tocca a chi è entrato.
+function revAvvio() {
+  if (revApprovateAttive()) return 0;
+  const condiviso = typeof Store !== 'undefined' && Store.modoCondiviso;
+  if (!currentUser || !canWrite('bom') || (condiviso && !isAdmin())) return -1;
   const lista = revDaApprovareAllAvvio();
   lista.forEach(it => releaseRevision(it.id, 'Approvazione iniziale', { iniziale: true }));
   db.settings.revApprovate = true;
   saveDB();
   return lista.length;
-}
-function revAttivaConfirm() {
-  const n = revAttiva();
-  if (n < 0) return;
-  closeModal();
-  if (typeof renderView === 'function') renderView(activeView);
-  savedToast(`Revisioni approvate attive${n ? ` · ${n} approvazioni iniziali` : ''}`);
 }
 
 // ─── Interfaccia ───
@@ -646,10 +647,8 @@ function renderRevBar(elId, itemId) {
   el.innerHTML = `${revBadge(it)}
     ${azioni}
     <button class="btn-outline" onclick="revHistoryModal('${it.id}')">${ico('clock', 'tinted', '')} Storico revisioni</button>
-    ${attive ? `<button class="btn-outline" onclick="codeRevModal('${it.id}')" title="La revisione del disegno, decisa fuori dall'app">Revisione del codice</button>` : ''}
     <button class="btn-outline" onclick="ecoRegistroModal()" title="Tutte le revisioni approvate, di tutti gli articoli">Modifiche tecniche</button>${isAssembly(it.type) ? `
     <button class="btn-outline" onclick="bomCompareModal('${it.id}')" title="Le differenze con un'altra distinta, su tutti i livelli">⇄ Confronta con…</button>` : ''}
-    ${!attive && isAdmin() ? `<button class="btn-ghost" onclick="revAttivaModal()" title="Piani e ODP useranno solo revisioni approvate">Attiva le revisioni approvate…</button>` : ''}
     ${revFasceHtml(it)}`;
 }
 function renderBomRevBar() { renderRevBar('bom-rev-bar', currentBomId); }

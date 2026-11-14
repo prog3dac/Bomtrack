@@ -94,7 +94,7 @@ function itemInfoHtml(it) {
   return `<h3>${ico('eye', 'tinted pill', 'Scheda di sola lettura')} ${esc(it.code)} — ${esc(it.name)}${itemBadges(it)}</h3>
     <p style="color:var(--text-dim);margin-bottom:4px">
       <span class="bom-type-tag tt-${typeKey(it.type)}">${typeShort(it.type)}</span> ${esc(typeLabel(it.type))}
-      · U.M. <strong>${esc(it.uom || '—')}</strong> · codice rev. <strong>${esc(itemCodeRev(it))}</strong>${hasRevisions(it) ? ` · ${itemInfoRevStato(it)}` : ''}</p>
+      · U.M. <strong>${esc(it.uom || '—')}</strong>${hasRevisions(it) ? ` · codice rev. <strong>${esc(itemCodeRev(it))}</strong> · ${itemInfoRevStato(it)}` : ''}</p>
     <p class="empty-text" style="text-align:left;padding:0 0 12px">Scheda di <strong>sola lettura</strong>: qui non si modifica niente, e per questo si può aprire in mezzo a qualunque lavoro. Le modifiche si fanno dall'anagrafica, dal listino e dalla distinta.</p>
     ${itemInfoBody(it)}
     <div class="modal-actions">

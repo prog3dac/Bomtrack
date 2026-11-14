@@ -1120,7 +1120,7 @@ function odlMaterialeInviato(o) {
     const it = getItem(clPhaseItemId(l));
     return { code: l.code || (it && it.code) || '', name: it ? it.name || '' : '',
       qty: Number(l.qty) || 0, uom: l.uom || '', startDate: l.startDate || '',
-      disegno: it && it.drawingRef ? `Dis. ${it.drawingRef} rev. ${itemCodeRev(it, l.startDate || '')}` : '' };
+      disegno: it && it.drawingRef ? `Dis. ${it.drawingRef}${hasRevisions(it) ? ' rev. ' + itemCodeRev(it, l.startDate || '') : ''}` : '' };
   });
 }
 // La merce in conto lavorazione viaggia con il nostro DDT, causale «conto

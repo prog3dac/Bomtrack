@@ -597,7 +597,15 @@ async function cloudGiro() {
   try {
     await cloudInvia();
     await cloudPulizia();
-    if (!Store.hasPendingChanges()) await cloudRicevi();
+    if (!Store.hasPendingChanges()) {
+      await cloudRicevi();
+      // Arrivati i dati dei colleghi, l'Amministratore fa il passaggio alle
+      // revisioni approvate (views-rev.js); il giro dopo le manda.
+      if (typeof revAvvio === 'function' && revAvvio() > 0) {
+        _cloud.ancora = true;
+        if (typeof renderView === 'function' && typeof activeView !== 'undefined') renderView(activeView);
+      }
+    }
     _cloud.ultimo = new Date();
     // I codici visti presi da un collega valgono un giro: se intanto li ha
     // restituiti tornano liberi, e se li tiene ancora il server lo ridice.

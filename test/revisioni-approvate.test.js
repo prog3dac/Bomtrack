@@ -9,10 +9,12 @@
 //      genera ordini di produzione, e lo si dice;
 //   4. approva solo l'Amministratore; gli altri chiedono, e la bozza in
 //      approvazione non si modifica;
-//   5. prima dell'attivazione non cambia niente: un archivio con mille
-//      distinte e nessuna revisione non si sveglia con i piani vuoti;
-//   6. la revisione del codice (00, 01…) si registra, vale da una data, ed è
-//      quella stampata sui documenti.
+//   5. il passaggio dal modello di prima si fa da solo al primo accesso: un
+//      archivio con mille distinte e nessuna revisione non si sveglia con i
+//      piani vuoti;
+//   6. la revisione del codice (00, 01…) è dei codici da progetto: si
+//      registra dalla loro scheda, vale da una data, ed è quella stampata sui
+//      documenti.
 
 const assert = require('node:assert/strict');
 const { describe, it } = require('./tap.js');
@@ -182,44 +184,73 @@ describe('Chi approva', () => {
   });
 });
 
-describe('Attivazione', () => {
-  it('approva da oggi chi non è mai stato rilasciato o è cambiato, senza numero MT', () => {
+describe('Passaggio alle revisioni approvate', () => {
+  it('al primo accesso approva chi non è mai stato rilasciato o è cambiato, senza numero MT', () => {
     const a = app();
     a.eval(`releaseRevision('p1', 'già rilasciata')`);           // bozza uguale all'ultima
-    assert.equal(a.eval('revAttiva()'), 1, 'solo g1, mai rilasciato');
+    assert.equal(a.eval('revAvvio()'), 1, 'solo g1, mai rilasciato');
     assert.equal(a.eval('revApprovateAttive()'), true);
     const r = ev(a, `revValidaAl('g1')`);
     assert.equal(r.motivo, 'Approvazione iniziale');
     assert.equal(r.ecoNumber, '');
     assert.equal(r.validFrom, oggi(a));
     assert.ok(a.eval(`revValidaAl('p1')`), 'p1 usa l\'ultima rilasciata');
+    assert.equal(a.eval('revAvvio()'), 0, 'una volta sola');
   });
 
-  it('la attiva solo l\'Amministratore', () => {
+  it('lo fa chi modifica le distinte; con l\'archivio condiviso solo l\'Amministratore', () => {
+    assert.equal(app({}, 'officina').eval('revAvvio()'), -1);
+    assert.ok(app({}, 'progettazione').eval('revAvvio()') > 0, 'in locale basta Progettazione');
     const a = app({}, 'progettazione');
-    assert.equal(a.eval('revAttiva()'), -1);
+    a.eval('Store.modoCondiviso = true');
+    assert.equal(a.eval('revAvvio()'), -1);
     assert.equal(a.eval('revApprovateAttive()'), false);
+  });
+
+  it('non c\'è più un pulsante per attivarle', () => {
+    const a = app();
+    a.eval(`document.body.insertAdjacentHTML('beforeend', '<div id="bom-rev-bar"></div>'); renderRevBar('bom-rev-bar', 'g1')`);
+    assert.ok(!/Attiva le revisioni/.test(a.html('bom-rev-bar')));
+    assert.ok(!/codeRevModal/.test(a.html('bom-rev-bar')), 'la revisione del codice sta nella scheda del codice');
   });
 });
 
 describe('Revisione del codice', () => {
   it('parte da 00, sale, vale da una data e la stampano i documenti', () => {
     const a = app({ revApprovate: true });
-    assert.equal(a.eval(`itemCodeRev(getItem('c1'))`), '00');
+    assert.equal(a.eval(`itemCodeRev(getItem('p1'))`), '00');
     const dopo = giorni(a, 15);
-    a.eval(`registraCodeRev('c1', { dal: '${dopo}', drawingRef: 'DIS-1', note: 'foro' })`);
-    assert.equal(a.eval(`itemCodeRev(getItem('c1'))`), '00', 'fino al giorno scelto vale la 00');
-    assert.equal(a.eval(`itemCodeRev(getItem('c1'), '${dopo}')`), '01');
-    assert.equal(a.eval(`getItem('c1').drawingRef`), 'DIS-1');
-    const riga = ev(a, `lineExtraDoc({ itemId: 'c1', deliveryDate: '${dopo}' })`);
+    a.eval(`registraCodeRev('p1', { dal: '${dopo}', drawingRef: 'DIS-1', note: 'foro' })`);
+    assert.equal(a.eval(`itemCodeRev(getItem('p1'))`), '00', 'fino al giorno scelto vale la 00');
+    assert.equal(a.eval(`itemCodeRev(getItem('p1'), '${dopo}')`), '01');
+    assert.equal(a.eval(`getItem('p1').drawingRef`), 'DIS-1');
+    const riga = ev(a, `lineExtraDoc({ itemId: 'p1', deliveryDate: '${dopo}' })`);
     assert.deepEqual(riga, ['Dis. / Drw. DIS-1 rev. 01']);
   });
 
   it('non torna indietro', () => {
     const a = app({ revApprovate: true });
-    a.eval(`registraCodeRev('c1', { rev: '03' })`);
-    assert.equal(a.eval(`registraCodeRev('c1', { rev: '02' })`), null);
-    assert.equal(a.eval(`itemCodeRevUltima(getItem('c1'))`), '03');
+    a.eval(`registraCodeRev('p1', { rev: '03' })`);
+    assert.equal(a.eval(`registraCodeRev('p1', { rev: '02' })`), null);
+    assert.equal(a.eval(`itemCodeRevUltima(getItem('p1'))`), '03');
+  });
+
+  it('è solo dei codici da progetto: un commerciale non ce l\'ha', () => {
+    const a = app({ revApprovate: true });
+    assert.equal(a.eval(`registraCodeRev('c1', {})`), null);
+    assert.equal(a.eval(`(getItem('c1').codeRevs || []).length`), 0);
+    a.eval(`getItem('c1').drawingRef = 'CAT-7'`);
+    assert.deepEqual(ev(a, `lineExtraDoc({ itemId: 'c1' })`), ['Dis. / Drw. CAT-7'], 'il disegno sì, la revisione no');
+  });
+
+  it('si vede e si registra dalla scheda del codice', () => {
+    const a = app();
+    a.eval(`registraCodeRev('p1', { rev: '02', dal: '2026-01-01' })`);
+    const campo = a.eval(`codeRevCampoHtml(getItem('p1'))`);
+    assert.match(campo, /rev\. 02<\/strong> dal 01\/01\/2026/);
+    assert.match(campo, /codeRevModal\('p1'\)/);
+    assert.match(a.eval(`itemTechFieldsHtml(getItem('p1'))`), /id="it-coderev"/);
+    assert.ok(!/it-coderev/.test(a.eval(`itemTechFieldsHtml(getItem('c1'))`)), 'un commerciale no');
   });
 
   it('dopo una revisione del codice nuova, distinta e ciclo validi vanno riallineati', () => {

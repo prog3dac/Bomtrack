@@ -1627,6 +1627,8 @@ chi l'ha approvata. E poter tornare a com'era una distinta in un certo momento.
 | | Revisione del codice | Revisione di distinta e ciclo |
 |---|---|---|
 | Numeri | 00, 01, 02… (00 alla creazione) | v0, v1, v2… (v0 alla creazione) |
+| Chi ce l'ha | i codici da progetto: parti e assiemi | assiemi e parti fatte in casa |
+| Dove si vede e si cambia | nella scheda dell'articolo | nella barra revisioni di distinta e ciclo |
 | Dove si decide | fuori dall'app: ufficio tecnico, CAD | nell'app |
 | Come cambia | si **registra** | bozza → richiesta → **approvazione** |
 | Sui PDF di richieste, ordini e ordini di lavoro | «Dis. … rev. 02» | no |
@@ -1701,9 +1703,10 @@ Nella barra revisioni i badge dicono tutto in una riga: *Codice rev. 02*, *Valid
 
 ### Revisione del codice
 
-È il numero del cartiglio del disegno: si decide fuori dall'app e qui si **registra**, con
-**Revisione del codice** nella barra revisioni: numero (propone il successivo), data da cui vale,
-riferimento disegno e nota. La registrazione fotografa i dati tecnici dell'articolo (materiale,
+È il numero del cartiglio del disegno: dice in che revisione è il codice. Si decide fuori
+dall'app e qui si **registra**, dalla scheda dell'articolo: *Anagrafica articoli →* l'articolo *→
+Tecnico*, accanto al riferimento disegno, c'è la revisione in cui è il codice e **Nuova revisione
+del codice…**: numero (propone il successivo), data da cui vale, riferimento disegno e nota. La registrazione fotografa i dati tecnici dell'articolo (materiale,
 finitura, trattamento, pesi, misure). Il numero non torna indietro.
 
 Sulle righe di richieste, ordini e ordini di lavoro la riga «Dis. … rev. 02» porta la revisione
@@ -1714,13 +1717,15 @@ Ogni revisione di distinta e ciclo dice **per quale revisione del codice è fatt
 revisione del codice nuova, la barra avvisa che distinta e ciclo validi sono fatti per la
 precedente: **Vanno bene anche per la 02** lo conferma, altrimenti si prepara una revisione nuova.
 
-La revisione del codice ce l'hanno tutti gli articoli, anche i commerciali.
+La revisione del codice ce l'hanno solo i **codici da progetto**, parti e assiemi. Un commerciale
+o una materia prima porta il riferimento disegno senza revisione; anche la scheda di sola lettura
+mostra la revisione del codice solo per parti e assiemi.
 
-### Attivare le revisioni approvate
+### Il passaggio dalle versioni prima della 0.159.0
 
-Sono spente finché l'Amministratore non preme **Attiva le revisioni approvate…** nella barra
-revisioni: fino ad allora piani e ODP usano la bozza come sempre, e chi ha il ruolo per le distinte
-rilascia da solo (**Nuova revisione**). All'attivazione, per non fermare niente, ogni codice che
+Le revisioni approvate valgono sempre, e non c'è niente da attivare. Un archivio che arriva da una
+versione precedente fa il passaggio da solo, una volta, al primo accesso di chi modifica le
+distinte (con l'archivio condiviso, dell'Amministratore). Per non fermare niente, ogni codice che
 non è mai stato rilasciato o la cui bozza è cambiata dall'ultimo rilascio riceve
 un'**approvazione iniziale** valida da oggi, senza numero MT. Le revisioni rilasciate prima
 diventano approvate, ciascuna valida dal giorno del suo rilascio.
