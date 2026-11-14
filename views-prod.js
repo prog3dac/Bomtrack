@@ -916,7 +916,9 @@ function odpSetField(id, field, value) {
     // uscito: si fa in bozza, dove il materiale non è ancora congelato per
     // nessuno. Ricongelarlo qui tiene le due cose d'accordo senza chiederlo.
     o.qty = Math.max(0, Number(value) || 0);
-    const part = getItem(o.itemId);
+    // In bozza il materiale segue i pezzi, dalla revisione che l'ordine aveva
+    // già (dalla 0.159.0): cambiare i pezzi non cambia revisione.
+    const part = odpRevItem(o);
     // Una ripresa (dalla 0.145.0) non ha la distinta per materiale: ha i pezzi stessi.
     if (part && o.status === 'bozza') o.materials = o.reworkOfId ? (o.materials || []).map(m => Object.assign(m, { qty: o.qty * (Number(m.perPezzo) || 1) })) : opFreezeMaterials(part, o.qty, o.planId);
     if (o.status === 'bozza') odpPianifica(o);
@@ -1553,18 +1555,35 @@ function opAnnullaDichiarazioneAsk(declId) {
 function nextOdpNumber() { return numeroProgressivo('ODP'); }
 // La fabbrica unica: dal fabbisogno e dalla mano passano di qui entrambe, così
 // un ordine scritto a mano non è una seconda specie di ordine.
+// L'articolo nella revisione con cui l'ordine è nato (dalla 0.159.0), o la
+// revisione valida alla sua data se l'ordine è di prima.
+function odpRevItem(o) {
+  const part = getItem(o.itemId);
+  if (!part) return null;
+  const r = o.rev && (db.revisions || []).find(x => x.itemId === part.id && x.rev === o.rev);
+  if (r && r.snapshot && revApprovateAttive()) return Object.assign({}, part, { components: r.snapshot.components || [], cycle: r.snapshot.cycle || [], operations: r.snapshot.operations || [], _rev: r });
+  const op = itemOperativo(part, o.dueDate || oggiISO());
+  return op && op._senzaRev ? part : op;
+}
 function odpNew(part, qty, dueDate, extra) {
   const n = Math.max(0, Number(qty) || 0);
   const planId = (extra && extra.planId) || null;
+  // Con le revisioni approvate attive (dalla 0.159.0) fasi e materiale vengono
+  // dalla revisione valida il giorno in cui i pezzi servono, non dalla bozza;
+  // e senza una revisione valida l'ordine non nasce.
+  const quando = dueDate || oggiISO();
+  const op = itemOperativo(part, quando);
+  if (op && op._senzaRev) { showToast(`${part.code || 'Questo articolo'} non ha una revisione approvata valida al ${fmtDateIt(quando)}: l'ordine di produzione non si crea`, 'error'); return null; }
+  const revInfo = op && op._rev ? { rev: op._rev.rev, codeRev: itemCodeRev(part, quando) } : {};
   return odpPianifica(stampNew(Object.assign({
     id: gid(), number: nextOdpNumber(), itemId: part.id,
     code: part.code || '', name: part.name || '', uom: itemUom(part),
     qty: n, date: oggiISO(), dueDate: dueDate || '',
     status: 'bozza', title: '', notes: '', notesInternal: '',
     planId: null, jobId: null,
-    phases: opFreezePhases(part), materials: opFreezeMaterials(part, n, planId),
+    phases: opFreezePhases(op), materials: opFreezeMaterials(op, n, planId),
     active: true,
-  }, extra || {})));
+  }, revInfo, extra || {})));
 }
 // ─── Le date delle fasi ───
 // Ogni fase porta inizio e fine **pianificati**, calcolati a ritroso dalla data
@@ -1653,6 +1672,7 @@ function odpNewSave(partId) {
   const due = val('odp-new-due');
   return conNumeri({ ODP: 1 }, () => {
     const o = odpNew(part, qty, due);
+    if (!o) return;
     db.prodOrders.push(o); saveDB();
     closeModal(); currentOdpId = o.id; odpView = 'edit'; renderOdp();
     showToast(`Ordine di produzione ${o.number} creato`);

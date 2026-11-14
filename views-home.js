@@ -270,6 +270,14 @@ function homeSegnali() {
       voci: [voce(fmtMB(dbSpazio().usatoMB) + ' su ' + fmtMB(dbSpazio().limiteMB), 'Oltre il limite i salvataggi falliscono: esporta un backup e alleggerisci l\'archivio', '')] });
   }
 
+  // Le revisioni di distinta e ciclo in attesa di approvazione (dalla 0.159.0):
+  // le decide l'Amministratore, ed è lui che deve vederle.
+  if (isAdmin() && revApprovateAttive()) {
+    agg(revDaApprovare().map(it => voce(it.code, `${it.name} — ${revLabel(itemRev(it))} chiesta da ${actorName(it.revRequest.by) || '—'} il ${fmtDateIt(it.revRequest.at)}, valida dal ${fmtDateIt(it.revRequest.dal)}`,
+      it.type === 'parte' ? `homeApri('cycle','${it.id}')` : `homeApri('bom','${it.id}')`)),
+    'revisione da approvare', 'revisioni da approvare', 'bom', 'media');
+  }
+
   // Prima i più gravi (dalla 0.105.6), come promette il manuale: l'allarme
   // rosso del backup o dello spazio stava in fondo, sotto le informazioni.
   // L'ordinamento è stabile: a parità di gravità resta l'ordine di sopra.

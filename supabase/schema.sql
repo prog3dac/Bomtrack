@@ -223,6 +223,13 @@ alter table public.items add column if not exists treatment text;
 alter table public.items add column if not exists gross_weight_kg numeric;
 alter table public.items add column if not exists barcode text;
 alter table public.items add column if not exists drawing_ref text;
+-- Revisioni approvate (dalla 0.159.0): la richiesta di approvazione in corso,
+-- l'ultimo respingimento, le revisioni del codice registrate e la conferma
+-- che distinta e ciclo valgono anche per l'ultima.
+alter table public.items add column if not exists rev_request jsonb;
+alter table public.items add column if not exists rev_rejected jsonb;
+alter table public.items add column if not exists code_revs jsonb;
+alter table public.items add column if not exists code_rev_ok text;
 -- 0.138.0: i contatti di fornitori e clienti (nome, ruolo, email, telefono).
 -- Un elenco che si legge sempre insieme alla sua anagrafica: jsonb.
 alter table public.suppliers add column if not exists contacts jsonb;
@@ -453,6 +460,10 @@ create table if not exists public.production_orders (
   pos int, created_at timestamptz, updated_at timestamptz, created_by uuid, updated_by uuid,
   synced_at timestamptz not null default clock_timestamp()
 );
+-- La revisione di distinta e ciclo da cui l'ordine ha preso fasi e materiale,
+-- e quella del codice (dalla 0.159.0).
+alter table public.production_orders add column if not exists rev text;
+alter table public.production_orders add column if not exists code_rev text;
 
 create table if not exists public.production_order_phases (
   id uuid primary key,
@@ -606,6 +617,12 @@ create table if not exists public.item_revisions (
 alter table public.item_revisions add column if not exists eco_number text;
 alter table public.item_revisions add column if not exists eco_kind text;
 alter table public.item_revisions add column if not exists eco_impact jsonb;
+-- Revisioni approvate (dalla 0.159.0): la data da cui vale, la revisione del
+-- codice per cui è fatta e chi l'aveva chiesta. La fine validità non si salva:
+-- è il giorno prima della successiva.
+alter table public.item_revisions add column if not exists valid_from date;
+alter table public.item_revisions add column if not exists code_rev text;
+alter table public.item_revisions add column if not exists requested_by uuid;
 
 -- ─── Allegati, promemoria, cestino ──────────────────────────
 create table if not exists public.attachment_docs (
@@ -1494,6 +1511,21 @@ end $$;
 drop trigger if exists profiles_ultimo_admin on public.profiles;
 create trigger profiles_ultimo_admin before delete on public.profiles for each row execute function public.profiles_ultimo_admin();
 
+-- Le revisioni approvate (dalla 0.159.0): quando sono attive, una revisione di
+-- distinta e ciclo la approva solo l'Amministratore. L'app lo fa già; qui vale
+-- anche per chi passa dall'API con il ruolo Progettazione, che le tabelle
+-- degli articoli le scrive.
+create or replace function public.revisioni_guardia() returns trigger language plpgsql set search_path = public as $$
+begin
+  if coalesce((select (data->>'revApprovate')::boolean from public.settings where id = 1), false)
+     and auth.uid() is not null and public.ruolo_attivo() is distinct from 'admin' then
+    raise exception 'con le revisioni approvate attive una revisione la approva solo l''amministratore';
+  end if;
+  return new;
+end $$;
+drop trigger if exists revisioni_guardia on public.item_revisions;
+create trigger revisioni_guardia before insert on public.item_revisions for each row execute function public.revisioni_guardia();
+
 -- L'officina sui documenti (dalla 0.105.4). Le policy dicono quali tabelle un
 -- ruolo scrive, non quali colonne: l'officina scrive gli ordini perché un
 -- ricevimento ne cambia lo stato, e passando dall'API poteva cambiarne anche
@@ -1791,7 +1823,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 9)
+    'schema_versione', 10)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

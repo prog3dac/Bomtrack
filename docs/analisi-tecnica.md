@@ -1214,6 +1214,31 @@ tornano rimettendo quello di prima.
 lavoro non porta il fornitore da cui viene la sua tariffa: cambiando terzista
 lo si dice con un avviso, ma la riga non lo ricorda.
 
+### R. Revisioni approvate *(censite nella 0.159.0)*
+
+**R1 — il costo legge ancora la bozza.** `costOf()` (`costing.js`) esplode
+distinta e ciclo in lavorazione, come prima: è il conto che serve a chi
+progetta, ed è quello che finisce nella fotografia al rilascio. Piani, ODP e
+ordini di lavoro invece usano la revisione valida (`itemOperativo`,
+`views-rev.js`). Preventivi, consuntivo e listino di vendita andrebbero portati
+sulla revisione valida oggi, con la differenza dalla bozza in Gestione DB.
+
+**R2 — righe di richieste e ordini non salvano la revisione.** Il PDF stampa
+la revisione del codice valida alla data di consegna (`lineExtraDoc`), ma la
+riga non la ricorda: una revisione registrata dopo con una data passata
+cambierebbe la ristampa. Servono una colonna su `rfq_lines`, `order_lines` e
+`work_order_lines`.
+
+**R3 — il collaudo non dice su quale revisione è stato fatto.** Il piano di
+controllo è uno per articolo; la revisione del codice ricevuta o prodotta non
+si salva sul collaudo.
+
+**R4 — le fasi di un ODL scritto a mano e il materiale del conto lavoro**
+usano la revisione valida, ma `clPassataDiRiga` e le altre letture del ciclo
+sulle righe già scritte (`views-stock.js`) guardano ancora la bozza. Finché
+bozza e valida hanno le stesse fasi non cambia niente; con un riordino delle
+fasi in bozza la passata di una riga vecchia si legge sulla bozza.
+
 ### G. I testi per i documenti *(censite nella 0.155.0)*
 
 **G1 — non passano dal foglio Excel di Gestione.** `settings.docTexts` viaggia

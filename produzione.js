@@ -233,7 +233,7 @@ function montaggioDichiara(planId, asmId, qty, righe, note) {
   if (odp.length) { showToast(`${asm.code || 'Questo assieme'} si monta con ${odp.map(o => o.number).join(', ')}: le fasi si dichiarano lì`, 'error'); return null; }
   const q = Number(qty) || 0;
   if (!(q > 0)) { showToast('Scrivi quanti ne sono stati montati', 'error'); return null; }
-  const lista = righe || montaggioComponenti(asm, q, planId).stock.map(x => ({ itemId: x.item.id, qty: x.qty }));
+  const lista = righe || montaggioComponenti(itemOperativo(asm, p.dueDate || oggiISO()), q, planId).stock.map(x => ({ itemId: x.item.id, qty: x.qty }));
   const rec = Store.insert('productions', { planId, itemId: asmId, qty: q, date: nowISO(), note: String(note || '').trim() });
   if (!rec) return null;
   const testo = `Montaggio ${asm.code || ''} — ${p.number || ''}`.trim();
@@ -268,7 +268,8 @@ function montaggioBody() {
   const resta = daFare(planId, asm.id, richiesti);
   const u = itemUom(asm) || 'pz';
   const puoScrivere = canWriteShop('docs');
-  const comp = montaggioComponenti(asm, resta, planId);
+  const piano = getPlan(planId);
+  const comp = montaggioComponenti(itemOperativo(asm, (piano && piano.dueDate) || oggiISO()), resta, planId);
   window.__montRighe = comp.stock.map(x => ({ itemId: x.item.id, perPezzo: x.perPezzo }));
   const storico = (db.productions || [])
     .filter(x => x.planId === planId && x.itemId === asm.id)
