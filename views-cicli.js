@@ -352,7 +352,7 @@ function refreshCycleCosts(it) {
 function updateCycleRow(idx) {
   const it = currentCycleItem(); if (!it) return;
   // Il ridisegno rimette il valore salvato: senza permessi il campo non resta modificato a video
-  if (!roleGuard('catalog')) { renderCycles(); return; }
+  if (!roleGuard('catalog') || !revBozzaLibera(it.id)) { renderCycles(); return; }
   const row = (it.cycle || [])[idx]; if (!row || row.kind !== 'op') return;
   {
     // Il tempo cambia unità con la natura della fase: ore su una lavorazione
@@ -394,7 +394,7 @@ function updateCycleRow(idx) {
 // la scheda di reparto.
 function updateCycleNote(idx) {
   const it = currentCycleItem(); if (!it) return;
-  if (!roleGuard('catalog')) { renderCycles(); return; }
+  if (!roleGuard('catalog') || !revBozzaLibera(it.id)) { renderCycles(); return; }
   const row = (it.cycle || [])[idx]; if (!row || row.kind !== 'op') return;
   row.note = val('cyc-opnote-' + idx).trim();
   touch(it); saveDB();
@@ -404,6 +404,7 @@ function updateCycleNote(idx) {
 // quella del centro) prima di salvare — resta comunque un campo modificabile.
 function onCycleRowSupplierChange(idx) {
   const it = currentCycleItem(); if (!it) return;
+  if (!revBozzaLibera(it.id)) { renderCycles(); return; }
   const row = (it.cycle || [])[idx]; if (!row) return;
   if (row.costMode === 'orario') {
     const wc = getWorkCenter(row.workCenterId);
@@ -433,7 +434,7 @@ function onCycleRowSupplierChange(idx) {
 // costo: si ridisegna la riga così i campi giusti compaiono subito.
 function onCycleRowModeChange(idx) {
   const it = currentCycleItem(); if (!it) return;
-  if (!roleGuard('catalog')) { renderCycles(); return; }
+  if (!roleGuard('catalog') || !revBozzaLibera(it.id)) { renderCycles(); return; }
   const row = (it.cycle || [])[idx]; if (!row) return;
   row.costMode = val('cyc-opmode-' + idx) === 'orario' ? 'orario' : 'fisso';
   // Le ore non si toccano cambiando modo: sono un tempo, e il tempo della fase
@@ -446,14 +447,14 @@ function onCycleRowModeChange(idx) {
 }
 function delCycleRow(idx) {
   const it = currentCycleItem(); if (!it) return;
-  if (!roleGuard('catalog')) return;
+  if (!roleGuard('catalog') || !revBozzaLibera(it.id)) return;
   if (!(it.cycle || [])[idx]) return;
   it.cycle.splice(idx, 1);
   touch(it); saveDB(); renderCycles(); savedToast('Riga eliminata');
 }
 function moveCycleOp(k, dir) {
   const it = currentCycleItem(); if (!it) return;
-  if (!roleGuard('catalog')) return;
+  if (!roleGuard('catalog') || !revBozzaLibera(it.id)) return;
   const next = moveKindRow(it.cycle || [], 'op', k, dir);
   if (next === it.cycle) return;   // già in cima o in fondo
   it.cycle = next;
@@ -466,7 +467,7 @@ function closeCyclePicker() {
 // interna o conto lavoro (a seconda del fornitore scelto), a costo fisso o
 // orario (ore × tariffa, proposta dal fornitore/centro e poi modificabile).
 function addCycleOpRow() {
-  if (!roleGuard('catalog')) return;
+  if (!roleGuard('catalog') || !revBozzaLibera(currentCycleItemId)) return;
   const box = document.getElementById('picker-op'); if (!box) return;
   if (!db.workCenters.length) { showToast('Aggiungi prima un centro di lavoro in Gestione', 'error'); return; }
   const wc = db.workCenters.filter(w => w.active !== false)[0] || null;
@@ -551,7 +552,7 @@ function onCycleOpModeChange() {
 }
 function pickCycleOp() {
   const it = currentCycleItem(); if (!it) return;
-  if (!roleGuard('catalog')) return;
+  if (!roleGuard('catalog') || !revBozzaLibera(it.id)) return;
   const wcId = val('cyc-wc');
   if (!wcId) { showToast('Seleziona un centro di lavoro', 'error'); return; }
   if (!Array.isArray(it.cycle)) it.cycle = [];

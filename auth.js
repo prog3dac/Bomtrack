@@ -196,6 +196,9 @@ function doLogin(user, persist) {
   document.getElementById('app-main').style.display = 'block';
   renderUserPill();
   startClock();
+  // Il passaggio alle revisioni approvate (views-rev.js). Con l'archivio
+  // condiviso aspetta i dati dei colleghi: lo fa il primo giro di cloud.js.
+  if (!Store.modoCondiviso) revAvvio();
   // L'indirizzo comanda: chi apre un link a una vista precisa, o ricarica la
   // pagina, ci ritrova. Altrimenti si atterra sul riepilogo.
   // Un QR inquadrato prima di entrare (`#/q/…`, qr.js) si legge adesso, perché

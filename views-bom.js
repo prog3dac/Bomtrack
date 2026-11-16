@@ -405,7 +405,7 @@ function isAllowedChild(parentType, childId) {
   return !!child && (ALLOWED_CHILDREN[parentType] || []).includes(child.type);
 }
 function editComponentModal(idx) {
-  if (!roleGuard('bom')) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   const comp = it.components[idx]; if (!comp) return;
   // Il costo di riga forzato c'è solo nella distinta di una parte (prima stava
@@ -437,7 +437,7 @@ function editComponentModal(idx) {
   renderPickerResults();
 }
 function saveComponentEdit(idx) {
-  if (!roleGuard('bom')) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   const comp = it.components[idx]; if (!comp) return;
   const itemId = val('cmp-item');
@@ -459,7 +459,7 @@ function saveComponentEdit(idx) {
   saveDB(); closeModal(); renderBom(); savedToast('Componente aggiornato');
 }
 function delComponent(idx) {
-  if (!roleGuard('bom')) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   askConfirm('Eliminare questo componente dalla distinta?', () => {
     it.components.splice(idx, 1); touch(it); saveDB(); renderBom(); savedToast('Componente eliminato');
@@ -534,7 +534,7 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 }
 
 function toggleBomPanel() {
-  if (!roleGuard('bom')) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
   const it = getItem(currentBomId);
   if (!it) { showToast('Seleziona prima una macchina, un gruppo o un sottogruppo', 'error'); return; }
   const panel = document.getElementById('bom-panel'); if (!panel) return;
@@ -643,7 +643,7 @@ function bomPanelUpdateInsertBtn() {
   btn.textContent = n ? `Inserisci (${n})` : 'Inserisci';
 }
 function bomPanelInsertAll() {
-  if (!roleGuard('bom')) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   if (!bomPanelQty.size) { showToast('Imposta una quantità per almeno un articolo', 'error'); return; }
   let added = 0, skipped = 0;

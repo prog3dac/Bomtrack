@@ -2,6 +2,20 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.159.0 — 2026-11-14
+
+**Revisioni approvate di distinta e ciclo, e revisione del codice.**
+- **Due numerazioni.** La revisione del codice (00, 01, 02…) si decide fuori dall'app, sul disegno, e qui si registra con la sua data: è quella che esce su ordini, richieste di offerta e ordini di lavoro accanto al numero di disegno. Distinta e ciclo hanno una revisione sola, v0, v1, v2… (prima A, B, C): la v0 nasce con l'articolo.
+- **Validità senza buchi.** Ogni revisione vale da una data; la precedente finisce il giorno prima. Le date non si sovrappongono, non si sceglie una data passata e la revisione in corso non ha data di fine.
+- **Si usa solo una revisione approvata e valida alla data in cui il pezzo serve.** MRP, ordini di produzione, montaggio e conto lavoro leggono distinta e ciclo dalla revisione valida, non dalla bozza. Un articolo senza revisione valida resta fuori e l'MRP lo segnala; l'ordine di produzione ricorda revisione e revisione del codice.
+- **Chi decide.** Progettazione modifica la bozza e chiede l'approvazione, dicendo se la modifica è tecnica, commerciale o economica e da quando vale. L'Amministratore approva o respinge con una nota; il cruscotto gli segnala le richieste. Mentre la richiesta è aperta, la bozza non si tocca. Quando una revisione del codice nuova arriva dopo l'ultima revisione approvata, l'articolo chiede di allineare distinta e ciclo o di confermare che vanno bene così.
+- **La revisione del codice sta nella scheda del codice**, e solo per i codici da progetto (parti e assiemi): *Anagrafica → Tecnico*, accanto al disegno, con *Nuova revisione del codice…*. Un commerciale porta il disegno sui documenti senza revisione.
+- **Valgono sempre**, senza un pulsante per attivarle. Un archivio di prima fa il passaggio da solo al primo accesso di chi modifica le distinte (con l'archivio condiviso, dell'Amministratore): ogni distinta e ciclo in uso riceve un'approvazione iniziale, senza numero MT.
+
+Da sapere: il costo, le righe di richieste e ordini e i collaudi leggono ancora la bozza (in `docs/analisi-tecnica.md`, R1–R4).
+
+Schema 10: nuove colonne su `item_revisions`, `items` e `production_orders`, e un controllo che lascia approvare solo l'Amministratore. L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql`.
+
 ### 0.158.0 — 2026-11-13
 
 **Gli strumenti di misura si registrano in Gestione, come le macchine.**

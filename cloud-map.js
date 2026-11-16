@@ -257,6 +257,10 @@ const CLOUD_TYPES = (() => {
   ['lastCal', 'nextDue', 'sentOn'].forEach(k => { t[k] = 'date'; });
   t.adjusted = 'bool';
   ['points', 'impact'].forEach(k => { t[k] = 'jsonb'; });
+  // Revisioni approvate (dalla 0.159.0).
+  t.validFrom = 'date';
+  t.requestedBy = 'uuid';
+  ['revRequest', 'revRejected', 'codeRevs'].forEach(k => { t[k] = 'jsonb'; });
   t.year = 'int';
   ['date', 'dueDate', 'deliveryDate', 'confirmedDate', 'startDate', 'replyBy', 'validTo', 'offerValidTo', 'plannedStart', 'plannedEnd', 'downFrom', 'downTo'].forEach(k => { t[k] = 'date'; });
   ['createdAt', 'updatedAt', 'deletedAt', 'doneAt', 'sentAt', 'codeManualAt', 'startedAt', 'endedAt', 'closedAt'].forEach(k => { t[k] = 'timestamptz'; });

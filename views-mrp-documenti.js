@@ -384,7 +384,7 @@ function planCreateDocsFatto(p, kind, gruppi) {
   if (!gruppi.length) { closeModal(); showToast('Quelle righe sono già in un documento di questo tipo', 'error'); renderMrp(); return; }
   const creati = [];
   gruppi.forEach(({ supplierId, righe }) => {
-    if (kind === 'odp') { righe.forEach(r => creati.push(planNewOdp(p, r))); return; }
+    if (kind === 'odp') { righe.forEach(r => { const o = planNewOdp(p, r); if (o) creati.push(o); }); return; }
     creati.push(kind === 'rfq' ? planNewRfq(p, supplierId, righe)
       : (kind === 'odl' ? planNewOdl(p, supplierId, righe) : planNewOrder(p, supplierId, righe)));
   });
@@ -539,6 +539,7 @@ function planNewOdl(p, supplierId, righe) {
 function planNewOdp(p, r) {
   const o = odpNew(r.item, r.qtyOrder != null ? r.qtyOrder : r.qty, r.due || p.dueDate || '',
     { planId: p.id, jobId: p.jobId || null, title: p.title ? `${p.title} — ${r.item.code || ''}` : `Da ${p.number}` });
+  if (!o) return null;
   db.prodOrders.push(o);
   return o;
 }
@@ -757,6 +758,7 @@ function renderPlanEdit(id) {
       ${prodInterna ? planAvanzamentoKpi(id, exp.make) : ''}
     </div>
     ${exp.cycle ? '<div class="empty-text" style="color:var(--red)">' + ico('warning', 'tinted', '') + ' Rilevato riferimento ciclico nelle distinte: il fabbisogno è troncato su quel ramo.</div>' : ''}
+    ${mrpSenzaRevHtml(exp)}
 
     ${planTabsHtml([
       { id: 'buy', label: 'Da acquistare', n: buy.length, html: `
@@ -1363,7 +1365,7 @@ function mrpMakeTable(make, planId) {
   const rows = make.map(e => {
     const c = costOf(e.item.id).total;
     const refs = (gia.get('make#' + e.item.id) || []).filter(x => x.kind === 'odp');
-    const fasi = clCycleRuns(e.item);
+    const fasi = clCycleRuns(itemOperativo(e.item, e.due || oggiISO()));
     const seg = [];
     if (refs.length) seg.push(`<span class="price-best" ${clickAttrs(`openOdpFromPlan('${refs[0].id}')`, "Apri l'ordine di produzione")} title="Già lanciata con un ordine di produzione: le fasi si seguono lì">${ico('factory', 'tinted', '')} ${esc(refs.map(x => x.number).join(', '))}</span>`);
     else if (!fasi.length) seg.push(`<span class="mrp-warn" title="Il ciclo di questa parte non ha lavorazioni: non c'è nessuna successione da seguire">${ico('warning', 'tinted', '')} senza ciclo</span>`);
@@ -1418,6 +1420,15 @@ function mrpStockTable(stock) {
       <th scope="col" style="text-align:right">Esistente</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
+// I codici del piano che non hanno una revisione approvata valida il giorno in
+// cui servono (dalla 0.159.0): restano nel fabbisogno, ma sotto di loro non si
+// scende — la bozza non la usa nessuno. Si dice quali, e dove si approvano.
+function mrpSenzaRevHtml(exp) {
+  const lista = (exp && exp.senzaRev) || [];
+  if (!lista.length) return '';
+  return `<div class="empty-text" style="color:var(--red);text-align:left">${ico('warning', 'tinted', '')} ${lista.length === 1 ? 'Un codice non ha' : lista.length + ' codici non hanno'} una revisione approvata valida alla data in cui serve, e il fabbisogno sotto di ${lista.length === 1 ? 'lui' : 'loro'} non c'è:
+    ${lista.map(e => `<span class="code-link" ${clickAttrs(e.item.type === 'parte' ? `homeApri('cycle','${e.item.id}')` : `homeApri('bom','${e.item.id}')`, 'Apri la barra revisioni')}>${esc(e.item.code)}</span> al ${esc(fmtDateIt(e.due))}`).join(', ')}</div>`;
+}
 // ─── Gli assiemi da montare (dalla 0.100.0) ───
 // Il montaggio si dichiara qui, come la produzione di una parte: quanti ne sono
 // stati montati, e i componenti diretti escono dal magazzino (produzione.js).
@@ -1427,7 +1438,7 @@ function mrpAsmTable(asm, planId) {
   const rows = asm.map(e => {
     const fatti = prodottiDi(planId, e.item.id);
     const resta = daFare(planId, e.item.id, e.qty);
-    const nComp = montaggioComponenti(e.item, 1).stock.length;
+    const nComp = montaggioComponenti(itemOperativo(e.item, e.due || oggiISO()), 1).stock.length;
     const statoFatti = fatti <= 0 ? '<span class="empty-text" style="padding:0">—</span>'
       : resta > 0 ? `<span class="mrp-warn">${fmtQtyIt(fatti)}</span>` : `<span class="price-best">${fmtQtyIt(fatti)}</span>`;
     // Un assieme con un ordine di produzione nel piano si monta da lì: fasi,
@@ -1485,11 +1496,11 @@ function mrpExportData(p) {
     e, costo: costOf(e.item.id).total,
     fatti: prodottiDi(p.id, e.item.id), resta: daFare(p.id, e.item.id, e.qty),
     odp: (gia.get('make#' + e.item.id) || []).filter(x => x.kind === 'odp'),
-    senzaCiclo: !clCycleRuns(e.item).length,
+    senzaCiclo: !clCycleRuns(itemOperativo(e.item, e.due || oggiISO())).length,
   }));
   const asm = exp.asm.map(e => ({
     e, fatti: prodottiDi(p.id, e.item.id), resta: daFare(p.id, e.item.id, e.qty),
-    nComp: montaggioComponenti(e.item, 1).stock.length,
+    nComp: montaggioComponenti(itemOperativo(e.item, e.due || oggiISO()), 1).stock.length,
   }));
   const job = p.jobId ? getJob(p.jobId) : null;
   return {
@@ -1559,6 +1570,7 @@ function exportMrpExcel(id) {
   if (d.fasi.length) piano.push([`Conto lavoro (${cur()})`, eur(d.totaleCl)]);
   if (d.risparmio > 0) piano.push([`Risparmio possibile cambiando fornitore (${cur()})`, eur(d.risparmio)]);
   if (d.exp.cycle) piano.push([], ['Attenzione: riferimento ciclico nelle distinte, il fabbisogno è troncato su quel ramo']);
+  (d.exp.senzaRev || []).forEach(e => piano.push(['Attenzione: nessuna revisione approvata valida', `${e.item.code} al ${fmtDateIt(e.due)}: sotto non si scende`]));
 
   const colPrezzo = `Prezzo (${cur()}/U.M.)`, colImporto = `Importo (${cur()})`;
   const date = ['Serve per', 'Ordinare entro', 'Giorni consegna'];

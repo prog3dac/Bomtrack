@@ -615,7 +615,7 @@ function odlMaterialeProposto(o, l) {
   const pezzi = Number(l.qty) || 0;
   const righe = a.outKind === 'clStep'
     ? (a.part && hasStock(a.part) ? [{ item: a.part, perPezzo: 1, qty: pezzi }] : [])
-    : (typeof sostituzioniMateriali === 'function' ? sostituzioniMateriali(o.planId, clMaterialsOf(a.part, pezzi)) : clMaterialsOf(a.part, pezzi));
+    : (typeof sostituzioniMateriali === 'function' ? sostituzioniMateriali(o.planId, clMaterialsOf(itemOperativo(a.part, l.startDate || oggiISO()), pezzi)) : clMaterialsOf(itemOperativo(a.part, l.startDate || oggiISO()), pezzi));
   const gia = clRegistrato(o, l, 'out');
   return righe.map(x => Object.assign({}, x, { gia: gia.get(x.item.id) || 0, residuo: Math.max(0, x.qty - (gia.get(x.item.id) || 0)) }));
 }
@@ -968,7 +968,7 @@ function odlAddPhaseModal(id) {
     titolo: '+ Lavorazione da ciclo',
     // Solo gli articoli che una lavorazione ce l'hanno: gli altri aprirebbero
     // una scheda vuota, e scoprirlo dopo averli scelti è il modo peggiore.
-    filtro: i => cicloFasi(i).length > 0,
+    filtro: i => cicloFasi(itemOperativo(i)).length > 0,
     vuoto: 'Nessun articolo ha un ciclo di lavorazione. Le fasi si scrivono nella scheda dell’articolo, sotto <em>Ciclo</em>.',
   });
 }
@@ -978,7 +978,8 @@ function odlAddPhaseModal(id) {
 // invece di impedirlo.
 function odlPhasePickModal(id, ids) {
   const o = getOdl(id); if (!o) return;
-  const parti = (ids || []).map(getItem).filter(it => it && cicloFasi(it).length > 0);
+  // Le fasi della revisione valida oggi (dalla 0.159.0), non della bozza.
+  const parti = (ids || []).map(id => getItemOperativo(id)).filter(it => it && cicloFasi(it).length > 0);
   if (!parti.length) { showToast('Nessun articolo con un ciclo di lavorazione', 'error'); return; }
   const blocchi = parti.map((it, pi) => {
     const righe = clCycleRuns(it).map(t => {
@@ -1028,7 +1029,7 @@ function odlPhaseLines(scelte, pezziDi, due) {
   (scelte || []).forEach(chiave => {
     const itemId = String(chiave).split('#')[0];
     const from = Number(String(chiave).split('#')[1]) || 0;
-    const it = getItem(itemId); if (!it) return;
+    const it = getItemOperativo(itemId, due || oggiISO()); if (!it) return;
     const pezzi = Number(pezziDi(itemId)) || 0;
     if (!(pezzi > 0)) return;                  // zero pezzi non è una lavorazione
     const t = clCycleRuns(it).find(x => x.from === from); if (!t) return;
@@ -1119,7 +1120,7 @@ function odlMaterialeInviato(o) {
     const it = getItem(clPhaseItemId(l));
     return { code: l.code || (it && it.code) || '', name: it ? it.name || '' : '',
       qty: Number(l.qty) || 0, uom: l.uom || '', startDate: l.startDate || '',
-      disegno: it && it.drawingRef ? `Dis. ${it.drawingRef} rev. ${itemRev(it)}` : '' };
+      disegno: it && it.drawingRef ? `Dis. ${it.drawingRef}${hasRevisions(it) ? ' rev. ' + itemCodeRev(it, l.startDate || '') : ''}` : '' };
   });
 }
 // La merce in conto lavorazione viaggia con il nostro DDT, causale «conto

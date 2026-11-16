@@ -1223,7 +1223,11 @@ function lineExtraDoc(l) {
   const it = lineArticoloDoc(l);
   if (!it) return [];
   const out = [];
-  if (it.drawingRef) out.push(`Dis. / Drw. ${it.drawingRef} rev. ${itemRev(it)}`);
+  // La revisione del codice, quella del disegno (dalla 0.159.0), valida alla
+  // data in cui la riga serve: non la bozza di distinta, che il fornitore non
+  // vede e che poteva non essere ancora approvata.
+  // La revisione del codice solo per i codici da progetto (dalla 0.159.0).
+  if (it.drawingRef) out.push(`Dis. / Drw. ${it.drawingRef}${hasRevisions(it) ? ' rev. ' + itemCodeRev(it, l.deliveryDate || l.dueDate || l.startDate || '') : ''}`);
   const piano = (typeof qcAttivo === 'function' && qcAttivo()) ? qcPianoPer(it) : null;
   if (piano && piano.cert) out.push(`Certificato richiesto / Certificate required: ${piano.cert}`);
   return out;

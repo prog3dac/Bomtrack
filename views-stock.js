@@ -1204,8 +1204,10 @@ function clFromOdlModal(docId, lineId, verso) {
   // In uscita dal **primo** estremo del ciclo esce il materiale; da ogni altro
   // esce il pezzo stesso, che è quello tornato dalla fase precedente.
   // Con le sostituzioni decise sul piano dell'ordine (alternativi.js).
+  // Il materiale della revisione valida il giorno dell'invio (dalla 0.159.0).
+  const parteRev = itemOperativo(parte, l.startDate || oggiISO());
   const materiali = () => typeof sostituzioniMateriali === 'function'
-    ? sostituzioniMateriali(o.planId, clMaterialsOf(parte, pezzi)) : clMaterialsOf(parte, pezzi);
+    ? sostituzioniMateriali(o.planId, clMaterialsOf(parteRev, pezzi)) : clMaterialsOf(parteRev, pezzi);
   const righe = (uscita && !passaggio) ? materiali()
     : (parte && hasStock(parte) ? [{ item: parte, perPezzo: 1, qty: pezzi }] : []);
   const gia = clRegistrato(o, l, verso);

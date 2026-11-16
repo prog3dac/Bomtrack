@@ -926,6 +926,9 @@ textarea.notes-internal{border-style:dashed}
 /* Badge di stato documento (RFQ / ODA) */
 .doc-badge{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;border-radius:5px;padding:3px 8px;white-space:nowrap;border:1px solid currentColor}
 .doc-badge.st-bozza{color:var(--text-dim)}
+/* Revisioni approvate: «v0» in maiuscolo si leggerebbe «VO» */
+.rev-badge{text-transform:none;letter-spacing:0}
+.rev-fascia{flex-basis:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;padding:2px 0}
 .doc-badge.st-inviata,.doc-badge.st-inviato{color:var(--accent)}
 .doc-badge.st-ricevuta,.doc-badge.st-confermato{color:var(--purple)}
 .doc-badge.st-parziale{color:var(--orange)}
