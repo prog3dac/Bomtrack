@@ -50,20 +50,165 @@ function timbraInizia(odpId, faseId) {
   if (!opAvviata(o, f)) { showToast(`La fase ${f.seq} va avviata prima di timbrare`, 'error'); return false; }
   const chi = utenteId();
   if (logApertoDiFase(odpId, faseId, chi)) return true;
+  // Passare a un'altra fase chiude quella in corso come «Cambio lavoro»: non
+  // è tempo perso, e non si chiede niente (dalla 0.159.0).
   const aperto = logAperto(chi);
-  if (aperto) Store.update('timeLogs', aperto.id, { endedAt: nowISO() });
+  if (aperto) Store.update('timeLogs', aperto.id, { endedAt: nowISO(), pauseReason: PAUSA_CAMBIO, pauseNote: '' });
   Store.insert('timeLogs', { id: gid(), odpId, phaseId: faseId, workCenterId: f.workCenterId || null, machineId: f.machineId || null, userId: chi,
     startedAt: nowISO(), endedAt: null, note: '', active: true });
   saveDB();
   return true;
 }
-function timbraPausa(odpId, faseId) {
+// `causale` (dalla 0.159.0): l'id della causale della pausa; senza, la
+// timbratura si chiude e basta (Fine e dichiara: la fase è finita).
+function timbraPausa(odpId, faseId, causale, nota) {
   if (!roleGuardShop('docs')) return false;
   const l = logApertoDiFase(odpId, faseId, utenteId());
   if (!l) return false;
-  Store.update('timeLogs', l.id, { endedAt: nowISO() });
+  const campi = { endedAt: nowISO() };
+  if (causale) { campi.pauseReason = causale; campi.pauseNote = String(nota || '').trim(); }
+  Store.update('timeLogs', l.id, campi);
   saveDB();
   return true;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CAUSALI DI PAUSA (dalla 0.159.0)
+// ═══════════════════════════════════════════════════════════
+// La Pausa del reparto chiede perché, con un tocco. La pausa non è un record:
+// è il tempo fra la fine di una timbratura e la timbratura dopo della stessa
+// persona, e la causale sta sulla timbratura che si chiude. Le causali che
+// «contano come tempo perso» fanno le ore perse del centro e della macchina
+// della fase; le ore lavorate non cambiano, e con loro consuntivo, contatori
+// delle macchine e manutenzione.
+//
+// Una pausa che non riprende in giornata si ferma all'ora di fine giornata del
+// calendario di fabbrica: la notte non è tempo perso, e un guasto di più
+// giorni è un fermo di manutenzione, che la capacità finita già conosce.
+const PAUSA_CAMBIO = 'cambio';   // fissa: passare a un'altra fase, non si chiede
+const PAUSE_DI_SERIE = [
+  { id: 'turno', name: 'Fine turno', lost: false, maint: false },
+  { id: 'personale', name: 'Pausa personale', lost: false, maint: false },
+  { id: 'materiale', name: 'Attesa materiale', lost: true, maint: false },
+  { id: 'attrezzaggio', name: 'Attesa attrezzaggio o utensile', lost: true, maint: false },
+  { id: 'controllo', name: 'Attesa controllo qualità', lost: true, maint: false },
+  { id: 'guasto', name: 'Guasto macchina', lost: true, maint: true },
+  { id: 'altro', name: 'Altro', lost: true, maint: false, nota: true },
+];
+function causaliPausa(tutte) {
+  const l = db.settings && Array.isArray(db.settings.pauseReasons) ? db.settings.pauseReasons : PAUSE_DI_SERIE;
+  return tutte ? l : l.filter(c => c.active !== false);
+}
+function causalePausa(id) {
+  if (!id) return null;
+  if (id === PAUSA_CAMBIO) return { id, name: 'Cambio lavoro', lost: false, maint: false, fissa: true };
+  return causaliPausa(true).find(c => c.id === id) || null;
+}
+function causaleNome(id) { const c = causalePausa(id); return c ? c.name : (id ? 'causale eliminata' : ''); }
+
+// L'ora di fine giornata del calendario, «HH:MM» (di serie le 17:00).
+function fineGiornataOra() {
+  const v = typeof calSettings === 'function' ? calSettings().dayEnd : '';
+  return /^\d{2}:\d{2}$/.test(v || '') ? v : '17:00';
+}
+// La fine della giornata in cui cade un istante, nell'ora locale.
+function fineGiornataDi(ms) {
+  const d = new Date(ms);
+  const [h, m] = fineGiornataOra().split(':').map(Number);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
+// Le pause: una per timbratura chiusa con una causale. Va da quando la
+// timbratura si chiude alla timbratura dopo della stessa persona (su qualsiasi
+// fase), o ad adesso se non ha ripreso; mai oltre la fine di quella giornata.
+// `dal` e `al` (AAAA-MM-GG) filtrano sul giorno in cui la pausa comincia.
+function pauseTimbrate(opts) {
+  const o = opts || {};
+  const adesso = Date.parse(o.adesso || nowISO());
+  const perUtente = new Map();
+  timeLogs().forEach(l => {
+    const k = l.userId || '';
+    if (!perUtente.has(k)) perUtente.set(k, []);
+    perUtente.get(k).push(l);
+  });
+  const out = [];
+  perUtente.forEach(lista => {
+    lista.sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
+    lista.forEach((l, i) => {
+      if (!l.endedAt || !l.pauseReason) return;
+      if (o.odpId && (l.odpId !== o.odpId || l.phaseId !== o.faseId)) return;
+      const da = Date.parse(l.endedAt);
+      if (!isFinite(da)) return;
+      const giorno = giornoLocaleDi(da);
+      if ((o.dal && giorno < o.dal) || (o.al && giorno > o.al)) return;
+      const dopo = lista.slice(i + 1).find(x => Date.parse(x.startedAt) >= da);
+      const ripresa = dopo ? Date.parse(dopo.startedAt) : null;
+      const fine = Math.min(ripresa != null ? ripresa : adesso, fineGiornataDi(da));
+      const ore = fine > da ? (fine - da) / 3600000 : 0;
+      const c = causalePausa(l.pauseReason);
+      out.push({ log: l, causale: c, causaleId: l.pauseReason, nota: l.pauseNote || '', da: l.endedAt,
+        ore, perse: c && c.lost ? ore : 0, aperta: ripresa == null });
+    });
+  });
+  return out.sort((a, b) => String(b.da).localeCompare(String(a.da)));
+}
+// Il giorno locale di un istante, AAAA-MM-GG.
+function giornoLocaleDi(ms) {
+  const d = new Date(ms);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function orePerseFase(odpId, faseId) {
+  return pauseTimbrate({ odpId, faseId }).reduce((s, p) => s + p.perse, 0);
+}
+// L'ultima pausa di una fase ferma: la timbratura chiusa più di recente, se
+// ha una causale e nessuno ha ripreso dopo.
+function pausaInCorso(odpId, faseId) {
+  const chiuse = logsDiFase(odpId, faseId).filter(l => l.endedAt).sort((a, b) => String(b.endedAt).localeCompare(String(a.endedAt)));
+  const l = chiuse[0];
+  if (!l || !l.pauseReason || l.pauseReason === PAUSA_CAMBIO) return null;
+  if (logsDiFase(odpId, faseId).some(x => x !== l && Date.parse(x.startedAt) >= Date.parse(l.endedAt))) return null;
+  return { causale: causaleNome(l.pauseReason), nota: l.pauseNote || '', da: l.endedAt };
+}
+
+// ─── La scelta della causale, in reparto ───
+function repartoPausaModal(odpId, faseId, conNota) {
+  const o = getOdp(odpId); const f = o && (o.phases || []).find(x => x.id === faseId);
+  if (!f) return;
+  const voci = causaliPausa();
+  const nota = conNota ? causalePausa(conNota) : null;
+  openModal(`<h3>${ico('clock', 'tinted pill', '')} Perché ti fermi?</h3>
+    <p><strong>${esc(o.code || '')}</strong> · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}</p>
+    ${nota ? `<div class="modal-field"><label for="pausa-nota">${esc(nota.name)}: scrivi il motivo</label><input id="pausa-nota" maxlength="200" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();repartoPausaCon('${o.id}','${f.id}','${esc(nota.id)}',true)}"></div>
+      <div class="modal-actions"><button class="btn-ghost" onclick="repartoPausaModal('${o.id}','${f.id}')">Indietro</button>
+        <button class="add-btn-sm" onclick="repartoPausaCon('${o.id}','${f.id}','${esc(nota.id)}',true)">Metti in pausa</button></div>`
+    : `<div class="pausa-causali">${voci.map(c => `<button type="button" class="btn-outline reparto-btn${c.lost ? '' : ' pausa-normale'}" onclick="repartoPausaCon('${o.id}','${f.id}','${esc(c.id)}')">${esc(c.name)}</button>`).join('')}</div>
+      <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Continua a lavorare</button></div>`}`, false, 'pausa');
+  if (nota && typeof document !== 'undefined') { const el = document.getElementById('pausa-nota'); if (el && el.focus) el.focus(); }
+}
+function repartoPausaCon(odpId, faseId, id, letta) {
+  const c = causalePausa(id);
+  if (!c) return;
+  if (c.nota && !letta) { repartoPausaModal(odpId, faseId, id); return; }
+  const nota = letta ? val('pausa-nota') : '';
+  if (c.nota && !nota) { showToast('Scrivi il motivo della pausa', 'error'); return; }
+  closeModal();
+  if (!timbraPausa(odpId, faseId, id, nota)) return;
+  renderReparto();
+  showToast('In pausa · ' + c.name);
+  if (c.maint) repartoGuasto(odpId, faseId);
+}
+// Un guasto propone l'intervento di manutenzione, già sulla macchina (o sul
+// centro) della fase e con il fermo da oggi.
+function repartoGuasto(odpId, faseId) {
+  const o = getOdp(odpId); const f = o && (o.phases || []).find(x => x.id === faseId);
+  if (!f || !f.workCenterId) return;
+  const conMacchina = moduloAttivo('macchine') && f.machineId;
+  const dove = conMacchina ? 'm:' + f.machineId : 'wc:' + f.workCenterId;
+  const nome = conMacchina ? (machineLabel(getMachine(f.machineId)) || f.machineName || 'la macchina') : (f.wcName || 'il centro');
+  askConfirm(`Registrare un intervento di manutenzione su ${nome}?`, () => maintEventModal(null, dove, { fermoDa: oggiISO(),
+    nota: `Guasto durante ${o.number || ''} fase ${f.seq}`.trim() }), { title: 'Guasto', ok: 'Registra intervento', cancel: 'No, solo pausa', safe: true });
 }
 
 // ─── I gesti del terminale ───
@@ -239,7 +384,12 @@ function repartoDopoAvvio(odpId, faseId) {
   window.__repartoDopoAvvio = null;
   if (x && x.odpId === odpId && x.faseId === faseId) timbraInizia(odpId, faseId);
 }
-function repartoPausa(odpId, faseId) { if (timbraPausa(odpId, faseId)) { renderReparto(); showToast('In pausa'); } }
+// La Pausa chiede sempre la causale (dalla 0.159.0): la timbratura si chiude
+// quando se ne sceglie una.
+function repartoPausa(odpId, faseId) {
+  if (!roleGuardShop('docs') || !logApertoDiFase(odpId, faseId, utenteId())) return;
+  repartoPausaModal(odpId, faseId);
+}
 function repartoFine(odpId, faseId) {
   timbraPausa(odpId, faseId);
   renderReparto();
@@ -313,12 +463,19 @@ function timbratureApplica(odpId, faseId, righe, adesso) {
     if (r.id && r.elimina) { Store.remove('timeLogs', r.id); cambiate++; return; }
     if (r.elimina) return;
     const x = tenute.find(t => t.r === r);
+    // La causale (dalla 0.159.0) vale solo per una timbratura chiusa; chi non
+    // la passa (un chiamante di prima) la lascia com'è.
+    const causale = r.pauseReason === undefined ? undefined : (r.endedAt ? r.pauseReason || '' : '');
     if (r.id) {
-      if (!cambiata(x)) return;
-      Store.update('timeLogs', r.id, { startedAt: r.startedAt, endedAt: r.endedAt || null });
+      const l = proprie.get(r.id);
+      const nuovaCausale = causale !== undefined && causale !== (l.pauseReason || '');
+      if (!cambiata(x) && !nuovaCausale) return;
+      const campi = cambiata(x) ? { startedAt: r.startedAt, endedAt: r.endedAt || null } : {};
+      if (nuovaCausale) { campi.pauseReason = causale; campi.pauseNote = ''; }
+      Store.update('timeLogs', r.id, campi);
     } else {
       Store.insert('timeLogs', { id: gid(), odpId, phaseId: faseId, workCenterId: f.workCenterId || null, machineId: f.machineId || null, userId: r.userId || null,
-        startedAt: r.startedAt, endedAt: r.endedAt, note: 'aggiunta a mano', active: true });
+        startedAt: r.startedAt, endedAt: r.endedAt, pauseReason: causale || '', pauseNote: '', note: 'aggiunta a mano', active: true });
     }
     cambiate++;
   });
@@ -333,7 +490,7 @@ function timbratureModal(odpId, faseId) {
   const o = getOdp(odpId); const f = o && (o.phases || []).find(x => x.id === faseId);
   if (!f) return;
   const righe = logsDiFase(odpId, faseId).slice().sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
-    .map(l => ({ id: l.id, userId: l.userId, inizio: isoALocale(l.startedAt), fine: isoALocale(l.endedAt), elimina: false, prima: l }));
+    .map(l => ({ id: l.id, userId: l.userId, inizio: isoALocale(l.startedAt), fine: isoALocale(l.endedAt), causale: l.pauseReason || '', elimina: false, prima: l }));
   _tmb = { odpId, faseId, righe };
   openModal(`<h3>${ico('clock', 'tinted pill', '')} Correggi le timbrature</h3>
     <p><strong>${esc(o.number || '')}</strong> · ${esc(o.code || '')} · fase ${esc(String(f.seq))} ${esc(f.wcName || '')}</p>
@@ -360,8 +517,15 @@ function timbratureRigheHtml() {
       <div class="tmb-ore">
         <div class="modal-field"><label for="tmb-a-${i}">Inizio</label>${timbratureCampoHtml('tmb-a-' + i, r.inizio, r.elimina, false)}</div>
         <div class="modal-field"><label for="tmb-b-${i}">Fine</label>${timbratureCampoHtml('tmb-b-' + i, r.fine, r.elimina, true)}</div>
-      </div></div>`;
+      </div>${r.fine ? `<div class="modal-field tmb-causale"><label for="tmb-c-${i}">Causale della pausa</label>${timbratureCausaleHtml(i, r.causale, r.elimina)}</div>` : ''}</div>`;
   }).join('');
+}
+// La causale della pausa che segue la timbratura (dalla 0.159.0). «—» vuol
+// dire nessuna: la timbratura si è chiusa con Fine e dichiara, o è di prima.
+function timbratureCausaleHtml(i, sel, spento) {
+  const voci = causaliPausa().slice();
+  [PAUSA_CAMBIO, sel].forEach(id => { if (id && !voci.some(c => c.id === id)) voci.push(causalePausa(id) || { id, name: 'causale eliminata' }); });
+  return `<select id="tmb-c-${i}"${spento ? ' disabled' : ''}><option value="">—</option>${voci.map(c => `<option value="${esc(c.id)}"${c.id === sel ? ' selected' : ''}>${esc(c.name)}${c.lost ? ' · tempo perso' : ''}</option>`).join('')}</select>`;
 }
 // Il campo di un orario (dalla 0.151.0): la data, e l'ora in un solo elenco a
 // passi di 5 minuti. Un orario timbrato fuori dai 5 minuti (08:02) resta
@@ -403,6 +567,9 @@ function timbratureLeggi(ridisegna) {
     if (a && !a.disabled) { const x = timbratureCampoLeggi('tmb-a-' + i, ''); r.inizio = x.v; r.aMeta = x.meta; }
     if (b && !b.disabled) { const x = timbratureCampoLeggi('tmb-b-' + i, (r.inizio || '').slice(0, 10)); r.fine = x.v; r.aMeta = r.aMeta || x.meta; }
     if (u && !r.id) r.userId = u.value;
+    const c = document.getElementById('tmb-c-' + i);
+    if (c && !c.disabled) r.causale = c.value;
+    if (!r.fine) r.causale = '';
   });
   if (ridisegna) { const el = document.getElementById('tmb-righe'); if (el) el.innerHTML = timbratureRigheHtml(); }
 }
@@ -430,7 +597,7 @@ function timbratureSalva() {
   if (_tmb.righe.some(r => !r.elimina && r.aMeta)) { showToast('Manca l\'ora, o la data, in una timbratura', 'error'); return; }
   // Il campo non ha i secondi: un orario non toccato resta quello timbrato.
   const ora = (v, iso) => (iso && v === isoALocale(iso) ? iso : (v ? localeAIso(v) : null));
-  const righe = _tmb.righe.map(r => ({ id: r.id, userId: r.userId, elimina: r.elimina,
+  const righe = _tmb.righe.map(r => ({ id: r.id, userId: r.userId, elimina: r.elimina, pauseReason: r.causale || '',
     startedAt: ora(r.inizio, r.prima && r.prima.startedAt), endedAt: r.fine ? ora(r.fine, r.prima && r.prima.endedAt) : null }));
   const esito = timbratureApplica(_tmb.odpId, _tmb.faseId, righe);
   if (!esito.ok) { showToast(esito.errore, 'error'); return; }
@@ -476,6 +643,7 @@ function repartoCardHtml(o, f, stato) {
   const pezzi = attesa ? opAttesiFase(o, f) : opDaFare(o, f);
   // Attrezzaggio compreso, come nei Tempi del consuntivo: le timbrature lo contano.
   const previste = consOreFase(f, pezzi, true);
+  const perse = orePerseFase(o.id, f.id);
   const bottoni = !scrive ? '' : aperto
     ? `<button class="add-btn-sm reparto-btn" onclick="repartoPausa('${o.id}','${f.id}')">${ico('clock', '', '')} Pausa</button>
        ${stato !== 'chiusa' ? `<button class="btn-outline reparto-btn" onclick="repartoFine('${o.id}','${f.id}')">${ico('check', 'tinted', '')} Fine e dichiara</button>` : ''}`
@@ -486,7 +654,7 @@ function repartoCardHtml(o, f, stato) {
   // solo se qualcuno ha ancora una timbratura aperta.
   const lavoro = lavorano.length
     ? `<div class="reparto-lavoro on">${ico('factory', '', '')} <span>In lavorazione da ${repartoTempo(o.id, f.id, 'sessione')} · ${esc(lavorano.join(', '))}</span></div>`
-    : stato === 'corso' ? `<div class="reparto-lavoro pausa">${ico('clock', '', '')} <span>In pausa${ore > 0 ? '' : ' · nessuna timbratura'}</span></div>`
+    : stato === 'corso' ? `<div class="reparto-lavoro pausa">${ico('clock', '', '')} <span>In pausa${logsDiFase(o.id, f.id).length ? repartoPausaTesto(o, f) : ' · nessuna timbratura'}</span></div>`
     : stato === 'avviabile' ? `<div class="reparto-lavoro">Non ancora iniziata</div>`
     : attesa ? `<div class="reparto-lavoro">In attesa · ${esc(opAvviabile(o, f).motivo || '')}</div>` : '';
   const codiceQr = repartoCodiceQr(o, f);
@@ -503,7 +671,7 @@ function repartoCardHtml(o, f, stato) {
       <div><span class="reparto-num-l">${stato === 'chiusa' ? 'Fatti' : attesa ? 'Attesi' : 'Da fare'}</span>
         <strong>${stato === 'chiusa' ? fmtQtyIt(opFatti(o, f)) : attesa ? fmtQtyIt(pezzi) : `${fmtQtyIt(opResidua(o, f))} <span class="reparto-num-di">di ${fmtQtyIt(opDaFare(o, f))}</span>`} pz</strong></div>
       <div><span class="reparto-num-l">Tempo lavorato</span>
-        <strong>${repartoTempo(o.id, f.id, 'totale')}</strong>${previste > 0 ? ` <span class="reparto-num-di">su ${fmtOre(previste)} previste</span>` : ''}
+        <strong>${repartoTempo(o.id, f.id, 'totale')}</strong>${previste > 0 ? ` <span class="reparto-num-di">su ${fmtOre(previste)} previste</span>` : ''}${perse > 0 ? ` <span class="reparto-num-di reparto-perse">· perse ${fmtOre(perse)}</span>` : ''}
         ${scrive && timbratureCorreggibili() ? `<button type="button" class="reparto-correggi" onclick="timbratureModal('${o.id}','${f.id}')" title="Correggi a mano le timbrature di questa fase">${ico('edit', '', '')} Correggi i tempi</button>` : ''}</div>
     </div>
     ${repartoNoteFase(o, f).map(n => `<div class="reparto-nota${n.ciclo ? ' ciclo' : ''}"><span class="reparto-num-l">${esc(n.label)}</span>${esc(n.testo)}</div>`).join('')}
@@ -511,6 +679,16 @@ function repartoCardHtml(o, f, stato) {
     ${typeof qrSvg === 'function' && qrDisponibile() ? `<div class="reparto-qr">${qrSvg(qrLink('fase', codiceQr), 96)}<span>${esc(codiceQr)}</span></div>` : ''}
     </div>
     ${lavoro}</div>`;
+}
+
+// «· Attesa materiale · dalle 10:40» (dalla 0.159.0): la causale dell'ultima pausa.
+function repartoPausaTesto(o, f) {
+  const p = pausaInCorso(o.id, f.id);
+  if (!p) return '';
+  const d = new Date(p.da);
+  const ora = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const quando = giornoLocaleDi(d.getTime()) === oggiISO() ? 'dalle ' + ora : 'dal ' + fmtDateIt(p.da) + ' ' + ora;
+  return ` · ${esc(p.causale)}${p.nota ? ' (' + esc(p.nota) + ')' : ''} · ${quando}`;
 }
 
 // Il codice del QR della scheda (dalla 0.132.0): numero dell'ODP e fase,
@@ -585,6 +763,180 @@ function renderReparto() {
     </div>
   </div>`;
   repartoAggiornaScheda();
+}
+
+// ─── Le ore perse, nel Carico centri (dalla 0.159.0) ───
+// Per centro (e per macchina, col modulo) e per causale, le pause che contano
+// come tempo perso negli ultimi N giorni, con la quota sulle ore timbrate.
+const PERSE_PERIODI = [7, 30, 90];
+let persePeriodo = 30;
+function perseSetPeriodo(g) { persePeriodo = PERSE_PERIODI.includes(Number(g)) ? Number(g) : 30; if (typeof renderLoad === 'function') renderLoad(); }
+function perseDal(giorni, oggi) {
+  const d = new Date((oggi || oggiISO()) + 'T12:00:00');
+  d.setDate(d.getDate() - (giorni - 1));
+  return giornoLocaleDi(d.getTime());
+}
+// { colonne: [causali], righe: [{ wcId, machineId, nome, sotto, celle: Map(causale → ore), perse, timbrate }] }
+function orePerseTabella(opts) {
+  const o = opts || {};
+  const dal = perseDal(o.giorni || persePeriodo, o.oggi);
+  const conMacchine = moduloAttivo('macchine');
+  const passa = l => !o.wcId || l.workCenterId === o.wcId;
+  const pause = pauseTimbrate({ dal, adesso: o.adesso }).filter(p => p.perse > 0 && passa(p.log));
+  const righe = new Map();
+  const riga = (wcId, machineId) => {
+    const k = wcId + '|' + (machineId || '');
+    if (!righe.has(k)) {
+      const m = machineId ? getMachine(machineId) : null;
+      const wc = getWorkCenter(wcId);
+      righe.set(k, { wcId, machineId: machineId || null, nome: machineId ? (machineLabel(m) || 'macchina eliminata') : (wc ? wc.name : 'centro eliminato'),
+        sotto: !!machineId, celle: new Map(), perse: 0, timbrate: 0 });
+    }
+    return righe.get(k);
+  };
+  pause.forEach(p => {
+    const dove = [riga(p.log.workCenterId || '', null)];
+    if (conMacchine && p.log.machineId) dove.push(riga(p.log.workCenterId || '', p.log.machineId));
+    dove.forEach(r => { r.celle.set(p.causaleId, (r.celle.get(p.causaleId) || 0) + p.perse); r.perse += p.perse; });
+  });
+  timeLogs().filter(l => passa(l) && giornoLocaleDi(Date.parse(l.startedAt)) >= dal).forEach(l => {
+    const ore = logOre(l, o.adesso);
+    const a = righe.get((l.workCenterId || '') + '|'), b = conMacchine && l.machineId ? righe.get((l.workCenterId || '') + '|' + l.machineId) : null;
+    if (a) a.timbrate += ore;
+    if (b) b.timbrate += ore;
+  });
+  const usate = new Set(pause.map(p => p.causaleId));
+  const colonne = causaliPausa(true).filter(c => usate.has(c.id));
+  usate.forEach(id => { if (!colonne.some(c => c.id === id)) colonne.push(causalePausa(id) || { id, name: 'causale eliminata' }); });
+  // Un centro e sotto le sue macchine, i centri per ore perse.
+  const centri = Array.from(righe.values()).filter(r => !r.sotto).sort((a, b) => b.perse - a.perse || a.nome.localeCompare(b.nome));
+  const ordinate = [];
+  centri.forEach(c => { ordinate.push(c); Array.from(righe.values()).filter(r => r.sotto && r.wcId === c.wcId).sort((a, b) => b.perse - a.perse).forEach(r => ordinate.push(r)); });
+  return { dal, colonne, righe: ordinate, pause };
+}
+function orePerseHtml(wcId) {
+  if (!moduloAttivo('officina')) return '';
+  const t = orePerseTabella({ wcId });
+  const periodo = `<select onchange="perseSetPeriodo(this.value)" aria-label="Periodo delle ore perse">${PERSE_PERIODI.map(g => `<option value="${g}"${g === persePeriodo ? ' selected' : ''}>Ultimi ${g} giorni</option>`).join('')}</select>`;
+  const testa = `<div class="cycle-section-head"><h3>${ico('clock', 'tinted', '')} Ore perse</h3>${periodo}</div>`;
+  if (!t.righe.length) return `<div class="mrp-section">${testa}<div class="empty-text">Nessuna pausa con una causale di tempo perso dal ${esc(fmtDateIt(t.dal))}${wcId ? ' su questo centro' : ''}. Le causali si scelgono in Reparto, a ogni Pausa.</div></div>`;
+  const cella = (r, id, ore) => ore > 0
+    ? `<span class="code-link" ${clickAttrs(`orePerseDettaglio('${esc(r.wcId)}','${esc(r.machineId || '')}','${esc(id)}')`, 'Le pause di ' + r.nome)}>${fmtOre(ore)}</span>` : '';
+  const corpo = t.righe.map(r => `<tr${r.sotto ? ' class="perse-sotto"' : ''}><td>${r.sotto ? '↳ ' : ''}${esc(r.nome)}</td>
+    ${t.colonne.map(c => `<td class="num">${cella(r, c.id, r.celle.get(c.id) || 0)}</td>`).join('')}
+    <td class="num"><strong>${cella(r, '', r.perse)}</strong></td>
+    <td class="num">${r.timbrate > 0 ? Math.round(r.perse / r.timbrate * 100) + '%' : '—'}</td></tr>`).join('');
+  return `<div class="mrp-section">${testa}
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">Le pause scelte in Reparto con una causale che conta come tempo perso, dal ${esc(fmtDateIt(t.dal))}: dalla Pausa a quando la stessa persona riprende, mai oltre le ${esc(fineGiornataOra())} di quel giorno. La quota è sulle ore timbrate nello stesso periodo. Le causali si cambiano in <em>Gestione → Centri di lavoro</em>.</p>
+    <div class="table-wrap"><table class="dash-table"><thead><tr><th>Centro</th>${t.colonne.map(c => `<th class="num">${esc(c.name)}</th>`).join('')}<th class="num">Totale</th><th class="num">Sulle timbrate</th></tr></thead>
+    <tbody>${corpo}</tbody></table></div></div>`;
+}
+function orePerseDettaglio(wcId, machineId, causaleId) {
+  const t = orePerseTabella({ wcId });
+  const l = t.pause.filter(p => (p.log.workCenterId || '') === wcId && (!machineId || p.log.machineId === machineId) && (!causaleId || p.causaleId === causaleId));
+  const wc = getWorkCenter(wcId), m = machineId ? getMachine(machineId) : null;
+  const dove = m ? machineLabel(m) : (wc ? wc.name : 'centro eliminato');
+  openModal(`<h3>${ico('clock', 'tinted pill', '')} Ore perse — ${esc(dove)}</h3>
+    <p>${causaleId ? esc(causaleNome(causaleId)) : 'Tutte le causali'} · dal ${esc(fmtDateIt(t.dal))}</p>
+    <div class="table-wrap"><table class="dash-table"><thead><tr><th>Quando</th><th>Ordine</th><th>Fase</th><th>Chi</th><th>Causale</th><th class="num">Ore</th></tr></thead><tbody>
+    ${l.map(p => { const o = getOdp(p.log.odpId); const f = o && (o.phases || []).find(x => x.id === p.log.phaseId);
+      return `<tr><td>${esc(fmtStamp(p.da))}${p.aperta ? ' · in corso' : ''}</td><td>${o ? `<span class="code-link" ${clickAttrs(`closeModal();homeApri('odp','${o.id}')`, 'Apri ' + (o.number || ''))}>${esc(o.number || '')}</span> ${esc(o.code || '')}` : 'ordine eliminato'}</td>
+        <td>${f ? esc(String(f.seq)) : '—'}</td><td>${esc(nomeOperatore(p.log.userId))}</td><td>${esc(causaleNome(p.causaleId))}${p.nota ? ' — ' + esc(p.nota) : ''}</td><td class="num">${fmtOre(p.perse)}</td></tr>`; }).join('')}
+    </tbody></table></div>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Chiudi</button></div>`, true, 'consulta');
+}
+// La sezione dell'Excel del Carico centri.
+function orePerseExportSezione() {
+  const t = orePerseTabella({ wcId: typeof loadSoloCentro !== 'undefined' ? loadSoloCentro : '' });
+  const righe = t.pause.filter(p => p.perse > 0).map(p => {
+    const o = getOdp(p.log.odpId); const f = o && (o.phases || []).find(x => x.id === p.log.phaseId);
+    const wc = getWorkCenter(p.log.workCenterId), m = p.log.machineId ? getMachine(p.log.machineId) : null;
+    return [fmtStamp(p.da), wc ? wc.name : '', m ? machineLabel(m) : '', o ? o.number || '' : '', o ? o.code || '' : '', f ? f.seq : '',
+      nomeOperatore(p.log.userId), causaleNome(p.causaleId), p.nota, +p.perse.toFixed(2)];
+  });
+  return { nome: 'Ore perse',
+    colonne: [{ h: 'Quando', w: 18 }, { h: 'Centro', w: 22 }, { h: 'Macchina', w: 20 }, { h: 'Ordine', w: 16 }, { h: 'Codice', w: 18 }, { h: 'Fase', w: 8, num: true },
+      { h: 'Chi', w: 20 }, { h: 'Causale', w: 26 }, { h: 'Nota', w: 28 }, { h: 'Ore perse', w: 12, num: true }],
+    righe, totali: null };
+}
+
+// ─── Le causali, in Gestione → Centri di lavoro (dalla 0.159.0) ───
+// Stanno nelle impostazioni, come il calendario: viaggiano con il backup e con
+// l'archivio condiviso. Al primo cambio la lista di serie si copia e da lì è
+// dell'azienda. Una causale già usata si sospende, non si elimina: le pause di
+// ieri devono continuare a dire perché.
+function causaliPausaGestioneHtml() {
+  if (!moduloAttivo('officina')) return '';
+  const usate = new Set(timeLogs().map(l => l.pauseReason).filter(Boolean));
+  const righe = causaliPausa(true).map(c => `<div class="mgmt-item mgmt-row">
+    <div class="mgmt-item-main"><span class="mgmt-item-name">${esc(c.name)}</span>
+      <span class="mgmt-item-meta">${c.lost ? 'tempo perso' : 'non conta come perso'}${c.maint ? ' · propone un intervento di manutenzione' : ''}${c.nota ? ' · chiede il motivo' : ''}</span></div>
+    <div class="mgmt-item-badges">${activeBadge(c)}</div>
+    <div class="mgmt-item-actions">
+      <button class="mini-btn" onclick="causalePausaAttiva('${esc(c.id)}')" title="${c.active === false ? 'Riattiva' : 'Sospendi'} la causale">${ico(c.active === false ? 'check' : 'pause', 'tinted', c.active === false ? 'Riattiva' : 'Sospendi')}</button>
+      <button class="mini-btn" onclick="causalePausaModal('${esc(c.id)}')" title="Modifica la causale">${ico('edit', 'tinted', 'Modifica la causale')}</button>
+      ${usate.has(c.id) ? '' : `<button class="mini-btn danger" onclick="causalePausaElimina('${esc(c.id)}')" title="Elimina la causale">${ico('trash', 'tinted', 'Elimina la causale')}</button>`}</div></div>`).join('');
+  return `<h3 class="settings-group-title" style="margin-top:24px">${ico('clock', 'tinted', '')} Causali di pausa</h3>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">In Reparto la <strong>Pausa</strong> chiede una di queste, con un tocco. Quelle di <strong>tempo perso</strong> fanno le ore perse del <em>Carico centri</em>. Passare a un'altra fase chiude la timbratura come <em>Cambio lavoro</em>, senza chiedere.</p>
+    <div class="mgmt-panel"><div class="mgmt-list">${righe}</div>
+    <div class="mgmt-form"><input id="cp-name" placeholder="Nuova causale (es. Attesa gru)" maxlength="60">
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cp-lost" checked> Tempo perso</label>
+      <button class="add-btn-sm" onclick="causalePausaAggiungi()">+ Aggiungi</button></div></div>`;
+}
+// La lista da scrivere: una copia, la prima volta quella di serie.
+function causaliPausaDaScrivere() { return causaliPausa(true).map(c => Object.assign({}, c)); }
+function causaliPausaSalva(lista, msg) {
+  db.settings.pauseReasons = lista;
+  saveDB(); renderManage(); savedToast(msg);
+}
+function causalePausaAggiungi() {
+  if (!roleGuard('manage')) return;
+  const nome = val('cp-name');
+  if (!nome) { showToast('Scrivi il nome della causale', 'error'); return; }
+  const lista = causaliPausaDaScrivere();
+  if (lista.some(c => c.name.toLowerCase() === nome.toLowerCase())) { showToast('Questa causale c\'è già', 'error'); return; }
+  const el = typeof document !== 'undefined' && document.getElementById('cp-lost');
+  lista.push({ id: gid(), name: nome, lost: el ? !!el.checked : true, maint: false, active: true });
+  causaliPausaSalva(lista, 'Causale aggiunta');
+}
+function causalePausaModal(id) {
+  if (!roleGuard('manage')) return;
+  const c = causalePausa(id); if (!c || c.fissa) return;
+  openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica la causale</h3>
+    <div class="modal-field"><label for="cpe-name">Nome</label><input id="cpe-name" value="${esc(c.name)}" maxlength="60"></div>
+    <label style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="checkbox" id="cpe-lost" ${c.lost ? 'checked' : ''}> Conta come tempo perso</label>
+    <label style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="checkbox" id="cpe-maint" ${c.maint ? 'checked' : ''}> Propone un intervento di manutenzione</label>
+    <label style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="checkbox" id="cpe-nota" ${c.nota ? 'checked' : ''}> Chiede di scrivere il motivo</label>
+    <p class="empty-text" style="text-align:left;padding:4px 0">Cambiare «tempo perso» cambia anche le ore perse delle pause già fatte con questa causale.</p>
+    <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+      <button class="add-btn-sm" onclick="causalePausaModifica('${esc(c.id)}')">Salva</button></div>`, false, 'form');
+}
+function causalePausaModifica(id) {
+  if (!roleGuard('manage')) return;
+  const nome = val('cpe-name');
+  if (!nome) { showToast('Scrivi il nome della causale', 'error'); return; }
+  const lista = causaliPausaDaScrivere();
+  const c = lista.find(x => x.id === id); if (!c) return;
+  if (lista.some(x => x.id !== id && x.name.toLowerCase() === nome.toLowerCase())) { showToast('Questa causale c\'è già', 'error'); return; }
+  const spunta = k => { const el = document.getElementById(k); return !!(el && el.checked); };
+  Object.assign(c, { name: nome, lost: spunta('cpe-lost'), maint: spunta('cpe-maint'), nota: spunta('cpe-nota') });
+  closeModal();
+  causaliPausaSalva(lista, 'Causale salvata');
+}
+function causalePausaAttiva(id) {
+  if (!roleGuard('manage')) return;
+  const lista = causaliPausaDaScrivere();
+  const c = lista.find(x => x.id === id); if (!c) return;
+  if (c.active !== false && lista.filter(x => x.active !== false).length <= 1) { showToast('Serve almeno una causale attiva', 'error'); return; }
+  c.active = c.active === false;
+  causaliPausaSalva(lista, c.active ? 'Causale riattivata' : 'Causale sospesa');
+}
+function causalePausaElimina(id) {
+  if (!roleGuard('manage')) return;
+  if (timeLogs().some(l => l.pauseReason === id)) { showToast('La causale è già usata: si può solo sospendere', 'error'); return; }
+  const lista = causaliPausaDaScrivere();
+  if (lista.filter(x => x.id !== id && x.active !== false).length < 1) { showToast('Serve almeno una causale attiva', 'error'); return; }
+  causaliPausaSalva(lista.filter(x => x.id !== id), 'Causale eliminata');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -688,7 +1040,9 @@ function maintPlanElimina(id) {
 }
 // `dove` è un centro o una macchina, come nella tendina (leggiDove): «wc:…»,
 // «m:…», o l'id nudo di un centro.
-function maintEventModal(planId, dove) {
+// `pre` (dalla 0.159.0): { fermoDa, nota } già scritti, per il guasto dal reparto.
+function maintEventModal(planId, dove, pre) {
+  const pr = pre || {};
   if (!roleGuardShop('docs')) return;
   const p = planId ? getMaintPlan(planId) : null;
   const d = p ? { workCenterId: p.workCenterId, machineId: moduloAttivo('macchine') ? p.machineId || null : null } : leggiDove(dove);
@@ -699,10 +1053,10 @@ function maintEventModal(planId, dove) {
     <div class="modal-grid">
       <div class="modal-field"><label>Data</label><input id="me-date" type="date" value="${esc(oggiISO())}"></div>
       <div class="modal-field"></div>
-      <div class="modal-field"><label>Fermo macchina dal</label><input id="me-from" type="date"></div>
+      <div class="modal-field"><label>Fermo macchina dal</label><input id="me-from" type="date" value="${esc(pr.fermoDa || '')}"></div>
       <div class="modal-field"><label>al</label><input id="me-to" type="date"></div>
       <div class="modal-field" style="grid-column:1/-1"><label>Ricambi usati (escono dal magazzino)</label><textarea id="me-ric" rows="3">${esc(ric)}</textarea></div>
-      <div class="modal-field" style="grid-column:1/-1"><label>Nota</label><input id="me-note" placeholder="cosa si è fatto"></div>
+      <div class="modal-field" style="grid-column:1/-1"><label>Nota</label><input id="me-note" placeholder="cosa si è fatto" value="${esc(pr.nota || '')}"></div>
     </div>
     <p class="empty-text" style="text-align:left;padding:4px 0">Un fermo anche futuro si scrive qui: la capacità finita non mette fasi su ${d.machineId ? 'quella macchina' : 'quel centro'} in quei giorni${d.machineId ? ', e il centro lavora con le altre' : ''}.</p>
     <div class="modal-actions">

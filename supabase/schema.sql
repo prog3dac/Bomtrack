@@ -698,6 +698,11 @@ create table if not exists public.maintenance_events (
 alter table public.production_time_logs add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 alter table public.maintenance_plans add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
 alter table public.maintenance_events add column if not exists machine_id uuid references public.machines(id) deferrable initially deferred;
+-- 0.159.0, causali di pausa: la timbratura che la Pausa chiude porta il perché
+-- (l'id di una causale delle impostazioni, o «cambio» quando si passa a
+-- un'altra fase) e, per «Altro», il motivo scritto.
+alter table public.production_time_logs add column if not exists pause_reason text;
+alter table public.production_time_logs add column if not exists pause_note text;
 
 -- 0.140.0, modulo Qualità: il collaudo della merce in entrata. Nasce dal
 -- ricevimento di un ordine fornitore o dal rientro dall'ultima fase di un
@@ -1823,7 +1828,7 @@ language sql stable security definer set search_path = public as $$
                   or exists (select 1 from public.orders) or exists (select 1 from public.rfqs)
                   or exists (select 1 from public.families)),
     'ora', public.pull_istante(),
-    'schema_versione', 10)
+    'schema_versione', 11)
 $$;
 grant execute on function public.archivio_stato() to authenticated;
 

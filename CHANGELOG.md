@@ -2,6 +2,20 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.159.0 — 2026-11-16
+
+**Causali di pausa in Reparto, e le ore perse dei centri.** Modulo Officina.
+- **La Pausa chiede perché**, con un pulsante grande per causale: *Fine turno*, *Pausa personale*, *Attesa materiale*, *Attesa attrezzaggio o utensile*, *Attesa controllo qualità*, *Guasto macchina*, *Altro* (che chiede il motivo). La timbratura si chiude quando se ne sceglie una. Passare a un'altra fase chiude quella in corso come *Cambio lavoro*, senza chiedere; *Fine e dichiara* non chiede niente.
+- **Il guasto propone l'intervento di manutenzione** sulla macchina della fase (o sul centro), già compilato con il fermo da oggi.
+- La scheda del Reparto dice **In pausa · Attesa materiale · dalle 10:40**, e accanto al tempo lavorato le ore **perse** della fase.
+- **Ore perse nel Carico centri**: per centro e macchina, per causale, con la quota sulle ore timbrate, negli ultimi 7, 30 o 90 giorni. Un clic apre le pause; l'Excel ha il foglio *Ore perse*.
+- Una pausa va fino a quando **la stessa persona** riprende, su qualsiasi fase, e mai oltre la **fine della giornata**: un campo nuovo in *Gestione → Calendario di fabbrica*, di serie le 17:00, che si vede con il modulo Officina.
+- Le causali si cambiano in *Gestione → Centri di lavoro*: nome, se contano come tempo perso, se propongono la manutenzione, se chiedono il motivo. Una causale usata si sospende, non si elimina.
+- **Correggi i tempi** ha la tendina *Causale della pausa* su ogni timbratura chiusa.
+- Le ore lavorate non cambiano: consuntivo, contatori delle macchine e manutenzione «ogni N ore» restano come prima. Le timbrature di prima non hanno causale e non fanno ore perse.
+
+Schema 11: `pause_reason` e `pause_note` su `production_time_logs`. **L'archivio condiviso va aggiornato rieseguendo `supabase/schema.sql`** nel SQL Editor di Supabase.
+
 ### 0.159.0 — 2026-11-14
 
 **Revisioni approvate di distinta e ciclo, e revisione del codice.**

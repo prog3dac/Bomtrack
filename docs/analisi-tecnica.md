@@ -1246,6 +1246,23 @@ con il backup e con l'archivio condiviso (sta nelle impostazioni), ma
 *Import → Impostazioni di Gestione* non ha un foglio per i testi: per portarli
 su un'altra postazione senza archivio condiviso serve il backup.
 
+### P. Le causali di pausa *(censite nella 0.159.0)*
+
+**P1 — le causali non passano dal foglio Excel di Gestione.** Come i testi
+(G1): `settings.pauseReasons` viaggia con il backup e con l'archivio condiviso,
+non con *Import → Impostazioni di Gestione*.
+
+**P2 — la pausa è derivata, non registrata.** La durata è lo spazio fra la
+timbratura chiusa con la causale e la successiva della stessa persona,
+tagliato alla fine della giornata (`pauseTimbrate`, `officina.js`). Un fermo
+della macchina mentre nessuno timbra non si vede, e chi resta in pausa per
+giorni conta solo fino alla sera del primo: per quello c'è l'intervento di
+manutenzione col suo fermo.
+
+**P3 — le ore perse non entrano nella capacità.** La capacità finita usa
+ancora la capacità teorica dei centri; un'efficienza misurata (ore lavorate
+su ore disponibili) potrebbe ridurla, con qualche mese di dati.
+
 ---
 
 ## Note in positivo
