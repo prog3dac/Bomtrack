@@ -1246,7 +1246,7 @@ con il backup e con l'archivio condiviso (sta nelle impostazioni), ma
 *Import → Impostazioni di Gestione* non ha un foglio per i testi: per portarli
 su un'altra postazione senza archivio condiviso serve il backup.
 
-### P. Le causali di pausa *(censite nella 0.159.0)*
+### P. Le causali di pausa *(censite nella 0.160.0)*
 
 **P1 — le causali non passano dal foglio Excel di Gestione.** Come i testi
 (G1): `settings.pauseReasons` viaggia con il backup e con l'archivio condiviso,

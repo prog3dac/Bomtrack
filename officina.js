@@ -51,7 +51,7 @@ function timbraInizia(odpId, faseId) {
   const chi = utenteId();
   if (logApertoDiFase(odpId, faseId, chi)) return true;
   // Passare a un'altra fase chiude quella in corso come «Cambio lavoro»: non
-  // è tempo perso, e non si chiede niente (dalla 0.159.0).
+  // è tempo perso, e non si chiede niente (dalla 0.160.0).
   const aperto = logAperto(chi);
   if (aperto) Store.update('timeLogs', aperto.id, { endedAt: nowISO(), pauseReason: PAUSA_CAMBIO, pauseNote: '' });
   Store.insert('timeLogs', { id: gid(), odpId, phaseId: faseId, workCenterId: f.workCenterId || null, machineId: f.machineId || null, userId: chi,
@@ -59,7 +59,7 @@ function timbraInizia(odpId, faseId) {
   saveDB();
   return true;
 }
-// `causale` (dalla 0.159.0): l'id della causale della pausa; senza, la
+// `causale` (dalla 0.160.0): l'id della causale della pausa; senza, la
 // timbratura si chiude e basta (Fine e dichiara: la fase è finita).
 function timbraPausa(odpId, faseId, causale, nota) {
   if (!roleGuardShop('docs')) return false;
@@ -73,7 +73,7 @@ function timbraPausa(odpId, faseId, causale, nota) {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  CAUSALI DI PAUSA (dalla 0.159.0)
+//  CAUSALI DI PAUSA (dalla 0.160.0)
 // ═══════════════════════════════════════════════════════════
 // La Pausa del reparto chiede perché, con un tocco. La pausa non è un record:
 // è il tempo fra la fine di una timbratura e la timbratura dopo della stessa
@@ -384,7 +384,7 @@ function repartoDopoAvvio(odpId, faseId) {
   window.__repartoDopoAvvio = null;
   if (x && x.odpId === odpId && x.faseId === faseId) timbraInizia(odpId, faseId);
 }
-// La Pausa chiede sempre la causale (dalla 0.159.0): la timbratura si chiude
+// La Pausa chiede sempre la causale (dalla 0.160.0): la timbratura si chiude
 // quando se ne sceglie una.
 function repartoPausa(odpId, faseId) {
   if (!roleGuardShop('docs') || !logApertoDiFase(odpId, faseId, utenteId())) return;
@@ -463,7 +463,7 @@ function timbratureApplica(odpId, faseId, righe, adesso) {
     if (r.id && r.elimina) { Store.remove('timeLogs', r.id); cambiate++; return; }
     if (r.elimina) return;
     const x = tenute.find(t => t.r === r);
-    // La causale (dalla 0.159.0) vale solo per una timbratura chiusa; chi non
+    // La causale (dalla 0.160.0) vale solo per una timbratura chiusa; chi non
     // la passa (un chiamante di prima) la lascia com'è.
     const causale = r.pauseReason === undefined ? undefined : (r.endedAt ? r.pauseReason || '' : '');
     if (r.id) {
@@ -520,7 +520,7 @@ function timbratureRigheHtml() {
       </div>${r.fine ? `<div class="modal-field tmb-causale"><label for="tmb-c-${i}">Causale della pausa</label>${timbratureCausaleHtml(i, r.causale, r.elimina)}</div>` : ''}</div>`;
   }).join('');
 }
-// La causale della pausa che segue la timbratura (dalla 0.159.0). «—» vuol
+// La causale della pausa che segue la timbratura (dalla 0.160.0). «—» vuol
 // dire nessuna: la timbratura si è chiusa con Fine e dichiara, o è di prima.
 function timbratureCausaleHtml(i, sel, spento) {
   const voci = causaliPausa().slice();
@@ -681,7 +681,7 @@ function repartoCardHtml(o, f, stato) {
     ${lavoro}</div>`;
 }
 
-// «· Attesa materiale · dalle 10:40» (dalla 0.159.0): la causale dell'ultima pausa.
+// «· Attesa materiale · dalle 10:40» (dalla 0.160.0): la causale dell'ultima pausa.
 function repartoPausaTesto(o, f) {
   const p = pausaInCorso(o.id, f.id);
   if (!p) return '';
@@ -765,7 +765,7 @@ function renderReparto() {
   repartoAggiornaScheda();
 }
 
-// ─── Le ore perse, nel Carico centri (dalla 0.159.0) ───
+// ─── Le ore perse, nel Carico centri (dalla 0.160.0) ───
 // Per centro (e per macchina, col modulo) e per causale, le pause che contano
 // come tempo perso negli ultimi N giorni, con la quota sulle ore timbrate.
 const PERSE_PERIODI = [7, 30, 90];
@@ -860,7 +860,7 @@ function orePerseExportSezione() {
     righe, totali: null };
 }
 
-// ─── Le causali, in Gestione → Centri di lavoro (dalla 0.159.0) ───
+// ─── Le causali, in Gestione → Centri di lavoro (dalla 0.160.0) ───
 // Stanno nelle impostazioni, come il calendario: viaggiano con il backup e con
 // l'archivio condiviso. Al primo cambio la lista di serie si copia e da lì è
 // dell'azienda. Una causale già usata si sospende, non si elimina: le pause di
@@ -1040,7 +1040,7 @@ function maintPlanElimina(id) {
 }
 // `dove` è un centro o una macchina, come nella tendina (leggiDove): «wc:…»,
 // «m:…», o l'id nudo di un centro.
-// `pre` (dalla 0.159.0): { fermoDa, nota } già scritti, per il guasto dal reparto.
+// `pre` (dalla 0.160.0): { fermoDa, nota } già scritti, per il guasto dal reparto.
 function maintEventModal(planId, dove, pre) {
   const pr = pre || {};
   if (!roleGuardShop('docs')) return;

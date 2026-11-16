@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.159.0 — 2026-11-16
+### 0.160.0 — 2026-11-16
 
 **Causali di pausa in Reparto, e le ore perse dei centri.** Modulo Officina.
 - **La Pausa chiede perché**, con un pulsante grande per causale: *Fine turno*, *Pausa personale*, *Attesa materiale*, *Attesa attrezzaggio o utensile*, *Attesa controllo qualità*, *Guasto macchina*, *Altro* (che chiede il motivo). La timbratura si chiude quando se ne sceglie una. Passare a un'altra fase chiude quella in corso come *Cambio lavoro*, senza chiedere; *Fine e dichiara* non chiede niente.

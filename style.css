@@ -1189,7 +1189,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .reparto-testa{display:flex;gap:8px;align-items:flex-start;margin-bottom:4px}
 .reparto-azioni{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .reparto-btn{min-height:48px;font-size:16px;padding:0 18px;flex:1;justify-content:center}
-/* La scelta della causale (dalla 0.159.0): pulsanti grandi, due per riga al
+/* La scelta della causale (dalla 0.160.0): pulsanti grandi, due per riga al
    telefono. Quelle che non sono tempo perso (Fine turno) in tinta, per prime. */
 .pausa-causali{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin:8px 0 4px}
 .pausa-causali .reparto-btn{flex:none;white-space:normal;text-align:center;line-height:1.2;padding:8px 12px}

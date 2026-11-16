@@ -1,4 +1,4 @@
-// Le causali di pausa del reparto e le ore perse (dalla 0.159.0).
+// Le causali di pausa del reparto e le ore perse (dalla 0.160.0).
 
 const assert = require('node:assert/strict');
 const { describe, it } = require('./tap.js');

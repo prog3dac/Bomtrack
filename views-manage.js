@@ -1386,7 +1386,7 @@ function readCalendarSettings() {
   const easterEl = document.getElementById('set-cal-easter');
   const supplierDays = val('set-cal-sup') === 'calendario' ? 'calendario' : 'lavorativi';
   const cal = { workDays: giorni, holidays: Array.from(new Set(holidays)).sort(), easter: easterEl ? !!easterEl.checked : true, closures, supplierDays };
-  // L'ora di fine giornata (dalla 0.159.0) si vede solo col modulo Officina:
+  // L'ora di fine giornata (dalla 0.160.0) si vede solo col modulo Officina:
   // senza il campo resta quella di prima.
   const fine = document.getElementById('set-cal-end') ? val('set-cal-end') : calSettings().dayEnd;
   if (/^\d{2}:\d{2}$/.test(fine || '')) cal.dayEnd = fine;

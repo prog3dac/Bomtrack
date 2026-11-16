@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.159.0**
+**Versione dell'app documentata: 0.160.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3868,11 +3868,11 @@ di una persona non si sovrappongano, su questa fase o sulle altre: se qualcosa n
 niente e dice cosa. Ogni correzione entra nello **storico delle modifiche** (*Timbratura ODP-… fase
 …*, con chi l'ha fatta e gli orari di prima e di dopo).
 
-Sotto ogni timbratura chiusa c'è anche la **Causale della pausa** che l'ha chiusa (dalla 0.159.0):
+Sotto ogni timbratura chiusa c'è anche la **Causale della pausa** che l'ha chiusa (dalla 0.160.0):
 si corregge, o si scrive dopo, dalla stessa tendina. «—» vuol dire nessuna: la timbratura si è
-chiusa con *Fine e dichiara*, o è di prima della 0.159.0.
+chiusa con *Fine e dichiara*, o è di prima della 0.160.0.
 
-### Le causali di pausa (modulo Officina, dalla 0.159.0)
+### Le causali di pausa (modulo Officina, dalla 0.160.0)
 
 **Pausa** apre la domanda *Perché ti fermi?* con un pulsante grande per causale. La timbratura si
 chiude quando se ne tocca una; *Continua a lavorare* lascia tutto com'era. Di serie:
@@ -4087,7 +4087,7 @@ Sotto ogni centro, il sotto-elenco **Fornitori conto lavoro**: fornitore, tariff
 fare quella lavorazione fuori, e a quanto. Si possono sospendere. Con il modulo Macchine utensili
 c'è anche l'elenco delle **macchine** del centro, e un centro con macchine non si elimina.
 
-**Causali di pausa** (modulo Officina, dalla 0.159.0). Sotto i centri, le causali che il Reparto
+**Causali di pausa** (modulo Officina, dalla 0.160.0). Sotto i centri, le causali che il Reparto
 chiede a ogni Pausa (→ [cap. 24](#24-carico-dei-centri-di-lavoro)). Per ognuna: il nome, se
 **conta come tempo perso**, se **propone un intervento di manutenzione** e se **chiede di
 scrivere il motivo**. Si aggiungono dal campo in fondo, si sospendono (spariscono dal Reparto,
@@ -4215,7 +4215,7 @@ per tutti i colleghi.
 | Chiusure | nessuna — una per riga: `2026-08-10 2026-08-21 Ferie estive` |
 | Margine fra livelli di distinta (gg) | 0 |
 | Giorni di consegna di fornitori e terzisti | lavorativi (dalla 0.110.0) |
-| Fine della giornata di lavoro | 17:00 — solo con il modulo Officina (dalla 0.159.0): fin qui conta una pausa del reparto che non riprende in giornata |
+| Fine della giornata di lavoro | 17:00 — solo con il modulo Officina (dalla 0.160.0): fin qui conta una pausa del reparto che non riprende in giornata |
 
 Il calendario serve alla programmazione a ritroso del fabbisogno: fasi interne e montaggi si
 contano in giorni lavorativi, e di serie anche i giorni dei fornitori (consegna a listino,
@@ -5146,7 +5146,7 @@ dentro**: uscendo e rientrando, il documento torna bloccato.
 | **Tratta** | Le fasi **consecutive** dello stesso terzista, commissionate come una sola lavorazione |
 | **Passata** | Un giro di uscita e rientro dallo stesso terzista. Due passate dallo stesso terzista = due ODL |
 | **Fase** | Un passo del ciclo di lavorazione (10, 20, 30…) |
-| **Causale di pausa** · **Ore perse** | Il perché di una Pausa in Reparto; le pause con una causale di tempo perso, sommate per centro e macchina nel Carico centri (dalla 0.159.0, → [cap. 24](#24-carico-dei-centri-di-lavoro)) |
+| **Causale di pausa** · **Ore perse** | Il perché di una Pausa in Reparto; le pause con una causale di tempo perso, sommate per centro e macchina nel Carico centri (dalla 0.160.0, → [cap. 24](#24-carico-dei-centri-di-lavoro)) |
 | **Ciclo di lavorazione** | La sequenza di fasi che trasforma il materiale in una parte |
 | **Distinta di una parte** | Il materiale che una parte consuma: materie prime e commerciali, mai assiemi o altre parti. Dalla 0.125.0 sta in *Gestione DB* come quella degli assiemi |
 | **Concetto** | L'oggetto nel nome di una parte: `ALBERO`, `FLANGIA`. Sempre maiuscolo, scelto da un elenco |
