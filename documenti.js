@@ -183,7 +183,7 @@ function docEmessoApri(id) {
   if (!d) return Promise.resolve('nessuno');
   return archivioApri(d.path).then(esito => {
     if (esito === 'non-supportato') showToast('Questo browser non può leggere l\'archivio: servono Chrome o Edge', 'error');
-    else if (esito === 'non-configurato') showToast('Archivio non impostato su questo PC: scegli la cartella da Gestione → Backup', 'error');
+    else if (esito === 'non-configurato') showToast('Archivio non impostato su questo PC: la cartella si sceglie ' + archivioDove(), 'error');
     else if (esito === 'negato') showToast('Permesso negato sulla cartella d\'archivio', 'error');
     else if (esito === 'assente') showToast(`DOCUMENTO NON TROVATO — "${d.path}" non è in ${archivioNome() || 'archivio'}`, 'error');
     else if (esito === 'errore') showToast('Documento non apribile', 'error');
@@ -207,7 +207,7 @@ function docEmessiHtml(kind, rec) {
     </div>`).join('');
   let nota = '';
   if (stato === 'non-supportato') nota = 'Questo browser non scrive nella cartella d\'archivio (servono Chrome o Edge): il PDF resta un download.';
-  else if (stato === 'non-configurato') nota = `La cartella d'archivio non è impostata su questo PC: il PDF resta un download. Si sceglie in Gestione → Backup.${typeof isAdmin === 'function' && isAdmin() ? ` <button class="mini-btn" onclick="archivioApriGestione()">${ico('settings', 'tinted', '')} Apri Gestione</button>` : ''}`;
+  else if (stato === 'non-configurato') nota = `La cartella d'archivio non è impostata su questo PC: il PDF resta un download. ${archivioRimando()}`;
   else if (rec.status === 'bozza' && !copie.length) nota = 'Il PDF va in archivio quando il documento si segna come inviato.';
   else if (!copie.length) nota = 'Nessuna copia archiviata.';
   const pulsante = scrive && stato === 'configurato'

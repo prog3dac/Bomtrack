@@ -270,7 +270,7 @@ function allegatoApri(id) {
   if (!doc) { showToast('NESSUN DOCUMENTO SALVATO', 'error'); return Promise.resolve('nessuno'); }
   return archivioApri(doc.path, rec.page).then(esito => {
     if (esito === 'non-supportato') showToast('Questo browser non può leggere l\'archivio: servono Chrome o Edge', 'error');
-    else if (esito === 'non-configurato') showToast('Archivio allegati non impostato su questo PC: la cartella si sceglie da Gestione → Backup', 'error');
+    else if (esito === 'non-configurato') showToast('Archivio allegati non impostato su questo PC: la cartella si sceglie ' + archivioDove(), 'error');
     else if (esito === 'negato') showToast('Permesso negato sulla cartella d\'archivio', 'error');
     else if (esito === 'assente') showToast(`DOCUMENTO NON TROVATO — "${doc.path}" non è in ${archivioNome() || 'archivio'}`, 'error');
     else if (esito === 'errore') showToast('Documento non apribile', 'error');
@@ -461,14 +461,15 @@ function allegatiBody(id) {
 }
 
 // ─── Lo stato dell'archivio, scritto dove serve ───
-// Compare nella scheda Allegati, nel pannello che collega un documento e in
-// Gestione, ed è lo stesso testo. La cartella si sceglie **solo in Gestione →
-// Backup** (dalla 0.161.0): è un'impostazione di questo PC che decide dove
-// finiscono i file di tutti, e un pulsante «Cambia» accanto a ogni allegato la
-// faceva cambiare per sbaglio. Fuori da Gestione resta il rimando, con il
-// pulsante per arrivarci a chi in Gestione può entrare.
-// `inGestione` a true lì, dove il pulsante per scegliere c'è già accanto.
-function archivioBlocco(inGestione) {
+// Compare nella scheda Allegati, nel pannello che collega un documento, nel
+// pannello dell'archivio condiviso e in Gestione, ed è lo stesso testo.
+// La cartella si sceglie in un posto solo (dalla 0.161.0): un pulsante «Cambia»
+// accanto a ogni allegato la faceva cambiare per sbaglio. Il posto è il
+// pannello dell'**archivio condiviso** (l'icona della nuvola in alto), che è
+// sempre a portata di tutti; un PC senza archivio condiviso non ha la nuvola,
+// e lì resta *Gestione → Backup*. Fuori da quei due resta il rimando.
+// `qui` a true dove il pulsante per scegliere c'è già accanto.
+function archivioBlocco(qui) {
   const stato = archivioStato();
   if (stato === 'non-supportato') {
     return `<p class="empty-text" style="text-align:left;padding:0 0 12px">${ico('warning', 'tinted', '')}
@@ -476,27 +477,52 @@ function archivioBlocco(inGestione) {
       (non con un doppio click su <span style="font-family:var(--mono)">index.html</span>). I documenti già allegati restano, ma da qui non si aprono.</p>`;
   }
   if (stato === 'non-configurato') {
-    const rimando = inGestione ? ''
-      : (typeof isAdmin === 'function' && isAdmin()
-        ? ` Si sceglie in Gestione → Backup. <button class="mini-btn" onclick="archivioApriGestione()">${ico('settings', 'tinted', '')} Apri Gestione</button>`
-        : ' Si sceglie in Gestione → Backup: chiedilo a un amministratore, che la imposta entrando una volta da questo PC.');
     return `<p class="empty-text" style="text-align:left;padding:0 0 12px">${ico('warning', 'tinted', '')}
-      <strong>Archivio allegati non impostato su questo PC.</strong> Va indicata la cartella dove stanno i PDF — una cartella locale, oppure quella di un servizio sincronizzato.${rimando}</p>`;
+      <strong>Archivio allegati non impostato su questo PC.</strong> Va indicata la cartella dove stanno i PDF — una cartella locale, oppure quella di un servizio sincronizzato.${qui ? '' : ' ' + archivioRimando()}</p>`;
   }
   return `<p class="empty-text" style="text-align:left;padding:0 0 12px">
     Archivio di questo PC: <strong>${esc(archivioNome())}</strong></p>`;
 }
-// Il rimando: chiude il pannello aperto e porta alla scheda dove si sceglie.
-function archivioApriGestione() {
+// Dove si sceglie la cartella, a parole: entra nei messaggi.
+function archivioDove() {
+  return typeof cloudAttivo === 'function' && cloudAttivo()
+    ? 'dall\'icona della nuvola in alto (Archivio condiviso)'
+    : 'da Gestione → Backup';
+}
+// Il rimando, con il pulsante per arrivarci a chi ci può arrivare: la nuvola è
+// di tutti, Gestione solo degli amministratori.
+function archivioRimando() {
+  const cloud = typeof cloudAttivo === 'function' && cloudAttivo();
+  if (cloud || (typeof isAdmin === 'function' && isAdmin())) {
+    return `Si sceglie ${archivioDove()}. <button class="mini-btn" onclick="archivioApriImpostazione()">${ico('folder', 'tinted', '')} Scegli cartella</button>`;
+  }
+  return 'Si sceglie da Gestione → Backup: chiedilo a un amministratore, che la imposta entrando una volta da questo PC.';
+}
+// Il rimando porta dove si sceglie: chiude il pannello aperto e apre l'altro.
+function archivioApriImpostazione() {
   if (typeof closeModal === 'function') closeModal();
+  if (typeof cloudAttivo === 'function' && cloudAttivo()) { cloudPannello(); return; }
   setView('manage');
   setMgmtTab('backup');
 }
-// La scelta, da Gestione: dopo si ridisegna la scheda, dove il nome della
-// cartella compare nello stato e sul pulsante.
+// La sezione nel pannello dell'archivio condiviso: stato e pulsante.
+function archivioSezioneCloud() {
+  return `<div class="modal-field" id="cl-archivio"><label>${ico('folder', 'tinted', '')} Archivio allegati di questo PC</label>${archivioSezioneCloudCorpo()}</div>`;
+}
+function archivioSezioneCloudCorpo() {
+  const pulsante = archivioStato() === 'non-supportato' ? ''
+    : `<button class="btn-outline" onclick="archivioSceglieModal()">${ico('folder', 'tinted', '')} ${archivioNome() ? 'Cambia cartella' : 'Scegli cartella'}</button>`;
+  return archivioBlocco(true) + pulsante
+    + '<p class="cl-nota">La cartella è di questo PC, non dell\'archivio condiviso: ogni computer indica la sua.</p>';
+}
+// La scelta, dal pannello della nuvola o da Gestione: dopo si ridisegna quello
+// che è aperto, dove il nome della cartella compare nello stato e sul pulsante.
 function archivioSceglieModal() {
   archivioScegli().then(ok => {
-    if (ok && typeof activeView !== 'undefined' && activeView === 'manage') renderManage();
+    if (!ok) return;
+    const el = typeof document !== 'undefined' && document.getElementById('cl-archivio');
+    if (el) renderInto('cl-archivio', () => `<label>${ico('folder', 'tinted', '')} Archivio allegati di questo PC</label>${archivioSezioneCloudCorpo()}`);
+    if (typeof activeView !== 'undefined' && activeView === 'manage') renderManage();
   });
 }
 // Il file scelto dalla finestra di sistema. Si svuota l'input subito dopo:

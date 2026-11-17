@@ -1753,6 +1753,7 @@ function cloudPannello() {
       <button class="btn-outline" onclick="cloudCopiaLink()">${ico('copy', 'tinted', '')} Copia</button></div></div>
       <p class="cl-nota">Mettilo anche in Supabase come <strong>Site URL</strong> (Authentication → URL Configuration): gli inviti e il recupero password riportano qui.</p>
       ${cloudQrLinkHtml(link)}` : ''}
+    ${dentro && typeof archivioSezioneCloud === 'function' ? archivioSezioneCloud() : ''}
     <div class="modal-actions">
       ${dentro && Store.hasPendingChanges() ? `<button class="btn-outline" onclick="cloudPannelloScartaRifiutati()" title="Manda le modifiche in attesa a pezzi: quelle che il server rifiuta tornano come sul server, le altre partono">Scarta solo i rifiutati</button>` : ''}
       ${dentro ? `<button class="btn-outline" onclick="cloudPannelloRiscarica()">Scarta e riscarica</button>` : ''}

@@ -403,7 +403,7 @@ function tarCertificatoSalva(calId, file) {
   const cal = tarGet(calId), s = cal ? struGet(cal.instrumentId) : null;
   if (!cal || !s || !file) return Promise.resolve(null);
   if (typeof archivioStato !== 'function' || archivioStato() !== 'configurato') {
-    showToast('Per allegare il certificato serve la cartella d\'archivio (Gestione → Backup, da Chrome o Edge)', 'error');
+    showToast('Per allegare il certificato serve la cartella d\'archivio, da Chrome o Edge: si sceglie ' + archivioDove(), 'error');
     return Promise.resolve(null);
   }
   return archivioSalvaIn(tarCertificatoNome(s, cal), file).then(path => {
@@ -425,7 +425,7 @@ function tarCertificatoApri(calId) {
   if (!cal || !cal.certPath) return Promise.resolve('nessuno');
   return archivioApri(cal.certPath).then(esito => {
     if (esito === 'non-supportato') showToast('Questo browser non può leggere l\'archivio: servono Chrome o Edge', 'error');
-    else if (esito === 'non-configurato') showToast('Archivio non impostato su questo PC: scegli la cartella da Gestione → Backup', 'error');
+    else if (esito === 'non-configurato') showToast('Archivio non impostato su questo PC: la cartella si sceglie ' + archivioDove(), 'error');
     else if (esito === 'negato') showToast('Permesso negato sulla cartella d\'archivio', 'error');
     else if (esito === 'assente') showToast(`CERTIFICATO NON TROVATO — "${cal.certPath}" non è in ${archivioNome() || 'archivio'}`, 'error');
     else if (esito === 'errore') showToast('Certificato non apribile', 'error');
@@ -929,7 +929,7 @@ function tarModal(instrumentId) {
       <div class="modal-field"><label>N° certificato</label><input id="tar-cert" placeholder="es. LAT 123 / 4567"></div>
       ${archivio ? '<div class="modal-field"><label>Certificato PDF</label><input type="file" id="tar-file" accept="application/pdf,.pdf"></div>' : ''}
     </div>
-    ${archivio ? '' : '<p class="empty-text" style="text-align:left;padding:2px 0 6px">Il PDF del certificato si allega quando su questo PC è scelta la cartella d\'archivio (Gestione → Backup, da Chrome o Edge).</p>'}
+    ${archivio ? '' : `<p class="empty-text" style="text-align:left;padding:2px 0 6px">Il PDF del certificato si allega quando su questo PC è scelta la cartella d'archivio, da Chrome o Edge: si sceglie ${archivioDove()}.</p>`}
     <div class="table-wrap"><table class="qc-table">
       <thead><tr><th scope="col" class="num">Riferimento${s.uom ? ' (' + esc(s.uom) + ')' : ''}</th><th scope="col" class="num">Letto dallo strumento</th></tr></thead>
       <tbody id="tar-punti">${punti}</tbody></table></div>

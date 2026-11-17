@@ -417,35 +417,54 @@ describe('Archivio — quello che si vede', () => {
     assert.ok(a.eval('allegatiBody("M1")').includes('NESSUN DOCUMENTO SALVATO'));
   });
 
-  // Dalla 0.161.0 la cartella si sceglie solo in Gestione → Backup: la scheda
-  // dice dove, e porta lì chi in Gestione può entrare.
-  it('senza cartella la scheda rimanda a Gestione, e non la sceglie da sé', () => {
+  // Dalla 0.161.0 la cartella si sceglie in un posto solo: la scheda dice dove,
+  // e porta lì chi ci può arrivare. Senza archivio condiviso è Gestione.
+  it('senza cartella la scheda rimanda a dove si sceglie, e non la sceglie da sé', () => {
     const a = app(null, { collega: false });
     const html = a.eval('allegatiBody("M1")');
     assert.ok(html.includes('non impostato su questo PC'));
     assert.ok(html.includes('Gestione → Backup'));
-    assert.ok(html.includes('archivioApriGestione()'), 'l\'amministratore ha il pulsante per arrivarci');
+    assert.ok(html.includes('archivioApriImpostazione()'), 'l\'amministratore ha il pulsante per arrivarci');
     assert.ok(!html.includes('archivioSceglieModal()'), 'la scelta non sta qui');
     a.asRole('progettazione');
     const altro = a.eval('allegatiBody("M1")');
-    assert.ok(!altro.includes('archivioApriGestione()'), 'chi in Gestione non entra legge solo il rimando');
+    assert.ok(!altro.includes('archivioApriImpostazione()'), 'chi in Gestione non entra legge solo il rimando');
     assert.ok(altro.includes('amministratore'));
   });
 
-  it('con la cartella scelta, fuori da Gestione non si cambia', () => {
+  it('con la cartella scelta, fuori dai due posti non si cambia', () => {
     const a = app();
     for (const html of [a.eval('allegatiBody("M1")'), a.eval('archivioBlocco()')]) {
       assert.ok(html.includes('Disegni'));
       assert.ok(!html.includes('archivioSceglieModal()'));
     }
     assert.ok(a.eval('renderArchivio()').includes('archivioSceglieModal()'), 'in Gestione sì');
+    assert.ok(a.eval('archivioSezioneCloud()').includes('archivioSceglieModal()'), 'e nel pannello della nuvola');
   });
 
-  it('il rimando porta a Gestione → Backup', () => {
+  it('senza archivio condiviso il rimando porta a Gestione → Backup', () => {
     const a = app(null, { collega: false });
-    a.eval('archivioApriGestione()');
+    a.eval('archivioApriImpostazione()');
     assert.equal(a.eval('activeView'), 'manage');
     assert.equal(a.eval('mgmtTab'), 'backup');
+  });
+
+  // Con l'archivio condiviso si sceglie dalla nuvola, che vedono tutti: non
+  // serve entrare come amministratore per un'impostazione di questo PC.
+  it('con l\'archivio condiviso si sceglie dalla nuvola, anche chi non è amministratore', () => {
+    const a = app(null, { collega: false });
+    a.storage.setItem('bomtrack_cloud', JSON.stringify({ url: 'http://x', chiave: 'k', allineato: true }));
+    a.asRole('progettazione');
+    const html = a.eval('allegatiBody("M1")');
+    assert.ok(html.includes('nuvola'));
+    assert.ok(html.includes('archivioApriImpostazione()'));
+    // Il pulsante apre il pannello della nuvola, e lì c'è la scelta.
+    a.eval('var __aperto = ""; openModal = h => { __aperto = h; return null; };');
+    a.eval('archivioApriImpostazione()');
+    const pannello = a.eval('__aperto');
+    assert.ok(pannello.includes('Archivio condiviso'));
+    assert.ok(pannello.includes('archivioSceglieModal()'));
+    assert.ok(pannello.includes('Scegli cartella'));
   });
 
   // La vecchia strada resta aperta dove la nuova non c'è: togliere a qualcuno

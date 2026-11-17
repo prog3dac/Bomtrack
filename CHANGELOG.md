@@ -7,7 +7,7 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 **Allegati nella cartella del codice, e la cartella d'archivio si sceglie solo in Gestione.**
 - **Il PDF copiato nell'archivio** dal pannello *Collega documento* va in una cartella che si chiama come il codice, accanto a `Documenti Bomtrack` e `Tarature`: `CU-6204-2RS/scheda tecnica.pdf`. La cartella nasce alla prima copia; i caratteri che Windows non accetta diventano un trattino. Un nome già preso non si sovrascrive (`… (2).pdf`), come prima.
 - I PDF già in archivio restano dove sono: i percorsi salvati non cambiano e non c'è niente da migrare.
-- **La cartella d'archivio del PC si sceglie solo in *Gestione → Backup*.** La scheda Allegati, il pannello di collegamento e le schede di richieste, ordini e ordini di lavoro dicono qual è o che manca, con *Apri Gestione* per l'amministratore; il pulsante *Cambia* accanto agli allegati non c'è più.
+- **La cartella d'archivio del PC si sceglie in un posto solo**: il pannello dell'archivio condiviso (l'icona della nuvola in alto), sezione *Archivio allegati di questo PC*, aperto a chiunque abbia fatto l'accesso. Senza archivio condiviso resta *Gestione → Backup*. La scheda Allegati, il pannello di collegamento e le schede di richieste, ordini e ordini di lavoro dicono qual è o che manca, con *Scegli cartella* che porta lì; il pulsante *Cambia* accanto agli allegati non c'è più.
 
 Schema: nessun cambiamento.
 
