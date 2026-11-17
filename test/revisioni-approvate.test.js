@@ -182,7 +182,7 @@ describe('La pagina Cicli mostra di serie il ciclo approvato (dalla 0.162.0)', (
     assert.match(h, /1 fase</, 'le fasi della revisione approvata');
     assert.doesNotMatch(h, /addCycleOpRow|updateCycleRow/, 'l\'approvata non si modifica');
 
-    a.eval(`document.getElementById('cyc-ver').value = 'bozza'; onCycleVersione()`);
+    a.eval(`document.getElementById('cycles-ver').value = 'bozza'; revSceltaVersione('cycles', 'p1')`);
     h = a.html('cyc-body');
     assert.match(h, /2 fasi</);
     assert.match(h, /addCycleOpRow/, 'la bozza si modifica');
@@ -195,8 +195,42 @@ describe('La pagina Cicli mostra di serie il ciclo approvato (dalla 0.162.0)', (
     const a = app({ revApprovate: true });
     a.eval(`currentCycleItemId = 'p1'; renderCycles()`);
     const h = a.html('cyc-body');
-    assert.doesNotMatch(h, /cyc-ver/);
+    assert.doesNotMatch(h, /cycles-ver/);
     assert.match(h, /addCycleOpRow/);
+  });
+});
+
+describe('La pagina Distinte mostra di serie la distinta approvata (dalla 0.162.0)', () => {
+  it('l\'approvata in sola lettura, la bozza dalla tendina, e riaperta si torna all\'approvata', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`releaseRevision('g1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('g1').components.push({ itemId: 'c2', qty: 3 })`);   // la bozza cambia
+    a.eval(`currentBomId = 'g1'; renderBom()`);
+    let h = a.html('bom-tree');
+    assert.match(a.html('bom-ver-box'), /Approvata v0/);
+    assert.match(a.html('bom-ver-box'), /Bozza v1 · modificata/);
+    assert.doesNotMatch(h, /C2/, 'la riga aggiunta in bozza non c\'è');
+    assert.doesNotMatch(h, /editComponentModal|delComponent/, 'l\'approvata non si modifica');
+    assert.equal(a.el('bom-add-comp').style.display, 'none');
+    assert.match(a.html('bom-cost-summary'), /40,00/, 'il costo è della distinta approvata: 2 × 10 + 4 × 5');
+    a.eval('delComponent(0)');
+    assert.equal(a.eval(`getItem('g1').components.length`), 3, 'nessuna modifica dalla vista approvata');
+
+    a.eval(`document.getElementById('bom-ver').value = 'bozza'; revSceltaVersione('bom', 'g1')`);
+    h = a.html('bom-tree');
+    assert.match(h, /C2/);
+    assert.match(h, /editComponentModal/);
+    assert.equal(a.el('bom-add-comp').style.display, '');
+
+    a.eval(`openBomFor('g1')`);
+    assert.doesNotMatch(a.html('bom-tree'), /C2/, 'riaperta, si torna all\'approvata');
+  });
+
+  it('senza una revisione approvata si vede la bozza, senza tendina', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`currentBomId = 'g1'; renderBom()`);
+    assert.equal(a.html('bom-ver-box'), '');
+    assert.match(a.html('bom-tree'), /editComponentModal/);
   });
 });
 

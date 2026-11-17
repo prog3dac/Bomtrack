@@ -1373,6 +1373,17 @@ parte*, sotto).
   livello dell'albero), l'ultima icona a destra 🌳 **apre la sua distinta** al posto di quella
   corrente, senza cercarla nel menu (dalla 0.135.0).
 
+**Approvata o bozza** (dalla 0.162.0). Con le revisioni approvate la distinta si apre **sempre
+sull'approvata** valida oggi, quella che usano piani e ODP, **in sola lettura**: niente *Modifica*,
+*Elimina* né *+ Aggiungi componenti*. Tutto l'albero si legge così: ogni sottoassieme e ogni parte
+mostra la sua revisione valida, come la esplode il fabbisogno, e uno senza revisione approvata porta
+l'etichetta *non approvata*. Anche le card di costo sono quelle della distinta approvata, ai costi
+di oggi dei componenti. La tendina sopra l'albero (*Approvata v1 · valida dal …*) porta alla
+**Bozza v2**, dove l'albero è quello di sempre e si modifica; se la bozza è diversa, la tendina
+scrive *modificata* e sopra l'albero compare un avviso. Cambiando distinta, o aprendola da un'altra
+pagina, si torna all'approvata. Un articolo senza revisione approvata mostra direttamente la bozza.
+Lo stesso vale per i *Cicli di lavorazione* (→ [cap. 14](#14-cicli-di-lavorazione)).
+
 **Comandi.**
 
 | Comando | Cosa fa |

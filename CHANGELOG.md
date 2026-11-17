@@ -4,7 +4,8 @@ Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per n
 
 ### 0.162.0 — 2026-11-17
 
-**I Cicli si aprono sulla revisione approvata, e l'ODP di montaggio non nasce più senza fasi.**
+**Distinte e Cicli si aprono sulla revisione approvata, e l'ODP di montaggio non nasce più senza fasi.**
+- **Distinte base**: con le revisioni approvate la distinta si apre sull'**approvata** valida oggi, in sola lettura, con ogni sottoassieme e parte nella sua revisione valida (come li esplode il fabbisogno; *non approvata* su chi non ne ha una) e le card di costo della distinta approvata. La tendina sopra l'albero porta alla **Bozza vN**, che si modifica come prima; *modificata* e un avviso se è diversa. Cambiando distinta si torna all'approvata.
 - **Cicli di lavorazione**: con le revisioni approvate la pagina mostra di serie il ciclo **approvato** valido oggi, in sola lettura, con le fasi, i tempi, il costo e le note. La tendina accanto al titolo porta alla **Bozza vN**, l'unica che si modifica; se la bozza ha fasi diverse la tendina dice *modificata* e un avviso lo ripete sopra le fasi. Cambiando articolo, o aprendolo da un'altra pagina, si torna all'approvata.
 - Il fabbisogno decideva se proporre l'ordine di produzione di un assieme guardando il ciclo della **bozza**, mentre l'ordine copia quello della **revisione approvata**. Con la fase di montaggio scritta solo in bozza, *Genera ordini di produzione* creava un ODP vuoto, e l'avanzamento non mostrava il montaggio.
 - Ora conta la revisione valida il giorno in cui l'assieme serve. Se le fasi sono solo in bozza, la riga in *Da montare* dice **ciclo da approvare** e porta al ciclo; l'avanzamento lo dice sulla riga del montaggio.

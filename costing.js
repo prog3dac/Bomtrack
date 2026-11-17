@@ -196,9 +196,11 @@ function wcRateFor(wc, supplierId) {
   return s ? (Number(s.rate) || 0) : (Number(wc.hourlyRate) || 0);
 }
 
-function sellingPrice(itemId) {
+// `costo` (facoltativo, dalla 0.162.0): un costo già calcolato, per esempio
+// quello della distinta approvata che la pagina Distinte mostra di serie.
+function sellingPrice(itemId, costo) {
   const it = getItem(itemId);
-  const c = costOf(itemId);
+  const c = costo || costOf(itemId);
   const mgPct = it && it.marginPctOverride != null ? it.marginPctOverride : (db.settings.marginPct || 0);
   return c.total * (1 + (Number(mgPct) || 0) / 100);
 }

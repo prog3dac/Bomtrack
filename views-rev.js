@@ -165,6 +165,48 @@ function itemOperativo(it, data) {
     sourcing: s.sourcing || it.sourcing, _rev: r });
 }
 function getItemOperativo(id, data) { return itemOperativo(getItem(id), data); }
+
+// ─── Approvata o bozza nelle pagine Distinte e Cicli (dalla 0.162.0) ───
+// Con le revisioni approvate le due pagine si aprono **sull'approvata** valida
+// oggi, quella che piani e ODP usano: guardare la bozza credendola in vigore è
+// come era nato un ODP di montaggio vuoto. La bozza si sceglie dalla tendina,
+// ed è l'unica che si modifica. La scelta vale per l'articolo aperto in quella
+// pagina: cambiando articolo, o aprendolo da un'altra pagina, si torna
+// all'approvata.
+const revBozzaAperta = { bom: null, cycles: null };
+function revApprovataInVista(it) {
+  if (!it || !revApprovateAttive() || !revServe(it)) return null;
+  return revValidaAl(it.id) || null;
+}
+function revMostraBozza(pagina, it) { return !revApprovataInVista(it) || revBozzaAperta[pagina] === it.id; }
+function revApriApprovata(pagina) { revBozzaAperta[pagina] = null; }
+// L'articolo con le righe di una revisione: una copia, chi la riceve legge.
+function revItemDi(it, r) {
+  const sn = (r && r.snapshot) || {};
+  return Object.assign({}, it, { components: sn.components || [], cycle: sn.cycle || [], operations: sn.operations || [], _rev: r });
+}
+// La bozza è diversa dall'approvata? `cosa` sceglie le righe da confrontare:
+// 'cycle' le sole fasi, 'components' la sola distinta.
+function revBozzaDiversa(it, r, cosa) {
+  const sn = (r && r.snapshot) || {};
+  const prima = cosa === 'cycle' ? { type: it.type, cycle: sn.cycle || [], operations: sn.operations || [] } : { type: it.type, components: sn.components || [] };
+  const dopo = cosa === 'cycle' ? { type: it.type, cycle: cicloFasi(it) } : { type: it.type, components: distintaRighe(it) };
+  return !revDiffVuoto(revDiff(prima, dopo));
+}
+function revVersioneHtml(pagina, it, r, diversa) {
+  const per = revPeriodo(r);
+  const bozza = revMostraBozza(pagina, it);
+  return `<label class="rev-ver"><span class="sr-only">Versione da mostrare</span>
+    <select id="${pagina}-ver" onchange="revSceltaVersione('${pagina}','${it.id}')" title="L'approvata è quella che usano piani e ODP; la bozza è quella che si modifica">
+      <option value="approvata" ${bozza ? '' : 'selected'}>Approvata ${esc(revLabel(r.rev))} · valida dal ${esc(fmtDateIt(per ? per.dal : revDal(r)))}</option>
+      <option value="bozza" ${bozza ? 'selected' : ''}>Bozza ${esc(revLabel(itemRev(it)))}${diversa ? ' · modificata' : ''}</option>
+    </select></label>`;
+}
+function revSceltaVersione(pagina, itemId) {
+  revBozzaAperta[pagina] = val(pagina + '-ver') === 'bozza' ? itemId : null;
+  if (pagina === 'bom') { if (typeof closeBomPanel === 'function') closeBomPanel(); renderBom(); }
+  else renderCycles();
+}
 // La bozza è in approvazione: distinta e ciclo si guardano ma non si toccano,
 // così chi approva firma esattamente quello che vede.
 function revInApprovazione(it) { return !!(it && it.revRequest && revApprovateAttive()); }

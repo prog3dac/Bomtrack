@@ -66,36 +66,7 @@ function cycleFilteredParts() {
 }
 function cycleSearchInput() { debounced('cyc-sel', renderCycles); }
 function onCycleFilterChange() { renderCycles(); }
-function onCyclePartSelect() { currentCycleItemId = val('cyc-part'); renderCycles(); }
-// ─── Approvata o bozza (dalla 0.162.0) ───
-// Con le revisioni approvate si vede di serie il ciclo **approvato**, quello
-// che piani e ODP usano oggi: guardare la bozza e credere che sia quello in
-// vigore è come era nato un ODP di montaggio vuoto. La bozza si
-// sceglie dalla tendina, ed è l'unica che si modifica. La scelta vale per
-// l'articolo aperto: cambiando articolo si torna all'approvata.
-let cycleBozzaDi = null;
-function cycleApprovata(it) {
-  if (!it || !revApprovateAttive() || !revServe(it)) return null;
-  return revValidaAl(it.id) || null;
-}
-function cycleMostraBozza(it) { return !cycleApprovata(it) || cycleBozzaDi === it.id; }
-function onCycleVersione() { cycleBozzaDi = val('cyc-ver') === 'bozza' ? currentCycleItemId : null; renderCycles(); }
-// La bozza ha fasi diverse dall'approvata? Si confrontano le sole fasi: la
-// distinta ha la sua pagina.
-function cycleBozzaDiversa(it, r) {
-  return !revDiffVuoto(revDiff({ type: it.type, cycle: (r.snapshot || {}).cycle || [], operations: (r.snapshot || {}).operations || [] },
-    { type: it.type, cycle: cicloFasi(it) }));
-}
-function cycleVersioneHtml(it, r) {
-  const per = revPeriodo(r);
-  const bozza = cycleMostraBozza(it);
-  const diversa = cycleBozzaDiversa(it, r);
-  return `<label class="cycle-ver"><span class="sr-only">Versione del ciclo</span>
-    <select id="cyc-ver" onchange="onCycleVersione()" title="L'approvata è quella che usano piani e ODP; la bozza è quella che si modifica">
-      <option value="approvata" ${bozza ? '' : 'selected'}>Approvata ${esc(revLabel(r.rev))} · valida dal ${esc(fmtDateIt(per ? per.dal : revDal(r)))}</option>
-      <option value="bozza" ${bozza ? 'selected' : ''}>Bozza ${esc(revLabel(itemRev(it)))}${diversa ? ' · modificata' : ''}</option>
-    </select></label>`;
-}
+function onCyclePartSelect() { currentCycleItemId = val('cyc-part'); revApriApprovata('cycles'); renderCycles(); }
 // Il ciclo approvato in sola lettura: le stesse colonne, senza campi.
 function cycleOpsTableApprovata(fasi) {
   if (!fasi.length) return '<div class="empty-text" style="padding:8px 0">La revisione approvata non ha fasi.</div>';
@@ -129,7 +100,7 @@ function openCycleFor(id) {
   if (!it || (it.type !== 'parte' && !isAssembly(it.type))) return;
   if (!vistaAttiva('cycles')) { setView('cycles'); return; }   // avvisa e resta al Riepilogo
   currentCycleItemId = id;
-  cycleBozzaDi = null;   // si apre sempre sull'approvata
+  revApriApprovata('cycles');   // si apre sempre sull'approvata (dalla 0.162.0)
   ['search', 'type', 'family', 'subfamily', 'machine', 'group'].forEach(k => setVal('cyc-' + k, ''));
   // Anche lo scope condiviso (filters.js), altrimenti setView lo riscriverebbe
   // subito dopo sui campi appena svuotati, e la parte scelta potrebbe restare
@@ -199,11 +170,13 @@ function renderCycles() {
   // materiale di una parte, che qui non si mostrano (stanno nella distinta).
   const opRows = (it.cycle || []).map((r, i) => ({ r, i })).filter(x => x.r.kind === 'op');
   const assieme = isAssembly(it.type);
-  const approvata = cycleApprovata(it);
-  const bozza = cycleMostraBozza(it);
-  const fasiApprovate = approvata && !bozza ? cicloFasi(Object.assign({}, it, { cycle: (approvata.snapshot || {}).cycle || [], operations: (approvata.snapshot || {}).operations || [] })) : null;
+  // Di serie l'approvata, in sola lettura; la bozza dalla tendina (views-rev.js).
+  const approvata = revApprovataInVista(it);
+  const bozza = revMostraBozza('cycles', it);
+  const diversa = approvata ? revBozzaDiversa(it, approvata, 'cycle') : false;
+  const fasiApprovate = approvata && !bozza ? cicloFasi(revItemDi(it, approvata)) : null;
   const n = fasiApprovate ? fasiApprovate.length : opRows.length;
-  const avviso = fasiApprovate && cycleBozzaDiversa(it, approvata)
+  const avviso = fasiApprovate && diversa
     ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} La bozza ${esc(revLabel(itemRev(it)))} ha fasi diverse da queste: sceglila dalla tendina per vederla e modificarla. Piani e ODP useranno le sue fasi solo dopo l'approvazione.</p>`
     : fasiApprovate ? '<p class="empty-text" style="text-align:left;padding:0 0 8px">Il ciclo che piani e ODP usano oggi, in sola lettura. Per modificarlo scegli la bozza dalla tendina.</p>' : '';
   body.innerHTML = `
@@ -211,7 +184,7 @@ function renderCycles() {
     <div class="cycle-section">
       <div class="cycle-section-head">
         <h3>${ico('wrench', 'tinted pill', '')} ${assieme ? 'Ciclo di montaggio' : 'Ciclo di lavorazione'} <span class="cycle-dim">${n} ${n === 1 ? 'fase' : 'fasi'}</span></h3>
-        ${approvata ? cycleVersioneHtml(it, approvata) : ''}
+        ${approvata ? revVersioneHtml('cycles', it, approvata, diversa) : ''}
         ${bozza ? '<button class="add-btn-sm" onclick="addCycleOpRow()">+ Lavorazione</button>' : ''}
       </div>
       ${avviso}
