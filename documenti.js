@@ -191,12 +191,6 @@ function docEmessoApri(id) {
   });
 }
 
-// La cartella scelta dalla scheda del documento: dopo si ridisegna la scheda,
-// non Gestione.
-function docEmessiScegliCartella(kind) {
-  archivioScegli().then(ok => { if (ok && DOC_EMESSI_TIPI[kind]) DOC_EMESSI_TIPI[kind].render(); });
-}
-
 // ─── In scheda ───
 // Sotto i pulsanti di generazione: le copie archiviate, apribili, e il modo di
 // aggiungerne una. Su una bozza non c'è niente da mostrare se non una riga che
@@ -213,7 +207,7 @@ function docEmessiHtml(kind, rec) {
     </div>`).join('');
   let nota = '';
   if (stato === 'non-supportato') nota = 'Questo browser non scrive nella cartella d\'archivio (servono Chrome o Edge): il PDF resta un download.';
-  else if (stato === 'non-configurato') nota = `La cartella d'archivio non è impostata su questo PC: il PDF resta un download. <button class="mini-btn" onclick="docEmessiScegliCartella('${kind}')">${ico('folder', 'tinted', '')} Scegli cartella</button>`;
+  else if (stato === 'non-configurato') nota = `La cartella d'archivio non è impostata su questo PC: il PDF resta un download. Si sceglie in Gestione → Backup.${typeof isAdmin === 'function' && isAdmin() ? ` <button class="mini-btn" onclick="archivioApriGestione()">${ico('settings', 'tinted', '')} Apri Gestione</button>` : ''}`;
   else if (rec.status === 'bozza' && !copie.length) nota = 'Il PDF va in archivio quando il documento si segna come inviato.';
   else if (!copie.length) nota = 'Nessuna copia archiviata.';
   const pulsante = scrive && stato === 'configurato'

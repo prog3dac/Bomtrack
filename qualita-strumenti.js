@@ -397,8 +397,7 @@ function tarConseguenzaTesto(s, asFound, asLeft, date, nextDue) {
 // Il PDF del laboratorio sta nella cartella d'archivio comune: gli allegati
 // custoditi nel browser non viaggiano fra i PC, e il certificato serve a tutti.
 function tarCertificatoNome(s, cal) {
-  const pulito = t => String(t || '').replace(/[\\/:*?"<>|]+/g, '-').trim();
-  return `Tarature/${pulito(s.code) || 'strumento'}/${cal.date}${cal.certNo ? ' ' + pulito(cal.certNo) : ''}.pdf`;
+  return `Tarature/${archivioNomeCartella(s.code) || 'strumento'}/${cal.date}${cal.certNo ? ' ' + archivioNomeCartella(cal.certNo) : ''}.pdf`;
 }
 function tarCertificatoSalva(calId, file) {
   const cal = tarGet(calId), s = cal ? struGet(cal.instrumentId) : null;

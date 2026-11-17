@@ -237,9 +237,11 @@ describe('Archivio — leggere la cartella', () => {
   });
 
   it('copiare un PDF dentro l\'archivio non sovrascrive un nome già preso', async () => {
-    const a = app({ 'scheda.pdf': 'vecchio' });
-    const nome = await a.eval('archivioNomeLibero("scheda.pdf")');
-    assert.equal(nome, 'scheda (2).pdf');
+    const files = { 'M1/scheda.pdf': 'vecchio' };
+    const a = app(files);
+    assert.equal(await a.eval('archivioSalvaIn("M1/scheda.pdf", "nuovo")'), 'M1/scheda (2).pdf');
+    assert.equal(files['M1/scheda.pdf'], 'vecchio');
+    assert.equal(files['M1/scheda (2).pdf'], 'nuovo');
   });
 
   // L'elenco si legge una volta per sessione: un file messo da un collega dopo
@@ -248,13 +250,68 @@ describe('Archivio — leggere la cartella', () => {
     const files = { 'altro.pdf': 'x' };
     const a = app(files);
     await a.eval('archivioElenco(true)');
-    files['catalogo.pdf'] = 'DEL COLLEGA';
-    const nome = await a.eval('archivioNomeLibero("catalogo.pdf")');
-    assert.equal(nome, 'catalogo (2).pdf');
-    assert.equal(await a.eval('archivioSalva("catalogo.pdf", "MIO")'), null, 'il nome preso si rifiuta');
-    assert.equal(files['catalogo.pdf'], 'DEL COLLEGA');
-    assert.equal(await a.eval('archivioSalva(' + JSON.stringify(nome) + ', "MIO")'), 'catalogo (2).pdf');
-    assert.equal(files['catalogo (2).pdf'], 'MIO');
+    files['M1/catalogo.pdf'] = 'DEL COLLEGA';
+    assert.equal(await a.eval('archivioSalvaIn("M1/catalogo.pdf", "MIO")'), 'M1/catalogo (2).pdf');
+    assert.equal(files['M1/catalogo.pdf'], 'DEL COLLEGA');
+    assert.equal(files['M1/catalogo (2).pdf'], 'MIO');
+  });
+});
+
+describe('Archivio — la cartella del codice', () => {
+  const scelto = (a, nome, testo) => {
+    a.eval('__ev = { target: { value: "x", files: [{ name: ' + JSON.stringify(nome) + ', _testo: ' + JSON.stringify(testo) + ' }] } }');
+    return a.eval('allegatoCopiaScelto(__ev)');
+  };
+
+  // È la richiesta: i PDF di un articolo in una cartella che si chiama come lui,
+  // accanto a quelle dei documenti emessi e delle tarature.
+  it('il PDF copiato da fuori va nella cartella che porta il nome del codice', async () => {
+    const files = {};
+    const a = app(files);
+    a.eval('window.__collegaItemId = "M1"');
+    assert.equal(await scelto(a, 'scheda.pdf', 'PDF'), 'M1/scheda.pdf');
+    assert.equal(files['M1/scheda.pdf'], 'PDF');
+    assert.equal(a.eval('window.__collegaPath'), 'M1/scheda.pdf', 'si propone subito da collegare');
+    // Collegato, il percorso salvato è quello con la cartella: gli altri PC lo trovano lì.
+    a.eval('allegatoCollega("M1", window.__collegaPath, "Scheda", "")');
+    assert.equal(a.snapshot().attachmentDocs[0].path, 'M1/scheda.pdf');
+  });
+
+  it('la cartella c\'è già: ci si aggiunge, senza toccare quello che contiene', async () => {
+    const files = { 'M1/scheda.pdf': 'VECCHIA' };
+    const a = app(files);
+    a.eval('window.__collegaItemId = "M1"');
+    assert.equal(await scelto(a, 'scheda.pdf', 'NUOVA'), 'M1/scheda (2).pdf');
+    assert.equal(files['M1/scheda.pdf'], 'VECCHIA');
+  });
+
+  // Un codice è testo libero: `/` farebbe una sottocartella in più, e i
+  // caratteri che Windows rifiuta farebbero fallire la copia.
+  it('i caratteri che una cartella non accetta diventano un trattino', async () => {
+    const files = {};
+    const a = app(files);
+    a.eval('db.items.find(i => i.id === "M1").code = "VITE M6/20: \\"inox\\"."');
+    a.eval('window.__collegaItemId = "M1"');
+    assert.equal(await scelto(a, 'scheda.pdf', 'PDF'), 'VITE M6-20- -inox-/scheda.pdf');
+    assert.equal(a.eval('archivioNomeCartella("CON")'), 'CON_', 'i nomi riservati di Windows');
+    assert.equal(a.eval('archivioNomeCartella("  ")'), '');
+    assert.equal(a.eval('allegatoCartellaCodice("nessuno")'), 'Senza codice');
+  });
+
+  // I file già in archivio non si spostano: il percorso salvato è quello, e
+  // sugli altri PC un file spostato sarebbe un collegamento rotto.
+  it('i documenti già collegati restano dove sono', () => {
+    const a = app({ 'catalogo.pdf': 'PDF' });
+    collega(a, 'M1', 'catalogo.pdf', 'Catalogo');
+    assert.equal(a.snapshot().attachmentDocs[0].path, 'catalogo.pdf');
+  });
+
+  it('un file che non è PDF non si copia', async () => {
+    const files = {};
+    const a = app(files);
+    a.eval('window.__collegaItemId = "M1"');
+    assert.equal(await scelto(a, 'listino.xlsx', 'x'), null);
+    assert.deepEqual(Object.keys(files), []);
   });
 });
 
@@ -360,14 +417,35 @@ describe('Archivio — quello che si vede', () => {
     assert.ok(a.eval('allegatiBody("M1")').includes('NESSUN DOCUMENTO SALVATO'));
   });
 
-  // Chi non ha configurato la cartella deve trovare qui il rimedio, non in
-  // Gestione: è un'impostazione di macchina, e la tocca anche chi in Gestione
-  // non entra.
-  it('senza cartella la scheda offre di sceglierla', () => {
+  // Dalla 0.161.0 la cartella si sceglie solo in Gestione → Backup: la scheda
+  // dice dove, e porta lì chi in Gestione può entrare.
+  it('senza cartella la scheda rimanda a Gestione, e non la sceglie da sé', () => {
     const a = app(null, { collega: false });
     const html = a.eval('allegatiBody("M1")');
     assert.ok(html.includes('non impostato su questo PC'));
-    assert.ok(html.includes('archivioSceglieModal()'));
+    assert.ok(html.includes('Gestione → Backup'));
+    assert.ok(html.includes('archivioApriGestione()'), 'l\'amministratore ha il pulsante per arrivarci');
+    assert.ok(!html.includes('archivioSceglieModal()'), 'la scelta non sta qui');
+    a.asRole('progettazione');
+    const altro = a.eval('allegatiBody("M1")');
+    assert.ok(!altro.includes('archivioApriGestione()'), 'chi in Gestione non entra legge solo il rimando');
+    assert.ok(altro.includes('amministratore'));
+  });
+
+  it('con la cartella scelta, fuori da Gestione non si cambia', () => {
+    const a = app();
+    for (const html of [a.eval('allegatiBody("M1")'), a.eval('archivioBlocco()')]) {
+      assert.ok(html.includes('Disegni'));
+      assert.ok(!html.includes('archivioSceglieModal()'));
+    }
+    assert.ok(a.eval('renderArchivio()').includes('archivioSceglieModal()'), 'in Gestione sì');
+  });
+
+  it('il rimando porta a Gestione → Backup', () => {
+    const a = app(null, { collega: false });
+    a.eval('archivioApriGestione()');
+    assert.equal(a.eval('activeView'), 'manage');
+    assert.equal(a.eval('mgmtTab'), 'backup');
   });
 
   // La vecchia strada resta aperta dove la nuova non c'è: togliere a qualcuno

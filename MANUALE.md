@@ -1004,9 +1004,13 @@ aggiornato nella cartella è aggiornato anche in Bomtrack, senza riallegare nien
 
 **La cartella la sceglie ogni PC, una volta.** Non sta nel database di proposito: ogni macchina ha
 il suo archivio, e scriverlo nel database imporrebbe a tutti la lettera di unità di chi l'ha
-configurato per primo. Si sceglie con la finestra di sistema, dalla scheda Allegati o da
-*Gestione → Backup*, e il browser se la ricorda. Può chiedere una conferma del permesso alla
-prima apertura di giornata: è normale, e si concede con un click.
+configurato per primo. Si sceglie con la finestra di sistema **solo da *Gestione → Backup***
+(dalla 0.161.0), e il browser se la ricorda. La scheda Allegati, il pannello che collega un
+documento e le schede di richieste e ordini dicono soltanto qual è, o che manca, con il pulsante
+**Apri Gestione** per l'amministratore. Gestione è degli amministratori: sul PC di un collega la
+cartella la imposta un amministratore entrando una volta da lì, e vale per chiunque usi poi quel
+browser. Può chiedere una conferma del permesso alla prima apertura di giornata: è normale, e si
+concede con un click.
 
 > ⚠️ **Serve Chrome o Edge**, e Bomtrack va aperta dal suo indirizzo. Aprendo `index.html`
 > con un doppio click il browser non ha nessuna origine sotto cui ricordare un permesso, e
@@ -1036,12 +1040,28 @@ appeso a tutti gli articoli di una serie. Il documento è censito una volta sola
 | Messaggio | Cosa vuol dire | Che fare |
 |---|---|---|
 | **NESSUN DOCUMENTO SALVATO** | A quel codice non è ancora collegato niente | Collegare un documento |
-| **Archivio allegati non impostato su questo PC** | Il documento c'è, ma questa macchina non sa dove cercarlo | Scegliere la cartella (il pulsante è lì) |
+| **Archivio allegati non impostato su questo PC** | Il documento c'è, ma questa macchina non sa dove cercarlo | Scegliere la cartella in *Gestione → Backup* |
 | **DOCUMENTO NON TROVATO** | Il file non è più in quella cartella: rinominato, spostato, o non ancora sincronizzato | Verificare l'archivio e **Ricollega**; se è il cloud, aspettare la sincronizzazione |
 
 **Un PDF che sta fuori dall'archivio non si può collegare**: sul desktop di chi lo sceglie esiste,
 sugli altri PC no. Il pannello lo dice e offre di **copiarlo nell'archivio**, senza mai
 sovrascrivere un file che ha già quel nome.
+
+**Il PDF copiato va nella cartella del codice** (dalla 0.161.0): una cartella che si chiama come il
+codice, accanto a quelle dei documenti emessi e delle tarature, creata alla prima copia. I
+caratteri che una cartella non accetta (`/ \ : * ? " < > |`) diventano un trattino.
+
+```
+<cartella d'archivio>/
+  Documenti Bomtrack/       copie dei documenti emessi
+  Tarature/                 certificati degli strumenti
+  CU-6204-2RS/              allegati del codice CU-6204-2RS
+    scheda tecnica.pdf
+```
+
+I PDF che erano già in archivio **restano dove sono**: il percorso salvato è quello, e spostarli a
+mano romperebbe il collegamento (si ripara con **Ricollega**). Un documento collegato a più codici
+resta nella cartella del codice da cui è stato copiato.
 
 **La verifica.** In *Gestione → Backup*, **Verifica archivio** scorre la cartella e nomina i
 documenti che non ci sono più: una volta per documento, non una per collegamento. Serve perché
