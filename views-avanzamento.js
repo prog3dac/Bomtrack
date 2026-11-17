@@ -306,7 +306,8 @@ function avzMontaggio(n, odp, oggi, planId) {
   }
   return Object.assign(base, { fatto: 0, totale: 0, pct: 0, stato: 'asm-programmato',
     ritardo: avzRitardo(false, false, n.start, n.end, '', oggi),
-    nota: n.end && oggi > n.end ? 'Data passata: nessun montaggio dichiarato' : 'Nessun montaggio dichiarato: si dichiara nel piano, scheda «Da montare»' });
+    nota: asmCicloDaApprovare({ item: n.item, due: n.end }) ? 'Le fasi di montaggio sono solo nella bozza: approvala per vederle qui e lanciare l\'ordine di produzione'
+      : n.end && oggi > n.end ? 'Data passata: nessun montaggio dichiarato' : 'Nessun montaggio dichiarato: si dichiara nel piano, scheda «Da montare»' });
 }
 function avzDaOdp(n, suoi, tipo, label, serve, oggi) {
   const docs = [];

@@ -2,6 +2,15 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.161.1 — 2026-11-17
+
+**L'ODP di montaggio non nasce più senza fasi.**
+- Il fabbisogno decideva se proporre l'ordine di produzione di un assieme guardando il ciclo della **bozza**, mentre l'ordine copia quello della **revisione approvata**. Con la fase di montaggio scritta solo in bozza, *Genera ordini di produzione* creava un ODP vuoto, e l'avanzamento non mostrava il montaggio.
+- Ora conta la revisione valida il giorno in cui l'assieme serve. Se le fasi sono solo in bozza, la riga in *Da montare* dice **ciclo da approvare** e porta al ciclo; l'avanzamento lo dice sulla riga del montaggio.
+- Un ODP di un assieme senza fasi nella revisione valida non si crea più, neanche a mano: lo dice e chiede di approvare la bozza.
+
+Schema: nessun cambiamento.
+
 ### 0.161.0 — 2026-11-17
 
 **Allegati nella cartella del codice, e la cartella d'archivio si sceglie solo in Gestione.**

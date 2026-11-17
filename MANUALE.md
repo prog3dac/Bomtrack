@@ -3031,6 +3031,12 @@ con un ODP nel piano mostra il numero dell'ordine al posto di *Dichiara montaggi
 si seguono come quelle di una parte, e i componenti escono all'avvio della prima. Dichiarare il
 montaggio qui è bloccato, per non farli uscire due volte.
 
+Conta il ciclo della **revisione approvata** valida il giorno in cui l'assieme serve, perché è
+quello che l'ordine copia. Se le fasi di montaggio sono scritte solo nella bozza, l'assieme non si
+lancia: la riga mostra **ciclo da approvare** (un clic apre il ciclo con la barra revisioni) e
+l'avanzamento lo dice sulla riga del montaggio. Approvata la bozza, l'ordine si genera con le sue
+fasi.
+
 La scheda **Da montare** elenca gli assiemi del piano — macchine, gruppi, sottogruppi — con la
 quantità, le date di montaggio, i componenti, quanti ne sono già stati **montati** e quanti
 **restano**. **Dichiara montaggio** apre la finestra:

@@ -1707,8 +1707,16 @@ function mrpMakeRows(plan) { return mrpDaProdurre(mrpExplodePlan(plan)).map(e =>
 // montaggio e preleva i componenti. Senza Produzione interna nessuno dei due.
 function mrpDaProdurre(exp) {
   if (typeof areaAttiva === 'function' && !areaAttiva('produzione')) return exp.make;
-  return exp.make.concat(exp.asm.filter(e => asmHaCiclo(e.item)));
+  return exp.make.concat(exp.asm.filter(asmSiLancia));
 }
+// Un assieme del fabbisogno si lancia con un ODP se ha fasi **nella revisione
+// valida il giorno in cui serve**, che è quella che l'ordine congela (odpNew).
+// Fino alla 0.159.x si guardava la bozza: con una fase scritta in bozza e la
+// revisione approvata senza ciclo il piano proponeva l'ODP, e l'ordine nasceva
+// vuoto.
+function asmSiLancia(e) { return asmHaCiclo(itemOperativo(e.item, e.due || oggiISO())); }
+// La fase c'è solo in bozza: l'ODP si potrà lanciare quando la bozza è approvata.
+function asmCicloDaApprovare(e) { return asmHaCiclo(e.item) && !asmSiLancia(e); }
 function mrpBuyRows(plan, netMode) { return mrpExplodePlan(plan).buy.map(e => mrpBuyRow(e, netMode, plan.id)); }
 // `.map(mrpBuyRow)` passerebbe l'indice dell'array come secondo argomento, e
 // dalla seconda riga in poi il netto si accenderebbe da solo. Le viste passano

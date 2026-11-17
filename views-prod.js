@@ -1574,6 +1574,10 @@ function odpNew(part, qty, dueDate, extra) {
   const quando = dueDate || oggiISO();
   const op = itemOperativo(part, quando);
   if (op && op._senzaRev) { showToast(`${part.code || 'Questo articolo'} non ha una revisione approvata valida al ${fmtDateIt(quando)}: l'ordine di produzione non si crea`, 'error'); return null; }
+  // Un assieme si lancia per le sue fasi di montaggio: senza, l'ordine sarebbe
+  // una scheda vuota. Succede quando le fasi sono solo nella bozza e la
+  // revisione valida a quella data non le ha.
+  if (isAssembly(part.type) && !cicloFasi(op).length) { showToast(`${part.code || 'Questo assieme'} non ha fasi nella revisione valida al ${fmtDateIt(quando)}${asmHaCiclo(part) ? ': il ciclo della bozza va approvato' : ''}. L'ordine di produzione non si crea`, 'error'); return null; }
   const revInfo = op && op._rev ? { rev: op._rev.rev, codeRev: itemCodeRev(part, quando) } : {};
   return odpPianifica(stampNew(Object.assign({
     id: gid(), number: nextOdpNumber(), itemId: part.id,

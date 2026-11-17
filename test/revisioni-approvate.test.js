@@ -149,6 +149,25 @@ describe('Con le revisioni approvate attive, piani e ODP usano solo quelle', () 
     const a = app({ revApprovate: true });
     assert.equal(a.eval(`odpNew(getItem('p1'), 2, '${giorni(a, 5)}')`), null);
   });
+  // Il caso di ECL-008-S00 (0.159.x): la fase di montaggio scritta in bozza e
+  // la revisione approvata senza ciclo. Il piano guardava la bozza e proponeva
+  // l'ODP, che nasceva senza fasi.
+  it('un assieme con le fasi solo in bozza non propone l\'ODP, lo dice, e l\'ordine non nasce vuoto', () => {
+    const a = app({ revApprovate: true });
+    const due = giorni(a, 30);
+    a.eval(`releaseRevision('g1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('g1').cycle = [{ kind: 'op', workCenterId: 'w1', costMode: 'orario', hours: 2, note: 'montaggio' }]`);
+    const piano = `({ id: 'pl1', lines: [{ itemId: 'g1', qty: 1, dueDate: '${due}' }] })`;
+    assert.equal(a.eval(`asmHaCiclo(getItem('g1'))`), true, 'la bozza ha la fase');
+    assert.equal(a.eval(`mrpDaProdurre(mrpExplodePlan(${piano})).length`), 0, 'niente ODP da proporre');
+    assert.match(a.eval(`mrpAsmTable(mrpExplodePlan(${piano}).asm, 'pl1')`), /ciclo da approvare/);
+    assert.equal(a.eval(`odpNew(getItem('g1'), 1, '${due}')`), null);
+
+    a.eval(`releaseRevision('g1', 'seconda', { dal: oggiISO() })`);
+    assert.equal(a.eval(`mrpDaProdurre(mrpExplodePlan(${piano})).length`), 1, 'approvata la bozza, l\'ODP si propone');
+    assert.doesNotMatch(a.eval(`mrpAsmTable(mrpExplodePlan(${piano}).asm, 'pl1')`), /ciclo da approvare/);
+    assert.equal(ev(a, `odpNew(getItem('g1'), 1, '${due}').phases.length`), 1);
+  });
 });
 
 describe('Chi approva', () => {
