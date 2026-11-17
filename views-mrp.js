@@ -1711,7 +1711,7 @@ function mrpDaProdurre(exp) {
 }
 // Un assieme del fabbisogno si lancia con un ODP se ha fasi **nella revisione
 // valida il giorno in cui serve**, che è quella che l'ordine congela (odpNew).
-// Fino alla 0.159.x si guardava la bozza: con una fase scritta in bozza e la
+// Prima si guardava la bozza: con una fase scritta in bozza e la
 // revisione approvata senza ciclo il piano proponeva l'ODP, e l'ordine nasceva
 // vuoto.
 function asmSiLancia(e) { return asmHaCiclo(itemOperativo(e.item, e.due || oggiISO())); }

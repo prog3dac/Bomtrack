@@ -1565,6 +1565,14 @@ ciclo, con le sole fasi di montaggio (→ [Il ciclo di un assieme](#il-ciclo-di-
   approvvigionamento, quante righe ha la sua distinta, e il pulsante **Distinta** che la apre;
 - la sezione **Ciclo di lavorazione**.
 
+**Approvata o bozza** (dalla 0.162.0). Con le revisioni approvate, la pagina si apre **sempre sul
+ciclo approvato** valido oggi, quello che usano piani e ODP, **in sola lettura**. La tendina accanto
+al titolo della sezione dice quale si sta guardando (*Approvata v0 · valida dal 14/11/2026*) e
+porta alla **Bozza v1**, l'unica che si modifica. Se la bozza ha fasi diverse dall'approvata, la
+tendina scrive *Bozza v1 · modificata* e sopra le fasi compare un avviso. Cambiando articolo, o
+aprendolo da un'altra pagina, si torna all'approvata. Un articolo senza revisione approvata mostra
+direttamente la bozza.
+
 **Filtri** (dalla 0.125.0 gli stessi di *Gestione DB*). Ricerca; **tipo** (Macchine · Gruppi ·
 Sottogruppi · Parti); **famiglia** e **sottofamiglia** delle parti; **macchina** e **gruppo** di
 appartenenza; il menu della parte. Le parti vengono prima degli assiemi.

@@ -170,6 +170,36 @@ describe('Con le revisioni approvate attive, piani e ODP usano solo quelle', () 
   });
 });
 
+describe('La pagina Cicli mostra di serie il ciclo approvato (dalla 0.162.0)', () => {
+  it('l\'approvata in sola lettura, la bozza dalla tendina, e cambiando articolo si torna all\'approvata', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`releaseRevision('p1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('p1').cycle.push({ kind: 'op', workCenterId: 'w1', costMode: 'orario', hours: 2, note: 'nuova' })`);
+    a.eval(`currentCycleItemId = 'p1'; renderCycles()`);
+    let h = a.html('cyc-body');
+    assert.match(h, /Approvata v0/);
+    assert.match(h, /Bozza v1 · modificata/);
+    assert.match(h, /1 fase</, 'le fasi della revisione approvata');
+    assert.doesNotMatch(h, /addCycleOpRow|updateCycleRow/, 'l\'approvata non si modifica');
+
+    a.eval(`document.getElementById('cyc-ver').value = 'bozza'; onCycleVersione()`);
+    h = a.html('cyc-body');
+    assert.match(h, /2 fasi</);
+    assert.match(h, /addCycleOpRow/, 'la bozza si modifica');
+
+    a.eval(`openCycleFor('p1')`);
+    assert.match(a.html('cyc-body'), /1 fase</, 'riaperto, si torna all\'approvata');
+  });
+
+  it('senza una revisione approvata si vede la bozza, senza tendina', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`currentCycleItemId = 'p1'; renderCycles()`);
+    const h = a.html('cyc-body');
+    assert.doesNotMatch(h, /cyc-ver/);
+    assert.match(h, /addCycleOpRow/);
+  });
+});
+
 describe('Chi approva', () => {
   it('Progettazione chiede, la bozza si blocca, l\'Amministratore approva', () => {
     const a = app({ revApprovate: true }, 'progettazione');

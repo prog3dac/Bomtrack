@@ -67,6 +67,56 @@ function cycleFilteredParts() {
 function cycleSearchInput() { debounced('cyc-sel', renderCycles); }
 function onCycleFilterChange() { renderCycles(); }
 function onCyclePartSelect() { currentCycleItemId = val('cyc-part'); renderCycles(); }
+// ─── Approvata o bozza (dalla 0.162.0) ───
+// Con le revisioni approvate si vede di serie il ciclo **approvato**, quello
+// che piani e ODP usano oggi: guardare la bozza e credere che sia quello in
+// vigore è come era nato un ODP di montaggio vuoto. La bozza si
+// sceglie dalla tendina, ed è l'unica che si modifica. La scelta vale per
+// l'articolo aperto: cambiando articolo si torna all'approvata.
+let cycleBozzaDi = null;
+function cycleApprovata(it) {
+  if (!it || !revApprovateAttive() || !revServe(it)) return null;
+  return revValidaAl(it.id) || null;
+}
+function cycleMostraBozza(it) { return !cycleApprovata(it) || cycleBozzaDi === it.id; }
+function onCycleVersione() { cycleBozzaDi = val('cyc-ver') === 'bozza' ? currentCycleItemId : null; renderCycles(); }
+// La bozza ha fasi diverse dall'approvata? Si confrontano le sole fasi: la
+// distinta ha la sua pagina.
+function cycleBozzaDiversa(it, r) {
+  return !revDiffVuoto(revDiff({ type: it.type, cycle: (r.snapshot || {}).cycle || [], operations: (r.snapshot || {}).operations || [] },
+    { type: it.type, cycle: cicloFasi(it) }));
+}
+function cycleVersioneHtml(it, r) {
+  const per = revPeriodo(r);
+  const bozza = cycleMostraBozza(it);
+  const diversa = cycleBozzaDiversa(it, r);
+  return `<label class="cycle-ver"><span class="sr-only">Versione del ciclo</span>
+    <select id="cyc-ver" onchange="onCycleVersione()" title="L'approvata è quella che usano piani e ODP; la bozza è quella che si modifica">
+      <option value="approvata" ${bozza ? '' : 'selected'}>Approvata ${esc(revLabel(r.rev))} · valida dal ${esc(fmtDateIt(per ? per.dal : revDal(r)))}</option>
+      <option value="bozza" ${bozza ? 'selected' : ''}>Bozza ${esc(revLabel(itemRev(it)))}${diversa ? ' · modificata' : ''}</option>
+    </select></label>`;
+}
+// Il ciclo approvato in sola lettura: le stesse colonne, senza campi.
+function cycleOpsTableApprovata(fasi) {
+  if (!fasi.length) return '<div class="empty-text" style="padding:8px 0">La revisione approvata non ha fasi.</div>';
+  const head = `<div class="cycle-row cycle-op-row cycle-op-ro cycle-head">
+    <span>Fase</span><span>Lavorazione</span><span>Fornitore</span><span>Modo</span>
+    <span class="num">Tempo</span><span class="num">Costo riga (${esc(cur())}/pz)</span><span>Note per il reparto</span></div>`;
+  return head + fasi.map((r, k) => {
+    const mac = !r.supplierId && r.machineId && typeof getMachine === 'function' ? getMachine(r.machineId) : null;
+    const tempo = r.supplierId ? `${fmtQtyIt(Number(r.days) || 0)} gg` : fmtMin(r.hours)
+      + (faseOperatori(r) > 1 ? ` · ${faseOperatori(r)} op.` : '') + (faseAttrezzaggio(r) ? ` · attr. ${fmtMin(faseAttrezzaggio(r))}` : '');
+    return `<div class="cycle-row cycle-op-row cycle-op-ro">
+      <span class="cycle-phase">${cyclePhaseNumber(k)}</span>
+      <span class="cycle-name">${cycleRowLabel(r)}${mac ? ` <span class="cycle-dim">${esc(machineLabel(mac))}</span>` : ''}</span>
+      <span>${r.supplierId ? esc(supplierName(r.supplierId) || '—') : 'Interna'}</span>
+      <span>${r.costMode === 'orario' ? 'Orario' : 'Fisso'}</span>
+      <span class="num">${esc(tempo)}</span>
+      <span class="num cost">${fmtN(cycleRowCost(r))}</span>
+      <span class="cycle-dim">${esc(r.note || '')}</span>
+    </div>`;
+  }).join('');
+}
 // La selezione resta valida finché la parte esiste ed è tra quelle filtrate,
 // altrimenti si ricade sulla prima (stesso patto di ensureCurrentBom).
 function ensureCurrentCycleItem(parts) {
@@ -79,6 +129,7 @@ function openCycleFor(id) {
   if (!it || (it.type !== 'parte' && !isAssembly(it.type))) return;
   if (!vistaAttiva('cycles')) { setView('cycles'); return; }   // avvisa e resta al Riepilogo
   currentCycleItemId = id;
+  cycleBozzaDi = null;   // si apre sempre sull'approvata
   ['search', 'type', 'family', 'subfamily', 'machine', 'group'].forEach(k => setVal('cyc-' + k, ''));
   // Anche lo scope condiviso (filters.js), altrimenti setView lo riscriverebbe
   // subito dopo sui campi appena svuotati, e la parte scelta potrebbe restare
@@ -148,14 +199,23 @@ function renderCycles() {
   // materiale di una parte, che qui non si mostrano (stanno nella distinta).
   const opRows = (it.cycle || []).map((r, i) => ({ r, i })).filter(x => x.r.kind === 'op');
   const assieme = isAssembly(it.type);
+  const approvata = cycleApprovata(it);
+  const bozza = cycleMostraBozza(it);
+  const fasiApprovate = approvata && !bozza ? cicloFasi(Object.assign({}, it, { cycle: (approvata.snapshot || {}).cycle || [], operations: (approvata.snapshot || {}).operations || [] })) : null;
+  const n = fasiApprovate ? fasiApprovate.length : opRows.length;
+  const avviso = fasiApprovate && cycleBozzaDiversa(it, approvata)
+    ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} La bozza ${esc(revLabel(itemRev(it)))} ha fasi diverse da queste: sceglila dalla tendina per vederla e modificarla. Piani e ODP useranno le sue fasi solo dopo l'approvazione.</p>`
+    : fasiApprovate ? '<p class="empty-text" style="text-align:left;padding:0 0 8px">Il ciclo che piani e ODP usano oggi, in sola lettura. Per modificarlo scegli la bozza dalla tendina.</p>' : '';
   body.innerHTML = `
     ${assieme ? cycleAssiemeNote(it) : cycleSourcingNote(it)}
     <div class="cycle-section">
       <div class="cycle-section-head">
-        <h3>${ico('wrench', 'tinted pill', '')} ${assieme ? 'Ciclo di montaggio' : 'Ciclo di lavorazione'} <span class="cycle-dim">${opRows.length} ${opRows.length === 1 ? 'fase' : 'fasi'}</span></h3>
-        <button class="add-btn-sm" onclick="addCycleOpRow()">+ Lavorazione</button>
+        <h3>${ico('wrench', 'tinted pill', '')} ${assieme ? 'Ciclo di montaggio' : 'Ciclo di lavorazione'} <span class="cycle-dim">${n} ${n === 1 ? 'fase' : 'fasi'}</span></h3>
+        ${approvata ? cycleVersioneHtml(it, approvata) : ''}
+        ${bozza ? '<button class="add-btn-sm" onclick="addCycleOpRow()">+ Lavorazione</button>' : ''}
       </div>
-      <div class="cycle-box">${cycleOpsTable(opRows)}</div>
+      ${avviso}
+      <div class="cycle-box">${fasiApprovate ? cycleOpsTableApprovata(fasiApprovate) : cycleOpsTable(opRows)}</div>
       <div id="picker-op"></div>
     </div>`;
   a11yFields(body);

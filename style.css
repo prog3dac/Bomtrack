@@ -456,6 +456,12 @@ body:has(#modal-root > .panel) #app-main:not(:hover){opacity:.82}
    costo — la cui cella si impila in due campi (ore, tariffa) quando è orario
    — e le frecce di riordino in coda. */
 .cycle-op-row{grid-template-columns:52px minmax(126px,2fr) minmax(92px,1fr) 68px 184px 92px 80px 56px 32px}
+/* Il ciclo approvato in sola lettura (dalla 0.162.0): niente campi, la nota in colonna */
+.cycle-op-row.cycle-op-ro{grid-template-columns:52px minmax(126px,2fr) minmax(92px,1fr) 68px 150px 92px minmax(120px,2fr)}
+.cycle-section-head:has(.cycle-ver){flex-wrap:wrap}
+.cycle-ver{position:relative;margin-left:auto}
+.cycle-ver select{min-height:32px;font-size:12px}
+.cycle-section-head .cycle-ver + .add-btn-sm{margin-left:0}
 .cycle-op-nota{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim)}
 .cycle-op-nota span{white-space:nowrap}
 .cycle-op-nota input{flex:1;min-width:0}
@@ -524,6 +530,8 @@ body:has(#modal-root > .panel) #app-main:not(:hover){opacity:.82}
   .cycle-row,.cycle-op-row{grid-template-columns:1fr 1fr;gap:4px}
   .cycle-head{display:none}
   .cycle-row .cycle-name{grid-column:1/-1}
+  .cycle-op-row.cycle-op-ro{grid-template-columns:1fr 1fr}
+  .cycle-op-ro .cycle-dim:last-child{grid-column:1/-1}
 }
 
 /* Fabbisogno materiali */
