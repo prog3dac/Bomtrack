@@ -270,7 +270,7 @@ function allegatoApri(id) {
   if (!doc) { showToast('NESSUN DOCUMENTO SALVATO', 'error'); return Promise.resolve('nessuno'); }
   return archivioApri(doc.path, rec.page).then(esito => {
     if (esito === 'non-supportato') showToast('Questo browser non può leggere l\'archivio: servono Chrome o Edge', 'error');
-    else if (esito === 'non-configurato') showToast('Archivio allegati non impostato su questo PC: scegli la cartella dalla scheda Allegati o da Gestione → Backup', 'error');
+    else if (esito === 'non-configurato') showToast('Archivio allegati non impostato su questo PC: la cartella si sceglie ' + archivioDove(), 'error');
     else if (esito === 'negato') showToast('Permesso negato sulla cartella d\'archivio', 'error');
     else if (esito === 'assente') showToast(`DOCUMENTO NON TROVATO — "${doc.path}" non è in ${archivioNome() || 'archivio'}`, 'error');
     else if (esito === 'errore') showToast('Documento non apribile', 'error');
@@ -461,13 +461,15 @@ function allegatiBody(id) {
 }
 
 // ─── Lo stato dell'archivio, scritto dove serve ───
-// Compare nella scheda Allegati e in Gestione, ed è lo stesso testo: la cartella
-// è un'impostazione **di questo PC**, quindi deve poterla sistemare chiunque
-// apra un allegato, non solo chi ha accesso a Gestione.
-// `conPulsante` a false dove il pulsante c'è già accanto, e sarebbe lo stesso
-// comando scritto due volte a un centimetro di distanza.
-function archivioBlocco(conPulsante) {
-  const pulsante = conPulsante !== false;
+// Compare nella scheda Allegati, nel pannello che collega un documento, nel
+// pannello dell'archivio condiviso e in Gestione, ed è lo stesso testo.
+// La cartella si sceglie in un posto solo (dalla 0.161.0): un pulsante «Cambia»
+// accanto a ogni allegato la faceva cambiare per sbaglio. Il posto è il
+// pannello dell'**archivio condiviso** (l'icona della nuvola in alto), che è
+// sempre a portata di tutti; un PC senza archivio condiviso non ha la nuvola,
+// e lì resta *Gestione → Backup*. Fuori da quei due resta il rimando.
+// `qui` a true dove il pulsante per scegliere c'è già accanto.
+function archivioBlocco(qui) {
   const stato = archivioStato();
   if (stato === 'non-supportato') {
     return `<p class="empty-text" style="text-align:left;padding:0 0 12px">${ico('warning', 'tinted', '')}
@@ -476,21 +478,50 @@ function archivioBlocco(conPulsante) {
   }
   if (stato === 'non-configurato') {
     return `<p class="empty-text" style="text-align:left;padding:0 0 12px">${ico('warning', 'tinted', '')}
-      <strong>Archivio allegati non impostato su questo PC.</strong> Indica la cartella dove stanno i PDF — una cartella locale, oppure quella di un servizio sincronizzato.
-      ${pulsante ? `<button class="mini-btn" onclick="archivioSceglieModal()">${ico('folder', 'tinted', '')} Scegli cartella</button>` : ''}</p>`;
+      <strong>Archivio allegati non impostato su questo PC.</strong> Va indicata la cartella dove stanno i PDF — una cartella locale, oppure quella di un servizio sincronizzato.${qui ? '' : ' ' + archivioRimando()}</p>`;
   }
   return `<p class="empty-text" style="text-align:left;padding:0 0 12px">
-    Archivio di questo PC: <strong>${esc(archivioNome())}</strong>
-    ${pulsante ? `<button class="mini-btn" onclick="archivioSceglieModal()" title="Scegli un'altra cartella">${ico('edit', 'tinted', 'Cambia')}</button>` : ''}</p>`;
+    Archivio di questo PC: <strong>${esc(archivioNome())}</strong></p>`;
 }
-// La scelta passa da qui e non direttamente da `archivioScegli()` perché dopo
-// va ridisegnato ciò che è aperto: il nome della cartella compare in due
-// pannelli e in Gestione.
+// Dove si sceglie la cartella, a parole: entra nei messaggi.
+function archivioDove() {
+  return typeof cloudAttivo === 'function' && cloudAttivo()
+    ? 'dall\'icona della nuvola in alto (Archivio condiviso)'
+    : 'da Gestione → Backup';
+}
+// Il rimando, con il pulsante per arrivarci a chi ci può arrivare: la nuvola è
+// di tutti, Gestione solo degli amministratori.
+function archivioRimando() {
+  const cloud = typeof cloudAttivo === 'function' && cloudAttivo();
+  if (cloud || (typeof isAdmin === 'function' && isAdmin())) {
+    return `Si sceglie ${archivioDove()}. <button class="mini-btn" onclick="archivioApriImpostazione()">${ico('folder', 'tinted', '')} Scegli cartella</button>`;
+  }
+  return 'Si sceglie da Gestione → Backup: chiedilo a un amministratore, che la imposta entrando una volta da questo PC.';
+}
+// Il rimando porta dove si sceglie: chiude il pannello aperto e apre l'altro.
+function archivioApriImpostazione() {
+  if (typeof closeModal === 'function') closeModal();
+  if (typeof cloudAttivo === 'function' && cloudAttivo()) { cloudPannello(); return; }
+  setView('manage');
+  setMgmtTab('backup');
+}
+// La sezione nel pannello dell'archivio condiviso: stato e pulsante.
+function archivioSezioneCloud() {
+  return `<div class="modal-field" id="cl-archivio"><label>${ico('folder', 'tinted', '')} Archivio allegati di questo PC</label>${archivioSezioneCloudCorpo()}</div>`;
+}
+function archivioSezioneCloudCorpo() {
+  const pulsante = archivioStato() === 'non-supportato' ? ''
+    : `<button class="btn-outline" onclick="archivioSceglieModal()">${ico('folder', 'tinted', '')} ${archivioNome() ? 'Cambia cartella' : 'Scegli cartella'}</button>`;
+  return archivioBlocco(true) + pulsante
+    + '<p class="cl-nota">La cartella è di questo PC, non dell\'archivio condiviso: ogni computer indica la sua.</p>';
+}
+// La scelta, dal pannello della nuvola o da Gestione: dopo si ridisegna quello
+// che è aperto, dove il nome della cartella compare nello stato e sul pulsante.
 function archivioSceglieModal() {
   archivioScegli().then(ok => {
     if (!ok) return;
-    allegatiRefresh();
-    allegatoCollegaRefresh();
+    const el = typeof document !== 'undefined' && document.getElementById('cl-archivio');
+    if (el) renderInto('cl-archivio', () => `<label>${ico('folder', 'tinted', '')} Archivio allegati di questo PC</label>${archivioSezioneCloudCorpo()}`);
     if (typeof activeView !== 'undefined' && activeView === 'manage') renderManage();
   });
 }
@@ -628,7 +659,7 @@ function allegatoCollegaBody() {
         <button class="btn-outline" onclick="document.getElementById('collega-copia').click()">${ico('upload', 'tinted', '')} Copia un PDF nell'archivio</button>
         <button class="btn-outline" onclick="allegatoCollegaLeggi(true)">${ico('refresh', 'tinted', '')} Rileggi la cartella</button>
       </div>
-      <p class="empty-text" style="text-align:left;padding:8px 0 0">Un PDF che sta fuori dall'archivio — sul desktop, in una mail — non si può collegare: sugli altri PC quel percorso non esiste. «Copia nell'archivio» lo mette dentro e poi lo collega.</p>`;
+      <p class="empty-text" style="text-align:left;padding:8px 0 0">Un PDF che sta fuori dall'archivio — sul desktop, in una mail — non si può collegare: sugli altri PC quel percorso non esiste. «Copia un PDF nell'archivio» lo mette dentro, nella cartella che porta il nome del codice, e poi lo collega.</p>`;
 }
 function allegatoCollegaConferma() {
   const itemId = window.__collegaItemId, path = window.__collegaPath;
@@ -643,19 +674,30 @@ function allegatoCollegaConferma() {
 // Il PDF scelto da fuori si copia in archivio e si propone subito: senza la
 // copia sarebbe un collegamento rotto su ogni altro PC, e chiederlo come gesto
 // separato vorrebbe dire che qualcuno se lo dimentica.
+//
+// Va nella cartella che porta il nome del codice (dalla 0.161.0), accanto a
+// quelle dei documenti emessi e delle tarature: chi apre l'archivio da Esplora
+// risorse trova i PDF di un articolo dove li cerca. La cartella nasce alla
+// prima copia. I PDF che erano già in archivio restano dove sono: il percorso
+// salvato è quello, e spostarli romperebbe il collegamento sugli altri PC.
+function allegatoCartellaCodice(itemId) {
+  const it = getItem(itemId);
+  return archivioNomeCartella(it && it.code) || 'Senza codice';
+}
 function allegatoCopiaScelto(ev) {
   const file = ev && ev.target && ev.target.files && ev.target.files[0];
   if (ev && ev.target) ev.target.value = '';
-  if (!file) return;
-  if (!/\.pdf$/i.test(file.name)) { showToast('Nell\'archivio vanno i PDF', 'error'); return; }
-  archivioNomeLibero(file.name)
-    .then(nome => archivioSalva(nome, file))
-    .then(nome => {
-      if (!nome) { showToast('Copia nell\'archivio non riuscita', 'error'); return; }
-      showToast('Copiato in archivio');
-      window.__collegaPath = nome;
+  if (!file) return Promise.resolve(null);
+  if (!/\.pdf$/i.test(file.name)) { showToast('Nell\'archivio vanno i PDF', 'error'); return Promise.resolve(null); }
+  const cartella = allegatoCartellaCodice(window.__collegaItemId);
+  return archivioSalvaIn(cartella + '/' + file.name, file)
+    .then(path => {
+      if (!path) { showToast('Copia nell\'archivio non riuscita', 'error'); return null; }
+      showToast(`Copiato in archivio, nella cartella «${cartella}»`);
+      window.__collegaPath = path;
       allegatoCollegaLeggi(true);
       allegatoCollegaRefresh();
+      return path;
     });
 }
 
@@ -695,7 +737,7 @@ function renderArchivio() {
     <div style="flex:1">
       <strong>${ico('folder', 'tinted', '')} Archivio allegati</strong>
       <p>I PDF non stanno dentro Bomtrack: stanno in una cartella, e il database ne memorizza il percorso. La cartella è un'impostazione <strong>di questo PC</strong> — ognuno indica la propria, che sia locale o quella di un servizio sincronizzato — e non finisce nel backup: un altro computer avrà un'altra lettera di unità.</p>
-      ${archivioBlocco(false)}
+      ${archivioBlocco(true)}
       ${esito}
       ${typeof docEmessiVerificaHtml === 'function' ? docEmessiVerificaHtml() : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">

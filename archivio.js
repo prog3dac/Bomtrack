@@ -207,49 +207,28 @@ function archivioFile(path, chiedi) {
   });
 }
 
-// ─── Metterci dentro un file ───
-// Serve a una cosa sola: chi sceglie un PDF che sta fuori dall'archivio — sul
-// desktop, in una mail scaricata — creerebbe un collegamento che sugli altri PC
-// non punta a niente. Copiarlo dentro trasforma quel gesto in un allegato vero.
-function archivioSalva(nome, blob) {
-  return archivioPronto(true).then(h => {
-    if (!h) return null;
-    // Ultima prova sulla cartella vera, subito prima di scrivere: un nome
-    // comparso nel frattempo non si tocca (createWritable lo azzererebbe).
-    return _archivioEsiste(h, nome).then(c_e => {
-      if (c_e) { console.error('Copia in archivio rifiutata: ' + nome + ' esiste già'); return null; }
-      return h.getFileHandle(nome, { create: true })
-        .then(fh => fh.createWritable())
-        .then(w => Promise.resolve(w.write(blob)).then(() => w.close()))
-        .then(() => { _archivioElenco = null; return nome; });
-    }).catch(e => { console.error('Copia in archivio fallita:', e); return null; });
-  });
+// ─── Il nome di una cartella ───
+// Un codice o un numero di certificato diventano il nome di una cartella:
+// `/` creerebbe una sottocartella in più, e `\ : * ? " < > |` Windows non li
+// accetta. Si sostituiscono con un trattino. Spazi e punti in coda Windows li
+// toglie da sé (e la cartella non si ritroverebbe più col nome scritto qui), e
+// i nomi riservati (CON, NUL, COM1…) non si possono creare: prendono un `_`.
+// '' se non resta niente: chi chiama sceglie il nome di riserva.
+function archivioNomeCartella(testo) {
+  const n = String(testo || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').replace(/[. ]+$/, '').trim();
+  return /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(n) ? n + '_' : n;
 }
 const _archivioEsiste = (h, nome) => h.getFileHandle(nome).then(() => true, () => false);
-// Un nome già preso non si sovrascrive: il file che c'è appartiene a qualcun
-// altro, e il codice che lo cita non saprebbe mai di aver perso il suo.
-// Si chiede alla cartella vera, non all'elenco: quello è letto una volta per
-// sessione e si ferma a 5000 PDF, e un file messo da un collega dopo non c'è.
-function archivioNomeLibero(nome) {
-  return archivioPronto(true).then(h => {
-    if (!h) return nome;
-    const punto = nome.lastIndexOf('.');
-    const base = punto > 0 ? nome.slice(0, punto) : nome;
-    const est = punto > 0 ? nome.slice(punto) : '';
-    const prova = i => {
-      if (i >= 999) return base + ' ' + Date.now() + est;
-      const c = i === 1 ? nome : base + ' (' + i + ')' + est;
-      return _archivioEsiste(h, c).then(c_e => (c_e ? prova(i + 1) : c));
-    };
-    return prova(1);
-  });
-}
 
-// ─── Metterci dentro un file, in una sottocartella ───
-// Come archivioSalva, ma il percorso può avere delle cartelle davanti, che si
-// creano se mancano: `Documenti Bomtrack/ODA/2026/ODA-2026-105_Rossi.pdf`.
-// Il nome non si sovrascrive mai: se c'è già, si prende il primo libero
-// (`… (2).pdf`) e si restituisce il percorso vero, che è quello da registrare.
+// ─── Metterci dentro un file ───
+// Il percorso può avere delle cartelle davanti, che si creano se mancano:
+// `Documenti Bomtrack/ODA/2026/ODA-2026-105_Rossi.pdf`, `Tarature/CAL-07/…`,
+// o la cartella del codice per un PDF copiato da fuori (allegati.js).
+// Il nome non si sovrascrive mai: il file che c'è appartiene a qualcun altro,
+// e il codice che lo cita non saprebbe mai di aver perso il suo. Si chiede alla
+// cartella vera, subito prima di scrivere, non all'elenco letto a inizio
+// sessione: se c'è già, si prende il primo libero (`… (2).pdf`) e si
+// restituisce il percorso vero, che è quello da registrare.
 // null se la cartella non è pronta o la scrittura non riesce — chi chiama ha
 // già il file in mano e lo dice, non lo perde.
 function archivioSalvaIn(path, blob) {
@@ -271,7 +250,7 @@ function archivioSalvaIn(path, blob) {
       return prova(1).then(libero => dir.getFileHandle(libero, { create: true })
         .then(fh => fh.createWritable())
         .then(w => Promise.resolve(w.write(blob)).then(() => w.close()))
-        .then(() => parti.concat(libero).join('/')));
+        .then(() => { _archivioElenco = null; return parti.concat(libero).join('/'); }));
     });
   }).catch(e => { console.error('Scrittura in archivio fallita:', e); return null; });
 }
