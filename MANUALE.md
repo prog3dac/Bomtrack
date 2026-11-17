@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.159.0**
+**Versione dell'app documentata: 0.160.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -3837,12 +3837,13 @@ etichette.
 - **Inizia** apre una **timbratura** a nome di chi è entrato. Se la fase non è ancora avviata,
   prima si apre la finestra di avvio di sempre (sulla prima fase esce il materiale), e la
   timbratura parte dopo.
-- **Pausa** chiude la timbratura; **Riprendi** ne apre un'altra.
+- **Pausa** chiede **perché ci si ferma** e chiude la timbratura; **Riprendi** ne apre un'altra
+  (→ *Le causali di pausa*, qui sotto).
 - **Fine e dichiara** chiude la timbratura e apre la dichiarazione dei pezzi buoni e degli scarti,
   la stessa dell'ODP.
 
 Una persona ha **una sola** timbratura aperta: cominciare un'altra fase mette in pausa quella in
-corso. Il **QR**
+corso, come *Cambio lavoro*. Il **QR**
 dell'ODP, con il modulo acceso, porta gli stessi pulsanti. Le ore timbrate entrano nel
 **consuntivo** della commessa al posto delle ore del ciclo, e fanno scadere le manutenzioni «ogni
 N ore».
@@ -3866,6 +3867,48 @@ apre l'elenco delle timbrature della fase, con l'operatore, la durata, l'inizio 
 di una persona non si sovrappongano, su questa fase o sulle altre: se qualcosa non torna non salva
 niente e dice cosa. Ogni correzione entra nello **storico delle modifiche** (*Timbratura ODP-… fase
 …*, con chi l'ha fatta e gli orari di prima e di dopo).
+
+Sotto ogni timbratura chiusa c'è anche la **Causale della pausa** che l'ha chiusa (dalla 0.160.0):
+si corregge, o si scrive dopo, dalla stessa tendina. «—» vuol dire nessuna: la timbratura si è
+chiusa con *Fine e dichiara*, o è di prima della 0.160.0.
+
+### Le causali di pausa (modulo Officina, dalla 0.160.0)
+
+**Pausa** apre la domanda *Perché ti fermi?* con un pulsante grande per causale. La timbratura si
+chiude quando se ne tocca una; *Continua a lavorare* lascia tutto com'era. Di serie:
+
+| Causale | Tempo perso | Che cosa fa in più |
+|---|---|---|
+| **Fine turno** | no | — |
+| **Pausa personale** | no | — |
+| **Attesa materiale** | sì | — |
+| **Attesa attrezzaggio o utensile** | sì | — |
+| **Attesa controllo qualità** | sì | — |
+| **Guasto macchina** | sì | chiede se registrare un **intervento di manutenzione** sulla macchina della fase (o sul centro), già compilato con il fermo da oggi |
+| **Altro** | sì | chiede di scrivere il motivo |
+
+Le prime due, che non sono tempo perso, sono in tinta e vengono prima: a fine giornata basta un
+tocco. La lista si cambia in *Gestione → Centri di lavoro* (→ [cap. 25](#25-gestione)).
+Passare a un'altra fase chiude quella in corso come **Cambio lavoro**, senza chiedere: non è tempo
+perso. *Fine e dichiara* non chiede niente, perché la fase è finita.
+
+In fondo alla scheda la riga della pausa dice la causale e da quando: *In pausa · Attesa materiale ·
+dalle 10:40*. Accanto al *Tempo lavorato* compaiono le ore **perse** della fase, se ce ne sono.
+
+**Quanto dura una pausa.** Dalla Pausa alla timbratura dopo **della stessa persona**, su questa
+fase o su un'altra: chi va ad aiutare su un altro centro non sta perdendo tempo. Una pausa che non
+riprende in giornata si ferma alla **fine della giornata** del calendario di fabbrica (di serie le
+17:00): la notte non è tempo perso, e un guasto di più giorni si registra come fermo di
+manutenzione. Una pausa ancora aperta conta fino ad adesso, con lo stesso limite. Le ore perse
+vanno al centro e alla macchina della fase, e **non cambiano le ore lavorate**: consuntivo,
+contatori delle macchine e manutenzione «ogni N ore» restano come prima.
+
+**Le ore perse nel Carico centri.** Sotto la coda c'è il riquadro **Ore perse**: una riga per
+centro (e, col modulo Macchine utensili, per macchina sotto il suo centro), una colonna per
+causale di tempo perso, il totale e la quota sulle ore timbrate nello stesso periodo. Il periodo è
+quello della tendina accanto al titolo: ultimi 7, 30 (di serie) o 90 giorni. Il filtro *Centro*
+della pagina vale anche qui. Un clic su un numero apre le pause che lo fanno: quando, ordine, fase,
+chi, causale e nota. *Esporta Excel* del Carico centri ha il foglio **Ore perse**, una riga per pausa.
 
 ### Manutenzione (modulo Officina, dalla 0.123.0)
 
@@ -4044,6 +4087,15 @@ Sotto ogni centro, il sotto-elenco **Fornitori conto lavoro**: fornitore, tariff
 fare quella lavorazione fuori, e a quanto. Si possono sospendere. Con il modulo Macchine utensili
 c'è anche l'elenco delle **macchine** del centro, e un centro con macchine non si elimina.
 
+**Causali di pausa** (modulo Officina, dalla 0.160.0). Sotto i centri, le causali che il Reparto
+chiede a ogni Pausa (→ [cap. 24](#24-carico-dei-centri-di-lavoro)). Per ognuna: il nome, se
+**conta come tempo perso**, se **propone un intervento di manutenzione** e se **chiede di
+scrivere il motivo**. Si aggiungono dal campo in fondo, si sospendono (spariscono dal Reparto,
+le pause già fatte restano) e si eliminano solo se nessuna pausa le usa. Ne resta sempre almeno
+una attiva. Cambiare «tempo perso» cambia anche le ore perse delle pause già fatte. Le causali
+stanno nelle impostazioni: viaggiano con il backup e con l'archivio condiviso, ma non con il foglio
+Excel delle impostazioni.
+
 ### ⚙️ Macchine utensili (modulo, dalla 0.126.0)
 
 | Campo | Note |
@@ -4163,6 +4215,7 @@ per tutti i colleghi.
 | Chiusure | nessuna — una per riga: `2026-08-10 2026-08-21 Ferie estive` |
 | Margine fra livelli di distinta (gg) | 0 |
 | Giorni di consegna di fornitori e terzisti | lavorativi (dalla 0.110.0) |
+| Fine della giornata di lavoro | 17:00 — solo con il modulo Officina (dalla 0.160.0): fin qui conta una pausa del reparto che non riprende in giornata |
 
 Il calendario serve alla programmazione a ritroso del fabbisogno: fasi interne e montaggi si
 contano in giorni lavorativi, e di serie anche i giorni dei fornitori (consegna a listino,
@@ -5093,6 +5146,7 @@ dentro**: uscendo e rientrando, il documento torna bloccato.
 | **Tratta** | Le fasi **consecutive** dello stesso terzista, commissionate come una sola lavorazione |
 | **Passata** | Un giro di uscita e rientro dallo stesso terzista. Due passate dallo stesso terzista = due ODL |
 | **Fase** | Un passo del ciclo di lavorazione (10, 20, 30…) |
+| **Causale di pausa** · **Ore perse** | Il perché di una Pausa in Reparto; le pause con una causale di tempo perso, sommate per centro e macchina nel Carico centri (dalla 0.160.0, → [cap. 24](#24-carico-dei-centri-di-lavoro)) |
 | **Ciclo di lavorazione** | La sequenza di fasi che trasforma il materiale in una parte |
 | **Distinta di una parte** | Il materiale che una parte consuma: materie prime e commerciali, mai assiemi o altre parti. Dalla 0.125.0 sta in *Gestione DB* come quella degli assiemi |
 | **Concetto** | L'oggetto nel nome di una parte: `ALBERO`, `FLANGIA`. Sempre maiuscolo, scelto da un elenco |

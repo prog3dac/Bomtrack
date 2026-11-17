@@ -921,7 +921,8 @@ function renderWorkCenters() {
       <input id="wc-name" placeholder="Nome (es. Tornitura)">
       <input id="wc-rate" type="number" min="0" step="0.5" placeholder="Tariffa ${esc(cur())}/h" title="Tariffa oraria del centro di lavoro, in ${esc(cur())} per ora">
       <input id="wc-cap" type="number" min="0" step="1" placeholder="Capacità h/sett" title="Ore totali disponibili a settimana, tutti gli operatori insieme. Lasciandolo a zero il carico si vede lo stesso, ma nessun sovraccarico viene segnalato">
-      <button class="add-btn-sm" onclick="addWc()">+ Aggiungi</button></div></div>`;
+      <button class="add-btn-sm" onclick="addWc()">+ Aggiungi</button></div></div>
+    ${typeof causaliPausaGestioneHtml === 'function' ? causaliPausaGestioneHtml() : ''}`;
 }
 function addWc() {
   if (!roleGuard('manage')) return;
@@ -1355,6 +1356,8 @@ function renderCalendarSettings() {
       <option value="calendario"${c.supplierDays === 'calendario' ? ' selected' : ''}>Di calendario (sabati, domeniche e festivi compresi)</option>
     </select></div>
     <label style="display:flex;gap:6px;align-items:center;margin:4px 0 8px"><input type="checkbox" id="set-cal-easter" ${c.easter !== false ? 'checked' : ''}> Pasquetta (calcolata ogni anno)</label>
+    ${moduloAttivo('officina') ? `<div class="modal-field"><label for="set-cal-end">Fine della giornata di lavoro</label><input id="set-cal-end" type="time" step="300" value="${esc(/^\d{2}:\d{2}$/.test(c.dayEnd || '') ? c.dayEnd : '17:00')}" style="max-width:140px">
+      <p class="empty-text" style="text-align:left;padding:4px 0 0">Una pausa del reparto che non riprende in giornata conta come tempo perso fino a quest'ora, non per tutta la notte.</p></div>` : ''}
     <div class="modal-field"><label>Chiusure (una per riga: dal [al] [nota], date AAAA-MM-GG)</label>
       <textarea id="set-cal-clo" rows="3" placeholder="2026-08-10 2026-08-21 Ferie estive">${esc(chiusure)}</textarea></div>
     <p class="empty-text" style="text-align:left;padding:4px 0 12px">Il fabbisogno programma <strong>a ritroso</strong> dalla consegna: le fasi interne e i montaggi si contano in giorni <strong>lavorativi</strong> di questo calendario. I giorni dei fornitori (consegna a listino, attraversamento e trasporto del terzista, ritardi confermati) seguono la scelta qui sopra: di serie lavorativi, o di calendario se i tuoi fornitori li dichiarano così. In ogni caso la data d'ordine o d'invio cade in un giorno lavorativo (se no si anticipa) e un arrivo previsto in un giorno di chiusura si sposta al primo lavorativo dopo. La soglia «da ordinare» del fabbisogno e del Riepilogo è di 5 giorni lavorativi. Il <strong>margine</strong> anticipa ancora di qualche giorno la data in cui un componente deve essere pronto rispetto all'inizio del lavoro sul padre.</p>`;
@@ -1382,7 +1385,13 @@ function readCalendarSettings() {
   });
   const easterEl = document.getElementById('set-cal-easter');
   const supplierDays = val('set-cal-sup') === 'calendario' ? 'calendario' : 'lavorativi';
-  return { cal: { workDays: giorni, holidays: Array.from(new Set(holidays)).sort(), easter: easterEl ? !!easterEl.checked : true, closures, supplierDays }, scartati };
+  const cal = { workDays: giorni, holidays: Array.from(new Set(holidays)).sort(), easter: easterEl ? !!easterEl.checked : true, closures, supplierDays };
+  // L'ora di fine giornata (dalla 0.160.0) si vede solo col modulo Officina:
+  // senza il campo resta quella di prima.
+  const fine = document.getElementById('set-cal-end') ? val('set-cal-end') : calSettings().dayEnd;
+  if (/^\d{2}:\d{2}$/.test(fine || '')) cal.dayEnd = fine;
+  else if (document.getElementById('set-cal-end') && fine) scartati.push('fine giornata ' + fine);
+  return { cal, scartati };
 }
 function saveSettings() {
   if (!roleGuard('manage')) return;

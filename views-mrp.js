@@ -1233,6 +1233,7 @@ function renderLoad() {
     ${loadChartHtml(tab)}
     ${loadTableHtml(tab)}
     ${typeof capCodaHtml === 'function' ? capCodaHtml({ odp: loadSoloPiano ? loadOdpScelto : null, wc: loadSoloCentro }) : ''}
+    ${typeof orePerseHtml === 'function' ? orePerseHtml(loadSoloCentro) : ''}
     ${loadItemsHtml(entries)}</div>`;
   if (typeof capLineaScorri === 'function') capLineaScorri(host);
 }
@@ -1444,7 +1445,7 @@ function loadExportSpec() {
       ],
       righe: codici,
       totali: null,
-    }],
+    }].concat(typeof orePerseExportSezione === 'function' && moduloAttivo('officina') ? [orePerseExportSezione()] : []),
   };
 }
 
