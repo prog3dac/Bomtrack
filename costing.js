@@ -23,7 +23,9 @@ function costOf(itemId, visited) {
   // proprio in funzione degli antenati: quello non va mai in cache.
   const hit = _costCache.get(itemId);
   if (hit) return hit;
-  const res = computeCost(it, itemId, visited || new Set());
+  // Il costo è quello della distinta e del ciclo **in vigore** (dalla 0.162.0):
+  // la bozza non costa niente a nessuno finché non è approvata (costoBozza).
+  const res = computeCost(typeof itemInVigore === 'function' ? itemInVigore(it) : it, itemId, visited || new Set());
   // Congelato: i chiamanti ricevono lo stesso oggetto, una modifica accidentale
   // avvelenerebbe la cache invece di restare locale.
   if (!res.cycle) _costCache.set(itemId, Object.freeze(res));
@@ -196,9 +198,11 @@ function wcRateFor(wc, supplierId) {
   return s ? (Number(s.rate) || 0) : (Number(wc.hourlyRate) || 0);
 }
 
-function sellingPrice(itemId) {
+// `costo` (facoltativo, dalla 0.162.0): un costo già calcolato, per esempio
+// quello della distinta approvata che la pagina Distinte mostra di serie.
+function sellingPrice(itemId, costo) {
   const it = getItem(itemId);
-  const c = costOf(itemId);
+  const c = costo || costOf(itemId);
   const mgPct = it && it.marginPctOverride != null ? it.marginPctOverride : (db.settings.marginPct || 0);
   return c.total * (1 + (Number(mgPct) || 0) / 100);
 }

@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.162.0**
+**Versione dell'app documentata: 0.163.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1373,6 +1373,17 @@ parte*, sotto).
   livello dell'albero), l'ultima icona a destra 🌳 **apre la sua distinta** al posto di quella
   corrente, senza cercarla nel menu (dalla 0.135.0).
 
+**Approvata o bozza** (dalla 0.162.0). Con le revisioni approvate la distinta si apre **sempre
+sull'approvata** valida oggi, quella che usano piani e ODP, **in sola lettura**: niente *Modifica*,
+*Elimina* né *+ Aggiungi componenti*. Tutto l'albero si legge così: ogni sottoassieme e ogni parte
+mostra la sua revisione valida, come la esplode il fabbisogno, e uno senza revisione approvata porta
+l'etichetta *non approvata*. Anche le card di costo sono quelle della distinta approvata, ai costi
+di oggi dei componenti. La tendina sopra l'albero (*Approvata v1 · valida dal …*) porta alla
+**Bozza v2**, dove l'albero è quello di sempre e si modifica; se la bozza è diversa, la tendina
+scrive *modificata* e sopra l'albero compare un avviso. Cambiando distinta, o aprendola da un'altra
+pagina, si torna all'approvata. Un articolo senza revisione approvata mostra direttamente la bozza.
+Lo stesso vale per i *Cicli di lavorazione* (→ [cap. 14](#14-cicli-di-lavorazione)).
+
 **Comandi.**
 
 | Comando | Cosa fa |
@@ -1503,14 +1514,14 @@ distinta le righe con una regola si riconoscono dal segno `se M=B` o `q.tà = L`
 **macchina** con codice `<codice del modello>-V01`, `-V02`…, il nome del modello seguito dalle
 scelte, il costo e i gruppi che conterrà. Sopra c'è l'intervallo di costo **da quanto a quanto**
 su tutte le combinazioni, fino a 256. **Genera la macchina** la crea; se la combinazione esiste
-già, il pulsante diventa **Apri la macchina**. La macchina nasce **senza ciclo** (dalla 0.162.0):
+già, il pulsante diventa **Apri la macchina**. La macchina nasce **senza ciclo** (dalla 0.163.0):
 costo e intervallo qui non contano le fasi, neanche quelle del modello.
 
 **Varianti generate.** Le macchine nate da questo modello, con le scelte, il costo e lo stato:
 *aggiornata* oppure *modello cambiato*, e *senza ciclo* finché il ciclo non è scritto (un clic lo
 apre in *Cicli di lavorazione*).
 
-**Distinta dal modello, ciclo della macchina** (dalla 0.162.0).
+**Distinta dal modello, ciclo della macchina** (dalla 0.163.0).
 - La **distinta** di una macchina generata è in **sola lettura** in *Gestione DB*: niente
   *+ Aggiungi componenti*, niente modifica o eliminazione delle righe, e neanche l'import da Excel la
   scrive. Si cambia il modello e si rigenera. Una riga cambiata a mano sarebbe sparita al primo
@@ -1580,6 +1591,14 @@ ciclo, con le sole fasi di montaggio (→ [Il ciclo di un assieme](#il-ciclo-di-
 - una nota in testa che dice **da dove viene il costo** di quella parte, secondo il suo
   approvvigionamento, quante righe ha la sua distinta, e il pulsante **Distinta** che la apre;
 - la sezione **Ciclo di lavorazione**.
+
+**Approvata o bozza** (dalla 0.162.0). Con le revisioni approvate, la pagina si apre **sempre sul
+ciclo approvato** valido oggi, quello che usano piani e ODP, **in sola lettura**. La tendina accanto
+al titolo della sezione dice quale si sta guardando (*Approvata v0 · valida dal 14/11/2026*) e
+porta alla **Bozza v1**, l'unica che si modifica. Se la bozza ha fasi diverse dall'approvata, la
+tendina scrive *Bozza v1 · modificata* e sopra le fasi compare un avviso. Cambiando articolo, o
+aprendolo da un'altra pagina, si torna all'approvata. Un articolo senza revisione approvata mostra
+direttamente la bozza.
 
 **Filtri** (dalla 0.125.0 gli stessi di *Gestione DB*). Ricerca; **tipo** (Macchine · Gruppi ·
 Sottogruppi · Parti); **famiglia** e **sottofamiglia** delle parti; **macchina** e **gruppo** di
@@ -1718,7 +1737,23 @@ il giorno in cui il pezzo serve**:
 | Nuovo ODP | la valida alla data in cui servono i pezzi; l'ordine se la ricorda |
 | Lavorazioni da ciclo in un ordine di lavoro, materiale al terzista | la valida alla data della lavorazione |
 | Montaggio dichiarato nel piano | la valida alla consegna del piano |
-| Costo in *Gestione DB* e nei report | la bozza, come prima |
+| Costi (in ogni pagina), *Costificazione*, scheda articolo, catalogo, peso calcolato | la valida oggi (dalla 0.162.0) |
+| Avanzamento, note della fase in *Reparto*, consuntivo dei montaggi senza ODP | la valida oggi o alla data del piano (dalla 0.162.0) |
+| Configuratore delle varianti | la valida oggi del modello (dalla 0.162.0) |
+| *Gestione DB* e *Cicli di lavorazione* | la valida oggi, in sola lettura; la bozza dalla tendina (dalla 0.162.0) |
+
+La bozza si vede e si modifica solo in *Gestione DB* e in *Cicli di lavorazione*, scegliendola
+dalla tendina; lì le card di costo sono quelle della bozza, con i componenti al costo in vigore.
+Un codice mai approvato, fuori da quelle due pagine, non ha righe: un assieme costa zero e una
+parte vale il suo prezzo a listino. Anche *Dove è usato*, l'impatto dei costi, i documenti aperti
+toccati da una modifica tecnica e gli avvisi del Riepilogo (fasi senza ore, distinte con articoli
+fuori produzione) guardano le distinte in vigore.
+
+La bozza si legge ancora in un caso solo, di proposito: i **blocchi all'eliminazione**. Un
+articolo, un centro, una macchina o un fornitore citati in una bozza non si eliminano, perché la
+bozza resterebbe con una riga che punta al vuoto. *Dove è usato* lo dice: «Nessuna distinta in
+vigore lo usa. È nella bozza di …». L'import da Excel e i valori proposti alle fasi da centri e
+fornitori scrivono la bozza, non la leggono.
 
 Così una revisione che vale dal 1° dicembre serve già oggi a pianificare le consegne di dicembre,
 mentre quelle di novembre restano sulla precedente.
@@ -3046,6 +3081,12 @@ produzione**: *Genera ordini di produzione* compare in testa alla scheda, e la r
 con un ODP nel piano mostra il numero dell'ordine al posto di *Dichiara montaggio*. Da lì le fasi
 si seguono come quelle di una parte, e i componenti escono all'avvio della prima. Dichiarare il
 montaggio qui è bloccato, per non farli uscire due volte.
+
+Conta il ciclo della **revisione approvata** valida il giorno in cui l'assieme serve, perché è
+quello che l'ordine copia. Se le fasi di montaggio sono scritte solo nella bozza, l'assieme non si
+lancia: la riga mostra **ciclo da approvare** (un clic apre il ciclo con la barra revisioni) e
+l'avanzamento lo dice sulla riga del montaggio. Approvata la bozza, l'ordine si genera con le sue
+fasi.
 
 La scheda **Da montare** elenca gli assiemi del piano — macchine, gruppi, sottogruppi — con la
 quantità, le date di montaggio, i componenti, quanti ne sono già stati **montati** e quanti

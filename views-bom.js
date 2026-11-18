@@ -72,7 +72,23 @@ function ensureCurrentBom() {
     currentBomId = m ? m.id : null;
   }
 }
-function onBomSelect() { currentBomId = val('bom-select'); bomExpanded = new Set(); renderBom(); }
+function onBomSelect() { currentBomId = val('bom-select'); bomExpanded = new Set(); revApriApprovata('bom'); renderBom(); }
+// ─── Approvata o bozza (dalla 0.162.0) ───
+// Con le revisioni approvate la distinta si apre sull'approvata valida oggi,
+// in sola lettura, e **tutto l'albero** si legge così: i sottoassiemi e le
+// parti mostrano la loro revisione valida, come li esplode il fabbisogno. La
+// bozza dell'articolo aperto si sceglie dalla tendina (views-rev.js), e lì
+// l'albero è quello di sempre, tutto in bozza.
+function bomInApprovata() {
+  const it = getItem(currentBomId);
+  return !!it && !revMostraBozza('bom', it);
+}
+function bomVista(item) { return item && bomInApprovata() ? itemOperativo(item, oggiISO()) : item; }
+function bomBozzaGuard() {
+  if (!bomInApprovata()) return true;
+  showToast('Stai guardando la revisione approvata: scegli la bozza dalla tendina per modificare la distinta', 'error');
+  return false;
+}
 
 function renderBom() {
   invalidateCaches();   // rete di sicurezza: la cache dei costi vive dentro un singolo disegno
@@ -90,6 +106,15 @@ function renderBom() {
   }
   const it = getItem(currentBomId);
   renderBomRevBar();
+  const approvata = revApprovataInVista(it);
+  const inApprovata = bomInApprovata();
+  const diversa = approvata ? revBozzaDiversa(it, approvata, 'components') : false;
+  const ver = document.getElementById('bom-ver-box');
+  if (ver) ver.innerHTML = approvata ? revVersioneHtml('bom', it, approvata, diversa) : '';
+  const bloccata = varDistintaBloccata(it);
+  const add = document.getElementById('bom-add-comp');
+  if (add) add.style.display = inApprovata || bloccata ? 'none' : '';
+  if (bloccata) closeBomPanel();
   const summary = document.getElementById('bom-cost-summary');
   const tree = document.getElementById('bom-tree');
   if (!it) {
@@ -99,8 +124,11 @@ function renderBom() {
     filtMount('bom');
     return;
   }
-  const c = costOf(it.id);
-  const price = sellingPrice(it.id);
+  // Le card sono della distinta che si guarda — approvata o bozza — sui costi
+  // in vigore dei componenti: altrimenti il totale non tornerebbe con le righe.
+  const vista = bomVista(it);
+  const c = computeCost(vista, it.id, new Set());
+  const price = sellingPrice(it.id, c);
   // Sono tutti costi **unitari**, per una unità dell'assieme aperto: senza il
   // denominatore si leggono come il costo di una commessa intera.
   const u = itemUom(it);
@@ -117,22 +145,21 @@ function renderBom() {
   // Albero
   const head = `<div class="bom-head"><span>Articolo</span><span class="num">Q.tà</span><span>U.M.</span>
     <span class="num">Costo un.</span><span class="num">Scarto %</span><span class="num">Costo riga</span><span style="text-align:right">Azioni</span></div>`;
-  const rootRow = renderBomRootNode(it);
+  const rootRow = renderBomRootNode(it, c.total);
   // Una parte di dati non ancora migrati legge la distinta da distintaRighe:
   // gli indici delle righe modificabili valgono però su `components`, che è
   // quello che le modifiche toccano (dopo parteDistintaViva).
   // Una variante generata (varianti.js): righe in sola lettura, salvo la fase
-  // di consumo, e niente «Aggiungi componenti».
-  const bloccata = varDistintaBloccata(it);
-  const addBtn = document.getElementById('bom-add-comp');
-  if (addBtn) addBtn.style.display = bloccata ? 'none' : '';
-  if (bloccata) closeBomPanel();
-  const rows = distintaRighe(it).map((comp, idx) =>
-    renderBomNode(comp, 1, it.id, bloccata ? 'fase' : true, idx, it.id, [it.id], bomPos('', idx))).join('');
-  const opsRow = renderOpsBlock(it, true);
+  // di consumo, e niente «Aggiungi componenti» (vedi sopra).
+  const rows = distintaRighe(vista).map((comp, idx) =>
+    renderBomNode(comp, 1, it.id, inApprovata ? false : bloccata ? 'fase' : true, idx, it.id, [it.id], bomPos('', idx))).join('');
+  const opsRow = renderOpsBlock(vista, true);
+  const verNota = !inApprovata ? '' : diversa
+    ? `<div class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} La bozza ${esc(revLabel(itemRev(it)))} ha una distinta diversa da questa: sceglila dalla tendina per vederla e modificarla. Piani e ODP la useranno solo dopo l'approvazione.</div>`
+    : '<div class="empty-text" style="text-align:left;padding:0 0 8px">La distinta che piani e ODP usano oggi, con ogni sottoassieme e parte nella sua revisione valida, in sola lettura. Per modificarla scegli la bozza dalla tendina.</div>';
   const nota = it.type === 'parte' && partSourcing(it) === 'buy'
     ? `<div class="empty-text" style="text-align:left;padding:6px 0">${ico('cart', 'tinted')} Questa parte si <strong>acquista</strong>: il suo costo è il prezzo a listino, e la distinta non entra né nel costo né nel fabbisogno finché l'approvvigionamento non passa a produzione interna.</div>` : '';
-  tree.innerHTML = varRigaBom(it) + nota + head + rootRow + (rows || `<div class="empty-text">Nessun componente.${bloccata ? '' : ' Usa "+ Aggiungi componenti".'}</div>`) + opsRow;
+  tree.innerHTML = verNota + varRigaBom(it) + nota + head + rootRow + (rows || `<div class="empty-text">Nessun componente.${bloccata || inApprovata ? '' : ' Usa "+ Aggiungi componenti".'}</div>`) + opsRow;
   refreshBomPanelIfOpen();
   filtMount('bom');
 }
@@ -170,8 +197,12 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
   // 0.125.0 stanno separati, come per gli assiemi). Una parte comprata no: la
   // sua distinta non concorre al costo e non va mostrata nell'albero.
   const isParte = child.type === 'parte' && partSourcing(child) !== 'buy';
-  const figli = (isProd || isParte) ? distintaRighe(child) : [];
-  const expandable = !cyc && (figli.length > 0 || (isParte && cicloFasi(child).length > 0));
+  const vista = bomVista(child);
+  const figli = (isProd || isParte) ? distintaRighe(vista) : [];
+  const expandable = !cyc && (figli.length > 0 || (isParte && cicloFasi(vista).length > 0));
+  // Nella vista approvata un sottoassieme senza revisione valida resta vuoto:
+  // lo stesso che succede nel fabbisogno, e si dice.
+  const senzaRev = vista && vista._senzaRev ? ` <span class="mrp-warn" title="Nessuna revisione approvata valida oggi: piani e ODP non la esplodono">${ico('warning', 'tinted', '')} non approvata</span>` : '';
   const expanded = bomExpanded.has(nodeKey);
   const unit = cyc ? 0 : costOf(comp.itemId).total;
   const qty = Number(comp.qty) || 0;
@@ -201,7 +232,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     <span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${toggle}
       <span class="bom-code">${codeLink(child.id, child.code)}</span>
       <span class="bom-type-tag tt-${typeKey(child.type)}">${typeShort(child.type)}</span>
-      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}${altMarker(child)}${varTagRiga(comp, getItem(parentId))}${bomFaseTag(comp, getItem(parentId))}</span>
+      <span class="nm" title="${esc(child.name)}">${esc(child.name)}${cyc ? ' ' + ico('warning', 'tinted') : ''}${altMarker(child)}${varTagRiga(comp, getItem(parentId))}${bomFaseTag(comp, getItem(parentId))}${senzaRev}</span>
     </span>
     <span class="num">${qty}</span>
     <span>${esc(child.uom || '')}</span>
@@ -214,7 +245,7 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
   if (expandable && expanded) {
     h += figli.map((cc, i) =>
       renderBomNode(cc, level + 1, child.id, false, i, nodeKey, ancestorIds.concat(child.id), bomPos(pos, i))).join('');
-    if (cicloFasi(child).length) h += renderOpsBlock(child, false, 18 + indent + 18);
+    if (cicloFasi(vista).length) h += renderOpsBlock(vista, false, 18 + indent + 18);
   }
   return h;
 }
@@ -225,8 +256,8 @@ function bomFaseTag(comp, padre) {
   return k > 0 ? ` <span class="rfq-clavoro-tag" title="Si usa alla fase ${cyclePhaseNumber(k)} del ciclo">fase ${cyclePhaseNumber(k)}</span>` : '';
 }
 // Riga radice: mostra l'articolo padre (macchina/gruppo selezionata) come prima riga dell'albero.
-function renderBomRootNode(it) {
-  const unit = costOf(it.id).total;
+function renderBomRootNode(it, totale) {
+  const unit = totale != null ? totale : costOf(it.id).total;
   return `<div class="bom-node bom-node-root">
     <span class="bom-name">
       <span class="bom-pos"></span>
@@ -274,13 +305,13 @@ function expandAllBom(on) {
     // c'era solo per la radice, e un giro chiuso più in basso (S1 dentro S2
     // dentro S1, possibile in archivio condiviso) riempiva lo stack (dalla 0.105.6).
     const walk = (item, prefix, antenati) => {
-      distintaRighe(item).forEach((comp, idx) => {
+      distintaRighe(bomVista(item)).forEach((comp, idx) => {
         const key = prefix + '>' + comp.itemId + '#' + idx;
         const child = getItem(comp.itemId);
         if (!child || antenati.includes(comp.itemId)) return;
         if (isAssembly(child.type)) { bomExpanded.add(key); walk(child, key, antenati.concat(comp.itemId)); }
         // Una Parte con distinta o ciclo si espande; i suoi figli sono foglie
-        else if (child.type === 'parte' && (distintaRighe(child).length || cicloFasi(child).length)) bomExpanded.add(key);
+        else if (child.type === 'parte' && (distintaRighe(bomVista(child)).length || cicloFasi(bomVista(child)).length)) bomExpanded.add(key);
       });
     };
     const it = getItem(currentBomId); if (it) walk(it, it.id, [it.id]);
@@ -414,7 +445,7 @@ function isAllowedChild(parentType, childId) {
   return !!child && (ALLOWED_CHILDREN[parentType] || []).includes(child.type);
 }
 function editComponentModal(idx) {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !bomBozzaGuard() || !revBozzaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   const comp = it.components[idx]; if (!comp) return;
   // Il costo di riga forzato c'è solo nella distinta di una parte (prima stava
@@ -456,7 +487,7 @@ function editComponentModal(idx) {
   renderPickerResults();
 }
 function saveComponentEdit(idx) {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !bomBozzaGuard() || !revBozzaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   const comp = it.components[idx]; if (!comp) return;
   const salvaFase = () => {
@@ -484,7 +515,7 @@ function saveComponentEdit(idx) {
   saveDB(); closeModal(); renderBom(); savedToast('Componente aggiornato');
 }
 function delComponent(idx) {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !bomBozzaGuard() || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   askConfirm('Eliminare questo componente dalla distinta?', () => {
     it.components.splice(idx, 1); touch(it); saveDB(); renderBom(); savedToast('Componente eliminato');
@@ -559,7 +590,7 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 }
 
 function toggleBomPanel() {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !bomBozzaGuard() || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
   const it = getItem(currentBomId);
   if (!it) { showToast('Seleziona prima una macchina, un gruppo o un sottogruppo', 'error'); return; }
   const panel = document.getElementById('bom-panel'); if (!panel) return;
@@ -668,7 +699,7 @@ function bomPanelUpdateInsertBtn() {
   btn.textContent = n ? `Inserisci (${n})` : 'Inserisci';
 }
 function bomPanelInsertAll() {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !bomBozzaGuard() || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   if (!bomPanelQty.size) { showToast('Imposta una quantità per almeno un articolo', 'error'); return; }
   let added = 0, skipped = 0;
@@ -776,7 +807,7 @@ function apriAnelloDistinta(id) {
 // passa.
 function openBomFor(id) {
   const it = getItem(id); if (!it || !DISTINTE_TIPI.includes(it.type)) return;
-  currentBomId = it.id; bomExpanded = new Set(); setView('bom');
+  currentBomId = it.id; bomExpanded = new Set(); revApriApprovata('bom'); setView('bom');
 }
 
 function supplierName(id) { const s = getSupplier(id); return s ? s.name : ''; }
@@ -873,6 +904,12 @@ function usedBy(itemId) {
   const l = parentIndex().get(itemId);
   return l ? l.slice() : [];
 }
+// Chi lo contiene nella distinta in vigore: «Dove è usato», l'impatto dei
+// costi e quello delle modifiche tecniche (dalla 0.162.0).
+function usatoInVigoreDa(itemId) {
+  const l = parentIndexInVigore().get(itemId);
+  return l ? l.slice() : [];
+}
 
 // ═══════════════════════════════════════════════════════════
 //  DOVE È USATO E IMPATTO SUI COSTI
@@ -887,7 +924,7 @@ function usageQty(parent, childId) {
   let q = 0;
   // La distinta di una parte comprata non conta: il suo costo è il listino.
   if (isAssembly(parent.type) || (parent.type === 'parte' && partSourcing(parent) !== 'buy')) {
-    distintaRighe(parent).forEach(c => {
+    distintaRighe(itemInVigore(parent)).forEach(c => {
       if (c.itemId === childId) q += (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
     });
   }
@@ -895,7 +932,7 @@ function usageQty(parent, childId) {
 }
 // Impieghi diretti: chi contiene l'articolo, con la quantità per unità.
 function directUses(itemId) {
-  return usedBy(itemId)
+  return usatoInVigoreDa(itemId)
     .map(p => ({ item: p, qty: usageQty(p, itemId) }))
     .sort((a, b) => (a.item.code || '').localeCompare(b.item.code || ''));
 }
@@ -905,7 +942,7 @@ function directUses(itemId) {
 function ancestorTotals(itemId) {
   const totali = new Map();
   const salita = (id, qty, percorso) => {
-    usedBy(id).forEach(p => {
+    usatoInVigoreDa(id).forEach(p => {
       if (percorso.has(p.id)) return;
       const q = qty * usageQty(p, id);
       totali.set(p.id, (totali.get(p.id) || 0) + q);
@@ -924,7 +961,7 @@ function impactedTops(itemId) {
     .map(([id, qty]) => ({ item: getItem(id), qty }))
     .filter(r => r.item);
   const macchine = righe.filter(r => r.item.type === 'macchina');
-  const cime = macchine.length ? macchine : righe.filter(r => !usedBy(r.item.id).length);
+  const cime = macchine.length ? macchine : righe.filter(r => !usatoInVigoreDa(r.item.id).length);
   return cime.sort((a, b) => (a.item.code || '').localeCompare(b.item.code || ''));
 }
 

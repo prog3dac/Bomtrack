@@ -466,7 +466,7 @@ describe('La sezione Opzioni', () => {
   });
 });
 
-// 0.162.0: la distinta di una variante generata non si scrive a mano — Rigenera
+// 0.163.0: la distinta di una variante generata non si scrive a mano — Rigenera
 // la riscriverebbe — e il ciclo è della macchina: nasce vuoto, lo scrive
 // l'operatore e Rigenera non lo tocca.
 const fase = (cost) => ({ kind: 'op', workCenterId: '', supplierId: null, costMode: 'fisso', cost, hours: 0, days: 0, note: '' });

@@ -614,7 +614,8 @@ function timbratureSalva() {
 // stato riordinato e al suo posto c'è un'altra fase, non si mostra nulla.
 // La nota congelata sull'ODP resta, a parte, solo se dice altro.
 function repartoNotaCiclo(o, f) {
-  const it = o && o.itemId && typeof getItem === 'function' ? getItem(o.itemId) : null;
+  // Il ciclo in vigore oggi, mai la bozza (dalla 0.162.0).
+  const it = o && o.itemId && typeof getItem === 'function' ? itemInVigore(getItem(o.itemId)) : null;
   if (!it || f.opIndex == null) return '';
   const r = cicloFasi(it)[f.opIndex];
   if (!r || String(r.workCenterId || '') !== String(f.workCenterId || '')) return '';

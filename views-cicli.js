@@ -66,7 +66,28 @@ function cycleFilteredParts() {
 }
 function cycleSearchInput() { debounced('cyc-sel', renderCycles); }
 function onCycleFilterChange() { renderCycles(); }
-function onCyclePartSelect() { currentCycleItemId = val('cyc-part'); renderCycles(); }
+function onCyclePartSelect() { currentCycleItemId = val('cyc-part'); revApriApprovata('cycles'); renderCycles(); }
+// Il ciclo approvato in sola lettura: le stesse colonne, senza campi.
+function cycleOpsTableApprovata(fasi) {
+  if (!fasi.length) return '<div class="empty-text" style="padding:8px 0">La revisione approvata non ha fasi.</div>';
+  const head = `<div class="cycle-row cycle-op-row cycle-op-ro cycle-head">
+    <span>Fase</span><span>Lavorazione</span><span>Fornitore</span><span>Modo</span>
+    <span class="num">Tempo</span><span class="num">Costo riga (${esc(cur())}/pz)</span><span>Note per il reparto</span></div>`;
+  return head + fasi.map((r, k) => {
+    const mac = !r.supplierId && r.machineId && typeof getMachine === 'function' ? getMachine(r.machineId) : null;
+    const tempo = r.supplierId ? `${fmtQtyIt(Number(r.days) || 0)} gg` : fmtMin(r.hours)
+      + (faseOperatori(r) > 1 ? ` · ${faseOperatori(r)} op.` : '') + (faseAttrezzaggio(r) ? ` · attr. ${fmtMin(faseAttrezzaggio(r))}` : '');
+    return `<div class="cycle-row cycle-op-row cycle-op-ro">
+      <span class="cycle-phase">${cyclePhaseNumber(k)}</span>
+      <span class="cycle-name">${cycleRowLabel(r)}${mac ? ` <span class="cycle-dim">${esc(machineLabel(mac))}</span>` : ''}</span>
+      <span>${r.supplierId ? esc(supplierName(r.supplierId) || '—') : 'Interna'}</span>
+      <span>${r.costMode === 'orario' ? 'Orario' : 'Fisso'}</span>
+      <span class="num">${esc(tempo)}</span>
+      <span class="num cost">${fmtN(cycleRowCost(r))}</span>
+      <span class="cycle-dim">${esc(r.note || '')}</span>
+    </div>`;
+  }).join('');
+}
 // La selezione resta valida finché la parte esiste ed è tra quelle filtrate,
 // altrimenti si ricade sulla prima (stesso patto di ensureCurrentBom).
 function ensureCurrentCycleItem(parts) {
@@ -79,6 +100,7 @@ function openCycleFor(id) {
   if (!it || (it.type !== 'parte' && !isAssembly(it.type))) return;
   if (!vistaAttiva('cycles')) { setView('cycles'); return; }   // avvisa e resta al Riepilogo
   currentCycleItemId = id;
+  revApriApprovata('cycles');   // si apre sempre sull'approvata (dalla 0.162.0)
   ['search', 'type', 'family', 'subfamily', 'machine', 'group'].forEach(k => setVal('cyc-' + k, ''));
   // Anche lo scope condiviso (filters.js), altrimenti setView lo riscriverebbe
   // subito dopo sui campi appena svuotati, e la parte scelta potrebbe restare
@@ -142,20 +164,31 @@ function renderCycles() {
     filtMount('cycles');
     return;
   }
-  renderCycleSummary(it);
   // Gli indici sono quelli dell'array `cycle`, perché è quello che le
   // modifiche toccano: in un dato non ancora migrato ci sono anche le righe
   // materiale di una parte, che qui non si mostrano (stanno nella distinta).
   const opRows = (it.cycle || []).map((r, i) => ({ r, i })).filter(x => x.r.kind === 'op');
   const assieme = isAssembly(it.type);
+  // Di serie l'approvata, in sola lettura; la bozza dalla tendina (views-rev.js).
+  const approvata = revApprovataInVista(it);
+  const bozza = revMostraBozza('cycles', it);
+  const diversa = approvata ? revBozzaDiversa(it, approvata, 'cycle') : false;
+  const fasiApprovate = approvata && !bozza ? cicloFasi(revItemDi(it, approvata)) : null;
+  const n = fasiApprovate ? fasiApprovate.length : opRows.length;
+  renderCycleSummary(fasiApprovate ? revItemDi(it, approvata) : it);
+  const avviso = fasiApprovate && diversa
+    ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} La bozza ${esc(revLabel(itemRev(it)))} ha fasi diverse da queste: sceglila dalla tendina per vederla e modificarla. Piani e ODP useranno le sue fasi solo dopo l'approvazione.</p>`
+    : fasiApprovate ? '<p class="empty-text" style="text-align:left;padding:0 0 8px">Il ciclo che piani e ODP usano oggi, in sola lettura. Per modificarlo scegli la bozza dalla tendina.</p>' : '';
   body.innerHTML = `
     ${assieme ? cycleAssiemeNote(it) : cycleSourcingNote(it)}
     <div class="cycle-section">
       <div class="cycle-section-head">
-        <h3>${ico('wrench', 'tinted pill', '')} ${assieme ? 'Ciclo di montaggio' : 'Ciclo di lavorazione'} <span class="cycle-dim">${opRows.length} ${opRows.length === 1 ? 'fase' : 'fasi'}</span></h3>
-        <button class="add-btn-sm" onclick="addCycleOpRow()">+ Lavorazione</button>
+        <h3>${ico('wrench', 'tinted pill', '')} ${assieme ? 'Ciclo di montaggio' : 'Ciclo di lavorazione'} <span class="cycle-dim">${n} ${n === 1 ? 'fase' : 'fasi'}</span></h3>
+        ${approvata ? revVersioneHtml('cycles', it, approvata, diversa) : ''}
+        ${bozza ? '<button class="add-btn-sm" onclick="addCycleOpRow()">+ Lavorazione</button>' : ''}
       </div>
-      <div class="cycle-box">${cycleOpsTable(opRows)}</div>
+      ${avviso}
+      <div class="cycle-box">${fasiApprovate ? cycleOpsTableApprovata(fasiApprovate) : cycleOpsTable(opRows)}</div>
       <div id="picker-op"></div>
     </div>`;
   a11yFields(body);
@@ -166,7 +199,9 @@ function renderCycleSummary(it) {
   const el = document.getElementById('cyc-summary'); if (!el) return;
   const bomTot = distintaRighe(it).reduce((s, r) => s + cycleRowCost(r), 0);
   const opsTot = cicloFasi(it).reduce((s, r) => s + cycleRowCost(r), 0);
-  const c = costOf(it.id);
+  // Il costo della versione che si guarda (dalla 0.162.0): costOf darebbe quello
+  // in vigore anche mentre si modifica la bozza.
+  const c = computeCost(it, it.id, new Set());
   const u = itemUom(it);
   el.innerHTML = (isAssembly(it.type) ? [
     kpi('Fasi di montaggio', fmtPer(opsTot, u), 'green'),
@@ -266,7 +301,12 @@ function cycleOpsTable(opRows) {
 // guardando, con le sue due tavole. `cycleRowLabel` qui non serve — restituisce
 // HTML, e in un foglio di calcolo un tag è solo sporcizia.
 function cycleExportSpec() {
-  const it = currentCycleItem();
+  // Si esporta la versione che si sta guardando: l'approvata di serie, la
+  // bozza solo se scelta dalla tendina (dalla 0.162.0).
+  const aperto = currentCycleItem();
+  const approvata = revApprovataInVista(aperto);
+  const it = approvata && !revMostraBozza('cycles', aperto) ? revItemDi(aperto, approvata) : aperto;
+  const versione = !approvata ? '' : it === aperto ? `bozza ${revLabel(itemRev(aperto))}` : `approvata ${revLabel(approvata.rev)}`;
   // La distinta della parte resta nell'export del suo ciclo: è il foglio che
   // si dà a chi la fa, e il materiale ci serve.
   const bom = distintaRighe(it).map((r, i) => ({ r, i }));
@@ -282,6 +322,7 @@ function cycleExportSpec() {
     slug: 'ciclo_' + String((it && it.code) || 'parte').replace(/[^A-Za-z0-9]+/g, '-'),
     filtri: [
       ['Parte', nome],
+      ['Versione', versione],
       ['Ricerca', val('cyc-search')],
       ['Famiglia', fam ? fam.name : ''],
       ['Sottofamiglia', sub ? sub.name : ''],

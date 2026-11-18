@@ -13,7 +13,7 @@
 // Revisione in esecuzione, mostrata accanto al logo. Va tenuta allineata alla
 // voce in cima a CHANGELOG.md (l'app si copia a mano tra PC: sapere
 // quale revisione sta girando su una postazione è l'unico modo per capirlo).
-const APP_VERSION = '0.162.0';
+const APP_VERSION = '0.163.0';
 
 let currentUser = null;      // utente della sessione (null = schermata di accesso)
 let currentBomId = null;     // articolo prodotto attualmente aperto nelle Distinte
@@ -390,6 +390,26 @@ function parentIndex() {
   _parentIdx = idx;
   return idx;
 }
+// Lo stesso indice sulle distinte **in vigore** (dalla 0.162.0): è quello che
+// dice dove un articolo è usato davvero, e chi risente di un suo costo. L'indice
+// sulla bozza qui sopra resta solo per i blocchi all'eliminazione: un articolo
+// citato in una bozza non si può togliere da sotto i piedi di chi la scrive.
+let _parentIdxVigore = null;
+function parentIndexInVigore() {
+  if (_parentIdxVigore) return _parentIdxVigore;
+  const idx = new Map();
+  (db.items || []).forEach(i => {
+    if (!isAssembly(i.type) && i.type !== 'parte') return;
+    distintaRighe(itemInVigore(i)).forEach(c => {
+      if (!c.itemId) return;
+      let l = idx.get(c.itemId);
+      if (!l) { l = []; idx.set(c.itemId, l); }
+      if (l[l.length - 1] !== i) l.push(i);
+    });
+  });
+  _parentIdxVigore = idx;
+  return idx;
+}
 // ─── "Usato da qualche parte", in senso ampio ───
 // usedBy()/parentIndex() rispondono a «è componente/riga di ciclo di un altro
 // articolo?»: basta per bloccare l'eliminazione con un messaggio preciso, ma
@@ -457,7 +477,7 @@ function invalidateCaches() {
   _costCache.clear();
   _itemIdx = null; _itemIdxArr = null; _itemIdxLen = -1;
   _codeIdx = null; _codeIdxArr = null; _codeIdxLen = -1;
-  _supIdx = null; _wcIdx = null; _parentIdx = null;
+  _supIdx = null; _wcIdx = null; _parentIdx = null; _parentIdxVigore = null;
   _prefixIdx = null; _prefixIdxArr = null; _prefixIdxLen = -1;
   _famIdx = null; _famIdxArr = null; _famIdxLen = -1;
   _cptIdx = null; _cptIdxLen = -1;

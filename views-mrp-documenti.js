@@ -800,7 +800,7 @@ function renderPlanEdit(id) {
           ${mrpStockTable(exp.stock)}
         </div>` : ''}` },
       { id: 'asm', label: 'Da montare', n: exp.asm.length, html: `
-        ${prodInterna && exp.asm.some(e => asmHaCiclo(e.item)) ? `<div class="plan-genera">
+        ${prodInterna && exp.asm.some(asmSiLancia) ? `<div class="plan-genera">
           ${planDocButton(p, 'odp', ico('factory', 'tinted', '') + ' Genera ordini di produzione')}
         </div>` : ''}
         <div class="mrp-section">
@@ -1450,9 +1450,13 @@ function mrpAsmTable(asm, planId) {
       : puoScrivere
         ? `<button class="mini-btn" title="Dichiara il montaggio: i componenti escono dal magazzino" onclick="montaggioModal('${planId}','${e.item.id}',${e.qty})">${ico('wrench', 'tinted', 'Montaggio')}</button>`
         : '';
+    // Il ciclo scritto in bozza e non ancora approvato non lancia niente: si
+    // dice qui, accanto all'assieme, invece di lasciare sparire l'ODP.
+    const daApprovare = !odp.length && asmCicloDaApprovare(e)
+      ? `<span class="mrp-warn code-link" style="margin-left:6px" ${clickAttrs(`homeApri('cycle','${e.item.id}')`, 'Apri il ciclo e la barra revisioni')} title="Il ciclo ha fasi solo nella bozza: la revisione valida al ${esc(fmtDateIt(e.due || oggiISO()))} non ne ha. Approva la bozza per lanciare l'ordine di produzione">${ico('warning', 'tinted', '')} ciclo da approvare</span>` : '';
     return `<tr>
       <td style="font-family:var(--mono)">${codeLink(e.item.id, e.item.code)}</td>
-      <td>${esc(e.item.name)}<span class="bom-type-tag tt-${typeKey(e.item.type)}" style="margin-left:6px">${typeShort(e.item.type)}</span></td>
+      <td>${esc(e.item.name)}<span class="bom-type-tag tt-${typeKey(e.item.type)}" style="margin-left:6px">${typeShort(e.item.type)}</span>${daApprovare}</td>
       <td style="font-family:var(--mono);text-align:right">${fmtQtyIt(e.qty)}</td>
       <td>${e.start && e.due && e.start < e.due ? `${fmtDateIt(e.start)} → ${fmtDateIt(e.due)}` : (e.due ? fmtDateIt(e.due) : '—')}</td>
       <td style="text-align:right">${nComp}</td>

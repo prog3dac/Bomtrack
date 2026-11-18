@@ -253,7 +253,7 @@ function varFirmaFase(o) {
   return diversa ? base.concat([o.supplierId || '', o.costMode || '', Number(o.rate) || 0, Number(o.cost) || 0, Number(o.days) || 0]) : base;
 }
 // L'impronta della definizione di un assieme: quello che il generato copia.
-// Dalla 0.162.0 il ciclo non si copia più (è della macchina generata, e lo
+// Dalla 0.163.0 il ciclo non si copia più (è della macchina generata, e lo
 // scrive l'operatore), quindi non entra nell'impronta: cambiare il ciclo del
 // modello non rende «da rigenerare» nessuna variante. `conCiclo` rifà
 // l'impronta di prima, che le macchine generate fino ad allora conservano.
@@ -300,7 +300,8 @@ function varCodiceNuovo(base) {
 // Prepara la generazione senza scrivere niente: { errori, esistente, macchina,
 // scelte }. Con `macchina` data (Rigenera) le righe si riscrivono su quella.
 function varPrepara(modelloId, scelteDate, macchina) {
-  const t = getItem(modelloId);
+  // Il modello in vigore, mai la sua bozza (dalla 0.162.0).
+  const t = itemInVigore(getItem(modelloId));
   const out = { errori: [], esistente: null, macchina: null, scelte: null };
   if (!varModello(t)) { out.errori.push('Non è un modello configurabile'); return out; }
   const norm = varNormalizzaScelte(t, scelteDate);
@@ -314,7 +315,7 @@ function varPrepara(modelloId, scelteDate, macchina) {
   const righe = varRigheScelte(t, norm.scelte, out.errori);
   if (!righe.length && !out.errori.length) out.errori.push('Con queste scelte la distinta resta vuota');
   if (out.errori.length) return out;
-  // Solo la distinta: il ciclo è della macchina (dalla 0.162.0). Una macchina
+  // Solo la distinta: il ciclo è della macchina (dalla 0.163.0). Una macchina
   // nuova nasce senza fasi, e Rigenera lascia quelle che l'operatore ha scritto.
   const dati = { components: righe, configHash: varFirma(t) };
   if (macchina) out.macchina = Object.assign({}, macchina, dati);
@@ -368,8 +369,8 @@ function varGenera(modelloId, scelte, fatto) {
 // Il modello è cambiato dopo la generazione.
 function varModelloAggiornato(it) {
   if (!varAttivo() || !it || it.type !== 'macchina' || !it.configuredFromId) return false;
-  const t = getItem(it.configuredFromId);
-  // L'impronta di prima della 0.162.0 conteneva anche il ciclo del modello:
+  const t = itemInVigore(getItem(it.configuredFromId));
+  // L'impronta di prima della 0.163.0 conteneva anche il ciclo del modello:
   // se coincide con quella, la macchina è aggiornata come allora.
   return !!t && varModello(t) && it.configHash !== varFirma(t) && it.configHash !== varFirma(t, true);
 }
@@ -482,7 +483,7 @@ function varCostoScelte(id, scelte) {
   if (!it) return Object.assign({}, ZERO_COST);
   if (!varModello(it)) return costOf(id);
   // Senza il ciclo del modello: la macchina generata nasce senza fasi
-  // (dalla 0.162.0), e il costo detto qui deve essere il suo.
+  // (dalla 0.163.0), e il costo detto qui deve essere il suo.
   return assiemeCost(Object.assign({}, it, { cycle: [], operations: [] }), varRigheScelte(it, scelte, null), c => costOf(c.itemId, new Set([id])));
 }
 // Tutte le combinazioni, se sono poche abbastanza da contarle (`limite`).
@@ -529,7 +530,7 @@ function varRigaBom(it) {
   return `<div class="empty-text" style="text-align:left;padding:8px 12px">${ico('tree', 'tinted', '')} ${testo}</div>`;
 }
 function varApri(id) { if (id) currentVarId = id; setView('varianti'); }
-// La distinta di una macchina generata non si modifica a mano (dalla 0.162.0):
+// La distinta di una macchina generata non si modifica a mano (dalla 0.163.0):
 // «Rigenera» la riscrive dal modello, e una riga cambiata qui sparirebbe senza
 // avviso. Si cambia il modello e si rigenera. Resta libera la fase di consumo,
 // perché il ciclo è della macchina. A modulo spento non c'è Rigenera, e la
