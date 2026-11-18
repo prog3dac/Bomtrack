@@ -278,7 +278,8 @@ function itemInfoMagazzino(it) {
 // Di cosa è fatto: componenti per un assieme, distinta e ciclo per una
 // parte. Un solo livello — scendere si fa cliccando il codice, che è il gesto
 // che questa scheda insegna.
-function itemInfoComposizione(it) {
+function itemInfoComposizione(bozza) {
+  const it = itemInVigore(bozza);   // la composizione in vigore, non la bozza (dalla 0.162.0)
   if (isAssembly(it.type)) {
     const comps = it.components || [];
     const ops = cicloFasi(it);

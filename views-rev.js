@@ -165,6 +165,15 @@ function itemOperativo(it, data) {
     sourcing: s.sourcing || it.sourcing, _rev: r });
 }
 function getItemOperativo(id, data) { return itemOperativo(getItem(id), data); }
+// L'articolo **in vigore oggi**: per tutto ciò che non ha una data sua — costi,
+// report, schede informative, reparto. Le bozze si vedono e si modificano solo
+// nelle pagine Distinte e Cicli (dalla 0.162.0); altrove, con le revisioni
+// approvate attive, un codice senza revisione approvata non ha righe.
+function itemInVigore(it) { return itemOperativo(it, oggiISO()); }
+// Il costo della bozza così com'è scritta, con i componenti al costo di oggi
+// (in vigore): serve alle sole pagine della bozza e alla fotografia che
+// l'approvazione congela.
+function costoBozza(it) { return computeCost(it, it.id, new Set()); }
 
 // ─── Approvata o bozza nelle pagine Distinte e Cicli (dalla 0.162.0) ───
 // Con le revisioni approvate le due pagine si aprono **sull'approvata** valida
@@ -221,7 +230,7 @@ function revBozzaLibera(itemId) {
 // vivi, modificare la distinta domani cambierebbe la revisione di ieri — cioè
 // esattamente il difetto che si sta risolvendo.
 function revSnapshot(it) {
-  const c = costOf(it.id);
+  const c = costoBozza(it);   // il costo di quello che si approva, non di quello in vigore
   return {
     code: it.code, name: it.name, type: it.type, uom: it.uom || '',
     sourcing: it.sourcing || null,
@@ -308,7 +317,7 @@ function nextEcoNumber() { return numeroProgressivo('MT'); }
 function ecoAntenati(itemId) {
   const visti = new Set([itemId]);
   const coda = [itemId];
-  const idx = parentIndex();
+  const idx = parentIndexInVigore();   // i documenti aperti nascono da quello in vigore
   while (coda.length) {
     (idx.get(coda.shift()) || []).forEach(p => { if (!visti.has(p.id)) { visti.add(p.id); coda.push(p.id); } });
   }
@@ -866,7 +875,7 @@ function revCompareModal(revId, controId) {
   const sezione = (titolo, righe) => righe.length
     ? `<h4 class="settings-group-title">${titolo} (${righe.length})</h4>${righe.join('')}` : '';
   const costoPrima = prima.snapshot.cost ? prima.snapshot.cost.total : 0;
-  const costoDopo = dopo ? (dopo.snapshot.cost ? dopo.snapshot.cost.total : 0) : costOf(it.id).total;
+  const costoDopo = dopo ? (dopo.snapshot.cost ? dopo.snapshot.cost.total : 0) : costoBozza(it).total;
   const delta = costoDopo - costoPrima;
   const u = itemUom(it);
   const nomeDopo = dopo ? revLabel(dopo.rev) : 'bozza (' + revLabel(itemRev(it)) + ')';

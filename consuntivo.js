@@ -299,7 +299,7 @@ function consReale(amb) {
   }));
   amb.montaggi.forEach(r => {
     const asm = getItem(r.itemId); if (!asm) return;
-    const v = cicloFasi(asm).reduce((a, op) => a + cycleRowCost(op), 0) * (Number(r.qty) || 0);
+    const v = cicloFasi(itemInVigore(asm)).reduce((a, op) => a + cycleRowCost(op), 0) * (Number(r.qty) || 0);
     if (!v) return;
     lavorazioni += v;
     aggiungi('lavorazioni', `Montaggio ${asm.code || ''} — ${fmtQtyIt(Number(r.qty) || 0)} pz, a costo standard del ciclo (senza ODP non ci sono ore)`, v, false);

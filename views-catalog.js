@@ -107,7 +107,8 @@ function itemUnitCost(i) {
 }
 // La colonna «Dettaglio»: cosa c'è da sapere su quell'articolo in una riga
 // sola, e cambia con il tipo. Estratta dalla riga perché la usa anche l'export.
-function catalogMeta(i) {
+function catalogMeta(bozza) {
+  const i = itemInVigore(bozza);   // quello in vigore, non la bozza (dalla 0.162.0)
   let meta = '';
   if (i.type === 'acquistato') { const s = getSupplier(i.supplierId); meta = s ? s.name : '—'; }
   else if (i.type === 'materiale' && priceRows(i).length) meta = '';

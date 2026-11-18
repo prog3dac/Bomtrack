@@ -708,7 +708,7 @@ function itemWeight(it, visti) {
   const w = numTecnico(it.weightKg);
   if (w != null) return { value: w, calcolato: false, completo: true };
   if (String(it.uom || '').toLowerCase() === 'kg') return { value: 1, calcolato: false, completo: true };
-  const righe = distintaRighe(it);
+  const righe = distintaRighe(typeof itemInVigore === 'function' ? itemInVigore(it) : it);
   if (!righe.length) return null;
   const v = visti || new Set();
   if (v.has(it.id)) return null;

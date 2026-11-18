@@ -164,7 +164,6 @@ function renderCycles() {
     filtMount('cycles');
     return;
   }
-  renderCycleSummary(it);
   // Gli indici sono quelli dell'array `cycle`, perché è quello che le
   // modifiche toccano: in un dato non ancora migrato ci sono anche le righe
   // materiale di una parte, che qui non si mostrano (stanno nella distinta).
@@ -176,6 +175,7 @@ function renderCycles() {
   const diversa = approvata ? revBozzaDiversa(it, approvata, 'cycle') : false;
   const fasiApprovate = approvata && !bozza ? cicloFasi(revItemDi(it, approvata)) : null;
   const n = fasiApprovate ? fasiApprovate.length : opRows.length;
+  renderCycleSummary(fasiApprovate ? revItemDi(it, approvata) : it);
   const avviso = fasiApprovate && diversa
     ? `<p class="empty-text" style="text-align:left;padding:0 0 8px">${ico('warning', 'tinted', '')} La bozza ${esc(revLabel(itemRev(it)))} ha fasi diverse da queste: sceglila dalla tendina per vederla e modificarla. Piani e ODP useranno le sue fasi solo dopo l'approvazione.</p>`
     : fasiApprovate ? '<p class="empty-text" style="text-align:left;padding:0 0 8px">Il ciclo che piani e ODP usano oggi, in sola lettura. Per modificarlo scegli la bozza dalla tendina.</p>' : '';
@@ -199,7 +199,9 @@ function renderCycleSummary(it) {
   const el = document.getElementById('cyc-summary'); if (!el) return;
   const bomTot = distintaRighe(it).reduce((s, r) => s + cycleRowCost(r), 0);
   const opsTot = cicloFasi(it).reduce((s, r) => s + cycleRowCost(r), 0);
-  const c = costOf(it.id);
+  // Il costo della versione che si guarda (dalla 0.162.0): costOf darebbe quello
+  // in vigore anche mentre si modifica la bozza.
+  const c = computeCost(it, it.id, new Set());
   const u = itemUom(it);
   el.innerHTML = (isAssembly(it.type) ? [
     kpi('Fasi di montaggio', fmtPer(opsTot, u), 'green'),
@@ -299,7 +301,12 @@ function cycleOpsTable(opRows) {
 // guardando, con le sue due tavole. `cycleRowLabel` qui non serve — restituisce
 // HTML, e in un foglio di calcolo un tag è solo sporcizia.
 function cycleExportSpec() {
-  const it = currentCycleItem();
+  // Si esporta la versione che si sta guardando: l'approvata di serie, la
+  // bozza solo se scelta dalla tendina (dalla 0.162.0).
+  const aperto = currentCycleItem();
+  const approvata = revApprovataInVista(aperto);
+  const it = approvata && !revMostraBozza('cycles', aperto) ? revItemDi(aperto, approvata) : aperto;
+  const versione = !approvata ? '' : it === aperto ? `bozza ${revLabel(itemRev(aperto))}` : `approvata ${revLabel(approvata.rev)}`;
   // La distinta della parte resta nell'export del suo ciclo: è il foglio che
   // si dà a chi la fa, e il materiale ci serve.
   const bom = distintaRighe(it).map((r, i) => ({ r, i }));
@@ -315,6 +322,7 @@ function cycleExportSpec() {
     slug: 'ciclo_' + String((it && it.code) || 'parte').replace(/[^A-Za-z0-9]+/g, '-'),
     filtri: [
       ['Parte', nome],
+      ['Versione', versione],
       ['Ricerca', val('cyc-search')],
       ['Famiglia', fam ? fam.name : ''],
       ['Sottofamiglia', sub ? sub.name : ''],

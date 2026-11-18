@@ -23,7 +23,9 @@ function costOf(itemId, visited) {
   // proprio in funzione degli antenati: quello non va mai in cache.
   const hit = _costCache.get(itemId);
   if (hit) return hit;
-  const res = computeCost(it, itemId, visited || new Set());
+  // Il costo è quello della distinta e del ciclo **in vigore** (dalla 0.162.0):
+  // la bozza non costa niente a nessuno finché non è approvata (costoBozza).
+  const res = computeCost(typeof itemInVigore === 'function' ? itemInVigore(it) : it, itemId, visited || new Set());
   // Congelato: i chiamanti ricevono lo stesso oggetto, una modifica accidentale
   // avvelenerebbe la cache invece di restare locale.
   if (!res.cycle) _costCache.set(itemId, Object.freeze(res));

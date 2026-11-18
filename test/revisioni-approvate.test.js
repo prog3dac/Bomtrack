@@ -234,6 +234,72 @@ describe('La pagina Distinte mostra di serie la distinta approvata (dalla 0.162.
   });
 });
 
+// Le bozze si vedono e si modificano solo in Distinte e Cicli: costi, report,
+// schede, avanzamento, reparto, consuntivo e configuratore leggono quello in
+// vigore. Ogni prova cambia la bozza dopo l'approvazione e guarda che non si
+// muova niente.
+describe('Le bozze non le usa nessuno fuori da Distinte e Cicli (dalla 0.162.0)', () => {
+  function approvatoPoiCambiato() {
+    const a = app({ revApprovate: true });
+    a.eval(`getItem('p1').cycle[0].rate = 40`);
+    a.eval(`releaseRevision('g1', 'prima', { dal: oggiISO() })`);
+    a.eval(`releaseRevision('p1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('g1').components.push({ itemId: 'c2', qty: 10 })`);
+    a.eval(`getItem('p1').cycle[0].hours = 7; getItem('p1').cycle.push({ kind: 'op', workCenterId: 'w1', costMode: 'orario', hours: 1, rate: 40, note: 'solo in bozza' })`);
+    a.eval('invalidateCaches()');
+    return a;
+  }
+
+  it('il costo è quello in vigore; quello della bozza si chiede a parte', () => {
+    const a = approvatoPoiCambiato();
+    assert.equal(a.eval(`costOf('g1').total`), 40, '2 × 10 + 4 × 5, senza la riga della bozza');
+    assert.equal(a.eval(`costOf('p1').total`), 50, '1 h × 40 + 10 di materiale, le ore della revisione');
+    assert.equal(a.eval(`costoBozza(getItem('g1')).total`), 110);
+    assert.equal(a.eval(`costoBozza(getItem('p1')).total`), 330);
+  });
+
+  it('l\'approvazione fotografa il costo della bozza che si approva', () => {
+    const a = approvatoPoiCambiato();
+    a.eval(`releaseRevision('g1', 'seconda', { dal: oggiISO() })`);
+    assert.equal(a.eval(`revisionsOf('g1')[0].snapshot.cost.total`), 110);
+  });
+
+  it('report, catalogo, scheda articolo e peso leggono quello in vigore', () => {
+    const a = approvatoPoiCambiato();
+    const righe = ev(a, `(r => (flattenBom('g1', 1, 0, 0, r, []), r.map(x => x.code)))([])`);
+    assert.ok(!righe.includes('C2'), 'la Costificazione non esplode la bozza');
+    assert.equal(a.eval(`catalogMeta(getItem('g1'))`).startsWith('2 comp.'), true);
+    assert.doesNotMatch(a.eval(`itemInfoComposizione(getItem('g1'))`), /C2/);
+    assert.equal(ev(a, `cicloFasi(itemInVigore(getItem('p1'))).length`), 1);
+  });
+
+  it('il reparto legge la nota della fase dal ciclo in vigore', () => {
+    const a = approvatoPoiCambiato();
+    a.eval(`getItem('p1').cycle[0].note = 'nota della bozza'`);
+    assert.equal(a.eval(`repartoNotaCiclo({ itemId: 'p1' }, { opIndex: 0, workCenterId: 'w1' })`), '');
+  });
+
+  it('l\'avanzamento conta le fasi in vigore', () => {
+    const a = approvatoPoiCambiato();
+    const n = ev(a, `(t => cicloFasi(t.op).length)(schedTree('p1', 1, '${giorni(a, 30)}'))`);
+    assert.equal(n, 1);
+  });
+
+  it('«Dove è usato» guarda le distinte in vigore; la bozza blocca solo l\'eliminazione', () => {
+    const a = approvatoPoiCambiato();
+    assert.equal(ev(a, `directUses('c2').length`), 0, 'C2 è solo nella bozza di G1');
+    assert.equal(ev(a, `usedBy('c2').length`), 1, 'ma non si può eliminare');
+    assert.match(a.eval(`usageBody('c2')`), /bozza di/);
+    assert.equal(ev(a, `directUses('c1').map(x => x.item.code + ':' + x.qty)`).join(), 'G1:4');
+  });
+
+  it('un codice mai approvato non costa e non si esplode', () => {
+    const a = app({ revApprovate: true });
+    assert.equal(a.eval(`costOf('g1').total`), 0);
+    assert.equal(a.eval(`costoBozza(getItem('g1')).total`), 40, 'nella sua pagina la bozza ha il suo costo');
+  });
+});
+
 describe('Chi approva', () => {
   it('Progettazione chiede, la bozza si blocca, l\'Amministratore approva', () => {
     const a = app({ revApprovate: true }, 'progettazione');

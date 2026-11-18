@@ -229,7 +229,7 @@ function homeSegnali() {
     // La fase si numera fra le sole lavorazioni, non nell'array intero: è il
     // numero che l'utente legge nella vista Cicli, e nominarne un altro
     // manderebbe a cercare la riga sbagliata.
-    cicloFasi(it).forEach((r, k) => {
+    cicloFasi(itemInVigore(it)).forEach((r, k) => {   // il ciclo in vigore, non la bozza
       const n = cyclePhaseNumber(k);
       if (r.costMode !== 'orario' || Number(r.hours) > 0) return;
       const wc = getWorkCenter(r.workCenterId);

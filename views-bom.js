@@ -122,10 +122,10 @@ function renderBom() {
     filtMount('bom');
     return;
   }
-  // Nella vista approvata anche i numeri sono della distinta approvata, sui
-  // costi di oggi dei componenti: altrimenti il totale non tornerebbe con le righe.
+  // Le card sono della distinta che si guarda — approvata o bozza — sui costi
+  // in vigore dei componenti: altrimenti il totale non tornerebbe con le righe.
   const vista = bomVista(it);
-  const c = inApprovata ? computeCost(vista, it.id, new Set()) : costOf(it.id);
+  const c = computeCost(vista, it.id, new Set());
   const price = sellingPrice(it.id, c);
   // Sono tutti costi **unitari**, per una unità dell'assieme aperto: senza il
   // denominatore si leggono come il costo di una commessa intera.
@@ -881,6 +881,12 @@ function usedBy(itemId) {
   const l = parentIndex().get(itemId);
   return l ? l.slice() : [];
 }
+// Chi lo contiene nella distinta in vigore: «Dove è usato», l'impatto dei
+// costi e quello delle modifiche tecniche (dalla 0.162.0).
+function usatoInVigoreDa(itemId) {
+  const l = parentIndexInVigore().get(itemId);
+  return l ? l.slice() : [];
+}
 
 // ═══════════════════════════════════════════════════════════
 //  DOVE È USATO E IMPATTO SUI COSTI
@@ -895,7 +901,7 @@ function usageQty(parent, childId) {
   let q = 0;
   // La distinta di una parte comprata non conta: il suo costo è il listino.
   if (isAssembly(parent.type) || (parent.type === 'parte' && partSourcing(parent) !== 'buy')) {
-    distintaRighe(parent).forEach(c => {
+    distintaRighe(itemInVigore(parent)).forEach(c => {
       if (c.itemId === childId) q += (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100);
     });
   }
@@ -903,7 +909,7 @@ function usageQty(parent, childId) {
 }
 // Impieghi diretti: chi contiene l'articolo, con la quantità per unità.
 function directUses(itemId) {
-  return usedBy(itemId)
+  return usatoInVigoreDa(itemId)
     .map(p => ({ item: p, qty: usageQty(p, itemId) }))
     .sort((a, b) => (a.item.code || '').localeCompare(b.item.code || ''));
 }
@@ -913,7 +919,7 @@ function directUses(itemId) {
 function ancestorTotals(itemId) {
   const totali = new Map();
   const salita = (id, qty, percorso) => {
-    usedBy(id).forEach(p => {
+    usatoInVigoreDa(id).forEach(p => {
       if (percorso.has(p.id)) return;
       const q = qty * usageQty(p, id);
       totali.set(p.id, (totali.get(p.id) || 0) + q);
@@ -932,7 +938,7 @@ function impactedTops(itemId) {
     .map(([id, qty]) => ({ item: getItem(id), qty }))
     .filter(r => r.item);
   const macchine = righe.filter(r => r.item.type === 'macchina');
-  const cime = macchine.length ? macchine : righe.filter(r => !usedBy(r.item.id).length);
+  const cime = macchine.length ? macchine : righe.filter(r => !usatoInVigoreDa(r.item.id).length);
   return cime.sort((a, b) => (a.item.code || '').localeCompare(b.item.code || ''));
 }
 

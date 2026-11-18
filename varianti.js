@@ -295,7 +295,8 @@ function varCodiceNuovo(base) {
 // Prepara la generazione senza scrivere niente: { errori, esistente, macchina,
 // scelte }. Con `macchina` data (Rigenera) le righe si riscrivono su quella.
 function varPrepara(modelloId, scelteDate, macchina) {
-  const t = getItem(modelloId);
+  // Il modello in vigore, mai la sua bozza (dalla 0.162.0).
+  const t = itemInVigore(getItem(modelloId));
   const out = { errori: [], esistente: null, macchina: null, scelte: null };
   if (!varModello(t)) { out.errori.push('Non è un modello configurabile'); return out; }
   const norm = varNormalizzaScelte(t, scelteDate);
@@ -361,7 +362,7 @@ function varGenera(modelloId, scelte, fatto) {
 // Il modello è cambiato dopo la generazione.
 function varModelloAggiornato(it) {
   if (!varAttivo() || !it || it.type !== 'macchina' || !it.configuredFromId) return false;
-  const t = getItem(it.configuredFromId);
+  const t = itemInVigore(getItem(it.configuredFromId));
   return !!t && varModello(t) && it.configHash !== varFirma(t);
 }
 // Rigenera la distinta della macchina concreta dalle scelte che aveva, sul

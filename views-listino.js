@@ -851,7 +851,12 @@ function usageBody(id) {
   const nuovo = simula ? numVal('usage-whatif', 0) : null;
 
   if (!diretti.length) {
-    return `<div class="empty-text">Questo articolo non è usato da nessuna parte: si può eliminare senza conseguenze.</div>`;
+    // Le bozze non contano come impiego, ma bloccano l'eliminazione: si dice
+    // dove, perché è lì che va tolto prima.
+    const inBozza = usedBy(id);
+    return inBozza.length
+      ? `<div class="empty-text">Nessuna distinta in vigore lo usa. È nella bozza di ${inBozza.map(p => codeLink(p.id, p.code)).join(', ')}: per eliminarlo va tolto da lì.</div>`
+      : `<div class="empty-text">Questo articolo non è usato da nessuna parte: si può eliminare senza conseguenze.</div>`;
   }
 
   // Le quantità in colonna sono di **questo** articolo dentro i suoi padri: la

@@ -1721,7 +1721,23 @@ il giorno in cui il pezzo serve**:
 | Nuovo ODP | la valida alla data in cui servono i pezzi; l'ordine se la ricorda |
 | Lavorazioni da ciclo in un ordine di lavoro, materiale al terzista | la valida alla data della lavorazione |
 | Montaggio dichiarato nel piano | la valida alla consegna del piano |
-| Costo in *Gestione DB* e nei report | la bozza, come prima |
+| Costi (in ogni pagina), *Costificazione*, scheda articolo, catalogo, peso calcolato | la valida oggi (dalla 0.162.0) |
+| Avanzamento, note della fase in *Reparto*, consuntivo dei montaggi senza ODP | la valida oggi o alla data del piano (dalla 0.162.0) |
+| Configuratore delle varianti | la valida oggi del modello (dalla 0.162.0) |
+| *Gestione DB* e *Cicli di lavorazione* | la valida oggi, in sola lettura; la bozza dalla tendina (dalla 0.162.0) |
+
+La bozza si vede e si modifica solo in *Gestione DB* e in *Cicli di lavorazione*, scegliendola
+dalla tendina; lì le card di costo sono quelle della bozza, con i componenti al costo in vigore.
+Un codice mai approvato, fuori da quelle due pagine, non ha righe: un assieme costa zero e una
+parte vale il suo prezzo a listino. Anche *Dove è usato*, l'impatto dei costi, i documenti aperti
+toccati da una modifica tecnica e gli avvisi del Riepilogo (fasi senza ore, distinte con articoli
+fuori produzione) guardano le distinte in vigore.
+
+La bozza si legge ancora in un caso solo, di proposito: i **blocchi all'eliminazione**. Un
+articolo, un centro, una macchina o un fornitore citati in una bozza non si eliminano, perché la
+bozza resterebbe con una riga che punta al vuoto. *Dove è usato* lo dice: «Nessuna distinta in
+vigore lo usa. È nella bozza di …». L'import da Excel e i valori proposti alle fasi da centri e
+fornitori scrivono la bozza, non la leggono.
 
 Così una revisione che vale dal 1° dicembre serve già oggi a pianificare le consegne di dicembre,
 mentre quelle di novembre restano sulla precedente.

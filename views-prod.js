@@ -1641,7 +1641,7 @@ function newOdpModal() {
     // Un ciclo senza fasi non ha una successione da seguire, e un ordine su una
     // parte così sarebbe una scheda vuota: si scopre dopo averla scelta, ed è
     // il modo peggiore.
-    filtro: i => (i.type === 'parte' || isAssembly(i.type)) && cicloFasi(i).length > 0,
+    filtro: i => (i.type === 'parte' || isAssembly(i.type)) && cicloFasi(itemInVigore(i)).length > 0,
     vuoto: 'Nessuna parte e nessun assieme ha un ciclo di lavorazione. Le fasi si scrivono in <em>Cicli di lavorazione</em>.',
   });
 }

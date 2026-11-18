@@ -429,7 +429,9 @@ function schedAssembly(it, qty, due) {
 // parti comprate, ciclo, margine fra livelli — e le date vengono dalle stesse
 // funzioni: un nodo che dicesse una data diversa dalla riga aggregata sarebbe
 // un secondo programma. Un test lo tiene fermo.
-//   nodo = { item, kind: 'asm'|'make'|'buy', qty, start, end, days, lead, steps, children }
+//   nodo = { item, op, kind: 'asm'|'make'|'buy', qty, start, end, days, lead, steps, children }
+// `op` è l'articolo nella revisione valida alla data (itemOperativo): fasi e
+// righe si leggono da lì, mai da `item`, che porta la bozza.
 // `start`/`end` sono le date **a ritroso**: per un acquisto ordine e arrivo,
 // per una parte lancio e pronto, per un assieme inizio e fine montaggio.
 // `lotti`: quelli di mrpLotti() sul piano intero, come nell'esplosione.
@@ -455,7 +457,7 @@ function schedTree(itemId, qty, due, ancestors, lotti) {
       const n = schedTree(c.itemId, qty * (Number(c.qty) || 0) * (1 + (Number(c.scrapPct) || 0) / 100), schedRigaDue(c, op, prog, perFigli), next, lotti);
       if (n) figli.push(n);
     });
-    return { item: it, kind: 'make', qty, start: prog.start, end: due || '', days: 0,
+    return { item: it, op, kind: 'make', qty, start: prog.start, end: due || '', days: 0,
       steps: prog.steps, children: figli };
   }
   const prog = schedAssembly(op, mrpLotto({ lotti }, it, qty), due);
@@ -466,7 +468,7 @@ function schedTree(itemId, qty, due, ancestors, lotti) {
     const n = schedTree(c.itemId, qty * f, schedRigaDue(c, op, prog, perFigli), next, lotti);
     if (n) figli.push(n);
   });
-  return { item: it, kind: 'asm', qty, start: prog.start, end: due || '', days: prog.days,
+  return { item: it, op, kind: 'asm', qty, start: prog.start, end: due || '', days: prog.days,
     steps: [], children: figli };
 }
 // I nodi dell'albero in ordine di disegno (padre, poi figli), con il livello.
