@@ -2,6 +2,18 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
+### 0.162.0 — 2026-11-18
+
+**Varianti: la distinta viene dal modello, il ciclo è della macchina.** Modulo Varianti.
+- **La distinta di una macchina generata è in sola lettura** in *Gestione DB*: niente *+ Aggiungi componenti*, niente modifica o eliminazione delle righe, e l'import da Excel la rifiuta. Si cambia il modello e si rigenera: prima le righe cambiate a mano sparivano al primo Rigenera, senza avviso. La riga sopra l'albero lo dice.
+- **Resta libera la fase di consumo** di ogni riga, quando il ciclo della macchina ha più di una fase.
+- **Il ciclo non si copia più dal modello.** La macchina nasce senza fasi e il ciclo lo scrive l'operatore in *Cicli di lavorazione*; **Rigenera non lo tocca**. La tabella *Varianti generate* segna *senza ciclo* le macchine che non l'hanno ancora.
+- Il ciclo del modello non entra più nell'impronta: cambiarlo non segna le varianti come *modello cambiato*. Le macchine generate prima, con l'impronta di allora, restano *aggiornate*.
+- Il costo del configuratore (anteprima e intervallo *da… a…*) non conta le fasi del modello: è quello della macchina che nasce.
+- Le macchine generate prima tengono il ciclo che avevano copiato, e da adesso lo gestisce l'operatore.
+
+Schema: nessun cambiamento.
+
 ### 0.161.0 — 2026-11-17
 
 **Allegati nella cartella del codice, e la cartella d'archivio si sceglie solo in Gestione.**

@@ -121,12 +121,18 @@ function renderBom() {
   // Una parte di dati non ancora migrati legge la distinta da distintaRighe:
   // gli indici delle righe modificabili valgono però su `components`, che è
   // quello che le modifiche toccano (dopo parteDistintaViva).
+  // Una variante generata (varianti.js): righe in sola lettura, salvo la fase
+  // di consumo, e niente «Aggiungi componenti».
+  const bloccata = varDistintaBloccata(it);
+  const addBtn = document.getElementById('bom-add-comp');
+  if (addBtn) addBtn.style.display = bloccata ? 'none' : '';
+  if (bloccata) closeBomPanel();
   const rows = distintaRighe(it).map((comp, idx) =>
-    renderBomNode(comp, 1, it.id, true, idx, it.id, [it.id], bomPos('', idx))).join('');
+    renderBomNode(comp, 1, it.id, bloccata ? 'fase' : true, idx, it.id, [it.id], bomPos('', idx))).join('');
   const opsRow = renderOpsBlock(it, true);
   const nota = it.type === 'parte' && partSourcing(it) === 'buy'
     ? `<div class="empty-text" style="text-align:left;padding:6px 0">${ico('cart', 'tinted')} Questa parte si <strong>acquista</strong>: il suo costo è il prezzo a listino, e la distinta non entra né nel costo né nel fabbisogno finché l'approvvigionamento non passa a produzione interna.</div>` : '';
-  tree.innerHTML = varRigaBom(it) + nota + head + rootRow + (rows || `<div class="empty-text">Nessun componente. Usa "+ Aggiungi componenti".</div>`) + opsRow;
+  tree.innerHTML = varRigaBom(it) + nota + head + rootRow + (rows || `<div class="empty-text">Nessun componente.${bloccata ? '' : ' Usa "+ Aggiungi componenti".'}</div>`) + opsRow;
   refreshBomPanelIfOpen();
   filtMount('bom');
 }
@@ -152,7 +158,8 @@ function bomPos(parentPos, idx) { return parentPos ? parentPos + '.' + (idx + 1)
 // Le righe dell'albero che hanno il pulsante «Apri distinta».
 function isAsmApribile(it) { return !!it && (it.type === 'gruppo' || it.type === 'sottogruppo'); }
 
-// Render ricorsivo di un nodo (componente). editable = riga di primo livello dell'articolo aperto.
+// Render ricorsivo di un nodo (componente). editable = riga di primo livello dell'articolo aperto;
+// 'fase' = riga di una variante generata, di cui si cambia solo la fase di consumo.
 function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancestorIds, pos) {
   const child = getItem(comp.itemId);
   if (!child) return `<div class="bom-node"><span class="bom-name"><span class="bom-pos">${esc(pos || '')}</span>${ico('warning', 'tinted')} articolo mancante</span></div>`;
@@ -179,10 +186,12 @@ function renderBomNode(comp, level, parentId, editable, idx, pathPrefix, ancesto
     : `<span class="bom-toggle leaf">•</span>`;
   const actions = `<button class="mini-btn" title="Dove è usato e impatto costi" onclick="usageModal('${comp.itemId}')">${ico('link', 'tinted', 'Dove è usato e impatto costi')}</button>`
     + (child.type === 'parte' && vistaAttiva('cycles') ? `<button class="mini-btn" title="Ciclo di lavorazione" onclick="openCycleFor('${comp.itemId}')">${ico('wrench', 'tinted', 'Ciclo di lavorazione')}</button>` : '')
-    + (editable
+    + (editable === true
       ? `<button class="mini-btn" title="Modifica" onclick="editComponentModal(${idx})">${ico('edit', 'tinted', 'Modifica')}</button>
          <button class="mini-btn danger" title="Elimina" onclick="delComponent(${idx})">${ico('trash', 'tinted', 'Elimina')}</button>`
-      : '')
+      : editable === 'fase' && cicloFasi(getItem(parentId)).length > 1
+        ? `<button class="mini-btn" title="Fase di consumo" onclick="editComponentModal(${idx})">${ico('edit', 'tinted', 'Fase di consumo')}</button>`
+        : '')
     // Dalla 0.135.0 gruppi e sottogruppi, a ogni livello, aprono la loro
     // distinta senza passare dal menu in alto: l'ultima icona a destra.
     + (isAsmApribile(child) && !cyc
@@ -421,6 +430,16 @@ function editComponentModal(idx) {
     ? `<div class="modal-field"><label>Fase di consumo</label><select id="cmp-phase" title="La fase del ciclo in cui si usa la riga: il fabbisogno la fa arrivare per l'inizio di quella fase">
         ${fasi.map((r, k) => { const wc = getWorkCenter(r.workCenterId); return `<option value="${k}" ${faseConsumo(comp, it) === k ? 'selected' : ''}>${cyclePhaseNumber(k)} · ${esc(wc ? wc.name : '?')}${r.supplierId ? ' (' + esc(supplierName(r.supplierId)) + ')' : ''}</option>`; }).join('')}
       </select></div>` : '';
+  if (varDistintaBloccata(it)) {
+    const g = getItem(comp.itemId);
+    if (!faseCampo) { varDistintaLibera(it.id); return; }
+    openModal(`<h3>${ico('edit', 'tinted pill', '')} Fase di consumo</h3>
+      <p class="empty-text" style="text-align:left;padding:0 0 10px"><strong>${esc(g ? g.code + ' — ' + g.name : '?')}</strong>. La riga viene dal modello: articolo e quantità si cambiano lì. La fase è del ciclo di questa macchina.</p>
+      ${faseCampo}
+      <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">Annulla</button>
+        <button class="add-btn-sm" onclick="saveComponentEdit(${idx})">Salva</button></div>`);
+    return;
+  }
   window.__pickerCandidates = pickerCandidates(it.type, it.id);
   openModal(`<h3>${ico('edit', 'tinted pill', '')} Modifica componente</h3>
     <p class="empty-text" style="text-align:left;padding:0 0 10px">${allowedHint(it.type)}</p>
@@ -440,6 +459,15 @@ function saveComponentEdit(idx) {
   if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   const comp = it.components[idx]; if (!comp) return;
+  const salvaFase = () => {
+    if (!document.getElementById('cmp-phase')) return;
+    const k = Math.floor(Number(val('cmp-phase')) || 0);
+    if (k > 0) comp.opIndex = k; else delete comp.opIndex;
+  };
+  if (varDistintaBloccata(it)) {
+    salvaFase(); touch(it); saveDB(); closeModal(); renderBom(); savedToast('Fase di consumo aggiornata');
+    return;
+  }
   const itemId = val('cmp-item');
   // Senza questo controllo, il picker lasciato senza selezione salvava
   // itemId '' e la distinta si ritrovava una riga orfana, che il report
@@ -451,15 +479,12 @@ function saveComponentEdit(idx) {
   if (it.type === 'parte' && isNeg('cmp-ovr')) { showToast('Il costo non può essere negativo', 'error'); return; }
   comp.itemId = itemId; comp.qty = numVal('cmp-qty', 0); comp.scrapPct = numVal('cmp-scrap', 0, 100);
   if (it.type === 'parte') { const o = val('cmp-ovr'); comp.costOverride = o === '' || o == null ? null : numVal('cmp-ovr', 0); }
-  if (document.getElementById('cmp-phase')) {
-    const k = Math.floor(Number(val('cmp-phase')) || 0);
-    if (k > 0) comp.opIndex = k; else delete comp.opIndex;
-  }
+  salvaFase();
   touch(it);
   saveDB(); closeModal(); renderBom(); savedToast('Componente aggiornato');
 }
 function delComponent(idx) {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   askConfirm('Eliminare questo componente dalla distinta?', () => {
     it.components.splice(idx, 1); touch(it); saveDB(); renderBom(); savedToast('Componente eliminato');
@@ -534,7 +559,7 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 }
 
 function toggleBomPanel() {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
   const it = getItem(currentBomId);
   if (!it) { showToast('Seleziona prima una macchina, un gruppo o un sottogruppo', 'error'); return; }
   const panel = document.getElementById('bom-panel'); if (!panel) return;
@@ -643,7 +668,7 @@ function bomPanelUpdateInsertBtn() {
   btn.textContent = n ? `Inserisci (${n})` : 'Inserisci';
 }
 function bomPanelInsertAll() {
-  if (!roleGuard('bom') || !revBozzaLibera(currentBomId)) return;
+  if (!roleGuard('bom') || !revBozzaLibera(currentBomId) || !varDistintaLibera(currentBomId)) return;
   const it = parteDistintaViva(getItem(currentBomId)); if (!it) return;
   if (!bomPanelQty.size) { showToast('Imposta una quantità per almeno un articolo', 'error'); return; }
   let added = 0, skipped = 0;

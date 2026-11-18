@@ -465,3 +465,72 @@ describe('La sezione Opzioni', () => {
     assert.match(a.html('var-body'), /var-opz-grid/);
   });
 });
+
+// 0.162.0: la distinta di una variante generata non si scrive a mano — Rigenera
+// la riscriverebbe — e il ciclo è della macchina: nasce vuoto, lo scrive
+// l'operatore e Rigenera non lo tocca.
+const fase = (cost) => ({ kind: 'op', workCenterId: '', supplierId: null, costMode: 'fisso', cost, hours: 0, days: 0, note: '' });
+describe('Distinta del modello, ciclo della variante', () => {
+  it('la variante nasce senza ciclo, e il costo del configuratore è il suo', () => {
+    const a = app();
+    a.eval(`getItem('mac').cycle = [${JSON.stringify(fase(100))}]; saveDB()`);
+    const r = genera(a, { L: '4', M: 'B' });
+    assert.deepEqual(ev(a, `cicloFasi(getItem('${r.id}'))`), []);
+    assert.equal(ev(a, `costOf('${r.id}').total`), ev(a, "varCostoScelte('mac', { L: '4', M: 'B' }).total"));
+    a.eval("setView('varianti')");
+    assert.match(a.html('var-body'), /senza ciclo/);
+  });
+  it('Rigenera lascia il ciclo scritto sulla variante, e il ciclo del modello non la rende vecchia', () => {
+    const a = app();
+    const r = genera(a, { L: '4', M: 'B' });
+    a.eval(`getItem('${r.id}').cycle = [${JSON.stringify(fase(7))}, ${JSON.stringify(fase(8))}]; saveDB()`);
+    a.eval(`getItem('mac').cycle = [${JSON.stringify(fase(100))}]; saveDB()`);
+    assert.equal(ev(a, `varModelloAggiornato(getItem('${r.id}'))`), false, 'il ciclo del modello non conta');
+    a.eval("getItem('mac').components[3].qty = 2; saveDB()");
+    a.eval(`varRigeneraUI(['${r.id}']); confirmYes()`);
+    assert.deepEqual(righe(a, r.id), [['MOD', 4], ['TRSB', 1], ['FIS', 2]]);
+    assert.deepEqual(ev(a, `cicloFasi(getItem('${r.id}')).map(f => f.cost)`), [7, 8]);
+  });
+  it('una variante generata prima, con l\'impronta che conteneva il ciclo, resta aggiornata', () => {
+    const a = app();
+    const r = genera(a, { L: '3', M: 'S' });
+    a.eval(`getItem('mac').cycle = [${JSON.stringify(fase(100))}]; getItem('${r.id}').configHash = varFirma(getItem('mac'), true); saveDB()`);
+    assert.equal(ev(a, `varModelloAggiornato(getItem('${r.id}'))`), false);
+  });
+  it('in Gestione DB la distinta della variante è in sola lettura, salvo la fase di consumo', () => {
+    const a = app();
+    const r = genera(a, { L: '4', M: 'B' });
+    a.eval(`getItem('${r.id}').cycle = [${JSON.stringify(fase(7))}, ${JSON.stringify(fase(8))}]; saveDB()`);
+    a.eval(`currentBomId = '${r.id}'; setView('bom')`);
+    const h = a.html('bom-tree');
+    assert.match(h, /sola lettura/);
+    assert.doesNotMatch(h, /delComponent\(/);
+    assert.match(h, /title="Fase di consumo"/);
+    assert.equal(a.eval("document.getElementById('bom-add-comp').style.display"), 'none');
+    a.eval('delComponent(0); toggleBomPanel()');
+    assert.equal(ev(a, `getItem('${r.id}').components.length`), 3);
+    assert.equal(a.eval("document.getElementById('bom-panel').classList.contains('open')"), false);
+    a.eval("editComponentModal(0); document.getElementById('cmp-phase').value = '1'; saveComponentEdit(0)");
+    assert.equal(ev(a, `getItem('${r.id}').components[0].opIndex`), 1);
+    assert.deepEqual(righe(a, r.id), [['MOD', 4], ['TRSB', 1], ['FIS', 1]], 'articoli e quantità restano');
+    // Il modello e le altre macchine si modificano come sempre.
+    a.eval("currentBomId = 'mac2'; renderBom()");
+    assert.match(a.html('bom-tree'), /delComponent\(/);
+    assert.equal(a.eval("document.getElementById('bom-add-comp').style.display"), '');
+  });
+  it('neanche l\'import da file scrive la distinta di una variante', () => {
+    const a = app();
+    const r = genera(a, { L: '4', M: 'B' });
+    const rep = ev(a, `importBom([{ CodicePadre: 'MAC-V01', CodiceFiglio: 'PRT', Qta: 1 }])`);
+    assert.equal(rep.added, 0);
+    assert.match(rep.errors[0], /variante generata/);
+    assert.deepEqual(righe(a, r.id), [['MOD', 4], ['TRSB', 1], ['FIS', 1]]);
+  });
+  it('a modulo spento la variante torna una macchina come le altre', () => {
+    const a = app();
+    const r = genera(a, { L: '4', M: 'B' });
+    a.eval("db.settings.modules.varianti = false; saveDB()");
+    a.eval(`currentBomId = '${r.id}'; setView('bom')`);
+    assert.match(a.html('bom-tree'), /delComponent\(/);
+  });
+});
