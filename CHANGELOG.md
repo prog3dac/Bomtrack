@@ -2,7 +2,7 @@
 
 Le revisioni seguono il versionamento semantico `0.MINOR.PATCH`: **MINOR** per nuove funzionalità, **PATCH** per correzioni. La versione in cima è quella in `APP_VERSION` (`core.js`) e mostrata nell'header dell'app.
 
-### 0.162.0 — 2026-11-17
+### 0.162.0 — 2026-11-18
 
 **Distinte e Cicli si aprono sulla revisione approvata, e l'ODP di montaggio non nasce più senza fasi.**
 - **La bozza non la usa più nessuno** fuori da *Gestione DB* e *Cicli*: costi in ogni pagina (piani, ODP, preventivi, consuntivi), *Costificazione* e il suo export, la scheda articolo, la colonna Dettaglio del catalogo, il peso calcolato, l'avanzamento, le note di fase in *Reparto*, il consuntivo dei montaggi senza ODP, il configuratore delle varianti, l'elenco del *Nuovo ODP*, *Dove è usato* con l'impatto dei costi, i documenti toccati da una modifica tecnica e gli avvisi del Riepilogo leggono la revisione in vigore. Prima tutti questi leggevano la bozza. L'approvazione fotografa il costo della bozza che si approva. La bozza si legge ancora solo per bloccare l'eliminazione di ciò che cita, e *Dove è usato* lo dice.
