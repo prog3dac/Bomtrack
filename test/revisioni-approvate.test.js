@@ -149,6 +149,155 @@ describe('Con le revisioni approvate attive, piani e ODP usano solo quelle', () 
     const a = app({ revApprovate: true });
     assert.equal(a.eval(`odpNew(getItem('p1'), 2, '${giorni(a, 5)}')`), null);
   });
+  // Il caso di ECL-008-S00 (0.159.x): la fase di montaggio scritta in bozza e
+  // la revisione approvata senza ciclo. Il piano guardava la bozza e proponeva
+  // l'ODP, che nasceva senza fasi.
+  it('un assieme con le fasi solo in bozza non propone l\'ODP, lo dice, e l\'ordine non nasce vuoto', () => {
+    const a = app({ revApprovate: true });
+    const due = giorni(a, 30);
+    a.eval(`releaseRevision('g1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('g1').cycle = [{ kind: 'op', workCenterId: 'w1', costMode: 'orario', hours: 2, note: 'montaggio' }]`);
+    const piano = `({ id: 'pl1', lines: [{ itemId: 'g1', qty: 1, dueDate: '${due}' }] })`;
+    assert.equal(a.eval(`asmHaCiclo(getItem('g1'))`), true, 'la bozza ha la fase');
+    assert.equal(a.eval(`mrpDaProdurre(mrpExplodePlan(${piano})).length`), 0, 'niente ODP da proporre');
+    assert.match(a.eval(`mrpAsmTable(mrpExplodePlan(${piano}).asm, 'pl1')`), /ciclo da approvare/);
+    assert.equal(a.eval(`odpNew(getItem('g1'), 1, '${due}')`), null);
+
+    a.eval(`releaseRevision('g1', 'seconda', { dal: oggiISO() })`);
+    assert.equal(a.eval(`mrpDaProdurre(mrpExplodePlan(${piano})).length`), 1, 'approvata la bozza, l\'ODP si propone');
+    assert.doesNotMatch(a.eval(`mrpAsmTable(mrpExplodePlan(${piano}).asm, 'pl1')`), /ciclo da approvare/);
+    assert.equal(ev(a, `odpNew(getItem('g1'), 1, '${due}').phases.length`), 1);
+  });
+});
+
+describe('La pagina Cicli mostra di serie il ciclo approvato (dalla 0.162.0)', () => {
+  it('l\'approvata in sola lettura, la bozza dalla tendina, e cambiando articolo si torna all\'approvata', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`releaseRevision('p1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('p1').cycle.push({ kind: 'op', workCenterId: 'w1', costMode: 'orario', hours: 2, note: 'nuova' })`);
+    a.eval(`currentCycleItemId = 'p1'; renderCycles()`);
+    let h = a.html('cyc-body');
+    assert.match(h, /Approvata v0/);
+    assert.match(h, /Bozza v1 · modificata/);
+    assert.match(h, /1 fase</, 'le fasi della revisione approvata');
+    assert.doesNotMatch(h, /addCycleOpRow|updateCycleRow/, 'l\'approvata non si modifica');
+
+    a.eval(`document.getElementById('cycles-ver').value = 'bozza'; revSceltaVersione('cycles', 'p1')`);
+    h = a.html('cyc-body');
+    assert.match(h, /2 fasi</);
+    assert.match(h, /addCycleOpRow/, 'la bozza si modifica');
+
+    a.eval(`openCycleFor('p1')`);
+    assert.match(a.html('cyc-body'), /1 fase</, 'riaperto, si torna all\'approvata');
+  });
+
+  it('senza una revisione approvata si vede la bozza, senza tendina', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`currentCycleItemId = 'p1'; renderCycles()`);
+    const h = a.html('cyc-body');
+    assert.doesNotMatch(h, /cycles-ver/);
+    assert.match(h, /addCycleOpRow/);
+  });
+});
+
+describe('La pagina Distinte mostra di serie la distinta approvata (dalla 0.162.0)', () => {
+  it('l\'approvata in sola lettura, la bozza dalla tendina, e riaperta si torna all\'approvata', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`releaseRevision('g1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('g1').components.push({ itemId: 'c2', qty: 3 })`);   // la bozza cambia
+    a.eval(`currentBomId = 'g1'; renderBom()`);
+    let h = a.html('bom-tree');
+    assert.match(a.html('bom-ver-box'), /Approvata v0/);
+    assert.match(a.html('bom-ver-box'), /Bozza v1 · modificata/);
+    assert.doesNotMatch(h, /C2/, 'la riga aggiunta in bozza non c\'è');
+    assert.doesNotMatch(h, /editComponentModal|delComponent/, 'l\'approvata non si modifica');
+    assert.equal(a.el('bom-add-comp').style.display, 'none');
+    assert.match(a.html('bom-cost-summary'), /40,00/, 'il costo è della distinta approvata: 2 × 10 + 4 × 5');
+    a.eval('delComponent(0)');
+    assert.equal(a.eval(`getItem('g1').components.length`), 3, 'nessuna modifica dalla vista approvata');
+
+    a.eval(`document.getElementById('bom-ver').value = 'bozza'; revSceltaVersione('bom', 'g1')`);
+    h = a.html('bom-tree');
+    assert.match(h, /C2/);
+    assert.match(h, /editComponentModal/);
+    assert.equal(a.el('bom-add-comp').style.display, '');
+
+    a.eval(`openBomFor('g1')`);
+    assert.doesNotMatch(a.html('bom-tree'), /C2/, 'riaperta, si torna all\'approvata');
+  });
+
+  it('senza una revisione approvata si vede la bozza, senza tendina', () => {
+    const a = app({ revApprovate: true });
+    a.eval(`currentBomId = 'g1'; renderBom()`);
+    assert.equal(a.html('bom-ver-box'), '');
+    assert.match(a.html('bom-tree'), /editComponentModal/);
+  });
+});
+
+// Le bozze si vedono e si modificano solo in Distinte e Cicli: costi, report,
+// schede, avanzamento, reparto, consuntivo e configuratore leggono quello in
+// vigore. Ogni prova cambia la bozza dopo l'approvazione e guarda che non si
+// muova niente.
+describe('Le bozze non le usa nessuno fuori da Distinte e Cicli (dalla 0.162.0)', () => {
+  function approvatoPoiCambiato() {
+    const a = app({ revApprovate: true });
+    a.eval(`getItem('p1').cycle[0].rate = 40`);
+    a.eval(`releaseRevision('g1', 'prima', { dal: oggiISO() })`);
+    a.eval(`releaseRevision('p1', 'prima', { dal: oggiISO() })`);
+    a.eval(`getItem('g1').components.push({ itemId: 'c2', qty: 10 })`);
+    a.eval(`getItem('p1').cycle[0].hours = 7; getItem('p1').cycle.push({ kind: 'op', workCenterId: 'w1', costMode: 'orario', hours: 1, rate: 40, note: 'solo in bozza' })`);
+    a.eval('invalidateCaches()');
+    return a;
+  }
+
+  it('il costo è quello in vigore; quello della bozza si chiede a parte', () => {
+    const a = approvatoPoiCambiato();
+    assert.equal(a.eval(`costOf('g1').total`), 40, '2 × 10 + 4 × 5, senza la riga della bozza');
+    assert.equal(a.eval(`costOf('p1').total`), 50, '1 h × 40 + 10 di materiale, le ore della revisione');
+    assert.equal(a.eval(`costoBozza(getItem('g1')).total`), 110);
+    assert.equal(a.eval(`costoBozza(getItem('p1')).total`), 330);
+  });
+
+  it('l\'approvazione fotografa il costo della bozza che si approva', () => {
+    const a = approvatoPoiCambiato();
+    a.eval(`releaseRevision('g1', 'seconda', { dal: oggiISO() })`);
+    assert.equal(a.eval(`revisionsOf('g1')[0].snapshot.cost.total`), 110);
+  });
+
+  it('report, catalogo, scheda articolo e peso leggono quello in vigore', () => {
+    const a = approvatoPoiCambiato();
+    const righe = ev(a, `(r => (flattenBom('g1', 1, 0, 0, r, []), r.map(x => x.code)))([])`);
+    assert.ok(!righe.includes('C2'), 'la Costificazione non esplode la bozza');
+    assert.equal(a.eval(`catalogMeta(getItem('g1'))`).startsWith('2 comp.'), true);
+    assert.doesNotMatch(a.eval(`itemInfoComposizione(getItem('g1'))`), /C2/);
+    assert.equal(ev(a, `cicloFasi(itemInVigore(getItem('p1'))).length`), 1);
+  });
+
+  it('il reparto legge la nota della fase dal ciclo in vigore', () => {
+    const a = approvatoPoiCambiato();
+    a.eval(`getItem('p1').cycle[0].note = 'nota della bozza'`);
+    assert.equal(a.eval(`repartoNotaCiclo({ itemId: 'p1' }, { opIndex: 0, workCenterId: 'w1' })`), '');
+  });
+
+  it('l\'avanzamento conta le fasi in vigore', () => {
+    const a = approvatoPoiCambiato();
+    const n = ev(a, `(t => cicloFasi(t.op).length)(schedTree('p1', 1, '${giorni(a, 30)}'))`);
+    assert.equal(n, 1);
+  });
+
+  it('«Dove è usato» guarda le distinte in vigore; la bozza blocca solo l\'eliminazione', () => {
+    const a = approvatoPoiCambiato();
+    assert.equal(ev(a, `directUses('c2').length`), 0, 'C2 è solo nella bozza di G1');
+    assert.equal(ev(a, `usedBy('c2').length`), 1, 'ma non si può eliminare');
+    assert.match(a.eval(`usageBody('c2')`), /bozza di/);
+    assert.equal(ev(a, `directUses('c1').map(x => x.item.code + ':' + x.qty)`).join(), 'G1:4');
+  });
+
+  it('un codice mai approvato non costa e non si esplode', () => {
+    const a = app({ revApprovate: true });
+    assert.equal(a.eval(`costOf('g1').total`), 0);
+    assert.equal(a.eval(`costoBozza(getItem('g1')).total`), 40, 'nella sua pagina la bozza ha il suo costo');
+  });
 });
 
 describe('Chi approva', () => {

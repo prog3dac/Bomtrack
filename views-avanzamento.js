@@ -186,7 +186,7 @@ function avzFaseNumero(st) {
   return st.from === st.to ? `fase ${cyclePhaseNumber(st.from)}` : `fasi ${cyclePhaseNumber(st.from)}-${cyclePhaseNumber(st.to)}`;
 }
 function avzFaseLavoro(n, st) {
-  const ops = ((n.item && n.item.cycle) || []).filter(r => r.kind === 'op').slice(st.from, st.to + 1);
+  const ops = cicloFasi(n.op || n.item).slice(st.from, st.to + 1);
   const centri = [...new Set(ops.map(r => (getWorkCenter(r.workCenterId) || {}).name).filter(Boolean))];
   const chi = st.esterna ? (supplierName(st.supplierId) || 'terzista') : 'interna';
   return `${centri.join(', ') || 'lavorazione'} · ${chi}`;
@@ -278,7 +278,7 @@ function avzCiclo(n, fasi, suoi, oggi) {
   else stato = 'da fare';
   const docs = suoi.map(o => ({ kind: 'odp', id: o.id, number: o.number,
     testo: `${ODP_STATUS[o.status] || o.status} · ${fmtQtyIt(opVersato(o))}/${fmtQtyIt(Number(o.qty) || 0)}` }));
-  const ops = ((n.item && n.item.cycle) || []).filter(r => r.kind === 'op').length;
+  const ops = cicloFasi(n.op || n.item).length;
   return { tipo: 'ciclo', label: `ciclo di ${ops} ${ops === 1 ? 'fase' : 'fasi'}`, start: n.start, end: n.end, attesa: '',
     fatto: stati.filter(avzFinito).length, totale: fasi.length, pct: stati.filter(avzFinito).length / fasi.length, stato,
     ritardo: Math.max(0, ...fasi.map(r => r.ritardo || 0)), meno: Math.max(0, ...fasi.map(r => r.meno || 0)), docs,
@@ -306,7 +306,8 @@ function avzMontaggio(n, odp, oggi, planId) {
   }
   return Object.assign(base, { fatto: 0, totale: 0, pct: 0, stato: 'asm-programmato',
     ritardo: avzRitardo(false, false, n.start, n.end, '', oggi),
-    nota: n.end && oggi > n.end ? 'Data passata: nessun montaggio dichiarato' : 'Nessun montaggio dichiarato: si dichiara nel piano, scheda «Da montare»' });
+    nota: asmCicloDaApprovare({ item: n.item, due: n.end }) ? 'Le fasi di montaggio sono solo nella bozza: approvala per vederle qui e lanciare l\'ordine di produzione'
+      : n.end && oggi > n.end ? 'Data passata: nessun montaggio dichiarato' : 'Nessun montaggio dichiarato: si dichiara nel piano, scheda «Da montare»' });
 }
 function avzDaOdp(n, suoi, tipo, label, serve, oggi) {
   const docs = [];

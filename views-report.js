@@ -15,7 +15,7 @@
 // riportati alla radice — un M1 da 3 pezzi in un gruppo usato due volte sono 6.
 function flattenBom(itemId, qty, scrap, level, rows, ancestors, pos, mult) {
   if (mult == null) mult = 1;
-  const it = getItem(itemId); if (!it) return;
+  const it = itemInVigore(getItem(itemId)); if (!it) return;   // la distinta in vigore, mai la bozza
   const cyc = ancestors.includes(itemId);
   const unit = cyc ? 0 : costOf(itemId).total;
   const factor = (Number(qty) || 0) * (1 + (Number(scrap) || 0) / 100);
@@ -136,7 +136,7 @@ function costContributors(itemId) {
     // Si risolve e si aggrega per id, non per codice: i codici duplicati
     // esistono (vedi duplicateCodeGroups) e per codice due articoli distinti
     // si fonderebbero, o un assieme omonimo di una foglia falserebbe il filtro.
-    const it = getItem(r.itemId);
+    const it = itemInVigore(getItem(r.itemId));   // come flattenBom: in vigore
     // Solo le foglie: un assieme e i suoi componenti conterebbero due volte la
     // stessa spesa. Una parte prodotta in casa che esplode il proprio ciclo
     // conta con le sue righe, non con se stessa — stessa regola.
