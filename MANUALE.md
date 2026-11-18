@@ -1,6 +1,6 @@
 # Bomtrack — Manuale d'uso
 
-**Versione dell'app documentata: 0.162.0**
+**Versione dell'app documentata: 0.163.0**
 
 📖 **[Leggilo come pagina web](https://claude.ai/code/artifact/726a0963-2db0-4947-999b-d7b5beb91a0b)** — stesso testo, con indice laterale, filtro dei capitoli e tema chiaro/scuro. Comodo da tenere aperto di fianco all'app.
 
@@ -1514,22 +1514,38 @@ distinta le righe con una regola si riconoscono dal segno `se M=B` o `q.tà = L`
 **macchina** con codice `<codice del modello>-V01`, `-V02`…, il nome del modello seguito dalle
 scelte, il costo e i gruppi che conterrà. Sopra c'è l'intervallo di costo **da quanto a quanto**
 su tutte le combinazioni, fino a 256. **Genera la macchina** la crea; se la combinazione esiste
-già, il pulsante diventa **Apri la macchina**.
+già, il pulsante diventa **Apri la macchina**. La macchina nasce **senza ciclo** (dalla 0.163.0):
+costo e intervallo qui non contano le fasi, neanche quelle del modello.
 
 **Varianti generate.** Le macchine nate da questo modello, con le scelte, il costo e lo stato:
-*aggiornata* oppure *modello cambiato*.
+*aggiornata* oppure *modello cambiato*, e *senza ciclo* finché il ciclo non è scritto (un clic lo
+apre in *Cicli di lavorazione*).
+
+**Distinta dal modello, ciclo della macchina** (dalla 0.163.0).
+- La **distinta** di una macchina generata è in **sola lettura** in *Gestione DB*: niente
+  *+ Aggiungi componenti*, niente modifica o eliminazione delle righe, e neanche l'import da Excel la
+  scrive. Si cambia il modello e si rigenera. Una riga cambiata a mano sarebbe sparita al primo
+  Rigenera, senza avviso.
+- Resta modificabile la **fase di consumo** di ogni riga, quando il ciclo della macchina ha più di
+  una fase: il pulsante a matita della riga apre solo quella.
+- Il **ciclo** è della macchina e lo scrive l'operatore in *Cicli di lavorazione*: può essere
+  diverso da macchina a macchina. **Rigenera non lo tocca**, e cambiare il ciclo del modello non
+  segna le varianti come *modello cambiato*.
+- Testata, revisioni ed eliminazione della macchina restano in *Gestione DB* come prima.
+- A modulo spento la macchina generata torna una macchina come le altre, distinta compresa.
 
 **Un'opzione aggiunta dopo** (dalla 0.130.0). Le macchine già generate non hanno una scelta per
 la nuova opzione: nella loro riga compare un menu (*Protezione: scegli…*) e la scelta si dà
 **macchina per macchina**. Finché manca, **Rigenera** resta spento e **Rigenera tutte** salta quella
-macchina. Data la scelta, Rigenera riscrive la distinta con le scelte complete: codice, piani e
+macchina. Data la scelta, Rigenera riscrive la distinta con le scelte complete (il ciclo resta quello della macchina): codice, piani e
 movimenti restano gli stessi, e la descrizione si aggiorna con la nuova scelta (se è ancora quella
 data alla generazione; una descrizione scritta a mano resta). Una scelta che renderebbe la macchina
 uguale a un'altra già generata si rifiuta. Se invece si **toglie** un'opzione dal modello, la
 macchina perde quella scelta al Rigenera.
 
 **La macchina generata è una macchina come le altre.** Si mette in un piano, si costifica, si
-revisiona. In Gestione DB una riga sopra l'albero dice da quale modello è nata.
+revisiona. In Gestione DB una riga sopra l'albero dice da quale modello è nata, che la distinta è
+in sola lettura e dove si scrive il ciclo.
 
 **La codifica è quella del modello.** La macchina generata eredita macrofamiglia, sottofamiglia,
 sigla macchina e schema dei codici dei figli. Nella sua scheda codice e codifica sono bloccati: si

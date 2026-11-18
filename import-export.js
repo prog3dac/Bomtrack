@@ -285,6 +285,9 @@ function importBom(rows) {
     const parent = findByCode(pCode);
     if (!parent) { report.errors.push(`Riga ${ln}: padre "${esc(pCode)}" non trovato in catalogo`); return; }
     if (!isAssembly(parent.type) && parent.type !== 'parte') { report.errors.push(`Riga ${ln}: "${esc(pCode)}" è ${typeLabel(parent.type)}, non può avere una distinta`); return; }
+    // Una variante generata da un modello (varianti.js): la distinta si
+    // cambia sul modello e si rigenera, anche da file.
+    if (typeof varDistintaBloccata === 'function' && varDistintaBloccata(parent)) { report.errors.push(`Riga ${ln}: "${esc(pCode)}" è una variante generata da un modello, la sua distinta si cambia sul modello`); return; }
     parteDistintaViva(parent);
     const child = findByCode(cCode);
     if (!child) { report.errors.push(`Riga ${ln}: figlio "${esc(cCode)}" non trovato in catalogo`); return; }

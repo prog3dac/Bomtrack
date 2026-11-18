@@ -253,12 +253,17 @@ function varFirmaFase(o) {
   return diversa ? base.concat([o.supplierId || '', o.costMode || '', Number(o.rate) || 0, Number(o.cost) || 0, Number(o.days) || 0]) : base;
 }
 // L'impronta della definizione di un assieme: quello che il generato copia.
-function varFirma(it) {
-  return varHash(JSON.stringify({
+// Dalla 0.163.0 il ciclo non si copia più (è della macchina generata, e lo
+// scrive l'operatore), quindi non entra nell'impronta: cambiare il ciclo del
+// modello non rende «da rigenerare» nessuna variante. `conCiclo` rifà
+// l'impronta di prima, che le macchine generate fino ad allora conservano.
+function varFirma(it, conCiclo) {
+  const f = {
     o: varOpzioni(it).map(o => [varCodice(o.code), o.choices.map(c => varValore(c.value))]),
     c: (it.components || []).map(c => [c.itemId, Number(c.qty) || 0, Number(c.scrapPct) || 0, c.cond || '', c.qtyExpr || '']),
-    p: cicloFasi(it).map(varFirmaFase),
-  }));
+  };
+  if (conCiclo) f.p = cicloFasi(it).map(varFirmaFase);
+  return varHash(JSON.stringify(f));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -310,10 +315,12 @@ function varPrepara(modelloId, scelteDate, macchina) {
   const righe = varRigheScelte(t, norm.scelte, out.errori);
   if (!righe.length && !out.errori.length) out.errori.push('Con queste scelte la distinta resta vuota');
   if (out.errori.length) return out;
-  const dati = { components: righe, cycle: cicloFasi(t).map(o => Object.assign({}, o)), operations: [], configHash: varFirma(t) };
+  // Solo la distinta: il ciclo è della macchina (dalla 0.163.0). Una macchina
+  // nuova nasce senza fasi, e Rigenera lascia quelle che l'operatore ha scritto.
+  const dati = { components: righe, configHash: varFirma(t) };
   if (macchina) out.macchina = Object.assign({}, macchina, dati);
   else {
-    out.macchina = Object.assign({ id: gid(), type: 'macchina', uom: t.uom, notes: t.notes || '', active: true,
+    out.macchina = Object.assign({ id: gid(), type: 'macchina', uom: t.uom, notes: t.notes || '', active: true, cycle: [], operations: [],
       name: `${t.name} — ${varEtichetteScelte(t, norm.scelte)}`,
       configuredFromId: t.id, configChoices: norm.scelte, configKey: chiave }, dati);
     ['overheadPctOverride', 'marginPctOverride', 'assemblyDays']
@@ -363,11 +370,13 @@ function varGenera(modelloId, scelte, fatto) {
 function varModelloAggiornato(it) {
   if (!varAttivo() || !it || it.type !== 'macchina' || !it.configuredFromId) return false;
   const t = itemInVigore(getItem(it.configuredFromId));
-  return !!t && varModello(t) && it.configHash !== varFirma(t);
+  // L'impronta di prima della 0.163.0 conteneva anche il ciclo del modello:
+  // se coincide con quella, la macchina è aggiornata come allora.
+  return !!t && varModello(t) && it.configHash !== varFirma(t) && it.configHash !== varFirma(t, true);
 }
 // Rigenera la distinta della macchina concreta dalle scelte che aveva, sul
 // modello di adesso. La macchina resta la stessa (codice, piani, movimenti):
-// cambia la distinta, come quando la si modifica a mano.
+// cambia la distinta, e il ciclo resta quello che l'operatore ha scritto.
 function varRigenera(id) {
   if (!roleGuard('bom')) return null;
   const m = getItem(id);
@@ -388,8 +397,6 @@ function varRigenera(id) {
   m.configChoices = prep.scelte;
   m.configKey = chiave;
   m.components = prep.macchina.components;
-  m.cycle = prep.macchina.cycle;
-  m.operations = [];
   m.configHash = prep.macchina.configHash;
   varCopiaCodifica(t, m);
   touch(m);
@@ -475,7 +482,9 @@ function varCostoScelte(id, scelte) {
   const it = getItem(id);
   if (!it) return Object.assign({}, ZERO_COST);
   if (!varModello(it)) return costOf(id);
-  return assiemeCost(it, varRigheScelte(it, scelte, null), c => costOf(c.itemId, new Set([id])));
+  // Senza il ciclo del modello: la macchina generata nasce senza fasi
+  // (dalla 0.163.0), e il costo detto qui deve essere il suo.
+  return assiemeCost(Object.assign({}, it, { cycle: [], operations: [] }), varRigheScelte(it, scelte, null), c => costOf(c.itemId, new Set([id])));
 }
 // Tutte le combinazioni, se sono poche abbastanza da contarle (`limite`).
 function varCombinazioni(t, limite) {
@@ -515,11 +524,27 @@ function varRigaBom(it) {
   if (varInPagina(it)) testo = `<strong>Modello configurabile</strong>: i costi qui sotto sono della parte comune. Opzioni, regole e configurazione stanno in ${vai(it.id)}.`;
   else if (it.configuredFromId && getItem(it.configuredFromId)) {
     const t = getItem(it.configuredFromId);
-    testo = `Generata da ${esc(t.code)}${it.configChoices ? ` con ${esc(varEtichetteScelte(t, it.configChoices) || varChiaveScelte(it.configChoices))}` : ''}.${varModelloAggiornato(it) ? ` <span class="mrp-warn">${ico('warning', 'tinted', '')} Il modello è cambiato dopo la generazione.</span>` : ''} Si gestisce in ${vai(t.id)}.`;
+    const ciclo = vistaAttiva('cycles') ? `<a href="#" onclick="openCycleFor('${it.id}');return false">Cicli di lavorazione</a>` : 'Cicli di lavorazione';
+    testo = `Generata da ${esc(t.code)}${it.configChoices ? ` con ${esc(varEtichetteScelte(t, it.configChoices) || varChiaveScelte(it.configChoices))}` : ''}.${varModelloAggiornato(it) ? ` <span class="mrp-warn">${ico('warning', 'tinted', '')} Il modello è cambiato dopo la generazione.</span>` : ''} ${ico('lock', 'tinted', '')} La distinta è in <strong>sola lettura</strong>: si cambia il modello e la si rigenera in ${vai(t.id)}. Il ciclo invece è di questa macchina e si scrive in ${ciclo}${cicloFasi(it).length ? '' : ` — <span class="mrp-warn">non c'è ancora</span>`}.`;
   } else return '';
   return `<div class="empty-text" style="text-align:left;padding:8px 12px">${ico('tree', 'tinted', '')} ${testo}</div>`;
 }
 function varApri(id) { if (id) currentVarId = id; setView('varianti'); }
+// La distinta di una macchina generata non si modifica a mano (dalla 0.163.0):
+// «Rigenera» la riscrive dal modello, e una riga cambiata qui sparirebbe senza
+// avviso. Si cambia il modello e si rigenera. Resta libera la fase di consumo,
+// perché il ciclo è della macchina. A modulo spento non c'è Rigenera, e la
+// macchina torna una macchina come le altre.
+function varDistintaBloccata(it) {
+  return varAttivo() && !!it && it.type === 'macchina' && !!it.configuredFromId && !!getItem(it.configuredFromId);
+}
+// Il controllo dei comandi che scrivono la distinta: true se si può.
+function varDistintaLibera(id) {
+  const it = getItem(id);
+  if (!varDistintaBloccata(it)) return true;
+  showToast(`${it.code} è una variante di ${getItem(it.configuredFromId).code}: la distinta si cambia sul modello, poi si rigenera`, 'error');
+  return false;
+}
 // L'etichetta accanto al codice (0.129.0): «modello» sui modelli, «variante di
 // …» sulle macchine generate. Una macchina modello non si produce, e senza un
 // segno negli elenchi sembrava uguale alle altre. `link` la rende un rimando
@@ -745,6 +770,7 @@ function varSezioneConfigura(t) {
     <select class="var-scelta" data-code="${esc(varCodice(o.code))}" onchange="varConfiguraAnteprima()">${o.choices.map(c => `<option value="${esc(c.value)}">${esc(c.label ? `${c.label} (${c.value})` : c.value)}</option>`).join('')}</select></div>`).join('');
   return varSezione('eye', 'Configura', null, `
     <p class="empty-text" style="text-align:left;padding:0 0 8px">${r ? `Costo da <strong>${fmtN(r.min)}</strong> a <strong>${fmtN(r.max)}</strong> su ${r.n} combinazioni.` : 'Troppe combinazioni per calcolare l\'intervallo di costo.'}</p>
+    <p class="empty-text" style="text-align:left;padding:0 0 8px">La macchina nasce <strong>senza ciclo</strong>: lo si scrive dopo in Cicli di lavorazione, e Rigenera non lo tocca. Il costo qui non conta quindi le fasi.</p>
     <div class="modal-grid">${campi}</div>
     <div id="varconf-prev" style="margin-top:10px"></div>
     ${canWrite('bom') ? `<div style="margin-top:10px"><button class="add-btn-sm" id="varconf-ok" onclick="varConfiguraGenera()">Genera la macchina</button></div>` : ''}`);
@@ -806,7 +832,7 @@ function varSezioneGenerate(t) {
       return `<tr><td style="font-family:var(--mono)">${codeLink(x.id, x.code)}</td>
         <td>${esc(x.configChoices ? (varEtichetteScelte(t, x.configChoices) || varChiaveScelte(x.configChoices)) : '')}${menu ? ' ' + menu : ''}</td>
         <td style="text-align:right;font-family:var(--mono)">${fmtN(costOf(x.id).total)}</td>
-        <td>${vecchia ? `<span class="mrp-warn">${ico('warning', 'tinted', '')} modello cambiato</span>` : '<span class="price-best">aggiornata</span>'}</td>
+        <td>${vecchia ? `<span class="mrp-warn">${ico('warning', 'tinted', '')} modello cambiato</span>` : '<span class="price-best">aggiornata</span>'}${cicloFasi(x).length ? '' : ` <span class="mrp-warn"${vistaAttiva('cycles') ? ` role="link" tabindex="0" style="cursor:pointer" onclick="openCycleFor('${x.id}')" onkeydown="if(event.key==='Enter')openCycleFor('${x.id}')"` : ''} title="Il ciclo della variante si scrive in Cicli di lavorazione">senza ciclo</span>`}</td>
         <td style="white-space:nowrap"><button class="mini-btn" title="Apri la distinta" onclick="currentBomId='${x.id}';bomExpanded=new Set();setView('bom')">${ico('eye', 'tinted', 'Apri la distinta')}</button>
           ${vecchia && scrivibile ? (mancanti.length
             ? `<button class="btn-outline" disabled title="Scegli prima ${esc(mancanti.map(o => o.name || o.code).join(', '))}">Rigenera</button>`
